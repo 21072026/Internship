@@ -216,7 +216,7 @@ export default function CandidatesPage() {
     // capacity/availability so AssignMentorInline can label each option (#942).
     // Full or paused mentors are kept in the list, never dropped or disabled —
     // getMentorAvailability() is only advisory here.
-    fetch('/api/users?view=mentorAvailability')
+    fetch('/api/users?view=mentorAvailability&roles=ADMIN,MENTOR')
       .then((r) => (r.ok ? r.json() : { users: [] }))
       .then((d) =>
         setMentors(

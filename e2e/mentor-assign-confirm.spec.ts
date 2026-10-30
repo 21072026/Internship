@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { acceptConfirmDialog, cancelConfirmDialog, confirmDialog } from './helpers/confirm';
+import { pickPerson } from './helpers/personPicker';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -170,7 +171,8 @@ test('the /admin/mentorship assign form asks for confirmation before assigning a
     // too ("Assign mentorship" contains "mentor"), which resolved to 2
     // elements (the dialog and the <select>) and made selectOption ambiguous.
     await page.getByLabel('Mentor*', { exact: true }).selectOption(mentor.id);
-    await page.getByLabel('Mentee').selectOption(newMentee.id);
+    // The mentee field is a server-side search (#1437), not a <select>.
+    await pickPerson(page, 'assign-mentee', newMentee);
 
     // Cancel first: no request, mentorship modal stays open, relation not created.
     const noRequestYet = page

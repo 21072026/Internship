@@ -620,6 +620,13 @@ const en = {
   // Capacity/status suffix shown next to a mentor's name in an admin picker
   // (#942) — see src/lib/mentorAvailabilityLabel.ts. Advisory only: a mentor
   // at capacity or not accepting is still selectable, never hidden or disabled.
+  personPicker: {
+    placeholder: 'Type a name to search',
+    noMatches: 'No one matches.',
+    more: 'Showing {shown} of {total} — keep typing to narrow it down.',
+    failed: 'Could not load people. Try again.',
+    clear: 'Clear selection',
+  },
   mentorAvailability: {
     available: 'Available',
     atCapacity: 'At capacity',
@@ -12239,6 +12246,13 @@ const tr: Dict = {
     month: 'Ay',
     noData: '—',
   },
+  personPicker: {
+    placeholder: 'Aramak için bir isim yazın',
+    noMatches: 'Eşleşen kimse yok.',
+    more: '{total} kişiden {shown} tanesi gösteriliyor — daraltmak için yazmaya devam edin.',
+    failed: 'Kişiler yüklenemedi. Tekrar deneyin.',
+    clear: 'Seçimi temizle',
+  },
   mentorAvailability: {
     available: 'Uygun',
     atCapacity: 'Kapasite dolu',
@@ -23640,6 +23654,13 @@ const de: Dict = {
     trendTitle: 'Annahme-Trend',
     month: 'Monat',
     noData: '—',
+  },
+  personPicker: {
+    placeholder: 'Namen eingeben, um zu suchen',
+    noMatches: 'Niemand gefunden.',
+    more: '{shown} von {total} angezeigt – weitertippen, um einzugrenzen.',
+    failed: 'Personen konnten nicht geladen werden. Bitte erneut versuchen.',
+    clear: 'Auswahl entfernen',
   },
   mentorAvailability: {
     available: 'Verfügbar',
