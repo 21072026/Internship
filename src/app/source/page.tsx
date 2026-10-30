@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
@@ -64,6 +65,9 @@ export default function SourcePortal() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.sourcePortal.title}</h1>
         <p className="text-gray-500 mt-1">{t.sourcePortal.subtitle}</p>
+        <Link href="/source/outcomes" className="mt-2 inline-block text-sm font-medium text-blue-600 hover:underline" data-testid="source-outcomes-link">
+          {t.sourceOutcomes.linkFromPortal} →
+        </Link>
       </div>
 
       <Card className="mb-6 max-w-2xl">
