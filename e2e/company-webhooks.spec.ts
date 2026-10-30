@@ -1,7 +1,7 @@
 import { test, expect, request as playwrightRequest, type APIRequestContext } from '@playwright/test';
 import { randomBytes } from 'crypto';
 import { prisma, seedUser, setOrgFeature, uniqueEmail } from './helpers/db';
-import { signInViaApi } from './helpers/auth';
+import { gotoSettled, signInViaApi } from './helpers/auth';
 
 // Self-served company webhooks (#2006). A COMPANY owner registers a hook for
 // its own hiring events: the event list is capped (above → 403, never trimmed),
@@ -118,4 +118,19 @@ test('fan-out delivers a company hook only its own company\'s events, whatever i
     .toEqual([hookA.id, orgWide.id].sort());
   // …and B's hook never does.
   expect((await deliveriesFor(ev.id)).some((j) => (j.payload as { webhookId: string }).webhookId === hookB.id)).toBe(false);
+});
+
+test('the company integrations page registers a webhook, shows the secret once and deletes it', async ({ page }) => {
+  expect((await signInViaApi(page.request, emails.b, PW)).ok).toBe(true);
+  await gotoSettled(page, '/company/integrations');
+  await page.getByTestId('company-hook-url').fill(TARGET);
+  await page.getByTestId('company-hook-event-offer.accepted').check();
+  await page.getByTestId('company-hook-create').click();
+  await expect(page.getByTestId('company-hook-secret').locator('code')).toHaveText(/^[0-9a-f]{48}$/);
+  const row = await prisma.webhook.findFirstOrThrow({ where: { orgId, companyId: companyB, events: { equals: ['offer.accepted'] } } });
+  await expect(page.getByTestId(`company-hook-${row.id}`)).toBeVisible();
+  page.once('dialog', (d) => d.accept());
+  await page.getByTestId(`company-hook-delete-${row.id}`).click();
+  await expect(page.getByTestId(`company-hook-${row.id}`)).toHaveCount(0);
+  expect(await prisma.webhook.count({ where: { id: row.id } })).toBe(0);
 });

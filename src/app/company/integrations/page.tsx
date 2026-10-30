@@ -10,8 +10,9 @@ import { Input } from '@/components/ui/Input';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { useLocale, useT } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
+import { CompanyWebhooks } from './CompanyWebhooks';
 
-// A COMPANY owner's own API keys (#2006). Everything that matters is decided by
+// A COMPANY owner's own API keys and webhooks (#2006). Everything that matters is decided by
 // /api/company/integrations/api-keys — which company, the scope ceiling, the
 // expiry cap; this page only renders what the route answers and never offers
 // a scope the route would refuse.
@@ -188,6 +189,8 @@ export default function CompanyIntegrationsPage() {
               ))}
             </ul>
           </Card>
+
+          <CompanyWebhooks onLocked={() => setBlocked('locked')} />
         </>
       )}
     </div>
