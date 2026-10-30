@@ -251,6 +251,8 @@ export const TEXT_LIMITS = {
   userEmail: 191,
   /** User.phone — VARCHAR(191); capped like `companyContactPhone` (a number, not a paste) */
   userPhone: 40,
+  /** User.benchedReason — VARCHAR(500): the admin's reason for a bench (#1778) */
+  benchReason: 500,
 } as const;
 
 export type TextLimitKey = keyof typeof TEXT_LIMITS;

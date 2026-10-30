@@ -11,6 +11,7 @@ import { orgWhere, withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import type { MatchMentee, MatchMentor } from './dimensions';
 import { selfSelectedCounts } from '@/lib/selfMatchSeats';
 import { normalizeThemes } from './semantic';
+import { notBenched } from '@/lib/participantState';
 import { withCustomAnswers, type CustomAnswerDb } from './customAnswers';
 
 // The custom-field answers ride along in bulk — one query per side, never per pair (#1803).
@@ -43,7 +44,8 @@ function withThemes<T extends { profileDigest: { themes: unknown } | null }>(row
 
 /** Who is in the mentor pool — one definition, shared by the loader and the cohort pass's cap check. */
 export function mentorPoolWhere(tenant: TenantWhere) {
-  return withinTenant({ role: { in: ['MENTOR' as const, 'ADMIN' as const] }, isActive: true }, tenant);
+  // Not on the bench (#1778): a benched mentor is not offered.
+  return withinTenant({ role: { in: ['MENTOR' as const, 'ADMIN' as const] }, isActive: true, ...notBenched() }, tenant);
 }
 
 /** Every active mentor (and admin who mentors) of the tenant, with their load. */
