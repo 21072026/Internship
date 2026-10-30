@@ -156,6 +156,14 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     demoUrl: { limit: 'projectUrl', files: PROJECT_WRITERS },
     boardUrl: { limit: 'projectUrl', files: PROJECT_WRITERS },
   },
+  Kudo: {
+    id: ID,
+    relationId: ID,
+    senderId: ID,
+    recipientId: ID,
+    reason: { limit: 'kudoReason', files: ['src/app/api/kudos/route.ts', 'src/components/KudosPanel.tsx'] },
+    presetKey: ENUMERATED,
+  },
   Goal: {
     id: ID,
     relationId: ID,
@@ -302,6 +310,8 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
   Organization: {
     // OPEN | RULES, checked by isEligibilityMode() before any write (#1945).
     eligibilityMode: ENUMERATED,
+    // full | read_only | off, checked by isImpersonationPolicy() before any write (#1586).
+    impersonationPolicy: ENUMERATED,
     id: ID,
     stripeCustomerId: ID,
     // Minted by the server for the DNS ownership proof (#1661/#1662), never typed.

@@ -29,6 +29,7 @@ import { SharedAiArtifacts } from '@/components/ai/SharedAiArtifacts';
 import { RelationRecurringMeeting } from '@/components/meeting/RelationRecurringMeeting';
 import { QuestionsPanel } from '@/components/QuestionsPanel';
 import { RelationNotesPanel } from '@/components/RelationNotesPanel';
+import { KudosPanel } from '@/components/KudosPanel';
 import { ContactActions } from '@/components/ContactActions';
 import { RelationLifecycleControls } from '@/components/RelationLifecycleControls';
 import { effectiveLifecycleState } from '@/lib/relationLifecycle';
@@ -810,6 +811,8 @@ export default function MenteeDetailPage() {
           <MeetingRequestsPanel relationId={id} mode="manage" />
 
           <QuestionsPanel relationId={id} mode="answer" />
+
+          <KudosPanel relationId={id} recipient={{ id: relation.mentee.id, fullName: relation.mentee.fullName }} />
 
           <div className="flex flex-col gap-3">
             {canIssueCertificate(relation, stages) && (

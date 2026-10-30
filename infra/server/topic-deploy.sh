@@ -365,6 +365,9 @@ _in_image "$IMAGE" node scripts/backfill-requisitions.mjs || true
 _in_image "$IMAGE" node prisma/backfill-skill-taxonomy.mjs --apply || true
 # …and the legacy self-assessments onto those rows (#1822), insert-only.
 _in_image "$IMAGE" node prisma/backfill-skill-levels.mjs --apply || true
+# The pair's mirror seats (#1804): insert-only, so the demo relations carry
+# them like prod's; nothing reads them for access, so a failure changes nothing.
+_in_image "$IMAGE" node prisma/backfill-relation-participants.mjs --apply || true
 
 # Point the demo MARKETING org at THIS topic's marketing host so the landing
 # demo form opens and e-mail links stay on the topic env, not production
