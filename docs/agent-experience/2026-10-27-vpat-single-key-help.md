@@ -39,3 +39,6 @@
 - **On 2026-10-30 `/admin/candidates/[id]`'s offer panel did not render locally on main itself**
   (`offers.spec.ts` "admin creates and sends an offer via the wizard" red with `git stash`), so
   the new wizard pre-fill test could not be run end to end here.
+- **`check:erasure-coverage` only inventories `@db.Text`/`MediumText`/`LongText` columns.** A short
+  free-text column (`@db.VarChar(500)`) is outside it — say in the schema comment how erasure
+  reaches it anyway (here: the attachment rows are deleted with the author's messages).
