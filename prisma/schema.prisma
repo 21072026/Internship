@@ -1783,6 +1783,12 @@ model AnnouncementImage {
   contentType    String
   size           Int
   data           Bytes
+  // What the image shows, in the author's words (EN 301 549 11.8.2, #3388): the
+  // admin form asks for it and the feed, the archive and the mail render it as
+  // alt text. Null = decorative (alt=""), which is also every image uploaded
+  // before the prompt existed. Configuration copy written for everyone, deleted
+  // with the announcement.
+  altText        String?  @db.VarChar(500)
   uploadedAt     DateTime @default(now())
 
   announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
@@ -1896,6 +1902,10 @@ model NewsletterImage {
   contentType  String
   size         Int
   data         Bytes
+  // The hero image's description (EN 301 549 11.8.2, #3388), rendered as its
+  // alt text in the mail and the archive. Null = decorative (alt=""). Issue
+  // copy written for everyone, deleted with the newsletter.
+  altText      String?  @db.VarChar(500)
   uploadedAt   DateTime @default(now())
 
   newsletter Newsletter @relation(fields: [newsletterId], references: [id], onDelete: Cascade)

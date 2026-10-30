@@ -64,7 +64,7 @@ export async function deliverAnnouncement(args: {
   announcement: { id: string; text: string; translations: Prisma.JsonValue; link: string | null };
   users: AnnouncementRecipient[];
   mailRecipients: AnnouncementRecipient[];
-  image: { data: Buffer; contentType: string } | null;
+  image: { data: Buffer; contentType: string; altText?: string | null } | null;
 }): Promise<DeliveryResult> {
   const { announcement, users, mailRecipients } = args;
   const translations = (announcement.translations ?? {}) as Record<string, string>;
@@ -127,7 +127,7 @@ export async function dispatchScheduledAnnouncement(id: string, now: Date = new 
       audience: true,
       emailRequested: true,
       sentById: true,
-      image: { select: { data: true, contentType: true } },
+      image: { select: { data: true, contentType: true, altText: true } },
     },
   });
   if (!row) return 'missing';
@@ -149,7 +149,7 @@ export async function dispatchScheduledAnnouncement(id: string, now: Date = new 
     announcement: row,
     users,
     mailRecipients,
-    image: row.image ? { data: Buffer.from(row.image.data), contentType: row.image.contentType } : null,
+    image: row.image ? { data: Buffer.from(row.image.data), contentType: row.image.contentType, altText: row.image.altText } : null,
   });
   await prisma.announcement.update({
     where: { id },
