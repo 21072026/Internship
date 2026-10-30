@@ -159,6 +159,9 @@ export async function GET(request: Request) {
           brandAccent: o.brandAccent,
           brandPalette: o.brandPalette,
           brandMarkVersion: o.brandMarkVersion,
+          // The welcome page `/` shows on the org's verified domain (#1664).
+          welcomeTitle: o.welcomeTitle,
+          welcomeBody: o.welcomeBody,
         },
         sso: {
           ssoEnabled: o.ssoEnabled,
@@ -323,6 +326,11 @@ const patchSchema = z.object({
   brandTileColor: z.string().max(TEXT_LIMITS.orgBrandTileColor).optional(),
   brandAccent: z.string().max(TEXT_LIMITS.orgBrandAccent).optional(),
   brandPalette: z.string().max(TEXT_LIMITS.orgBrandPalette).optional(),
+  // The tenant welcome page (#1664) — part of the white-label surface. Stored
+  // as plain text and rendered as text (src/lib/tenantWelcomeRule.ts); empty
+  // string clears, and an empty title switches the page off.
+  welcomeTitle: z.string().max(TEXT_LIMITS.orgWelcomeTitle).optional(),
+  welcomeBody: z.string().max(TEXT_LIMITS.orgWelcomeBody).optional(),
   // SSO config (#545).
   ssoEnabled: z.boolean().optional(),
   ssoProvider: z.string().max(20).optional(),
@@ -404,7 +412,7 @@ export async function PATCH(request: Request) {
 
   const {
     id, plan, vertical, brandName, brandLogoUrl, brandColor, supportEmail,
-    brandTileColor, brandAccent, brandPalette,
+    brandTileColor, brandAccent, brandPalette, welcomeTitle, welcomeBody,
     ssoEnabled, ssoProvider, ssoIssuer, ssoEntryPoint, ssoCertificate, ssoLogoutUrl, ssoEnforced,
     ssoClientId, ssoClientSecret, ssoDiscoveryUrl, ssoScopes,
     ssoSignRequests, ssoRequireInResponseTo,
@@ -515,8 +523,9 @@ export async function PATCH(request: Request) {
 
   const touchesBranding = brandName !== undefined || brandLogoUrl !== undefined ||
     brandColor !== undefined || supportEmail !== undefined ||
-    brandTileColor !== undefined || brandAccent !== undefined || brandPalette !== undefined;
-  const clearsBranding = isPureClear([brandName, brandLogoUrl, brandColor, supportEmail, brandTileColor, brandAccent, brandPalette]);
+    brandTileColor !== undefined || brandAccent !== undefined || brandPalette !== undefined ||
+    welcomeTitle !== undefined || welcomeBody !== undefined;
+  const clearsBranding = isPureClear([brandName, brandLogoUrl, brandColor, supportEmail, brandTileColor, brandAccent, brandPalette, welcomeTitle, welcomeBody]);
   if (touchesBranding && !clearsBranding && !orgPlanHasFeature(effectivePlan, 'WHITE_LABEL')) {
     return featureLocked('WHITE_LABEL');
   }
@@ -633,6 +642,10 @@ export async function PATCH(request: Request) {
   const bt = orNull(brandTileColor); if (bt !== undefined) data.brandTileColor = bt === null ? null : normalizeHex(bt);
   const ba = orNull(brandAccent); if (ba !== undefined) data.brandAccent = ba;
   const bp = orNull(brandPalette); if (bp !== undefined) data.brandPalette = bp === null ? null : (parsePalette(bp) ?? []).join(',');
+  const wt = orNull(welcomeTitle); if (wt !== undefined) data.welcomeTitle = wt;
+  // The body keeps its inner line breaks — they are its paragraphs; orNull()
+  // only trims the ends.
+  const wb = orNull(welcomeBody); if (wb !== undefined) data.welcomeBody = wb;
 
   // SSO fields: only touch what's provided, then validate the effective config
   // (existing merged with the incoming changes) — so enabling requires a

@@ -68,13 +68,25 @@ export async function findActiveMentorship(
 ): Promise<ActiveMentorship | null> {
   return db.mentorshipRelation.findFirst({
     where: {
-      menteeId,
+      // A mentee is mentored either as the relation's primary mentee or from a
+      // seat in a GROUP (#1804) — both count, so a group's mentee cannot also
+      // hold a one-to-one, nor sit in two groups at once.
+      OR: [{ menteeId }, { participants: { some: menteeSeatWhere(menteeId) } }],
       status: 'ACTIVE',
       ...(opts?.exceptRelationId ? { id: { not: opts.exceptRelationId } } : {}),
     },
     orderBy: { startDate: 'asc' },
     select: { id: true, mentorId: true, startDate: true },
   });
+}
+
+/**
+ * A MENTEE seat beyond the primary pair that nobody has left (#1804). The
+ * primary pair's mirror seat is excluded: the `menteeId` scalar already
+ * answers for it, and a stale mirror must never count.
+ */
+export function menteeSeatWhere(menteeId: string): Prisma.RelationParticipantWhereInput {
+  return { userId: menteeId, role: 'MENTEE', leftAt: null, isPrimaryPair: false };
 }
 
 /**
