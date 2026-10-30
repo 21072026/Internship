@@ -2,9 +2,7 @@ import { NextResponse } from 'next/server';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { parseRequired } from '@/lib/mentorScreeningRule';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { enforceRateLimit, rateLimit } from '@/lib/rateLimit';
 import { notify } from '@/lib/notify';
@@ -13,6 +11,7 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { requireCapability } from '@/lib/capabilityGate';
+import { requirePermission } from '@/lib/authz';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { capSkills } from '@/lib/skills';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
@@ -156,9 +155,9 @@ export async function POST(request: Request) {
 
 // GET — admin-only list of applications, filterable by status, paginated.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('user.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // Mentor recruiting is a mentorship module (the nav tags it so): a vertical
   // without it gets the same refusal a direct URL would on a write.
   const capGate = await requireCapability(session.user.orgId, 'mentorship');

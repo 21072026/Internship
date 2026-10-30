@@ -6,6 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { requireCapability } from '@/lib/capabilityGate';
 import { canSeeCompensation } from '@/lib/offers';
+import { actorFromSession, can } from '@/lib/authz';
 import { renderLetterForOffer } from '@/lib/offerLetterServer';
 import { generateOfferLetterPdf } from '@/lib/offerLetterPdf';
 import { getOrgBranding } from '@/lib/orgBranding';
@@ -31,6 +32,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const cap = await requireCapability(session.user.orgId, 'placements');
   if (cap) return cap;
   const role = session.user.role;
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'company.read', undefined, session));
 
   return withTenantScope(session, async () => {
     const offer = await prisma.offer.findFirst({
@@ -47,7 +50,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     });
     if (!offer) return NextResponse.json({ error: 'Offer not found' }, { status: 404 });
     const isOwnMenteeOffer = role === 'MENTEE' && offer.relation.menteeId === session.user.id;
-    if (!canSeeCompensation({ role, isOwnMenteeOffer }) || (role !== 'ADMIN' && offer.status === 'DRAFT')) {
+    if (!canSeeCompensation({ role, isOwnMenteeOffer }) || (!isAdmin && offer.status === 'DRAFT')) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

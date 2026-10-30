@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
@@ -67,7 +68,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   const rel = req.relation;
-  const allowed = session.user.role === 'ADMIN' || rel.mentorId === session.user.id;
+  // "Admin" is the permission layer's answer (#1571).
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'relation.write', undefined, session));
+  const allowed = isAdmin || rel.mentorId === session.user.id;
   if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (req.status !== 'PENDING') return NextResponse.json({ error: 'Already handled' }, { status: 409 });
 

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { scanMessageForSafeguarding } from '@/lib/safeguardingScan';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { sendEmail } from '@/services/emailService';
@@ -33,10 +32,9 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 // POST — a mentor (or admin) emails one or more of their mentees. Each send is
 // logged as an InteractionLog(Email) on the relation.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'mail.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
   // Mailing mentees about their mentorship is a mentorship-module write: a
   // vertical without the module (MARKETING) has no relations of this kind to
   // write to, and the composer is not in its nav either.
@@ -66,7 +64,7 @@ export async function POST(request: Request) {
     // mail another tenant's mentees by id (#2542 follow-up). A foreign id is
     // silently dropped, exactly like an id that does not exist.
     const where = withinTenant(
-      session.user.role === 'ADMIN'
+      admin
         ? { id: { in: relationIds } }
         : { id: { in: relationIds }, mentorId: session.user.id },
       await tenantWhere(session),

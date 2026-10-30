@@ -68,3 +68,13 @@ bir kanıt yolunu kırmızıya çevirir; sonucu doğrulanabilir bir `check:` kan
 (ilk çalıştırma üç bayat iddia buldu). Bir `check:` komutu `src/lib/vpat.ts`'i dışlamalıdır (`--exclude=vpat.ts`),
 yoksa kendi alıntısını bulur. Rapor yalnızca İngilizcedir; Markdown imaja girmediği için
 (`.dockerignore`) yayın `/accessibility/vpat` sayfası ve `/accessibility/vpat.md` route'udur.
+
+## DPA, ROPA ve DPIA paketi (#2029)
+**Kural:** yeni bir alt işleyen (subprocessor) ya da yeni bir işleme amacı, **aynı PR içinde** hem
+[`../trust/subprocessors.md`](../trust/subprocessors.md) hem [`ropa.md`](ropa.md) dosyasını günceller.
+
+- [dpa-template.md](dpa-template.md) — GDPR md. 28 işleyen sözleşmesi şablonu (imzadan önce avukat incelemesi şart)
+- [dpa-annex-sccs.md](dpa-annex-sccs.md) — aktarım dayanağı: AB SCC Modül 2, UK IDTA/Addendum, İsviçre; alt işleyen başına mekanizma
+- [ropa.md](ropa.md) — md. 30 işleme kaydı; her saklama süresi koddaki sabitine bağlı
+- [dpia-starter.md](dpia-starter.md) — DPIA başlangıç dosyası ve risk kaydı (AI CV okuma ve aday sıralaması yüksek riskli)
+- Müşteriye dönük özet: [`../trust/data-lifecycle.md`](../trust/data-lifecycle.md)

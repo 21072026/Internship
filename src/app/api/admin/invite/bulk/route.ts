@@ -5,7 +5,6 @@ import { logActivity } from '@/lib/activity';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
-import { planLimits, isOrgPlan } from '@/lib/orgPlans';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { createInvitation, discardInvitation, invitationOrgWhere } from '@/lib/inviteCreate';
 import { worldOfOrg, worldUserWhere } from '@/lib/userWorld';
@@ -56,18 +55,6 @@ function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
-}
-
-/** Seats left under the tenant's plan; null = unlimited (or no org resolved). */
-async function seatsAvailable(orgId: string | null): Promise<number | null> {
-  if (!orgId) return null;
-  const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { plan: true } });
-  const plan = org && isOrgPlan(org.plan) ? org.plan : null;
-  if (!plan) return null;
-  const limit = planLimits(plan).maxUsers;
-  if (limit == null) return null;
-  const usage = await prisma.user.count({ where: { orgId } });
-  return Math.max(0, limit - usage);
 }
 
 export async function POST(request: Request) {
@@ -139,7 +126,6 @@ export async function POST(request: Request) {
         defaultRole,
         existingUserEmails,
         pendingInviteEmails,
-        seatsAvailable: await seatsAvailable(orgId),
       });
 
       // Warn-only look-alike check (#841), same as the CSV importer.

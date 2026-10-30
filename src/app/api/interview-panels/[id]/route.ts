@@ -13,6 +13,7 @@ import { settingsOrgOf } from '@/lib/settingsOrg';
 import { logActivity } from '@/lib/activity';
 import { notifyIfAllowed } from '@/lib/notify';
 import { findActiveMentorship } from '@/lib/activeMentorship';
+import { actorFromSession, can } from '@/lib/authz';
 import { z } from 'zod';
 
 // Panel detail — and the place blind scoring is actually enforced (#824).
@@ -25,6 +26,8 @@ import { z } from 'zod';
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'company.read', undefined, session));
 
   return await withTenantScope(session, async () => {
     const { id } = await params;
@@ -34,7 +37,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     });
     if (!panel) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const isAdmin = session.user.role === 'ADMIN';
     const isMember = panel.members.some((m) => m.userId === session.user.id);
     // The subject's active mentor decides the outcome (#1846) — the same rule the
     // interview-request decision uses — and may read the panel for it.
@@ -169,6 +171,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   // panel lookup, like every other capability gate.
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'company.write', undefined, session));
 
   return await withTenantScope(session, async () => {
     const { id } = await params;
@@ -200,7 +204,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     // be indistinguishable from "authorized".
     assertSameOrg(panel.orgId, requireOrg(session));
 
-    const isAdmin = session.user.role === 'ADMIN';
     if (!isAdmin && panel.createdById !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

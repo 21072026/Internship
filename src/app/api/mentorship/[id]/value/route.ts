@@ -3,6 +3,7 @@ import { getServerSession, type Session } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { actorFromSession, can, type Permission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -41,13 +42,16 @@ const bodySchema = z.object({
 });
 
 /** The record, if the caller may see its value; otherwise the answer to send. */
-async function loadForEditor(session: Session, id: string) {
+async function loadForEditor(session: Session, id: string, perm: Permission) {
+  // Admin reach from the permission rule, not the role string (#1571).
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, perm, undefined, session));
   const relation = await prisma.mentorshipRelation.findFirst({
     where: withinTenant({ id }, await tenantWhere(session)),
     select: { id: true, orgId: true, mentorId: true, value: { select: { valueMinor: true, currency: true, source: true, updatedAt: true } } },
   });
   if (!relation) return { denied: NextResponse.json({ error: 'Relation not found' }, { status: 404 }) } as const;
-  if (session.user.role !== 'ADMIN' && relation.mentorId !== session.user.id) {
+  if (!isAdmin && relation.mentorId !== session.user.id) {
     return { denied: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) } as const;
   }
   if (!isDealValueEnabled(await shellCapabilities(relation.orgId))) {
@@ -71,7 +75,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       const session = await getServerSession(authOptions);
       if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       return await withTenantScope(session, async () => {
-        const loaded = await loadForEditor(session, id);
+        const loaded = await loadForEditor(session, id, 'program.read');
         if ('denied' in loaded) return loaded.denied;
         return NextResponse.json({ value: payload(loaded.relation.value) });
       });
@@ -93,7 +97,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       if (denied) return denied;
 
       return await withTenantScope(session, async () => {
-        const loaded = await loadForEditor(session, id);
+        const loaded = await loadForEditor(session, id, 'relation.write');
         if ('denied' in loaded) return loaded.denied;
         const { relation } = loaded;
 

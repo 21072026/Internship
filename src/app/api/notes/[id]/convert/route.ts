@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { actorFromSession, can } from '@/lib/authz';
 import { z } from 'zod';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -68,7 +69,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         select: { mentorId: true },
       });
       if (!relation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-      if (session.user.role !== 'ADMIN' && relation.mentorId !== session.user.id) {
+      // Admin reach from the permission rule, not the role string (#1571).
+      const actor = await actorFromSession(session);
+      const isAdmin = !!actor && (await can(actor, 'relation.write', undefined, session));
+      if (!isAdmin && relation.mentorId !== session.user.id) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
       const goal = await prisma.goal.create({
@@ -97,7 +101,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       where: { projectId_userId: { projectId: projectId!, userId: session.user.id } },
       select: { id: true },
     });
-    if (session.user.role !== 'ADMIN' && !member) {
+    // Admin reach from the permission rule, not the role string (#1571).
+    const actor = await actorFromSession(session);
+    const isAdmin = !!actor && (await can(actor, 'program.write', undefined, session));
+    if (!isAdmin && !member) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
     // An assignee who isn't on the project would get a task they can't see.

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can, requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -91,7 +92,10 @@ export async function GET(request: Request) {
   // Same fail-closed role gate as the mentor directory (#831): COMPANY and
   // SOURCE have their own separately-consented surfaces and no business reading
   // a mentor's calendar.
-  if (!['MENTEE', 'MENTOR', 'ADMIN'].includes(session.user.role)) {
+  // "Admin" is the permission layer's answer (#1571), asked once.
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'program.read', undefined, session));
+  if (!isAdmin && !['MENTEE', 'MENTOR'].includes(session.user.role)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
@@ -105,7 +109,7 @@ export async function GET(request: Request) {
     // to a caller in another organization.
     if (!mentor) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    let visible = session.user.role === 'ADMIN';
+    let visible = isAdmin;
     // A mentee may read the hours of the mentor they are actually paired with.
     // Deliberately MENTEE-only: there is no co-mentoring feature, so a mentor
     // has no errand in a peer's calendar — and a relation filter without
@@ -158,7 +162,7 @@ export async function GET(request: Request) {
     // full someone else's week is.
     const policy = await loadBookingPolicy(prisma, mentor.id);
     let busy: { start: string; end: string }[] | undefined;
-    if (session.user.role === 'ADMIN' || session.user.role === 'MENTEE') {
+    if (isAdmin || session.user.role === 'MENTEE') {
       const now = new Date();
       const horizon = new Date(now.getTime() + BUSY_HORIZON_MS);
       // Real calendars included (#1997): still bare windows to the reader.
@@ -203,10 +207,9 @@ async function zoneOfMentor(mentorId: string) {
 // POST — add a slot to the current mentor's availability (or, for an ADMIN, to
 // a mentor of their own organization). Weekly, or a dated one-off.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'program.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   if (parsed.data.endTime <= parsed.data.startTime) {

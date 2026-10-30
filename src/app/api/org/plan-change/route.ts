@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -48,10 +47,10 @@ const LIST_FIELDS = {
   updatedAt: true,
 } as const;
 
-async function gate() {
-  const session = await getServerSession(authOptions);
-  if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-  if (session.user.role !== 'ADMIN') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+async function gate(permission: 'org.settings.read' | 'org.settings.write', request: Request) {
+  const allowed = await requirePermission(permission, { request });
+  if ('error' in allowed) return { error: allowed.error };
+  const { session } = allowed;
   const orgId = resolveOrgId(session);
   if (!orgId) return { error: NextResponse.json({ error: 'No organization' }, { status: 403 }) };
   const capGate = await requireCapability(orgId, 'mentorship');
@@ -61,8 +60,8 @@ async function gate() {
 
 // GET — the caller's own org's requests, newest first, so the billing screen
 // can say "requested, waiting" or show an operator's answer.
-export async function GET() {
-  const g = await gate();
+export async function GET(request: Request) {
+  const g = await gate('org.settings.read', request);
   if ('error' in g) return g.error;
   const { session, orgId } = g;
   return withTenantScope(session, async () => {
@@ -78,7 +77,7 @@ export async function GET() {
 
 // POST — file (or update) the org's one open request.
 export async function POST(request: Request) {
-  const g = await gate();
+  const g = await gate('org.settings.write', request);
   if ('error' in g) return g.error;
   const { session, orgId } = g;
 

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { MATCH_DECISION_NOTE_MAX } from '@/lib/matching/decisionRule';
+import { getLocale } from '@/i18n/server';
 import { prisma } from '@/lib/prisma';
 import { decideMentorshipRequest } from '@/lib/mentorshipDecision';
 import { withTenantScope } from '@/lib/orgContext';
@@ -108,6 +110,10 @@ const decideSchema = z.object({
   requestId: z.string().min(1),
   action: z.enum(['approve', 'reject']),
   mentorId: z.string().min(1).optional(),
+  // The audit record (#1789): the suggestion batch the admin was shown (the
+  // server reads its rows) and the admin's own note on why this mentor.
+  suggestionBatchId: z.string().min(1).max(64).optional(),
+  decisionNote: z.string().max(MATCH_DECISION_NOTE_MAX).optional(),
 });
 
 // PUT — decide a request. Approving requires a mentorId and creates the
@@ -124,7 +130,7 @@ export async function PUT(request: Request) {
   return await withTenantScope(session, async () => {
   const parsed = decideSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
-  const { requestId, action, mentorId } = parsed.data;
+  const { requestId, action, mentorId, suggestionBatchId, decisionNote } = parsed.data;
 
   // The request and the chosen mentor must both be in the caller's tenant; a
   // foreign id reads as not found, never as "exists" (#2542).
@@ -148,6 +154,9 @@ export async function PUT(request: Request) {
     requestId,
     action,
     mentorId,
+    suggestionBatchId,
+    decisionNote,
+    locale: await getLocale(),
     actorId: session.user.id,
     actorEmail: session.user.email ?? null,
     request,

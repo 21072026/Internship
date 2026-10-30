@@ -300,6 +300,9 @@ model Organization {
   matchFeedback           MatchFeedback[]
   matchRuleSets           MatchRuleSet[]
   matchRules              MatchRule[]
+  matchDecisions          MatchDecision[]
+  matchRounds             MatchRound[]
+  matchProposals          MatchProposal[]
   settings                Setting[]
   programCosts            ProgramCost[]
   placements              Placement[]
@@ -4048,6 +4051,7 @@ model Cohort {
   adminScopeGrants AdminScopeGrant[]
   settings         Setting[]
   stageSlas        StageSla[]
+  matchRounds      MatchRound[]
 }
 
 // ── Program journey (#1852) ──────────────────────────────────────────────────
@@ -7002,6 +7006,130 @@ model MatchFeedback {
 /// weight × ratio; HARD_REQUIRE blocks the pair when the dimension does not
 /// match; HARD_EXCLUDE blocks it when it does. A block is score 0 with the
 /// rule named — never a silent drop.
+enum MatchRoundStatus {
+  DRAFT
+  REVIEW
+  PUBLISHED
+  DISCARDED
+}
+
+enum MatchProposalState {
+  DRAFT
+  LOCKED
+  DISCARDED
+  PUBLISHED
+}
+
+/// A bulk matching round over an intake (#1793, story #1791): the staging area
+/// where proposed pairings wait before any of them becomes a relation.
+/// DRAFT → REVIEW → PUBLISHED, or DISCARDED until published. PUBLISHED is
+/// terminal: never re-run, re-published, edited or discarded. The lifecycle
+/// rules are pure in src/lib/matching/round.ts. Nothing here creates a
+/// relation — only the publish path (#1796) does.
+model MatchRound {
+  id             String           @id @default(cuid())
+  orgId          String?
+  cohortId       String?
+  name           String           @db.VarChar(120)
+  status         MatchRoundStatus @default(DRAFT)
+  ruleSetId      String?
+  ruleSetVersion Int?
+  createdById    String
+  createdAt      DateTime         @default(now())
+  publishedById  String?
+  publishedAt    DateTime?
+  /// Counts written by the cohort pass (#1794): proposed, unmatched, mentors used, at capacity…
+  stats          Json             @default("{}")
+
+  org       Organization?   @relation(fields: [orgId], references: [id])
+  cohort    Cohort?         @relation(fields: [cohortId], references: [id], onDelete: SetNull)
+  proposals MatchProposal[]
+
+  @@index([orgId, status])
+  @@index([cohortId])
+}
+
+/// One mentee's proposed pairing inside a MatchRound (#1793). An UNMATCHED
+/// mentee still gets a row (mentorId null, `unmatchedReason` set) — that row is
+/// the diagnostic, not an absence. One proposal per mentee per round. Carries
+/// its own orgId and is in TENANT_MODELS: it names participants directly, so it
+/// is scoped on its own rather than through its round.
+model MatchProposal {
+  id              String             @id @default(cuid())
+  orgId           String?
+  roundId         String
+  menteeId        String
+  mentorId        String?
+  score           Int?
+  breakdown       Json               @default("[]")
+  blockedBy       Json               @default("[]")
+  rank            Int?
+  /// The next few candidates with their scores, so a swap needs no re-run.
+  alternatives    Json               @default("[]")
+  state           MatchProposalState @default(DRAFT)
+  unmatchedReason String?            @db.VarChar(64)
+  /// Set on publish.
+  relationId      String?
+  note            String?            @db.Text
+  updatedById     String?
+  updatedAt       DateTime           @updatedAt
+
+  org   Organization? @relation(fields: [orgId], references: [id])
+  round MatchRound    @relation(fields: [roundId], references: [id], onDelete: Cascade)
+
+  @@unique([roundId, menteeId])
+  @@index([roundId, state])
+}
+
+/// Where a pairing was decided (#1789). The human step, named.
+enum MatchDecisionSource {
+  ADMIN_DIRECT
+  REQUEST_APPROVAL
+  MENTOR_ACCEPT
+  BULK_ROUND
+  MENTEE_PREFERENCE
+}
+
+/// The auditable record of one pairing (#1789): who was paired, on what score,
+/// by which rule set, whether the human overrode the ranking, and why. One row
+/// per pairing, written by `recordMatchDecision()` (src/lib/matching/decision.ts)
+/// and nothing else. `breakdown` is a FROZEN copy of the rule contributions at
+/// decision time — editing or archiving the rule set later never rewrites it,
+/// which is why the score is copied here instead of recomputed on read.
+/// `overrodeSuggestion` is computed server-side from the suggestion batch the
+/// client was shown (MatchFeedback rows), never taken from the client. Ids are
+/// bare (no FK) on purpose: the audit row must outlive the relation, the people
+/// and the rule set it names.
+model MatchDecision {
+  id                 String              @id @default(cuid())
+  orgId              String?
+  relationId         String?
+  menteeId           String
+  mentorId           String
+  requestId          String?
+  /// #1791's bulk round, once it exists.
+  roundId            String?
+  source             MatchDecisionSource
+  score              Int?
+  breakdown          Json                @default("[]")
+  blockedBy          Json                @default("[]")
+  ruleSetId          String?
+  ruleSetVersion     Int?
+  /// Where the chosen mentor sat in the shown ranking; null = not scored/shown.
+  suggestedRank      Int?
+  overrodeSuggestion Boolean             @default(false)
+  /// The coordinator's own note — "why this mentor". Stored here and nowhere else.
+  note               String?             @db.Text
+  decidedById        String
+  decidedAt          DateTime            @default(now())
+
+  org Organization? @relation(fields: [orgId], references: [id])
+
+  @@index([orgId, decidedAt])
+  @@index([relationId])
+  @@index([menteeId])
+}
+
 enum MatchRuleKind {
   WEIGHTED
   HARD_REQUIRE

@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**The last hand-rolled admin checks move onto the permission layer (#1571, story #1565):** `/api/cron` asks `org.settings.write` (a sweep writes rows and sends mail), `/api/dev/db-tally` `analytics.read` (still 404 unless `DB_QUERY_TALLY=1`), and `/api/health`'s admin detail branch `can(actor, 'analytics.read')`. `scripts/authz-baseline.json` has no `pending` entry left: every remaining comparison to `'ADMIN'` under `src/app/api` is an `allowed` data-shape site with its reason (the invited role's admin-seat quota in `invite`/`register`, the agenda operator billing class, the outreach queue pick, the weekly-report read-only refusal). A signed-in non-admin calling `/api/cron` gets 403 instead of 401."
+}

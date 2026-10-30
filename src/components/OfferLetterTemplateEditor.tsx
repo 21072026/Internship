@@ -93,7 +93,7 @@ export function OfferLetterTemplateEditor() {
         <CardTitle>{e.title}</CardTitle>
       </CardHeader>
       <p className="text-sm text-gray-500 mb-4">{e.subtitle}</p>
-      {error && <p className="mb-3 text-sm text-red-600" role="alert">{error}</p>}
+      {error && <p className="mb-3 text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
       {flash && <p className="mb-3 text-sm text-green-700" role="status">{flash}</p>}
       {rows && (
         <div className="space-y-4">
