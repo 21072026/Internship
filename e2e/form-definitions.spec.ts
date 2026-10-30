@@ -38,8 +38,10 @@ test.describe('form definitions', () => {
 
   test('versions, locks, matchable and answers across versions', async ({ page }) => {
     await signInAndSettle(page, admin, PW, '/admin');
-    const track = { key: 'track', type: 'SELECT', labels: { en: 'Track' }, required: true, matchable: true, options: [{ value: 'web', labels: { en: 'Web' } }, { value: 'data', labels: { en: 'Data' } }] };
-    const bio = { key: 'about', type: 'LONG_TEXT', labels: { en: 'About you' } };
+    // Every live field reads in EN/TR/DE, or publishing is refused (#1802).
+    const L = (en: string) => ({ en, tr: `${en} (tr)`, de: `${en} (de)` });
+    const track = { key: 'track', type: 'SELECT', labels: L('Track'), required: true, matchable: true, options: [{ value: 'web', labels: L('Web') }, { value: 'data', labels: L('Data') }] };
+    const bio = { key: 'about', type: 'LONG_TEXT', labels: L('About you') };
     const base = { key: `mentee_reg_${stamp}`, audience: 'MENTEE', surface: 'REGISTRATION', title: { en: 'Registration' } };
 
     // Free text can never feed matching — refused at the write, not in a UI.
@@ -54,6 +56,11 @@ test.describe('form definitions', () => {
     // A draft is edited in place.
     const draftEdit = await page.request.put(`/api/admin/forms/${v1.id}`, { data: { fields: [track, { ...bio, labels: { en: 'Tell us about you' } }] } });
     expect(draftEdit.status()).toBe(200);
+    // An EN-only label cannot go live: the refusal names the field and the languages.
+    const halfTranslated = await page.request.post(`/api/admin/forms/${v1.id}/publish`);
+    expect(halfTranslated.status()).toBe(400);
+    expect(await halfTranslated.json()).toMatchObject({ code: 'missing_locales', fields: [{ key: 'about', locales: ['tr', 'de'] }] });
+    expect((await page.request.put(`/api/admin/forms/${v1.id}`, { data: { fields: [track, { ...bio, labels: L('Tell us about you') }] } })).status()).toBe(200);
     expect((await page.request.post(`/api/admin/forms/${v1.id}/publish`)).status()).toBe(200);
     expect((await page.request.post(`/api/admin/forms/${v1.id}/publish`)).status()).toBe(409);
 
@@ -71,7 +78,7 @@ test.describe('form definitions', () => {
     expect([rekeyed.status(), (await rekeyed.json()).code]).toEqual([409, 'field_key_locked']);
 
     // Editing the published version creates version 2 — `about` dropped (carried archived).
-    const v2res = await page.request.put(`/api/admin/forms/${v1.id}`, { data: { fields: [track, { key: 'city', type: 'TEXT', labels: { en: 'City' } }] } });
+    const v2res = await page.request.put(`/api/admin/forms/${v1.id}`, { data: { fields: [track, { key: 'city', type: 'TEXT', labels: L('City') }] } });
     expect(v2res.status()).toBe(201);
     const v2 = (await v2res.json()).form;
     expect(v2.version).toBe(2);
