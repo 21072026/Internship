@@ -100,7 +100,7 @@ export const SOURCE_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,39}$/;
  * source may be registered under these names. The unit test reads the
  * directory and fails when a new static sibling is not listed here.
  */
-export const RESERVED_SOURCE_SLUGS = ['calendar', 'chat', 'google'] as const;
+export const RESERVED_SOURCE_SLUGS = ['calendar', 'chat', 'google', 'microsoft'] as const;
 
 /** `IntegrationSource.label` is VarChar(80). */
 export const SOURCE_LABEL_MAX = 80;
