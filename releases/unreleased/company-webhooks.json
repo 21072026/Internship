@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Self-served company webhooks (#2006, 3/n):** a COMPANY owner registers webhooks for its own hiring events at `/api/company/integrations/webhooks` (`Webhook.companyId`, additive; at most 10 per company). Events are limited to `COMPANY_WEBHOOK_EVENTS` (application stage changes, interview requests and panel outcomes, offers, a filled requisition, the company's interest flags) — anything else is `403 event_above_ceiling`. Delivery is filtered at fan-out: `companyReceiverCheck()` resolves the event's subject record and delivers only when it belongs to the hook's company, fail-closed, so an admin widening the hook's event list still sends it nothing else; replays apply the same filter. SSRF guard, plan gate, one-time secret and warning-level audit as the admin form; the admin webhook list shows each hook's company; demo blocklist entry.",
+  "notes": {
+    "en": ["Companies can register their own webhooks for offers, interview requests and application updates — they only ever receive events about their own records."],
+    "tr": ["Şirketler teklifler, mülakat talepleri ve başvuru güncellemeleri için kendi webhook'larını kaydedebiliyor — yalnızca kendi kayıtlarıyla ilgili olayları alırlar."],
+    "de": ["Unternehmen können eigene Webhooks für Angebote, Interviewanfragen und Bewerbungsupdates registrieren — sie erhalten nur Ereignisse zu ihren eigenen Datensätzen."]
+  }
+}
