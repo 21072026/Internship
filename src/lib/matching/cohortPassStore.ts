@@ -18,6 +18,7 @@ import { resolveRuleSet } from './ruleSet';
 import { skillGraphsFor, skillIdsByUser } from './skillContext';
 import type { CohortPassLoaders } from './cohortPass';
 import { eligibleUserIds } from '@/lib/eligibility';
+import { notBenched } from '@/lib/participantState';
 
 export function cohortPassLoaders(opts: {
   tenant: TenantWhere;
@@ -38,6 +39,8 @@ export function cohortPassLoaders(opts: {
             {
               role: 'MENTEE' as const,
               isActive: true,
+              // A benched mentee is not proposed (#1778).
+              ...notBenched(),
               menteeRelations: { none: { status: 'ACTIVE' as const } },
               ...(opts.menteeIds ? { id: { in: [...opts.menteeIds] } } : {}),
             },

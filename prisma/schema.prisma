@@ -933,6 +933,17 @@ model User {
   // Idempotency for the reminder cron: stamped when the "let's talk again"
   // message goes out, so a tick that runs twice does not mail twice.
   reEngageNotifiedAt      DateTime?
+  // On the bench (#1778): "not this term, but keep them". ACTIVE | BENCHED, a
+  // free String with the whitelist in src/lib/participantState.ts (never an
+  // enum). NOT deactivation: a benched person still signs in and reads their
+  // own record — isActive, sessionsValidFrom and consentAt are never touched by
+  // a bench. Benched = not offered for matching, not assignable, no nudges;
+  // their existing pairings are unaffected (pausing a pairing is #1770's).
+  participantState        String        @default("ACTIVE") @db.VarChar(16)
+  benchedAt               DateTime?
+  // The admin's reason — prose about the person, scrubbed on erasure.
+  benchedReason           String?       @db.VarChar(500)
+  benchedById             String?       @db.VarChar(64)
   // Opt-out switch for transactional email (messages, announcements). In-app
   // notifications are always created regardless.
   emailNotifications      Boolean       @default(true)
@@ -1121,6 +1132,7 @@ model User {
   @@index([orgId, externalId])
   // The /api/v1 keyset (#1988): candidates page over (updatedAt, id) within one org.
   @@index([orgId, updatedAt, id])
+  @@index([participantState])
 }
 
 // Per-user state for in-product guidance surfaces (#2068): "I have seen this"
