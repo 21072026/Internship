@@ -1485,6 +1485,13 @@ model MessageAttachment {
   contentType String
   size        Int
   data        Bytes
+  // What an image shows, in the sender's words (WCAG 1.1.1 / EN 11.8.2, #2864):
+  // the composer asks for it under every attached image and the thread renders
+  // it as the image's alt text. Nullable — optional for the author, absent on
+  // every attachment sent before the prompt existed (the filename stands in).
+  // Erased with the row: the sweep deletes the attachments of the person's
+  // messages (accountErasure.ts).
+  altText     String?  @db.VarChar(500)
   createdAt   DateTime @default(now())
 
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
