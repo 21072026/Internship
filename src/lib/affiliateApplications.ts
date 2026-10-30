@@ -17,7 +17,7 @@ import { orgWhere } from '@/lib/tenantFilter';
 import { can } from '@/lib/authz';
 import { adminTierFor } from '@/lib/authzRule';
 import { lockOrganization } from '@/lib/affiliatePartners';
-import { sendAffiliateApplicationReceivedEmail } from '@/services/emailService';
+import { sendAffiliateApplicationReceivedEmail } from '@/lib/affiliateApplicationMail';
 import { APPLICATIONS_PER_ADDRESS_PER_DAY, type AffiliateApplicationInput } from '@/lib/affiliateApplicationRule';
 
 export type SubmitOutcome = 'created' | 'pending_exists' | 'capped';
