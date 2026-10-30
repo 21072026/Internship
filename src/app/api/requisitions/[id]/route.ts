@@ -5,6 +5,7 @@ import type { Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { COMPANY_NOT_VERIFIED, publishRefused } from '@/lib/companyVerification';
+import { raiseRequisitionStatus } from '@/lib/requisitionEvents';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { closedAtForStatus, normalizeSkills, protectedFields, requisitionPatchSchema } from '@/lib/requisitions';
@@ -103,6 +104,7 @@ export async function PATCH(request: Request, { params }: Context) {
       if (changed.count !== 1) return NextResponse.json({ error: 'Requisition changed concurrently; reload and try again', code: 'concurrent_update' }, { status: 409 });
       const requisition = await tx.requisition.findUnique({ where: { id: current.id }, include: { company: { select: { id: true, name: true } }, owner: { select: { id: true, fullName: true } } } });
       if (skills) mirror = { id: current.id, skills };
+      await raiseRequisitionStatus(tx, { requisitionId: current.id, orgId: scope.orgId, from: current.status, to: status }, scope.session.user.id);
       return NextResponse.json({ requisition });
     });
     const synced = mirror as { id: string; skills: string[] } | null;

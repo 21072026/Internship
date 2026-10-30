@@ -11,6 +11,7 @@ import { CommandPalette } from '@/components/CommandPalette';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { AdminNav } from '@/components/AdminNav';
 import { isSuperAdmin } from '@/lib/superAdmin';
+import { adminTierFor } from '@/lib/authzRule';
 import { resolveQueueScope } from '@/lib/mailQueueAdmin';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
@@ -80,7 +81,7 @@ async function AdminLayout({ children }: { children: React.ReactNode }) {
           <p className="text-xs text-gray-500 mt-1">{t.panel.admin}</p>
         </div>
 
-        <AdminNav capabilities={capabilities} superAdmin={superAdmin} operator={operator} />
+        <AdminNav capabilities={capabilities} superAdmin={superAdmin} operator={operator} adminTier={adminTierFor(session.user.role, session.user.adminLevel)} />
 
         <ModeSwitcher modes={modes} />
 

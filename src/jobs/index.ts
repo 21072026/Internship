@@ -27,6 +27,7 @@ import { registerMeetingJobs } from './meetings';
 import { registerDigestJobs } from './digests';
 import { registerHousekeepingJobs } from './housekeeping';
 import { registerPlatformJobs } from './platform';
+import { runProfileDigestSweep } from '@/lib/profileDigest';
 
 let registered = false;
 
@@ -108,6 +109,11 @@ export function registerAllJobs(): void {
   // before it mails, so a rerun loses the claim and sends nothing.
   registerJob('nudge.evaluate', async () => counters(await runNudgeScan()), { timeoutMs: 10 * 60_000 });
   registerJob('nudge.send', async (payload) => ({ [await runNudgeSend(payload)]: 1 }), { timeoutMs: 60_000 });
+
+  // The nightly profile-digest refresh (#2038). A rerun re-reads every text and
+  // its hash: what was generated the first time is now `unchanged` and costs
+  // no call, so a retry can only finish what the first attempt did not.
+  registerJob('profileDigest.refresh', async () => runProfileDigestSweep(), { timeoutMs: 15 * 60_000 });
 
   // A delayed stage-automation run (#1703). The run is claimed PENDING →
   // RUNNING in one guarded update before any action, so a rerun finds it taken

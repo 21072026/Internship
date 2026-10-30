@@ -23,6 +23,7 @@ import { sendMentorOfferEmail } from '@/services/emailService';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { decideMentorshipRequest, type DecisionResult } from '@/lib/mentorshipDecision';
 import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
+import { isBenched } from '@/lib/participantState';
 import { isExpired, offerExpiresAt, offerRefusal, reminderDue, weekAgo, type OfferRefusal } from '@/lib/mentorOfferRule';
 import { livePendingRequestWhere, requestExpiresAt } from '@/lib/requestExpiryRule';
 
@@ -61,14 +62,14 @@ export function offerableMenteesWhere(tenant: TenantWhere, now: Date = new Date(
 
 export type CreateOfferResult =
   | { ok: true; offerId: string }
-  | { ok: false; status: 403 | 404 | 409; code: OfferRefusal | 'not_found' };
+  | { ok: false; status: 403 | 404 | 409; code: OfferRefusal | 'not_found' | 'mentor_benched' };
 
 export async function createMentorOffer(opts: { session: Session; tenant: TenantWhere; menteeId: string; message: string | null; request?: Request }): Promise<CreateOfferResult> {
   const { session, tenant, menteeId, message, request } = opts;
   const now = new Date();
   const mentor = await prisma.user.findFirst({
     where: withinTenant({ id: session.user.id, isActive: true }, tenant),
-    select: { id: true, fullName: true, orgId: true, mentorCapacity: true, acceptingMentees: true, selfMatchLimit: true },
+    select: { id: true, fullName: true, orgId: true, mentorCapacity: true, acceptingMentees: true, selfMatchLimit: true, participantState: true },
   });
   // A mentee outside the tenant, not a MENTEE, inactive — or not opted in —
   // all read as "not offerable"; nothing is revealed about them.
@@ -77,6 +78,8 @@ export async function createMentorOffer(opts: { session: Session; tenant: Tenant
     select: { id: true, fullName: true, email: true, orgId: true, openToOffers: true, preferredLanguage: true, emailNotifications: true, notificationPrefs: true },
   });
   if (!mentor || !mentee) return { ok: false, status: 404, code: 'not_found' };
+  // A benched mentor (#1778) takes no new mentee, by offer or otherwise.
+  if (isBenched(mentor)) return { ok: false, status: 409, code: 'mentor_benched' };
 
   const [activeCount, menteeActive, menteePending, previous, pendingCount, sentLast7Days] = await Promise.all([
     prisma.mentorshipRelation.count({ where: { mentorId: mentor.id, status: 'ACTIVE' } }),

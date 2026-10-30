@@ -242,6 +242,11 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     bio: { limit: 'bio', files: PROFILE_WRITERS },
     interests: { exempt: '@db.Text, capped by the profile schema' },
     reEngageNote: { exempt: '@db.Text, written by an admin through its own route' },
+    // The bench (#1778): the state is a whitelist, the actor an id, the reason
+    // typed by an admin through the two bench routes.
+    participantState: ENUMERATED,
+    benchedById: ID,
+    benchedReason: { limit: 'benchReason', files: ['src/app/api/admin/users/[id]/bench/route.ts', 'src/app/api/admin/users/bench/route.ts'] },
   },
   MentorApplication: {
     id: ID,

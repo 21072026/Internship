@@ -159,6 +159,9 @@ export interface JobPayloadMap {
   /// The nightly nudge scan (#1684, src/lib/nudges/evaluate.ts): every enabled
   /// condition-scan NudgeRule of every org.
   'nudge.evaluate': Record<string, never>;
+  /// The nightly profile-digest refresh (#2038, src/lib/profileDigest.ts): a
+  /// bounded scan of consenting people, a model call only where the text changed.
+  'profileDigest.refresh': Record<string, never>;
   /// One nudge to one person (#1684). Keyed `nudge:<ruleId>:<userId>:<dedupeKey>`;
   /// the NudgeSend row (unique on the same triple) is claimed before the send.
   'nudge.send': { ruleId: string; userId: string; dedupeKey: string; eventId: string | null };
@@ -197,6 +200,8 @@ export interface JobPayloadMap {
     params: Record<string, unknown>;
     link: string;
     dedupeKey: string;
+    /** The chat card (#1942), carried so a held reminder keeps its join button. */
+    card?: { subjectKey: string; actionUrl: string | null; supersede: boolean } | null;
   };
 }
 
@@ -257,6 +262,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'automation.run',
   'webhook.deliver',
   'nudge.evaluate',
+  'profileDigest.refresh',
   'nudge.send',
   'notification.email',
   'notification.deferred',

@@ -14,6 +14,7 @@ import { announceNewRelation, createGuardedRelation } from '@/lib/relationCreate
 import { canTransitionRound, type RoundStatus } from '@/lib/matching/round';
 import { getLocale } from '@/i18n/server';
 import { scheduleCreateData } from '@/lib/relationSchedule';
+import { isBenched, MENTOR_BENCHED_ERROR } from '@/lib/participantState';
 import { relationScheduleDefaults } from '@/lib/relationScheduleDefaults';
 
 // POST — publish a round (#1796): one relation per LOCKED proposal, nothing
@@ -81,6 +82,9 @@ export async function POST(request: Request, { params }: Ctx) {
       if (gone) {
         return NextResponse.json({ error: 'A locked proposal names someone who can no longer be paired', code: 'participant_gone', proposalId: gone.id }, { status: 409 });
       }
+      // A mentor benched since the proposal was locked (#1778) is not assignable.
+      const benched = locked.find((p) => isBenched(byId.get(p.mentorId!)));
+      if (benched) return NextResponse.json({ ...MENTOR_BENCHED_ERROR, proposalId: benched.id }, { status: 409 });
 
       const start = new Date();
       const pipelineStatus = await resolveStartStage(round.orgId);

@@ -487,6 +487,21 @@ export const EVENT_CATALOG = [
     visibility: 'public',
     description: 'A mentorship\'s agreed end date was moved later (`expectedEndDate`, YYYY-MM-DD; `extendedCount` extensions so far).',
   },
+  {
+    // Every writer of Requisition.status (#1998): the create (`from` null), the
+    // edit route, the acceptance that takes the last opening (`to` FILLED,
+    // next to `requisition.filled`) and the sample programme. One event with
+    // `from`/`to` rather than opened/closed names, like
+    // mentorship.lifecycle_changed: DRAFT → OPEN is the opening,
+    // FILLED/CANCELLED the closing, ON_HOLD a pause.
+    name: 'requisition.status_changed',
+    version: 1,
+    subjectType: 'Requisition',
+    subjectKey: 'requisitionId',
+    payload: z.object({ requisitionId: id, from: z.string().nullable(), to: z.string() }).strict(),
+    visibility: 'public',
+    description: 'A requisition was created or changed status (`from` is null on creation; DRAFT, OPEN, ON_HOLD, FILLED, CANCELLED).',
+  },
 
   // ── Internal: recorded and subscribable inside the product, never a webhook. ─
   // Ids only: a payload that needs a person's name or address reads it from

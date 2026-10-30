@@ -4,7 +4,7 @@ import { ProgramScorecard } from '@/components/admin/ProgramScorecard';
 import { AnalyticsNarrative } from '@/components/analytics/AnalyticsNarrative';
 import { MeetingAttendanceCard } from '@/components/admin/MeetingAttendanceCard';
 import { SlaComplianceCard } from '@/components/admin/SlaComplianceCard';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { AlertTriangle } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -58,6 +58,8 @@ interface Analytics {
   // from an older server's payload → everything is shown, the same fail-open
   // direction as the shell gate.
   capabilities?: VerticalCapability[];
+  // The tenant's programmes, for the filter (#1652).
+  programs?: { id: string; name: string; term: string | null }[];
 }
 
 type RangePreset = '30' | '90' | '6m' | '12m' | 'all';
@@ -74,6 +76,14 @@ function rangeQuery(preset: RangePreset): string {
   else if (preset === '12m') from.setMonth(from.getMonth() - 12);
   const iso = (d: Date) => d.toISOString().slice(0, 10);
   return `?from=${iso(from)}&to=${iso(to)}`;
+}
+
+// The range query plus the programme filter (#1652). 'all' adds nothing, so
+// the unfiltered screen sends exactly the requests it always did.
+function analyticsQuery(preset: RangePreset, program: string): string {
+  const qs = rangeQuery(preset);
+  if (program === 'all') return qs;
+  return `${qs}${qs ? '&' : '?'}program=${encodeURIComponent(program)}`;
 }
 
 interface AgingItem {
@@ -168,6 +178,24 @@ export default function AdminAnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<RangePreset>('6m');
+  // The programme filter (#1652), kept in the URL (?program=) so a filtered
+  // view is linkable. Read after mount — the server render has no query — and
+  // nothing is fetched until it has been read, so a shared link never flashes
+  // the unfiltered numbers first.
+  const [program, setProgram] = useState('all');
+  const [programReady, setProgramReady] = useState(false);
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get('program');
+    if (fromUrl) setProgram(fromUrl);
+    setProgramReady(true);
+  }, []);
+  const chooseProgram = useCallback((value: string) => {
+    setProgram(value);
+    const url = new URL(window.location.href);
+    if (value === 'all') url.searchParams.delete('program');
+    else url.searchParams.set('program', value);
+    window.history.replaceState(window.history.state, '', url.toString());
+  }, []);
   // Premium tier state (#540): drives the full-report export buttons and the
   // three premium report cards. Read from `/api/admin/analytics/entitlements` —
   // one request that answers the question, where this used to probe the gated
@@ -200,12 +228,19 @@ export default function AdminAnalyticsPage() {
   const showProjects = has('projects');
 
   useEffect(() => {
-    const qs = rangeQuery(range);
+    if (!programReady) return;
+    const qs = analyticsQuery(range, program);
     setLoading(true);
     setError(null);
     fetch(`/api/admin/analytics${qs}`)
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-      .then((d) => setData(d))
+      .then((r) => {
+        // A programme from a stale link (deleted, or another org's) is a 404:
+        // fall back to every programme rather than an error screen.
+        if (r.status === 404 && program !== 'all') { chooseProgram('all'); return null; }
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d) => { if (d) setData(d); })
       .catch((e) => { console.error('[analytics]', e); setError(t.common.error); })
       .finally(() => setLoading(false));
     fetch(`/api/admin/analytics/aging${qs}`)
@@ -218,7 +253,7 @@ export default function AdminAnalyticsPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => setKpi(d))
       .catch((e) => console.error('[analytics/funnel]', e));
-  }, [range, t.common.error]);
+  }, [range, program, programReady, chooseProgram, t.common.error]);
 
   const maxFunnel = data ? Math.max(1, ...stages.map((s) => data.funnel[s.key] || 0)) : 1;
 
@@ -268,11 +303,29 @@ export default function AdminAnalyticsPage() {
               { value: 'all', label: t.analytics.allTime },
             ]}
           />
+          {showMentorship && (data?.programs?.length ?? 0) > 0 && (
+            <Select
+              aria-label={t.analytics.programFilter}
+              className="w-auto"
+              value={program}
+              onChange={(e) => chooseProgram(e.target.value)}
+              data-testid="analytics-program-filter"
+              options={[
+                { value: 'all', label: t.analytics.allPrograms },
+                ...(data?.programs ?? []).map((p) => ({ value: p.id, label: p.term ? `${p.name} (${p.term})` : p.name })),
+                { value: 'unassigned', label: t.analytics.unassignedProgram },
+              ]}
+            />
+          )}
           <Button variant="outline" size="sm" onClick={exportExcel} disabled={!data || !canExport} title={entitlements && !canExport ? t.common.exportLocked : undefined}>{t.analytics.exportExcel}</Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}>{t.analytics.print}</Button>
           {/* First destination (#1912) is a compliance report, not an upsell. */}
           <Link href="/admin/analytics/outcomes" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="outcomes-link">
             {t.outcomes.link}
+          </Link>
+          {/* How pairings ended (#1795) — free core, like the destination report. */}
+          <Link href="/admin/analytics/closure" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="closure-link">
+            {t.closure.link}
           </Link>
           {premium && (
             <>

@@ -19,8 +19,13 @@ import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { interactionInTenant, meetingInTenant } from '@/lib/analyticsScope';
 import { mentorWorkload as mentorWorkloadRows } from '@/lib/analyticsReports';
+import { relationProgramWhere, type ProgramFilter } from '@/lib/programFilterRule';
 
-export async function loadAdminAnalytics(session: Session, params: { from: string | null; to: string | null }, locale: Locale) {
+export async function loadAdminAnalytics(
+  session: Session,
+  params: { from: string | null; to: string | null; program?: ProgramFilter },
+  locale: Locale,
+) {
   const now = new Date();
   // Range: default from = start of the month 5 months ago; to = now. If the
   // client sends bad/inverted dates we fall back to the default rather than 500.
@@ -53,16 +58,29 @@ export async function loadAdminAnalytics(session: Session, params: { from: strin
   // meetings carry no `orgId`; they belong to their relation's (or project's)
   // tenant — src/lib/analyticsScope.ts.
   const tenant = await tenantWhere(session);
-  const interactionWhere = { date: inRange, ...interactionInTenant(tenant) };
-  const meetingWhere = { scheduledAt: inRange, ...meetingInTenant(tenant) };
+  // The programme filter (#1652). With none ('all') every `where` below is
+  // byte-for-byte what it was, so the unfiltered screen is unchanged. With one,
+  // relations narrow by `cohortId`, interactions and meetings follow their
+  // relation — a PROJECT meeting belongs to no programme, so it drops out of a
+  // filtered view rather than being guessed into one. The signup funnel is
+  // about accounts, not relations, and stays tenant-wide.
+  const program = params.program ?? { kind: 'all' as const };
+  const relWhere = relationProgramWhere(program);
+  const filtered = program.kind !== 'all';
+  const relationInScope = { relation: { is: { ...tenant, ...relWhere } } };
+  const interactionWhere = { date: inRange, ...(filtered ? relationInScope : interactionInTenant(tenant)) };
+  const meetingWhere = { scheduledAt: inRange, ...(filtered ? relationInScope : meetingInTenant(tenant)) };
 
   const [byStage, interactions, meetings, rsvpGroups, projectRows, relDates, interactionDates] = await Promise.all([
-    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: withinTenant({}, tenant), _count: { _all: true } }),
+    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: withinTenant({ ...relWhere }, tenant), _count: { _all: true } }),
     prisma.interactionLog.count({ where: interactionWhere }),
     prisma.meeting.count({ where: meetingWhere }),
     prisma.meeting.groupBy({ by: ['rsvp'], where: meetingWhere, _count: { _all: true } }),
-    prisma.project.findMany({ where: withinTenant({}, tenant), select: { name: true, _count: { select: { relations: true } } } }),
-    prisma.mentorshipRelation.findMany({ where: withinTenant({ startDate: inRange }, tenant), select: { startDate: true } }),
+    prisma.project.findMany({
+      where: withinTenant({}, tenant),
+      select: { name: true, _count: { select: { relations: filtered ? { where: relWhere } : true } } },
+    }),
+    prisma.mentorshipRelation.findMany({ where: withinTenant({ startDate: inRange, ...relWhere }, tenant), select: { startDate: true } }),
     prisma.interactionLog.findMany({ where: interactionWhere, select: { date: true } }),
   ]);
 
@@ -100,6 +118,7 @@ export async function loadAdminAnalytics(session: Session, params: { from: strin
 
   const projectWorkload = projectRows
     .map((p) => ({ name: p.name, interns: p._count.relations }))
+    .filter((p) => !filtered || p.interns > 0)
     .sort((a, b) => b.interns - a.interns)
     .slice(0, 10);
 
@@ -124,7 +143,15 @@ export async function loadAdminAnalytics(session: Session, params: { from: strin
     shellCapabilities(orgId),
   ]);
   // Shared with the report registry and the scheduled subscriptions (#1905).
-  const mentorWorkload = await mentorWorkloadRows({ stageOrgId: orgId, tenant, locale }, outcome);
+  const mentorWorkload = (
+    await mentorWorkloadRows({ stageOrgId: orgId, tenant, locale, ...(filtered ? { relation: relWhere } : {}) }, outcome)
+  ).filter((m) => !filtered || m.active > 0);
+  // The selector's options: the tenant's programmes, for every reader of this
+  // screen — /api/cohorts needs `program.read`, which an analytics reader may
+  // not hold. Names only; nothing else about a programme leaks through here.
+  const programs = capabilities.includes('mentorship')
+    ? await prisma.cohort.findMany({ where: withinTenant({}, tenant), orderBy: { createdAt: 'desc' }, select: { id: true, name: true, term: true } })
+    : [];
 
   const rsvp = Object.fromEntries(rsvpGroups.map((g) => [g.rsvp, g._count._all]));
   // Acceptance rate is over those who actually responded (accepted + declined).
@@ -157,6 +184,9 @@ export async function loadAdminAnalytics(session: Session, params: { from: strin
     // Which modules the cards above are about (#2423) — see the comment where
     // it is resolved. A consumer that finds the field missing shows everything.
     capabilities,
+    programs,
+    // The filter these numbers were computed under, echoed for the screen.
+    program: program.kind === 'program' ? program.id : program.kind,
   };
 }
 

@@ -105,6 +105,7 @@ const LEAK_WORDS: Record<string, RegExp> = {
 };
 
 const LEAK_EXEMPT: Record<string, string> = {
+  sourceIntegrations: 'The referring source\'s own API keys and webhooks (#2006), rendered only under /source, whose layout answers 404 for an org without the `sourcing` capability (MARKETING has none), and its routes serve SOURCE accounts only.',
   matchRounds: 'The bulk matching round board (#1796): its pages sit under /admin/matching, closed for an org without the `mentorship` capability by the segment layout (gatePage) and every round route by requireCapability, so MARKETING never renders a word of it.',
   matchDecision: 'The pairing audit record (#1789): its only reader, GET /api/admin/match-decisions, refuses an org without the `mentorship` capability (requireCapability), so MatchDecisionPanel draws nothing there; the note field sits on the internship assign/approve controls.',
   portal: 'The mentee portal shell: src/app/portal/layout.tsx redirects every org without the `mentorship` capability to /account.',
@@ -113,6 +114,7 @@ const LEAK_EXEMPT: Record<string, string> = {
   mentorImpact: 'The private impact card on /mentor only (src/app/mentor/page.tsx) — the mentor layout sends a MARKETING MENTOR to /sales, and getMentorImpact() returns null without the `mentorship` capability.',
   offers: 'Offer management — `/api/offers` refuses an org without the `placements` capability (requireCapability).',
   offersAdmin: 'The admin offer screen over the same `placements`-gated API.',
+  placements: 'The placement ledger (#1765) — /admin/placements is closed by gatePage, and its API and the `placements` export dataset refuse (requireCapability), for an org without the `placements` capability.',
   offerEmail: 'Sent only by src/lib/offerNotify.ts, i.e. by the `placements`-gated offer API.',
   adminWeeklyReports: '/admin/weekly-reports (#1918) — gatePage closes it, and its API refuses (requireCapability), for an org without the `mentorship` capability.',
   migration: '/admin/migrate (#2073) — gatePage closes it, and POST /api/admin/migrate refuses (requireCapability), for an org without the `mentorship` capability.',

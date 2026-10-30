@@ -56,7 +56,7 @@ export function AnnouncementAudiencePicker({ value, onChange }: { value: Audienc
         <div className="max-h-32 space-y-0.5 overflow-y-auto rounded border border-gray-200 p-1.5 dark:border-gray-700" data-testid={`audience-${key}`}>
           {items.map((o) => (
             <label key={o.id} className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-              <input type="checkbox" checked={((value[key] ?? []) as string[]).includes(o.id)} onChange={() => toggle(key, o.id)} />
+              <input type="checkbox" className="h-6 w-6 shrink-0" checked={((value[key] ?? []) as string[]).includes(o.id)} onChange={() => toggle(key, o.id)} />
               <span className="truncate">{o.label}</span>
             </label>
           ))}
@@ -72,10 +72,12 @@ export function AnnouncementAudiencePicker({ value, onChange }: { value: Audienc
       <p className="text-xs text-gray-500 dark:text-gray-400">{a.audienceHint}</p>
       <fieldset>
         <legend className="mb-1 text-xs font-medium text-gray-600 dark:text-gray-300">{a.audienceRoles}</legend>
+        {/* 24px boxes: side by side, the browser's 13px checkbox sat 6px from its
+            neighbour — under the WCAG 2.5.8 target size at phone width. */}
         <div className="flex flex-wrap gap-3">
           {AUDIENCE_ROLES.map((r) => (
             <label key={r} className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-gray-300">
-              <input type="checkbox" checked={(value.roles ?? []).includes(r)} onChange={() => toggle('roles', r)} data-testid={`audience-role-${r}`} />
+              <input type="checkbox" className="h-6 w-6 shrink-0" checked={(value.roles ?? []).includes(r)} onChange={() => toggle('roles', r)} data-testid={`audience-role-${r}`} />
               {roleLabels[r] ?? r}
             </label>
           ))}

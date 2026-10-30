@@ -24,6 +24,7 @@ export const COMPANY_WEBHOOK_EVENTS = [
   'offer.declined',
   'offer.expired',
   'requisition.filled',
+  'requisition.status_changed',
 ] as const;
 
 export type CompanyWebhookEvent = (typeof COMPANY_WEBHOOK_EVENTS)[number];
@@ -55,4 +56,5 @@ export const COMPANY_EVENT_SUBJECT: Record<CompanyWebhookEvent, { key: string; m
   'offer.declined': { key: 'offerId', model: 'offer' },
   'offer.expired': { key: 'offerId', model: 'offer' },
   'requisition.filled': { key: 'requisitionId', model: 'requisition' },
+  'requisition.status_changed': { key: 'requisitionId', model: 'requisition' },
 };

@@ -98,13 +98,19 @@ export default function NotificationsPage() {
   // fire one request for "page 2 of the new search" before correcting itself.
   // Keyed off the keystroke means it only ever runs while somebody is typing —
   // paging through an existing result set never resets itself.
+  //
+  // Only when the trimmed box differs from what is already searched: on mount
+  // the box is empty and so is the query, and resetting anyway sent a reader who
+  // had clicked "Next" within the debounce window straight back to page 1.
   useEffect(() => {
+    const next = search.trim();
+    if (next === query) return;
     const id = setTimeout(() => {
-      setQuery(search.trim());
+      setQuery(next);
       setPage(1);
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(id);
-  }, [search]);
+  }, [search, query]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const rangeStart = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;

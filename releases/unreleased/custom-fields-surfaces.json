@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Admin-defined questions on onboarding (mentee and mentor wizards) and the mentorship request panel, and a read-only answers panel on the admin candidate and mentor pages (`GET /api/admin/users/[id]/form-answers`, #1803).",
+  "notes": {
+    "en": ["Your programme's own questions now also appear during onboarding and when you ask for a mentor; admins see the answers on each person's page."],
+    "tr": ["Programınızın kendi soruları artık başlangıç adımlarında ve mentor talebinde de çıkıyor; yöneticiler cevapları her kişinin sayfasında görüyor."],
+    "de": ["Die eigenen Fragen Ihres Programms erscheinen jetzt auch beim Onboarding und bei der Mentoring-Anfrage; Admins sehen die Antworten auf der Seite jeder Person."]
+  }
+}

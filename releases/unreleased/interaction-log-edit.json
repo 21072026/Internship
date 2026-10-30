@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Edit an interaction log (#1356):** the mentee detail page gets an edit (pencil) button next to each log, which reuses the add form in edit mode and sends `PUT /api/interactions/[id]` with only the changed fields (an untouched date is not re-sent, so a log's time of day survives). The create and edit routes now share one schema, `src/lib/interactionSchema.ts`: the PUT gains `subject` (an empty value clears it) and both refuse an unparseable `date` with a 400 instead of a 500. Who may edit is unchanged — the pair's mentor or an admin with `relation.write`, another mentor's log is 403.",
+  "notes": {
+    "en": ["Mentors can now correct an interaction log — date, type, subject and notes — instead of deleting and retyping it."],
+    "tr": ["Mentorlar artık bir etkileşim kaydını silip yeniden yazmak yerine düzeltebilir — tarih, tür, konu ve notlar."],
+    "de": ["Mentorinnen und Mentoren können einen Interaktionseintrag jetzt korrigieren – Datum, Art, Betreff und Notizen –, statt ihn zu löschen und neu zu schreiben."]
+  }
+}

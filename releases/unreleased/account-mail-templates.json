@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Account mails in the template editor (#3399):** the invitation, password-reset and e-mail-verification mails are catalogue events (`account.invitation`, `account.passwordReset`, `account.verification`) and take an org's own template from `/admin/notification-templates`. The one-time link is never a merge tag: `renderNotificationEmail({ actionUrl })` always draws it as the button and the copy line, so a template can change the wording but not remove or replace the link. With no template the mail is unchanged; SET_INITIAL keeps its own copy. The reset and verification mails now read `emailDictionary(locale, orgId)` (`check:mail-dictionary` ratchet 25 → 23).",
+  "notes": {
+    "en": ["Admins can now reword the invitation, password-reset and email-verification mails in the template editor."],
+    "tr": ["Yöneticiler artık davet, parola sıfırlama ve e-posta doğrulama maillerinin metnini şablon düzenleyicide değiştirebilir."],
+    "de": ["Admins können jetzt die Einladungs-, Passwort-Reset- und E-Mail-Bestätigungsmails im Vorlagen-Editor umformulieren."]
+  }
+}
