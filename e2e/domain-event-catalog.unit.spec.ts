@@ -51,6 +51,7 @@ const PUBLISHED = [
   'user.created',
   'mentorship.ending_soon',
   'mentorship.extended',
+  'requisition.status_changed',
 ];
 
 const at = '2026-10-20T09:30:00.000Z';
@@ -86,6 +87,7 @@ const PRODUCERS: [site: string, event: string, payload: Record<string, unknown>]
   ['offerEvents (route)', 'offer.declined', { offerId: 'o1', applicationId: 'a1', requisitionId: 'rq1' }],
   ['offerEvents (expiry sweep)', 'offer.expired', { offerId: 'o1', applicationId: null, requisitionId: null }],
   ['api/offers/[id]', 'requisition.filled', { requisitionId: 'rq1', offerId: 'o1' }],
+  ['requisitionEvents', 'requisition.status_changed', { requisitionId: 'rq1', from: null, to: 'OPEN' }],
   ['api/interview-requests', 'interview_request.created', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2', companyId: 'c1' }],
   ['api/interview-requests/[id]', 'interview_request.approved', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2' }],
   ['api/interview-requests/[id]', 'interview_request.declined', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2', reasonCode: 'not_ready' }],

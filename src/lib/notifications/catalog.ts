@@ -439,6 +439,14 @@ export const NOTIFICATION_EVENTS = [
   // An admin tier change (#1579) signs the person out everywhere; this tells
   // them why when they are back. No params: the new tier is on their screen.
   { key: 'admin_tier.changed', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // Account mails (#3399): invitation, password reset and e-mail verification.
+  // They are NEVER published through notifyEvent() — each has its own sender in
+  // emailService.ts, because the mail carries a one-time token. They are here
+  // so the template editor can change their wording; the token link itself is
+  // drawn by renderNotificationEmail() and is not a merge tag.
+  { key: 'account.invitation', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: ['role'] },
+  { key: 'account.passwordReset', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  { key: 'account.verification', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
 ] as const satisfies readonly NotificationEventDef[];
 
 export type NotificationEventKey = (typeof NOTIFICATION_EVENTS)[number]['key'];

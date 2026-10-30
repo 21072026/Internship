@@ -31,6 +31,8 @@ interface AdminUser {
   // Does this account have an authenticator enrolled (#1543)? The reset action
   // is only offered where there is a factor to clear.
   twoFactorEnabled?: boolean;
+  // On the bench (#1778): ACTIVE | BENCHED.
+  participantState?: string;
 }
 
 // Which badge each account state gets. `warning` (amber) is for "waiting on
@@ -57,7 +59,10 @@ export default function AdminUsersPage() {
   const [filter, setFilter] = useState<'ALL' | 'ADMIN' | 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE'>('ALL');
   // Archived = deactivated (isActive=false). Default view hides them so the list
   // stays uncluttered; the "Archived" tab reveals them for reactivation (#570).
-  const [statusView, setStatusView] = useState<'ACTIVE' | 'ARCHIVED'>('ACTIVE');
+  const [statusView, setStatusView] = useState<'ACTIVE' | 'ARCHIVED' | 'BENCHED'>('ACTIVE');
+  // The bulk bench (#1778): the rows ticked on this page.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [benchNote, setBenchNote] = useState('');
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -113,7 +118,7 @@ export default function AdminUsersPage() {
       view: 'directory',
       page: String(page),
       perPage: String(PAGE_SIZE),
-      status: statusView === 'ACTIVE' ? 'active' : 'archived',
+      status: statusView === 'ACTIVE' ? 'active' : statusView === 'BENCHED' ? 'benched' : 'archived',
     });
     if (filter !== 'ALL') params.set('role', filter);
     if (debouncedSearch) params.set('search', debouncedSearch);
@@ -153,6 +158,35 @@ export default function AdminUsersPage() {
     }, 300);
     return () => clearTimeout(id);
   }, [search]);
+
+  // Bench or return people (#1778) — one person or the ticked rows. Never a
+  // deactivation: the server keeps isActive, sessions and consent as they are.
+  const bench = async (ids: string[], benched: boolean) => {
+    if (ids.length === 0) return;
+    setBusyId(ids.length === 1 ? ids[0] : 'bulk');
+    try {
+      const res =
+        ids.length === 1
+          ? await fetch(`/api/admin/users/${ids[0]}/bench`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ benched }) })
+          : await fetch('/api/admin/users/bench', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userIds: ids, benched }) });
+      if (res.ok) {
+        setSelected(new Set());
+        await load();
+      }
+    } finally {
+      setBusyId(null);
+    }
+  };
+  const reinviteBench = async () => {
+    setBusyId('reinvite');
+    try {
+      const res = await fetch('/api/admin/users/bench/reinvite', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      setBenchNote(res.ok ? t.bench.reinvited.replace('{n}', String(data.reminded ?? 0)) : t.bench.failed);
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const toggleActive = async (u: AdminUser) => {
     setBusyId(u.id);
@@ -321,7 +355,7 @@ export default function AdminUsersPage() {
       <AdminRolesPanel />
 
       <div className="inline-flex items-center gap-1 mb-4 p-1 rounded-lg bg-gray-100 dark:bg-gray-800">
-        {(['ACTIVE', 'ARCHIVED'] as const).map((s) => (
+        {(['ACTIVE', 'BENCHED', 'ARCHIVED'] as const).map((s) => (
           <button
             key={s}
             data-testid={`status-view-${s.toLowerCase()}`}
@@ -330,7 +364,7 @@ export default function AdminUsersPage() {
               statusView === s ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
             }`}
           >
-            {s === 'ACTIVE' ? t.usersAdmin.viewActive : `${t.usersAdmin.viewArchived}${archivedCount ? ` (${archivedCount})` : ''}`}
+            {s === 'ACTIVE' ? t.usersAdmin.viewActive : s === 'BENCHED' ? t.bench.view : `${t.usersAdmin.viewArchived}${archivedCount ? ` (${archivedCount})` : ''}`}
           </button>
         ))}
       </div>
@@ -363,12 +397,31 @@ export default function AdminUsersPage() {
           current={{ filter, statusView, search }}
           onApply={(f) => {
             setFilter((['ALL', 'ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE'] as const).find((r) => r === f.filter) ?? 'ALL');
-            setStatusView(f.statusView === 'ARCHIVED' ? 'ARCHIVED' : 'ACTIVE');
+            setStatusView(f.statusView === 'ARCHIVED' ? 'ARCHIVED' : f.statusView === 'BENCHED' ? 'BENCHED' : 'ACTIVE');
             setSearch(f.search || '');
             setPage(1);
           }}
         />
       </div>
+
+      {(selected.size > 0 || statusView === 'BENCHED') && (
+        <div className="mb-4 flex flex-wrap items-center gap-2" data-testid="bench-bar">
+          {selected.size > 0 && (
+            <>
+              <span className="text-sm text-gray-600 dark:text-gray-300">{t.bench.selected.replace('{n}', String(selected.size))}</span>
+              <Button size="sm" variant="outline" loading={busyId === 'bulk'} onClick={() => bench([...selected], statusView !== 'BENCHED')} data-testid="bench-bulk">
+                {statusView === 'BENCHED' ? t.bench.returnSelected : t.bench.benchSelected}
+              </Button>
+            </>
+          )}
+          {statusView === 'BENCHED' && (
+            <Button size="sm" variant="outline" loading={busyId === 'reinvite'} onClick={reinviteBench} data-testid="bench-reinvite">
+              {t.bench.reinvite}
+            </Button>
+          )}
+          {benchNote && <span role="status" className="text-sm text-gray-600 dark:text-gray-300">{benchNote}</span>}
+        </div>
+      )}
 
       <Card>
         <CardHeader>
@@ -383,7 +436,23 @@ export default function AdminUsersPage() {
             {shown.map((u) => (
               <div key={u.id} className="py-3">
               <div data-testid={`user-row-${u.id}`} className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                <div className="min-w-0 w-full sm:w-auto">
+                <div className="min-w-0 w-full sm:w-auto flex items-start gap-2">
+                  {u.isActive && ['ADMIN', 'MENTOR', 'MENTEE'].includes(u.role) && (
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      aria-label={t.bench.select.replace('{name}', u.fullName)}
+                      checked={selected.has(u.id)}
+                      onChange={(e) => {
+                        const next = new Set(selected);
+                        if (e.target.checked) next.add(u.id);
+                        else next.delete(u.id);
+                        setSelected(next);
+                      }}
+                      data-testid={`bench-select-${u.id}`}
+                    />
+                  )}
+                <div className="min-w-0">
                   {u.role === 'MENTEE' ? (
                     <Link href={`/admin/candidates/${u.id}`} className="text-sm font-medium text-gray-900 hover:text-blue-600 truncate block">
                       {u.fullName}
@@ -413,6 +482,7 @@ export default function AdminUsersPage() {
                     <p className="text-xs text-red-600 mt-1">{actionError.message}</p>
                   )}
                 </div>
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <RoleBadge role={u.role} />
                   <Badge variant={u.accountState ? STATE_BADGE[u.accountState] : u.isActive ? 'success' : 'warning'}>
@@ -424,6 +494,9 @@ export default function AdminUsersPage() {
                   </Badge>
                   {lockedIds.has(u.id) && (
                     <Badge variant="danger" data-testid={`locked-badge-${u.id}`}>{t.usersAdmin.locked}</Badge>
+                  )}
+                  {u.participantState === 'BENCHED' && (
+                    <Badge variant="warning" data-testid={`benched-badge-${u.id}`}>{t.bench.badge}</Badge>
                   )}
                   {/* Enforced SSO's break-glass holder (#1950). Badged in the
                       directory on purpose: an exemption nobody can see is how a
@@ -468,6 +541,18 @@ export default function AdminUsersPage() {
                   >
                     {u.isActive ? t.usersAdmin.deactivate : t.usersAdmin.activate}
                   </Button>
+                  {u.isActive && ['ADMIN', 'MENTOR', 'MENTEE'].includes(u.role) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      loading={busyId === u.id}
+                      disabled={!!busyId}
+                      data-testid={`bench-toggle-${u.id}`}
+                      onClick={() => bench([u.id], u.participantState !== 'BENCHED')}
+                    >
+                      {u.participantState === 'BENCHED' ? t.bench.returnOne : t.bench.benchOne}
+                    </Button>
+                  )}
                   <RoleConvertButton userId={u.id} fullName={u.fullName} role={u.role} onDone={load} />
                   {/* Only an active admin may hold the exemption — the endpoint
                       enforces that; the button simply does not offer it to

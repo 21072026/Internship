@@ -18,6 +18,7 @@ import { notificationLink, type NotificationRole } from '@/lib/notificationLink'
 import { capabilitiesMemo, shellCapabilities } from '@/lib/shellCapabilities';
 import { dormantCheckInApplies, interactionReminderApplies } from '@/lib/salesSurface';
 import { extendRelationUrl, markReadUrl } from '@/lib/emailActionToken';
+import { notBenched } from '@/lib/participantState';
 import { intlLocaleFor } from '@/lib/interviewRequests';
 import { settingByOrg, settingsOrgOfRow } from '@/lib/settingsOrg';
 import { resolveSettingRaw, withSettingsCache } from '@/lib/settingsResolver';
@@ -1772,7 +1773,7 @@ type InvitationCopy = Dictionary['notifications']['invitationEmail'];
 // sentence with {role} (Turkish does) still renders correctly. An unknown role
 // string (nothing else can reach this today) prints as-is rather than as an
 // empty gap in the sentence.
-function invitationBody(I: InvitationCopy, role: string) {
+export function invitationBody(I: InvitationCopy, role: string) {
   const roleLabel = I.roles[role as keyof typeof I.roles] ?? role;
   const [bodyBefore, bodyAfter = ''] = I.body.split('{role}');
   return { roleLabel, bodyBefore, bodyAfter };
@@ -1812,49 +1813,27 @@ export async function sendInvitationEmail({
   // product under this very address, and accepting here creates the second,
   // independent one. INTERNSHIP (or no org): the origin it always had.
   const registerUrl = `${await appUrlFor(orgId)}/auth/register?token=${token}`;
-  const brand = await emailBrand(orgId);
   const resolved = resolveLocale(locale);
-  // In the inviting tenant's own vocabulary (#2558): a marketing invitation
-  // asks a sales rep to join, not "a mentor". INTERNSHIP's overlay is empty.
-  const I = (await emailDictionary(resolved, orgId)).notifications.invitationEmail;
-  const { roleLabel, bodyBefore, bodyAfter } = invitationBody(I, role);
+  // In the inviting tenant's own vocabulary (#2558) and, when the org wrote
+  // one, its own wording (#3399): the renderer reads emailDictionary() for the
+  // recipient's org and the template editor's row; the token link is drawn
+  // there and cannot be templated away.
+  const { renderNotificationEmail } = await import('@/lib/notifications/emailRender');
+  const mail = await renderNotificationEmail({ eventKey: 'account.invitation', locale: resolved, orgId, params: { role }, actionUrl: registerUrl });
 
   return await sendEmail({
     to,
     // The recipient's tenant: an archived one is not mailed (#1582).
     orgId,
-    fromName: brand.name,
+    fromName: mail.fromName,
     category: 'invitation',
     lane,
     // An essential group, so there is no footer to translate here — but the
     // locale is passed anyway, so this send behaves like every other one if the
     // taxonomy ever moves it.
     locale: resolved,
-    subject: I.subject.replace('{brand}', brand.name),
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, esc(I.heading.replace('{brand}', brand.name)))}
-        <p>${esc(bodyBefore)}<strong>${esc(roleLabel)}</strong>${esc(bodyAfter)}</p>
-        <p>${esc(I.ctaIntro)}</p>
-        <a href="${registerUrl}" style="
-          display: inline-block;
-          background-color: ${brand.accent};
-          color: white;
-          padding: 12px 24px;
-          text-decoration: none;
-          border-radius: 6px;
-          margin: 16px 0;
-        ">
-          ${esc(I.cta)}
-        </a>
-        <p style="color: #6b7280; font-size: 14px;">
-          ${esc(I.expiry)}
-        </p>
-        <p style="color: #6b7280; font-size: 12px;">
-          ${esc(I.copyLink)} ${registerUrl}
-        </p>
-      </div>
-    `,
+    subject: mail.subject,
+    html: mail.html,
   });
 }
 
@@ -1890,47 +1869,32 @@ export async function sendPasswordResetEmail({
   // link into the other product would ask the right person to reset a password
   // on a site where that account does not exist. No org ⇒ the default product.
   const resetUrl = `${await appUrlFor(orgId)}/auth/reset?token=${token}`;
-  const isInitial = purpose === 'SET_INITIAL';
-  const brand = await emailBrand(orgId);
   const resolved = resolveLocale(locale);
-  const P = getDictionary(resolved).notifications.passwordResetEmail;
-  const V = isInitial ? P.setInitial : P.reset;
+  // The org's template applies to a RESET only (#3399); SET_INITIAL keeps its
+  // own copy — it activates an account, which a reset template does not say.
+  const { renderNotificationEmail } = await import('@/lib/notifications/emailRender');
+  const mail = await renderNotificationEmail({
+    eventKey: 'account.passwordReset',
+    locale: resolved,
+    orgId,
+    params: { name: fullName ?? '' },
+    recipientName: fullName,
+    actionUrl: resetUrl,
+    bespokeOnly: purpose === 'SET_INITIAL',
+  });
 
   return await sendEmail({
     to,
     // The recipient's tenant: an archived one is not mailed (#1582).
     orgId,
-    fromName: brand.name,
+    fromName: mail.fromName,
     category: 'password-reset',
     // Queued only on a temporary failure (#2944): a link that has expired is
     // not worth delivering, so the queue lets it go when the token does.
     notAfter: new Date(Date.now() + RESET_TOKEN_TTL_MS[purpose]),
     locale: resolved,
-    subject: V.subject.replace('{brand}', brand.name),
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, esc(V.heading))}
-        ${fullName ? `<p>${esc(P.greeting.replace('{name}', fullName))}</p>` : ''}
-        <p>${esc(V.body.replace('{brand}', brand.name))}</p>
-        <a href="${resetUrl}" style="
-          display: inline-block;
-          background-color: ${brand.accent};
-          color: white;
-          padding: 12px 24px;
-          text-decoration: none;
-          border-radius: 6px;
-          margin: 16px 0;
-        ">
-          ${esc(V.cta)}
-        </a>
-        <p style="color: #6b7280; font-size: 14px;">
-          ${esc(V.expiry)}
-        </p>
-        <p style="color: #6b7280; font-size: 12px;">
-          ${esc(P.copyLink)} ${resetUrl}
-        </p>
-      </div>
-    `,
+    subject: mail.subject,
+    html: mail.html,
   });
 }
 
@@ -2019,42 +1983,27 @@ export async function sendVerificationEmail({
 }) {
   // WORLDS (#2590): same rule as the reset link — the account's own product.
   const verifyUrl = `${await appUrlFor(orgId)}/auth/verify?token=${token}`;
-  const brand = await emailBrand(orgId);
   const resolved = resolveLocale(locale);
-  const V = getDictionary(resolved).notifications.verificationEmail;
+  // The org's own wording when it wrote one (#3399); the link is the renderer's.
+  const { renderNotificationEmail } = await import('@/lib/notifications/emailRender');
+  const mail = await renderNotificationEmail({
+    eventKey: 'account.verification',
+    locale: resolved,
+    orgId,
+    params: { name: fullName ?? '' },
+    recipientName: fullName,
+    actionUrl: verifyUrl,
+  });
 
   await sendEmail({
     to,
     // The recipient's tenant: an archived one is not mailed (#1582).
     orgId,
-    fromName: brand.name,
+    fromName: mail.fromName,
     category: 'verification',
     locale: resolved,
-    subject: V.subject.replace('{brand}', brand.name),
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, esc(V.heading))}
-        ${fullName ? `<p>${esc(V.greeting.replace('{name}', fullName))}</p>` : ''}
-        <p>${esc(V.body)}</p>
-        <a href="${verifyUrl}" style="
-          display: inline-block;
-          background-color: ${brand.accent};
-          color: white;
-          padding: 12px 24px;
-          text-decoration: none;
-          border-radius: 6px;
-          margin: 16px 0;
-        ">
-          ${esc(V.cta)}
-        </a>
-        <p style="color: #6b7280; font-size: 14px;">
-          ${esc(V.expiry)}
-        </p>
-        <p style="color: #6b7280; font-size: 12px;">
-          ${esc(V.copyLink)} ${verifyUrl}
-        </p>
-      </div>
-    `,
+    subject: mail.subject,
+    html: mail.html,
   });
 }
 
@@ -4908,7 +4857,7 @@ export async function sendWeeklyReportReminders(now = new Date(), options: { rel
     where: {
       ...(options.relationIds ? { id: { in: options.relationIds } } : {}),
       // Not a paused pair (#1772): reports are still accepted, just never chased during a pause.
-      ...activeRelationWhere(), pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', mentee: { isActive: true },
+      ...activeRelationWhere(), pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', mentee: { isActive: true, ...notBenched() },
       weeklyReports: { none: { weekStart, status: { in: [...SUBMITTED_WEEKLY_REPORT_STATUSES] } } },
     },
     select: {
@@ -5039,7 +4988,8 @@ export async function sendDormantCheckIns(now = new Date()) {
       ...activeRelationWhere(),
       dormantSince: { not: null },
       dormantNudgeCount: { lt: DORMANT_MAX_NUDGES },
-      mentee: { isActive: true },
+      // Not inactive, not on the bench (#1778): nobody on the bench is nudged.
+      mentee: { isActive: true, ...notBenched() },
     },
     select: {
       id: true,
@@ -5704,7 +5654,7 @@ export async function sendWeeklyMentorDigests() {
   const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   const mentors = await prisma.user.findMany({
-    where: { role: 'MENTOR', isActive: true },
+    where: { role: 'MENTOR', isActive: true, ...notBenched() },
     select: {
       id: true,
       orgId: true,
@@ -5977,7 +5927,7 @@ export async function sendDailyActivityDigests() {
   let skipped = 0;
 
   const mentors = await prisma.user.findMany({
-    where: { role: 'MENTOR', isActive: true },
+    where: { role: 'MENTOR', isActive: true, ...notBenched() },
     // #1720: `preferredLanguage` was missing here too — every recipient of this
     // digest is a registered user, so their own preference is the whole answer.
     select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
@@ -6241,8 +6191,10 @@ export async function checkRetentionReminders() {
  * date that was set months ago: someone can withdraw in between, and the whole
  * promise of the one-click link is that withdrawing actually stops the mail.
  */
-export async function checkReEngagementReminders() {
-  const people = await dueForReminder();
+export async function checkReEngagementReminders(opts: { userIds?: readonly string[] } = {}) {
+  // `userIds`: "Re-invite the bench" (#1778) — the same message, the same
+  // consent check and the same stamp, for the given people only.
+  const people = await dueForReminder(new Date(), opts);
 
   // WORLDS (#2590): the one-click "leave the pool" link opens the product the
   // PERSON's account lives in. `dueForReminder()` selects no organization, so it

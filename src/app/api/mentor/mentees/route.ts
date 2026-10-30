@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import { z } from 'zod';
 import { relationScheduleFields, scheduleCreateData } from '@/lib/relationSchedule';
 import { relationScheduleDefaults } from '@/lib/relationScheduleDefaults';
+import { isBenched, MENTOR_BENCHED_ERROR } from '@/lib/participantState';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/services/emailService';
 import { slugify } from '@/lib/transliterate';
@@ -58,6 +59,9 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
       }
       const { fullName, email, ...rest } = parsed.data;
+      // A benched mentor (#1778) takes no new mentee — not even one they add themselves.
+      const self = await prisma.user.findUnique({ where: { id: session.user.id }, select: { participantState: true } });
+      if (isBenched(self)) return NextResponse.json(MENTOR_BENCHED_ERROR, { status: 409 });
 
       // A real email means the mentee can be invited to set a password and log in.
       // No email → a deterministic placeholder for a tracking-only mentee (no login).

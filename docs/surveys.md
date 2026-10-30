@@ -141,7 +141,7 @@ MENTOR or BOTH) gets **which** survey **when**.
 | `STAGE_ENTERED` | a `StatusChange` into `stageKey` — the tenant's own key, checked against its resolved stages at create (`unknown_stage` otherwise) | `stage:<key>` |
 | `DAYS_AFTER_START` | `dayOffset` days after the relation started | `day:<n>` |
 | `DAYS_BEFORE_END` | `dayOffset` days before the relation's stage deadline (a moved deadline is a new period) | `before:<deadline day>` |
-| `DAYS_AFTER_END` | `dayOffset` days after the relation **completed** (`completedAt`); the first-destination survey (#1912) | `after:<n>` |
+| `DAYS_AFTER_END` | `dayOffset` days after the relation **completed** (`completedAt`); the first-destination survey (#1912), the close-loop survey (#1795) | `after:<n>:<relationId>` — also its invitation `round` |
 | `MANUAL` | once to the whole active audience, as soon as the campaign is active | `manual` |
 | `RECURRING` | every `everyDays` days (7–365), one round per period from the campaign's creation day | `pulse:<n>` |
 
@@ -168,6 +168,33 @@ before it creates, so a one-step change fails the deploy. It shipped in two
 deploys: #1887 added the `round` column and a dedicated `@@index([surveyId])`
 (the **expand**), #2769 widened the unique and switched RECURRING on (the
 **contract**). Keep that index: it is what lets the unique change again.
+
+**`DAYS_AFTER_END` is per pairing (#1795).** Its period used to be
+`after:<n>` alone, so a mentor who ended two pairings in the same window got one
+invitation and the second claim collided — and the invitation's empty `round`
+would have refused a second one anyway. The period, and the invitation's
+`round`, now carry the relation id; a target that was already sent under the
+old key (`legacyPeriodKey`) counts as sent, so the change re-invites nobody.
+
+## The close-loop survey and the closure report (#1795)
+
+When a pairing ends, both sides are asked how it went: the `relation_close`
+template (overall 1–5, goals met 1–5, the NPS item as "would you recommend",
+an optional comment), **CONFIDENTIAL**, run by a `DAYS_AFTER_END` campaign at
+day 0 for BOTH. It is switched on per org from `/admin/analytics/closure`
+(`POST /api/admin/analytics/closure`, idempotent, never back-fills); the
+invitation, the signed link, the two-reminder cap and the opt-out are this
+engine's own — there is no second survey engine. A participant never reads the
+other side's answer; admins read aggregates.
+
+The report (`GET /api/admin/analytics/closure`, `src/lib/closureReport.ts`)
+groups the pairings that ended in the period by lifecycle outcome and end
+reason. **Only `COMPLETED` is a success**: an early end (no fit, mentor
+unavailable…), a re-match, a reassignment or a churn is listed under its own
+outcome and labelled "not a completion". A group's scores are shown only above
+the response floor, residual included. The pair's agreed next steps
+(`MentorshipRelation.closurePlan`, written in the end dialog) are shown to both
+sides on the archived pairing.
 
 ## Results (#1910)
 

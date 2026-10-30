@@ -933,6 +933,17 @@ model User {
   // Idempotency for the reminder cron: stamped when the "let's talk again"
   // message goes out, so a tick that runs twice does not mail twice.
   reEngageNotifiedAt      DateTime?
+  // On the bench (#1778): "not this term, but keep them". ACTIVE | BENCHED, a
+  // free String with the whitelist in src/lib/participantState.ts (never an
+  // enum). NOT deactivation: a benched person still signs in and reads their
+  // own record — isActive, sessionsValidFrom and consentAt are never touched by
+  // a bench. Benched = not offered for matching, not assignable, no nudges;
+  // their existing pairings are unaffected (pausing a pairing is #1770's).
+  participantState        String        @default("ACTIVE") @db.VarChar(16)
+  benchedAt               DateTime?
+  // The admin's reason — prose about the person, scrubbed on erasure.
+  benchedReason           String?       @db.VarChar(500)
+  benchedById             String?       @db.VarChar(64)
   // Opt-out switch for transactional email (messages, announcements). In-app
   // notifications are always created regardless.
   emailNotifications      Boolean       @default(true)
@@ -1121,6 +1132,7 @@ model User {
   @@index([orgId, externalId])
   // The /api/v1 keyset (#1988): candidates page over (updatedAt, id) within one org.
   @@index([orgId, updatedAt, id])
+  @@index([participantState])
 }
 
 // Per-user state for in-product guidance surfaces (#2068): "I have seen this"
@@ -2417,6 +2429,10 @@ model SupportAttachment {
   contentType String
   size        Int
   data        Bytes
+  // What an image shows, in the sender's words (EN 301 549 11.8.2, #3407): the
+  // support composers ask for it and the thread renders it as alt text (the
+  // filename stands in when there is none). Deleted with the attachment rows.
+  altText     String?  @db.VarChar(500)
   createdAt   DateTime @default(now())
 
   message SupportMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
@@ -4456,6 +4472,11 @@ model MentorshipRelation {
   // The ending-soon nudge's idempotency stamp (#1786), in the shape of
   // `deadlineReminderSentAt`: one nudge per end date; extending clears it.
   endingSoonNotifiedAt       DateTime?
+  // The pair's agreed next steps, in their own words, written when the
+  // pairing ends (#1795) — "keep in touch quarterly", "intro to the hiring
+  // manager made". Shown to both sides on the archived record. Prose about the
+  // pairing: scrubbed on the mentee's erasure (accountErasure.ts).
+  closurePlan                String?          @db.Text
 
   mentor                User                           @relation("MentorRelations", fields: [mentorId], references: [id])
   mentee                User                           @relation("MenteeRelations", fields: [menteeId], references: [id])

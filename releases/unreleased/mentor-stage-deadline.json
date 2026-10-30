@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "Mentors can set and clear the stage deadline of their own mentee on the mentee detail page (`PUT /api/mentorship/[id]`), so the attention queue's \"Stage overdue\" reason can finally fire for them (#1373). The relation's company stays an admin decision (#2613).",
+  "notes": {
+    "en": [
+      "Mentors can now set a stage deadline for their mentee — a missed one shows as overdue."
+    ],
+    "tr": [
+      "Mentörler artık mentee'leri için aşama son tarihi belirleyebilir — geçen tarih gecikmiş olarak görünür."
+    ],
+    "de": [
+      "Mentoren können jetzt eine Stufenfrist für ihre Mentees setzen — eine verpasste Frist wird als überfällig angezeigt."
+    ]
+  }
+}

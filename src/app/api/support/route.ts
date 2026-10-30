@@ -23,7 +23,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 // message opens a fresh one. Separate from the mentorship message API.
 
 const postSchema = z.object({ body: z.string().max(5000).optional().default('') });
-const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
+const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true, altText: true } as const;
 
 // GET — the caller's tickets (newest first) with their messages. Admin replies
 // are marked read on view, mirroring the mentorship thread behaviour.
@@ -109,7 +109,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const built = await buildSupportAttachments(files);
+    const built = await buildSupportAttachments(files, read.altTexts);
 
     if (!built.ok) {
       return NextResponse.json({ error: built.error }, { status: built.status });
