@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { gotoSettled } from './helpers/auth';
 
 /**
  * Regression cover for the character counter (#782) and — more importantly —
@@ -79,7 +80,9 @@ test('the Announcements box shows a live counter and caps input at the API limit
 
   try {
     await signIn(page, adminEmail, 'AdminPass123');
-    await page.goto('/admin/announcements');
+    // gotoSettled: the page streams its Suspense copy, and a bare goto let the
+    // counter's testid resolve to both copies (strict mode, e2e-full 2026-10-30).
+    await gotoSettled(page, '/admin/announcements');
 
     const box = page.getByTestId('announcement-text');
     const counter = page.getByTestId('textarea-counter');

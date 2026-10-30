@@ -221,6 +221,8 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
     expect(result.results.map((r) => r.key).sort()).toEqual(
       [
         'activityLog',
+        // The public partner application form (#3372): unanswered applications age out.
+        'affiliateApplication',
         'affiliatePayoutDetails',
         'auditLog',
         'automationRun',

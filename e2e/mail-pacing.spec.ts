@@ -10,6 +10,12 @@ import {
   sendPasswordResetEmail,
   sendUnreadMessageDigests,
 } from '@/services/emailService';
+// emailService loads the account-mail renderer lazily (`await import()`, it
+// imports emailService back). Playwright resolves the `@/` alias only while it
+// loads the spec, so a module first reached at test time cannot resolve its own
+// `@/` imports ("Cannot find module '@/i18n/emailDictionary'"). Loading it here,
+// with the spec, puts it in the module cache before the lazy import asks.
+import '@/lib/notifications/emailRender';
 import { startFakeSmtp, type FakeSmtp } from './helpers/fakeSmtp';
 import { cleanupMenteeWithRelation, prisma, seedMenteeWithRelation, type SeededRelation } from './helpers/db';
 
