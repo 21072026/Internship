@@ -3,7 +3,7 @@ import { createUser } from '@/lib/userCreate';
 import { sourceOnly, withApiKey } from '@/lib/apiKey';
 import { randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
-import { KEYSET_ORDER, apiError, apiOk, keysetWhere, paginate, parseListQuery } from '@/lib/api/v1';
+import { KEYSET_ORDER, apiError, apiOk, keysetWhere, paginate, parseFilters, parseListQuery } from '@/lib/api/v1';
 import { apiWrite, writeOk } from '@/lib/api/v1Write';
 import { candidateSelect, serializeCandidate } from '@/lib/api/v1Resources';
 import { checkSkills, createCandidateSchema } from '@/lib/api/v1Candidates';
@@ -30,9 +30,21 @@ export async function GET(request: Request) {
   return withApiKey(request, 'candidates:read', async (key) => {
     const query = parseListQuery(request, RESOURCE);
     if (query instanceof Response) return query;
+    // `email` (#2004): an exact lookup — "do we already have this person?", the
+    // question a connector's search step asks before it creates. The address is
+    // matched, never returned: no resource carries one.
+    const filters = parseFilters(request, { email: 'string' });
+    if (filters instanceof Response) return filters;
 
     const mentees = await prisma.user.findMany({
-      where: { AND: [{ role: 'MENTEE', orgId: key.orgId }, sourceOnly(key), keysetWhere(query)] },
+      where: {
+        AND: [
+          { role: 'MENTEE', orgId: key.orgId },
+          sourceOnly(key),
+          keysetWhere(query),
+          filters.email ? { email: filters.email.trim().toLowerCase() } : {},
+        ],
+      },
       orderBy: KEYSET_ORDER,
       take: query.limit + 1,
       select: candidateSelect,

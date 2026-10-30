@@ -26,6 +26,7 @@ import { resolveSkill as resolveSeedSkill, skillLabel as seedSkillLabel } from '
 import { FALLBACK_TIMEZONE, timeZoneOptions } from '@/lib/timezone';
 import { ProfileProgressMeter } from '@/components/ProfileProgressMeter';
 import { DynamicFields, useDynamicFields } from '@/components/forms/DynamicFields';
+import { ProfileDigestCard } from '@/components/ProfileDigestCard';
 import {
   profileCompleteness,
   profileFieldAnchor,
@@ -577,6 +578,9 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
           </div>
         </form>
       </Card>
+
+      {/* What the semantic match rule reads about this person (#2038), shown as stored. */}
+      <ProfileDigestCard />
 
       {role === 'MENTEE' && userId && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-4xl mt-6">

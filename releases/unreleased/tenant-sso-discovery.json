@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Per-tenant SSO discovery (#1665):** on a tenant's DNS-verified host (or `<slug>.<APP_ROOT_DOMAIN>`), `/auth/signin` leads with \"Continue with <brand> SSO\" and `/auth/sso` redirects straight to the tenant's login route — no organisation code. `src/lib/ssoDiscovery.ts` resolves only through `resolveOrgFromHost()` and offers only an SSO-active, unarchived org; the default host, unverified domains and SSO-off tenants keep the code form. With `ssoEnforced` the page says the password form is for exempt admins; the refusal stays server-side (#1950). SP identifiers are unchanged (one registered endpoint, #2494). e2e `e2e/sso-discovery.spec.ts` (@smoke).",
+  "notes": {
+    "en": ["On your organisation's own domain, the sign-in page now offers your single sign-on directly — no organisation code to type."],
+    "tr": ["Kurumunuzun kendi alan adında giriş sayfası artık doğrudan tek oturum açmayı sunuyor — organizasyon kodu yazmanıza gerek yok."],
+    "de": ["Auf der eigenen Domain Ihrer Organisation bietet die Anmeldeseite jetzt direkt Ihr Single Sign-on an – ohne Organisationscode."]
+  }
+}

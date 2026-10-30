@@ -7,6 +7,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { logActivity } from '@/lib/activity';
 import { raiseLifecycleChanged } from '@/lib/lifecycleEvents';
 import { notify } from '@/lib/notify';
+import { CLOSURE_PLAN_MAX } from '@/lib/closureReport';
 import { AlreadyMentoredError, ALREADY_MENTORED_ERROR, findActiveMentorship } from '@/lib/activeMentorship';
 import {
   ACTIVE,
@@ -38,6 +39,9 @@ const lifecycleSchema = z.object({
   // Codes from LIFECYCLE_END_REASON_CODES — z.string() + the whitelist, never z.enum.
   reasonCode: z.string().max(40).optional(),
   reasonNote: z.string().max(2000).optional(),
+  // The pair's agreed next steps (#1795), only with an end. Shown to BOTH
+  // sides afterwards — unlike reasonNote, which only staff read.
+  closurePlan: z.string().max(CLOSURE_PLAN_MAX).optional(),
 });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -93,6 +97,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const ending = isTerminal(to);
       const reopening = to === ACTIVE && isTerminal(from);
       const reasonCode = ending ? parsed.data.reasonCode! : null;
+      const closurePlan = ending ? parsed.data.closurePlan?.trim() || null : null;
       const now = new Date();
 
       try {
@@ -116,7 +121,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
               ...stageClockPatch(from, to, relation, now),
               // completedAt anchors the post-mentorship document window (#854):
               // stamped on every end, cleared on a reopen, untouched by pause/resume.
-              ...(ending ? { completedAt: now, endReasonCode: reasonCode } : {}),
+              ...(ending ? { completedAt: now, endReasonCode: reasonCode, ...(closurePlan ? { closurePlan } : {}) } : {}),
               ...(reopening ? { completedAt: null, endReasonCode: null } : {}),
             },
           });

@@ -9,6 +9,7 @@ import { daysInStage, isStageOverdue } from '@/lib/stageClock';
 import { isStageTransition } from '@/lib/stageChange';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { relationProgramWhere, resolveProgramFilter } from '@/lib/programFilter';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 
 // GET — hiring-funnel aging & SLA.
@@ -61,8 +62,11 @@ export async function GET(request: Request) {
   // COUNT) are pipeline-generic and stay for every vertical — the #2423 gate
   // keeps the ageing and drop-off cards on a sales funnel on purpose.
   const candidateLists = (await shellCapabilities(orgId)).includes('mentorship');
+  // The analytics screen's programme filter (#1652): 'all' adds nothing.
+  const program = await resolveProgramFilter(searchParams.get('program'), tenant);
+  if ('error' in program) return program.error;
   const relations = await prisma.mentorshipRelation.findMany({
-    where: withinTenant({}, tenant),
+    where: withinTenant({ ...relationProgramWhere(program.filter) }, tenant),
     select: {
       id: true,
       status: true,
