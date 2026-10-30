@@ -23,8 +23,10 @@ test.describe.configure({ mode: 'serial' });
 const stamp = `${Date.now()}-${Math.round(performance.now())}`;
 let orgId = '';
 let adminId = '';
+let progAdminId = '';
 let previousHolderId: string | null = null;
 const adminEmail = uniqueEmail('aff-apply-admin');
+const progAdminEmail = uniqueEmail('aff-apply-progadmin');
 const applicant = `applicant-${stamp}@partner.example`;
 
 
@@ -58,6 +60,9 @@ test.beforeAll(async () => {
   ).id;
   await prisma.affiliateProgramSettings.create({ data: { orgId, plan: PLAN, planVersion: 1, planEffectiveAt: new Date() } });
   adminId = (await seedUser(adminEmail, 'AffApply123!', 'ADMIN', 'Apply Admin', { orgId })).id;
+  // A PROGRAM_ADMIN without a grant may not read the programme, so it is not told either.
+  progAdminId = (await seedUser(progAdminEmail, 'AffApply123!', 'ADMIN', 'Program Admin', { orgId })).id;
+  await prisma.user.update({ where: { id: progAdminId }, data: { adminLevel: 'PROGRAM_ADMIN' } });
 });
 
 test.afterAll(async () => {
@@ -66,6 +71,7 @@ test.afterAll(async () => {
     await prisma.affiliateProgramSettings.deleteMany({ where: { orgId } }).catch(() => {});
   }
   await cleanupByEmail(adminEmail);
+  await cleanupByEmail(progAdminEmail);
   if (orgId) await prisma.organization.deleteMany({ where: { id: orgId } }).catch(() => {});
   if (previousHolderId) {
     await prisma.organization
@@ -86,7 +92,9 @@ test('an application lands in the host’s org only; the internship host is clos
   expect(rows).toHaveLength(1);
   expect(rows[0]).toMatchObject({ orgId, firstName: 'Ada', status: 'PENDING', heardFrom: 'recommendation', locale: 'de' });
   expect(rows[0].consentTextVersion).toBeTruthy();
-  expect(await prisma.notification.count({ where: { userId: adminId, type: 'affiliate_application.new' } })).toBe(1);
+  // The notice is sent after the response (no timing difference between outcomes).
+  await expect.poll(() => prisma.notification.count({ where: { userId: adminId, type: 'affiliate_application.new' } }), { timeout: 15_000 }).toBe(1);
+  expect(await prisma.notification.count({ where: { userId: progAdminId, type: 'affiliate_application.new' } })).toBe(0);
 });
 
 test('refused fields are named; duplicates, honeypot and instant submits write nothing', async ({ request }) => {
