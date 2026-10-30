@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "Fixed: `/notifications` no longer jumps back to page 1 when \"Next\" is clicked right after the page opens (the search debounce reset the page on mount), and the announcement audience checkboxes are 24px tap targets (WCAG 2.5.8) at phone width."
+}
