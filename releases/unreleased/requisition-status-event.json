@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**`requisition.status_changed` (#1998):** a public event `{ requisitionId, from, to }` raised by every writer of `Requisition.status` through `raiseRequisitionStatus()` (`src/lib/requisitionEvents.ts`): the create route (`from` null), the edit route and the acceptance that takes the last opening (both inside their transaction, via `emitInTransaction`, so a rolled-back edit raises nothing), and the sample programme. Company webhooks may subscribe to it (delivered only for their own requisitions). `docs/domain-events.md` maps #1998's requested names to the published ones.",
+  "notes": {
+    "en": ["Webhooks can now follow a requisition's status: opened, put on hold, filled or cancelled."],
+    "tr": ["Webhook'lar artık bir iş talebinin durumunu takip edebiliyor: açıldı, bekletmeye alındı, doldu ya da iptal edildi."],
+    "de": ["Webhooks können jetzt den Status einer Stellenanforderung verfolgen: eröffnet, pausiert, besetzt oder storniert."]
+  }
+}
