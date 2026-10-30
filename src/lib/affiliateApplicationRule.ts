@@ -111,3 +111,38 @@ export function parseAffiliateApplication(input: unknown): ApplicationParseResul
  * one address being used from many.
  */
 export const APPLICATIONS_PER_ADDRESS_PER_DAY = 3;
+
+// ── The admin's decision (#3362) ─────────────────────────────────────────────
+
+/**
+ * Why an application was declined. Only the code is stored on the row and only
+ * its sentence reaches the applicant's mail; an admin's own note goes to the
+ * audit row, which the applicant never reads.
+ */
+export const APPLICATION_REJECTION_CODES = ['not_a_fit', 'duplicate', 'incomplete', 'other'] as const;
+export type ApplicationRejectionCode = (typeof APPLICATION_REJECTION_CODES)[number];
+
+export function isRejectionCode(v: unknown): v is ApplicationRejectionCode {
+  return typeof v === 'string' && (APPLICATION_REJECTION_CODES as readonly string[]).includes(v);
+}
+
+/**
+ * A referral-code suggestion from the applicant's name — `ada-example` — that
+ * the admin may change before approving. Letters are folded to ASCII (ß → ss,
+ * accents dropped), everything else becomes a single dash; the result always
+ * matches the partner-code shape (an alphanumeric first character, at most 40
+ * characters here). Uniqueness is the writer's question, not this one's.
+ */
+export function suggestPartnerCode(firstName: string, lastName: string): string {
+  const folded = `${firstName} ${lastName}`
+    .toLowerCase()
+    .replace(/ß/g, 'ss')
+    .replace(/ı/g, 'i')
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/g, '');
+  return folded === '' ? 'partner' : folded;
+}

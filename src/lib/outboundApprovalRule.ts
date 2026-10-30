@@ -181,6 +181,7 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   'mentor-assigned': { exempt: false, trigger: 'pipeline', why: 'an owner-assigned notice' },
   'mentee-assigned': { exempt: false, trigger: 'pipeline', why: 'an owner-assigned notice' },
   'mentor-application': { exempt: false, trigger: 'pipeline', why: 'an application decision' },
+  'affiliate-application-decision': { exempt: false, trigger: 'pipeline', why: 'the answer to a declined partner application (#3362)' },
   'mentor-offer': { exempt: false, trigger: 'pipeline', why: 'a mentor offering mentorship (#1809), sent only to an opted-in mentee' },
   'goals-evaluation': { exempt: false, trigger: 'pipeline', why: 'an automated evaluation notice' },
   // Inbound requests are addressed to staff in practice (and staff is never

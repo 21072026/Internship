@@ -3410,6 +3410,42 @@ export async function sendAffiliateApplicationReceivedEmail({
   });
 }
 
+// The answer to a declined partner application (#3362): the reason's sentence
+// only — an admin's own note never leaves the audit row.
+export async function sendAffiliateApplicationRejectedEmail({
+  to,
+  firstName,
+  reason,
+  locale,
+  orgId,
+}: {
+  to: string;
+  firstName: string;
+  reason: 'not_a_fit' | 'duplicate' | 'incomplete' | 'other';
+  locale?: string | null;
+  orgId: string;
+}) {
+  const brand = await emailBrand(orgId);
+  const M = (await emailDictionary(resolveLocale(locale), orgId)).affiliateApplicationEmail;
+  await sendEmail({
+    to,
+    orgId,
+    // no-user-row: the applicant was never given an account — nothing to unsubscribe.
+    category: 'affiliate-application-decision',
+    locale,
+    fromName: brand.name,
+    subject: M.rejected.subject,
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        ${brandHeader(brand, esc(M.rejected.heading))}
+        <p>${esc(M.greeting.replace('{name}', firstName))}</p>
+        <p>${esc(M.rejected.body)}</p>
+        <p>${esc(M.rejected.reasons[reason])}</p>
+      </div>
+    `,
+  });
+}
+
 export async function sendMentorApplicationUnderReviewEmail({
   to,
   fullName,

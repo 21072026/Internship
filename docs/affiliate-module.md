@@ -283,6 +283,21 @@ exactly as they are.
   (`affiliate_application.new`) and the applicant an acknowledgement in the
   form's language (`affiliate-application-received`, `inbound_requests` group,
   exempt from outbound approval as the person's own action).
+- **The decision** (#3362), on the **Applications** tab of `/admin/affiliates`
+  (pending count as a badge): `src/lib/affiliateApplicationReview.ts` is the one
+  writer. A decision moves `PENDING` → `APPROVED` | `REJECTED` once — a guarded
+  `updateMany` on `status: 'PENDING'`, so a second click answers 409
+  `already_decided`. **Approve** takes a referral code (the form suggests one
+  from the name, `suggestPartnerCode()`), creates the partner in the same
+  transaction under the organisation lock `createPartner()` and the migration
+  share (a taken code is 409 `code_taken` and leaves the application pending),
+  then calls the ordinary `invitePartner()` — there is no second way to an
+  account. If the invitation cannot be sent the approval stands and the admin is
+  told why. **Decline** takes a code from `APPLICATION_REJECTION_CODES`; only the
+  code is stored and only its sentence reaches the applicant
+  (`affiliate-application-decision`, held under outbound approval like any
+  decision mail to a contact); the admin's optional note lives in the audit row
+  alone. `affiliate.read` lists, `affiliate.write` decides; another org's id is 404.
 - **Retention:** the `affiliateApplication` entry deletes rows after 180 days,
   whatever their state (`src/lib/retentionEntries.ts`,
   `docs/pii-access-lifecycle.md`).
