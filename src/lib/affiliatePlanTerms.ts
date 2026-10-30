@@ -32,6 +32,11 @@ export interface PlanTermsView {
    * STOP_ALL (nothing accrues), RUN_OUT_WINDOW (existing customers earn the percent
    * until their own window closes), RUN_OUT_OPEN (the same, with no window) or
    * RUN_OUT_NONE (run-out, but the plan has no percent phase, so nothing is left to earn).
+   *
+   * The two run-out texts are CONDITIONAL on purpose: the engine only switches to
+   * percent when `switchAtCustomer` eligible customers paid before the termination, and
+   * no customer can become eligible afterwards. The plan alone cannot say whether the
+   * partner got there, so the wording says "if your percent phase has already started".
    */
   afterNotice: AfterNoticeTerms;
 }
