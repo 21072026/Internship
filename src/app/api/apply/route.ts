@@ -1,3 +1,4 @@
+import { requestExpiresAt } from '@/lib/requestExpiryRule';
 import { NextResponse } from 'next/server';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
@@ -158,7 +159,7 @@ export async function POST(request: Request) {
   // goes through the shared decision service (notification + e-mail to the
   // applicant either way).
   await prisma.mentorshipRequest.create({
-    data: { menteeId: mentee.id, preferredMentorId: mentor.id },
+    data: { menteeId: mentee.id, preferredMentorId: mentor.id, expiresAt: requestExpiresAt(new Date()) },
   });
   await notify(mentor.id, 'application.received', { name: fullName }, '/mentor/applications');
   await emit('application.created', { mentorId: mentor.id, menteeName: fullName, email }, { orgId: mentor.orgId ?? null, actor: null });

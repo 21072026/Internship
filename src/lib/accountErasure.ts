@@ -512,7 +512,8 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     prisma.messageTemplate.deleteMany({ where: { ownerId: userId } }),
     // The mentee's own words in their self-serve mentorship request, and the
     // reason they gave when asking for a different mentor (#2098).
-    prisma.mentorshipRequest.updateMany({ where: { menteeId: userId }, data: { message: null, rematchNote: null } }),
+    // `cancelReason` (#1775) is what an admin wrote ABOUT this person's request — scrubbed with the rest.
+    prisma.mentorshipRequest.updateMany({ where: { menteeId: userId }, data: { message: null, rematchNote: null, cancelReason: null } }),
     // A mentor's own words in a Mentor Offer (#1809), written to a mentee: about
     // the mentee when the mentee is erased, the mentor's text when the mentor is.
     prisma.mentorOffer.updateMany({ where: { OR: [{ mentorId: userId }, { menteeId: userId }] }, data: { message: null } }),
@@ -672,6 +673,7 @@ export async function hardDeleteUser(userId: string): Promise<void> {
   // support ticket failed with an opaque FK error.
   await prisma.supportTicket.updateMany({ where: { assignedAdminId: userId }, data: { assignedAdminId: null } });
   await prisma.mentorshipRequest.updateMany({ where: { decidedById: userId }, data: { decidedById: null } });
+  await prisma.mentorshipRequest.updateMany({ where: { cancelledById: userId }, data: { cancelledById: null } });
   await prisma.project.updateMany({ where: { ownerUserId: userId }, data: { ownerUserId: null } });
   // Revoked at Google first (#2098): the cascade would drop our copy of the
   // token but leave the grant live on the person's Google account.

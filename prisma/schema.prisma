@@ -1077,6 +1077,8 @@ model User {
 
   requisitionFits RequisitionFit[] @relation("RequisitionFitMentee")
 
+  cancelledMentorshipRequests MentorshipRequest[] @relation("CancelledMentorshipRequests")
+
   @@unique([email, orgId])
   @@index([role])
   @@index([referredById])
@@ -2420,6 +2422,10 @@ enum MentorshipRequestStatus {
   PENDING
   APPROVED
   REJECTED
+  // #1775: an admin withdrew it with a reason (`cancelReason`), or nobody
+  // answered within 14 days (`expiresAt`). Both free the mentee to ask again.
+  CANCELLED
+  EXPIRED
 }
 
 model MentorshipRequest {
@@ -2445,10 +2451,21 @@ model MentorshipRequest {
   rematchNote        String?                 @db.Text
   decidedById        String?
   decidedAt          DateTime?
+  // Request expiry (#1775). The rule — 14 days to an answer, ONE nudge on day 7
+  // — is pure in src/lib/requestExpiryRule.ts; src/lib/requestExpiry.ts is the
+  // only writer of the sweep's state. NULL `expiresAt` (requests from before the
+  // column) reads as createdAt + 14 days.
+  expiresAt          DateTime?
+  nudgeSentAt        DateTime?
+  // Who withdrew a pending request and why (admin only, `action: 'cancel'`).
+  // The reason is shown to the mentee — it is the one thing they are owed.
+  cancelledById      String?
+  cancelReason       String?                 @db.Text
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
 
   mentee           User                @relation("MentorshipRequests", fields: [menteeId], references: [id], onDelete: Cascade)
+  cancelledBy      User?               @relation("CancelledMentorshipRequests", fields: [cancelledById], references: [id], onDelete: SetNull)
   decidedBy        User?               @relation("DecidedMentorshipRequests", fields: [decidedById], references: [id])
   // SetNull: a mentor leaving must not take pending requests with them — the
   // preference simply disappears while the request survives.
@@ -2461,6 +2478,7 @@ model MentorshipRequest {
   @@index([menteeId])
   @@index([preferredMentorId])
   @@index([replacesRelationId])
+  @@index([status, expiresAt])
 }
 
 // A public, unauthenticated application to become a mentor (#904). No User
