@@ -251,8 +251,12 @@ export const TEXT_LIMITS = {
   userEmail: 191,
   /** User.phone — VARCHAR(191); capped like `companyContactPhone` (a number, not a paste) */
   userPhone: 40,
-  /** User.benchedReason — VARCHAR(500): the admin's reason for a bench (#1778) */
-  benchReason: 500,
+  /**
+   * User.benchedReason — VARCHAR(500): the admin's reason for a bench (#1778).
+   * A line, not a paste: kept under the 250-character bar every single-line
+   * reason here meets (e2e/text-limits-columns.unit.spec.ts).
+   */
+  benchReason: 240,
 } as const;
 
 export type TextLimitKey = keyof typeof TEXT_LIMITS;

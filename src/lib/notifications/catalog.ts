@@ -290,6 +290,7 @@ export const NOTIFICATION_EVENTS = [
   // The confirmed interview time, on the recipient's own clock (#1844); the cancellation of it.
   { key: 'interview_request.scheduled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
   { key: 'interview_request.cancelled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
+  { key: 'affiliate_application.new', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'mentor_application.new', category: 'mentorship', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'mentor_application.approved', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   // Plan-change requests (#1743): to the operators of the org's world, and the
@@ -436,6 +437,9 @@ export const NOTIFICATION_EVENTS = [
   { key: 'security.sessionsRevoked', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'role_changed.toMentor', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'role_changed.toMentee', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // An admin tier change (#1579) signs the person out everywhere; this tells
+  // them why when they are back. No params: the new tier is on their screen.
+  { key: 'admin_tier.changed', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
   // Account mails (#3399): invitation, password reset and e-mail verification.
   // They are NEVER published through notifyEvent() — each has its own sender in
   // emailService.ts, because the mail carries a one-time token. They are here
