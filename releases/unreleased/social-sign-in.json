@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Social sign-in — Google, Microsoft, LinkedIn (#1962):** on the tenant-SSO OIDC engine, now split into a provider-agnostic `OidcClient` core (`providerDocs` / `beginAuthorization` / `exchangeAndVerify`; the org functions are thin adapters). Operator config from env behind the `SOCIAL_SIGN_IN` flag; a provider without credentials is invisible (no button, 404). New `UserIdentity` (linked on provider SUBJECT, `@@unique([provider, subject])`), `SsoAuthRequest.linkUserId` and a wider `kind`. Linking rule pure in `src/lib/socialProvidersRule.ts`: known subject signs in; connect from `/account` links to the signed-in account; an email match links only on a VERIFIED email (missing claim = unverified; Microsoft via `xms_edov`); no match creates a MENTEE in the default org (pending under manual self-registration). The callback mints no session — it mints a single-use sign-in link redeemed through the `magic` provider, so enforced SSO, pending/inactive, world and the account's own 2FA all apply. `/account` lists and unlinks identities; the last way in is refused (409). Docs `docs/social-sign-in.md`; tests `scripts/test/social-sign-in.test.mjs`, `e2e/social-sign-in.spec.ts` (@smoke, all three providers against the stub IdP).",
+  "notes": {
+    "en": ["You can now sign in with Google, Microsoft or LinkedIn — and connect or disconnect those accounts from your account settings."],
+    "tr": ["Artık Google, Microsoft veya LinkedIn ile giriş yapabilir, bu hesapları hesap ayarlarından bağlayıp bağlantısını kesebilirsin."],
+    "de": ["Du kannst dich jetzt mit Google, Microsoft oder LinkedIn anmelden – und diese Konten in deinen Kontoeinstellungen verbinden oder trennen."]
+  }
+}

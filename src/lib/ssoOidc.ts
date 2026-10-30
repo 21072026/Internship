@@ -81,6 +81,34 @@ interface ProviderDocs {
 }
 
 /**
+ * One OIDC relying-party configuration, whoever owns it (#1962): a tenant's
+ * SSO org row (orgClient() below) or an installation-wide social provider
+ * (src/lib/socialProviders.ts). Everything that verifies a token reads only
+ * this — there is one engine, not one per provider.
+ */
+export interface OidcClient {
+  issuer: string;
+  clientId: string;
+  /** Opened lazily: only the token exchange needs it. */
+  clientSecret: () => string | null;
+  discoveryUrl: string;
+  scopes: string;
+  redirectUri: string;
+  /**
+   * The ID token's `iss` when it is not one fixed string — Microsoft's
+   * multi-tenant endpoint issues per directory. When set, the discovery
+   * document's issuer is not compared and the token's `iss` must satisfy it.
+   */
+  issuerMatches?: (iss: string, claims: JWTPayload) => boolean;
+  cache: {
+    read(): { docs: unknown; fetchedAt: Date | null };
+    write(docs: ProviderDocs): Promise<void>;
+  };
+}
+
+export type { ProviderDocs };
+
+/**
  * The redirect URI a customer registers at their IdP. Like the SAML ACS it
  * hangs off the configured origin (NEXTAUTH_URL): an IdP registration names one
  * URL, whatever host the sign-in started on.
@@ -146,17 +174,18 @@ function readCache(raw: unknown): ProviderDocs | null {
 
 const isStr = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
 
-/** The discovery document and the JWKS, cached on the org row. */
-async function providerDocs(org: OidcOrg, opts: { refresh?: boolean } = {}): Promise<ProviderDocs> {
-  const cached = readCache(org.ssoJwksCache);
-  const fresh = cached && org.ssoJwksFetchedAt && Date.now() - org.ssoJwksFetchedAt.getTime() < PROVIDER_CACHE_TTL_MS;
+/** The discovery document and the JWKS, cached by the client's owner. */
+export async function providerDocs(client: OidcClient, opts: { refresh?: boolean } = {}): Promise<ProviderDocs> {
+  const { docs: cachedRaw, fetchedAt } = client.cache.read();
+  const cached = readCache(cachedRaw);
+  const fresh = cached && fetchedAt && Date.now() - fetchedAt.getTime() < PROVIDER_CACHE_TTL_MS;
   if (cached && fresh && !opts.refresh) return cached;
-  if (!org.ssoDiscoveryUrl || !org.ssoIssuer) throw new OidcError('OIDC is not configured');
+  if (!client.discoveryUrl || !client.issuer) throw new OidcError('OIDC is not configured');
 
-  const d = await oidcFetchJson(org.ssoDiscoveryUrl);
+  const d = await oidcFetchJson(client.discoveryUrl);
   // OpenID Connect Discovery § 4.3: the document's issuer MUST be the one we
   // expect, or a discovery URL could hand us another IdP's endpoints.
-  if (d.issuer !== org.ssoIssuer) throw new OidcError('the discovery document names a different issuer');
+  if (d.issuer !== client.issuer) throw new OidcError('the discovery document names a different issuer');
   if (!isStr(d.authorization_endpoint) || !isStr(d.token_endpoint) || !isStr(d.jwks_uri)) {
     throw new OidcError('the discovery document lacks an authorization, token or JWKS endpoint');
   }
@@ -175,48 +204,68 @@ async function providerDocs(org: OidcOrg, opts: { refresh?: boolean } = {}): Pro
     // Public keys only: a private member published by mistake is not stored.
     jwks: { keys: (keys.keys as Record<string, unknown>[]).map(({ d: _d, p: _p, q: _q, dp: _dp, dq: _dq, qi: _qi, k: _k, ...pub }) => pub) } as JSONWebKeySet,
   };
-  await prisma.organization.update({
-    where: { id: org.id },
-    data: { ssoJwksCache: docs as object, ssoJwksFetchedAt: new Date() },
-  });
+  await client.cache.write(docs);
   return docs;
+}
+
+/** A tenant's SSO org row as an OIDC client (#1929) — its cache lives on the row. */
+export function orgClient(org: OidcOrg): OidcClient {
+  return {
+    issuer: org.ssoIssuer ?? '',
+    clientId: org.ssoClientId ?? '',
+    clientSecret: () => (org.ssoClientSecretEnc ? open(org.ssoClientSecretEnc, OIDC_CLIENT_SECRET_PURPOSE) : null),
+    discoveryUrl: org.ssoDiscoveryUrl ?? '',
+    scopes: org.ssoScopes?.trim() || OIDC_DEFAULT_SCOPES,
+    redirectUri: oidcCallbackUrl(org.slug),
+    cache: {
+      read: () => ({ docs: org.ssoJwksCache, fetchedAt: org.ssoJwksFetchedAt }),
+      write: async (docs) => {
+        await prisma.organization.update({ where: { id: org.id }, data: { ssoJwksCache: docs as object, ssoJwksFetchedAt: new Date() } });
+      },
+    },
+  };
 }
 
 /** "Test connection" (#1933 for SAML): refetch discovery + JWKS now. Throws OidcError. */
 export async function probeOidcProvider(org: OidcOrg): Promise<{ keys: number }> {
-  const docs = await providerDocs(org, { refresh: true });
+  const docs = await providerDocs(orgClient(org), { refresh: true });
   return { keys: docs.jwks.keys.length };
 }
 
 const b64url = (buf: Buffer) => buf.toString('base64url');
 
 /**
- * Start a login: persist the single-use request and return the IdP URL. The
- * `state` is also returned so the route can bind it to the browser.
+ * Start a login for any client: persist the single-use request (state, nonce,
+ * PKCE verifier) under `kind` and return the IdP URL. The `state` is also
+ * returned so the route can bind it to the browser.
  */
-export async function beginOidcLogin(org: OidcOrg, returnOrigin: string | null): Promise<{ url: string; state: string }> {
-  if (!org.ssoClientId) throw new OidcError('OIDC client ID is missing');
-  const docs = await providerDocs(org);
+export async function beginAuthorization(
+  client: OidcClient,
+  row: { orgId: string; kind: string; returnOrigin: string | null; linkUserId?: string | null },
+): Promise<{ url: string; state: string }> {
+  if (!client.clientId) throw new OidcError('OIDC client ID is missing');
+  const docs = await providerDocs(client);
   const state = b64url(crypto.randomBytes(32));
   const nonce = b64url(crypto.randomBytes(32));
   const codeVerifier = b64url(crypto.randomBytes(32));
   const codeChallenge = b64url(crypto.createHash('sha256').update(codeVerifier).digest());
   await prisma.ssoAuthRequest.create({
     data: {
-      orgId: org.id,
-      kind: 'oidc',
+      orgId: row.orgId,
+      kind: row.kind,
       state,
       nonce,
       codeVerifier,
-      returnOrigin,
+      returnOrigin: row.returnOrigin,
+      linkUserId: row.linkUserId ?? null,
       expiresAt: new Date(Date.now() + OIDC_REQUEST_TTL_MS),
     },
   });
   const url = new URL(docs.discovery.authorization_endpoint);
   url.searchParams.set('response_type', 'code');
-  url.searchParams.set('client_id', org.ssoClientId);
-  url.searchParams.set('redirect_uri', oidcCallbackUrl(org.slug));
-  url.searchParams.set('scope', org.ssoScopes?.trim() || OIDC_DEFAULT_SCOPES);
+  url.searchParams.set('client_id', client.clientId);
+  url.searchParams.set('redirect_uri', client.redirectUri);
+  url.searchParams.set('scope', client.scopes);
   url.searchParams.set('state', state);
   url.searchParams.set('nonce', nonce);
   url.searchParams.set('code_challenge', codeChallenge);
@@ -224,40 +273,45 @@ export async function beginOidcLogin(org: OidcOrg, returnOrigin: string | null):
   return { url: url.toString(), state };
 }
 
+/** Start a tenant SSO login (#1929). */
+export async function beginOidcLogin(org: OidcOrg, returnOrigin: string | null): Promise<{ url: string; state: string }> {
+  return beginAuthorization(orgClient(org), { orgId: org.id, kind: 'oidc', returnOrigin });
+}
+
 /**
  * Burn the request named by `state` — for THIS org, unused, unexpired — and
  * return it, or null. The conditional update IS the admission: two tabs (or a
  * replay) racing for one state cannot both get a row back.
  */
-export async function spendOidcRequest(state: string, orgId: string) {
+export async function spendOidcRequest(state: string, orgId: string, kind: string = 'oidc') {
   const now = new Date();
   const spent = await prisma.ssoAuthRequest.updateMany({
-    where: { state, orgId, kind: 'oidc', usedAt: null, expiresAt: { gt: now } },
+    where: { state, orgId, kind, usedAt: null, expiresAt: { gt: now } },
     data: { usedAt: now },
   });
   if (spent.count !== 1) return null;
   return prisma.ssoAuthRequest.findUnique({
     where: { state },
-    select: { nonce: true, codeVerifier: true, returnOrigin: true },
+    select: { nonce: true, codeVerifier: true, returnOrigin: true, linkUserId: true },
   });
 }
 
-/** Exchange the code and return the VERIFIED ID-token claims. Throws OidcError. */
-export async function completeOidcLogin(
-  org: OidcOrg,
+/** Exchange the code and return the VERIFIED ID-token claims, for any client. Throws OidcError. */
+export async function exchangeAndVerify(
+  client: OidcClient,
   code: string,
   request: { nonce: string | null; codeVerifier: string | null },
 ): Promise<JWTPayload> {
-  if (!org.ssoClientId || !org.ssoClientSecretEnc || !org.ssoIssuer) throw new OidcError('OIDC is not configured');
+  if (!client.clientId || !client.issuer) throw new OidcError('OIDC is not configured');
   if (!request.nonce || !request.codeVerifier) throw new OidcError('the login request is incomplete');
-  const secret = open(org.ssoClientSecretEnc, OIDC_CLIENT_SECRET_PURPOSE);
-  if (!secret) throw new OidcError('the stored client secret cannot be opened');
-  const docs = await providerDocs(org);
+  const secret = client.clientSecret();
+  if (!secret) throw new OidcError('the client secret is missing or cannot be opened');
+  const docs = await providerDocs(client);
 
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code,
-    redirect_uri: oidcCallbackUrl(org.slug),
+    redirect_uri: client.redirectUri,
     code_verifier: request.codeVerifier,
   });
   const headers: Record<string, string> = { 'Content-Type': 'application/x-www-form-urlencoded' };
@@ -266,9 +320,9 @@ export async function completeOidcLogin(
   const methods = docs.discovery.token_endpoint_auth_methods_supported;
   if (!methods || methods.length === 0 || methods.includes('client_secret_basic')) {
     const enc = (v: string) => encodeURIComponent(v);
-    headers.Authorization = `Basic ${Buffer.from(`${enc(org.ssoClientId)}:${enc(secret)}`).toString('base64')}`;
+    headers.Authorization = `Basic ${Buffer.from(`${enc(client.clientId)}:${enc(secret)}`).toString('base64')}`;
   } else {
-    body.set('client_id', org.ssoClientId);
+    body.set('client_id', client.clientId);
     body.set('client_secret', secret);
   }
   const tokens = await oidcFetchJson(docs.discovery.token_endpoint, { method: 'POST', headers, body: body.toString() });
@@ -276,11 +330,12 @@ export async function completeOidcLogin(
 
   const verify = (keys: JSONWebKeySet) =>
     jwtVerify(tokens.id_token as string, createLocalJWKSet(keys), {
-      issuer: org.ssoIssuer!,
-      audience: org.ssoClientId!,
+      // A per-directory issuer (issuerMatches) is checked below instead.
+      ...(client.issuerMatches ? {} : { issuer: client.issuer }),
+      audience: client.clientId,
       algorithms: OIDC_ID_TOKEN_ALGORITHMS,
       clockTolerance: CLOCK_SKEW_S,
-      requiredClaims: ['exp', 'iat', 'sub'],
+      requiredClaims: ['exp', 'iat', 'sub', 'iss'],
     });
   let payload: JWTPayload;
   try {
@@ -288,7 +343,7 @@ export async function completeOidcLogin(
   } catch (e) {
     // An unknown key id is a rotation at the IdP: refetch once, then judge.
     if (e instanceof joseErrors.JWKSNoMatchingKey) {
-      const refreshed = await providerDocs(org, { refresh: true });
+      const refreshed = await providerDocs(client, { refresh: true });
       try {
         ({ payload } = await verify(refreshed.jwks));
       } catch (e2) {
@@ -298,12 +353,25 @@ export async function completeOidcLogin(
       throw new OidcError(`ID token rejected: ${e instanceof Error ? e.message : 'invalid'}`);
     }
   }
+  if (client.issuerMatches && !client.issuerMatches(String(payload.iss), payload)) {
+    throw new OidcError('ID token rejected: unexpected issuer');
+  }
   if (payload.nonce !== request.nonce) throw new OidcError('ID token rejected: nonce mismatch');
   // OIDC Core § 3.1.3.7: several audiences require an authorized party, and it must be us.
-  if (Array.isArray(payload.aud) && payload.aud.length > 1 && payload.azp !== org.ssoClientId) {
+  if (Array.isArray(payload.aud) && payload.aud.length > 1 && payload.azp !== client.clientId) {
     throw new OidcError('ID token rejected: azp is not this client');
   }
   return payload;
+}
+
+/** Exchange a tenant SSO code (#1929). */
+export async function completeOidcLogin(
+  org: OidcOrg,
+  code: string,
+  request: { nonce: string | null; codeVerifier: string | null },
+): Promise<JWTPayload> {
+  if (!org.ssoClientSecretEnc) throw new OidcError('OIDC is not configured');
+  return exchangeAndVerify(orgClient(org), code, request);
 }
 
 export { mapOidcClaims, type OidcIdentity } from '@/lib/ssoOidcClaims';

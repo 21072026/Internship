@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isParticipant } from '@/lib/relationParticipants';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { actorFromSession, can } from '@/lib/authz';
@@ -123,10 +124,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
       }
 
-      const isAuthorized =
-        isAdmin ||
-        relation.mentorId === session.user.id ||
-        relation.menteeId === session.user.id;
+      // The pair, or a seat beyond it — a group's third member reads the
+      // relation they are in (#1804).
+      const isAuthorized = isAdmin || (await isParticipant(relation, session.user.id));
 
       if (!isAuthorized) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
