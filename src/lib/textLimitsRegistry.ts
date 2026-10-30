@@ -346,6 +346,9 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     brandTileColor: { limit: 'orgBrandTileColor', files: ORG_WRITERS },
     brandAccent: { limit: 'orgBrandAccent', files: ORG_WRITERS },
     brandPalette: { limit: 'orgBrandPalette', files: ORG_WRITERS },
+    // The tenant welcome page (#1664): the route's zod and the editor's maxLength.
+    welcomeTitle: { limit: 'orgWelcomeTitle', files: [...ORG_WRITERS, 'src/app/admin/organizations/page.tsx'] },
+    welcomeBody: { limit: 'orgWelcomeBody', files: [...ORG_WRITERS, 'src/app/admin/organizations/page.tsx'] },
     brandMarkVersion: { exempt: 'a 16-character hash written by src/lib/brandAssets.ts after an upload, never typed into a form' },
   },
   // An organization's generated brand icons (#2922): every column is set by the
