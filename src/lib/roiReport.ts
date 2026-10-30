@@ -27,6 +27,7 @@ import { prisma } from '@/lib/prisma';
 import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { outcomeStageKeys } from '@/lib/pipelineStages';
 import type { Locale } from '@/i18n/config';
+import { isOurHire, OUR_HIRE_WHERE, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
 import {
   computeRoi,
   normaliseCurrency,
@@ -70,6 +71,10 @@ export async function loadRoiReport(tenant: TenantWhere, settingsOrgId: string, 
   const toDay = day(q.to);
   const toExclusive = new Date(toDay.getTime() + 24 * 60 * 60 * 1000);
   const relationScope: Prisma.MentorshipRelationWhereInput = withinTenant(q.cohortId ? { cohortId: q.cohortId } : {}, tenant);
+  // The one placement rule (#3472): a hire is counted on a PLACEMENT relation
+  // only, and — read from the stage trail — only when it is ours.
+  const placementScope: Prisma.MentorshipRelationWhereInput = { AND: [relationScope, PLACEMENT_RELATION_WHERE] };
+  const ourHireScope: Prisma.MentorshipRelationWhereInput = { AND: [relationScope, PLACEMENT_RELATION_WHERE, OUR_HIRE_WHERE] };
 
   const allCosts = await prisma.programCost.findMany({
     where: withinTenant({ periodStart: { lte: toDay }, periodEnd: { gte: from }, ...(q.cohortId ? { cohortId: q.cohortId } : {}) }, tenant),
@@ -81,13 +86,13 @@ export async function loadRoiReport(tenant: TenantWhere, settingsOrgId: string, 
   const outcome = await outcomeStageKeys(settingsOrgId, locale);
   const [ledgerRows, entries] = await Promise.all([
     prisma.placement.findMany({
-      where: withinTenant({ placedAt: { gte: from, lt: toExclusive }, relation: relationScope }, tenant),
-      select: { relationId: true, valueMinor: true, valueCurrency: true, feeMinor: true, feeCurrency: true, reversedAt: true },
+      where: withinTenant({ placedAt: { gte: from, lt: toExclusive }, relation: placementScope }, tenant),
+      select: { relationId: true, valueMinor: true, valueCurrency: true, feeMinor: true, feeCurrency: true, reversedAt: true, attribution: true },
     }),
     outcome.finished.length === 0
       ? Promise.resolve([] as { relationId: string }[])
       : prisma.statusChange.findMany({
-          where: { toStatus: { in: outcome.finished }, createdAt: { gte: from, lt: toExclusive }, relation: relationScope },
+          where: { toStatus: { in: outcome.finished }, createdAt: { gte: from, lt: toExclusive }, relation: ourHireScope },
           select: { relationId: true },
           distinct: ['relationId'],
         }),
@@ -95,7 +100,9 @@ export async function loadRoiReport(tenant: TenantWhere, settingsOrgId: string, 
   // A reversed placement (#1765) is a hire that was undone: it is not counted,
   // and — being ledgered — its relation is not counted from the stage trail
   // either.
-  const ledger = ledgerRows.filter((p) => !p.reversedAt);
+  // A ledgered hire that is not ours (its stamped attribution, #1765) is an
+  // honest outcome, not a placement: not counted either (#3472).
+  const ledger = ledgerRows.filter((p) => !p.reversedAt && isOurHire(p.attribution));
   const ledgerIds = new Set(ledgerRows.map((p) => p.relationId));
   const candidates = entries.map((e) => e.relationId).filter((id) => !ledgerIds.has(id));
   // Keep only relations whose FIRST entry into the finished stage is in the window.
