@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Translator pipeline (#2082, slice 1):** `npm run i18n:export` writes one flat JSON file per locale (`i18n/exports/<locale>.json`, gitignored) with the English source and the code comment beside every string and `MISSING` where there is none. `npm run i18n:import` merges a returned file back into `src/i18n/dictionaries.ts` by rewriting only the changed literals in place, and refuses the whole file when it would drop a key, names an unknown one, still has MISSING or unreviewed `MT` strings, or changes a string's `{placeholders}`. Both parse the dictionary with the TypeScript compiler (`scripts/i18n-dict-lib.mjs`). Export → import with no edits is byte-identical, pinned against the real dictionary in `scripts/test/i18n-pipeline.test.mjs`. The procedure, glossary and add-a-locale checklist are in `docs/i18n.md`."
+}
