@@ -23,6 +23,7 @@ import {
   ServerCog,
   Presentation,
 } from 'lucide-react';
+import type { Permission } from '@/lib/authzRule';
 import type { VerticalCapability } from '@/lib/verticals';
 
 /**
@@ -72,6 +73,13 @@ export interface NavLink {
    * `superAdminOnly`: the page and its API apply the rule themselves.
    */
   operatorOnly?: boolean;
+  /**
+   * The permission the destination's page needs (#1579), for the few admin
+   * pages a narrower tier cannot open (an OBSERVER holds reads only). An
+   * untagged link needs a read every tier holds. Presentation only — the
+   * page's API answers 403 itself, and that is the control.
+   */
+  permission?: Permission;
 }
 
 /** Who is looking — the facts the audience tags above are judged against. */
@@ -79,12 +87,18 @@ export interface NavAudience {
   superAdmin?: boolean;
   /** A super admin or the default organization's ADMIN (see `operatorOnly`). */
   operator?: boolean;
+  /**
+   * The permissions the viewer's admin tier holds (#1579) — TIER_PERMISSIONS of
+   * their tier, computed by the caller; undefined = not judged by permission.
+   */
+  permissions?: ReadonlySet<Permission>;
 }
 
 /** Does the audience pass this link's `superAdminOnly` / `operatorOnly` tag? */
 export function navAudienceAllows(l: NavLink, opts: NavAudience = {}): boolean {
   if (l.superAdminOnly && opts.superAdmin !== true) return false;
   if (l.operatorOnly && opts.superAdmin !== true && opts.operator !== true) return false;
+  if (l.permission && opts.permissions && !opts.permissions.has(l.permission)) return false;
   return true;
 }
 
@@ -93,7 +107,7 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/board', icon: Columns3, key: 'board' },
   // Stage automation rules (#1703/#1704): what runs when a relation enters or
   // leaves a stage. Every vertical with a pipeline has it.
-  { href: '/admin/automations', icon: Zap, key: 'automations', capability: 'pipeline' },
+  { href: '/admin/automations', icon: Zap, key: 'automations', capability: 'pipeline', permission: 'org.settings.write' },
   { href: '/admin/companies', icon: Building2, key: 'companies' },
   // The partner programme (docs/affiliate-module.md), marketing CRM only.
   { href: '/admin/affiliates', icon: Wallet, key: 'affiliates', capability: 'affiliate' },
@@ -158,7 +172,7 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/newsletters', icon: MailOpen, key: 'newsletters', capability: 'mentorship' },
   // Admin-authored nudges (#1686): reminders to mentors and mentees, so `mentorship`.
   // Stage-change rules are the automations screen (#1704), not this one.
-  { href: '/admin/nudges', icon: BellRing, key: 'nudges', capability: 'mentorship' },
+  { href: '/admin/nudges', icon: BellRing, key: 'nudges', capability: 'mentorship', permission: 'org.settings.write' },
   { href: '/admin/testimonials', icon: Quote, key: 'testimonials', capability: 'mentorship' },
   // Survey results (#1910). Untagged: a survey's audience may be companies, and
   // the engine (#1879) is not a mentorship module.

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { isLastActiveOrgAdmin } from '@/lib/adminTiers';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -8,8 +9,6 @@ import { checkPassword, passwordRefusal, passwordSchema } from '@/lib/password';
 import { logActivity } from '@/lib/activity';
 import { hardDeleteUser } from '@/lib/accountErasure';
 import { withTenantScope } from '@/lib/orgContext';
-import { orgWhere } from '@/lib/tenantFilter';
-import { defaultOrgId } from '@/lib/defaultOrg';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { clearRememberCookies } from '@/lib/rememberCookie';
 import { isPasswordLoginBlocked, SSO_REQUIRED_CODE, SSO_REQUIRED_MESSAGE } from '@/lib/ssoEnforcement';
@@ -166,13 +165,12 @@ export async function DELETE(request: Request) {
     // org delete themselves and leave that org with none. NULL-org admins are
     // the default org's (orgWhere). Whether this account IS an admin is a fact
     // about the row being deleted, read from it — not an authorization (#1571).
-    if (me.role === 'ADMIN') {
-      const admins = await prisma.user.count({
-        where: { AND: [{ role: 'ADMIN', NOT: { email: me.email } }, await orgWhere(me.orgId ?? (await defaultOrgId()))] },
-      });
-      if (admins < 1) {
-        return NextResponse.json({ error: 'The last admin account cannot be deleted' }, { status: 400 });
-      }
+    // Since #1579 "another admin" means another ACTIVE ORG_ADMIN: an org left
+    // with only observers, program admins or a switched-off account could no
+    // longer administer itself. The twin of another world lives in another org,
+    // so the org scope already leaves it out.
+    if (me.role === 'ADMIN' && (await isLastActiveOrgAdmin(me))) {
+      return NextResponse.json({ error: 'The last admin account cannot be deleted' }, { status: 400 });
     }
 
     // Acts on exactly this one row (#2590): hardDeleteUser is keyed by user id,
