@@ -99,6 +99,7 @@ import { resolveSlaDayRule, resolveStageEscalations } from '@/lib/stageSla';
 import { claimEscalation, escalationRecipients, openBreach, resolveBreaches } from '@/lib/slaBreach';
 import { SLA_LEVEL_MENTOR, daysOverdue, escalationDue, mentorAlreadyTold } from '@/lib/slaLadderRule';
 import { notifyEvent } from '@/lib/notifications/router';
+import { meetingChatCard } from '@/lib/meetingChatCard';
 import { sameTenant } from '@/lib/orgScope';
 import { brandAssetPath } from '@/lib/brandRule';
 import { holdIfRequired } from '@/lib/outboundDrafts';
@@ -5207,22 +5208,29 @@ export async function sendMeetingReminders() {
     );
 
     for (const user of participants) {
-      const link = user.id === m.relation.mentorId ? '/mentor/meetings' : '/portal/calendar';
       // LOCALE (#1720): the recipient is a signed-up participant, so the
       // language is their own stored preference — for the mail below and for
       // the date it is about. Resolved up here because the in-app notification
       // carries the same pre-rendered string and is addressed to the same
       // person.
+      // The mail's button target (the bell's link is the router's own).
+      const link = user.id === m.relation.mentorId ? '/mentor/meetings' : '/portal/calendar';
       const uLocale = resolveLocale(user.preferredLanguage);
       // Per participant: the two sides of a relation can sit in different zones,
       // and each must read the time on their own clock (#1030).
       const when = formatInTimeZone(m.scheduledAt!, user.timezone, undefined, dateLocale(uLocale));
-      // In-app: unconditional (notify() never throws).
-      await notify(
+      // The bell, push and chat (#1942) through the router — never a chat
+      // call from here. `reminderSentAt` (claimed above) is the single-shot
+      // guard for every channel together; the dedupe key holds the same line
+      // inside the router should one participant be reached twice.
+      await notifyEvent(
         user.id,
         'meeting_reminder.startingSoon',
         { title: m.title, minutes, when },
-        link
+        {
+          dedupeKey: `meeting-reminder:${m.id}:${user.id}:${m.scheduledAt!.toISOString()}`,
+          chatCard: meetingChatCard(m, 'reminder'),
+        }
       );
       notified++;
 

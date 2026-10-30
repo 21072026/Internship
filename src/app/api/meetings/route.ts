@@ -5,7 +5,8 @@ import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import { sendMeetingInviteEmail } from '@/services/emailService';
 import { emit } from '@/lib/events/emit';
-import { notifyIfAllowed } from '@/lib/notify';
+import { notifyEvent } from '@/lib/notifications/router';
+import { meetingChatCard } from '@/lib/meetingChatCard';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import type { Prisma } from '@prisma/client';
@@ -308,13 +309,15 @@ export async function POST(request: Request) {
       // echo when an admin schedules a meeting on their own relation.
       if (rel.mentee.id !== session.user.id && !notifiedMentees.has(rel.mentee.id)) {
         notifiedMentees.add(rel.mentee.id);
-        await notifyIfAllowed(
-          rel.mentee.id,
-          'meetingReminders',
-          when ? 'meeting.scheduled' : 'meeting.scheduledNoTime',
-          when ? { title, when: formatInTimeZone(when, rel.mentee.timezone) } : { title },
-          '/portal'
-        );
+        // Through the router (#1942): the bell, and a chat card with the join
+        // button for a mentee who linked chat. The mail went out above.
+        const chatCard = meetingChatCard(meeting, 'invite');
+        const dedupeKey = `meeting-invite:${meeting.id}`;
+        if (when) {
+          await notifyEvent(rel.mentee.id, 'meeting.scheduled', { title, when: formatInTimeZone(when, rel.mentee.timezone) }, { dedupeKey, chatCard });
+        } else {
+          await notifyEvent(rel.mentee.id, 'meeting.scheduledNoTime', { title }, { dedupeKey, chatCard });
+        }
       }
       created++;
     }
