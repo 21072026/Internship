@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Targeted, scheduled announcements with read tracking (#1721):** `Announcement` gains `audience` (criteria — roles, programmes, pipeline stages, companies, tags — never a recipient list), `targeted`, `scheduledAt`, `status` (`AnnouncementStatus`, default `SENT`, so every existing row reads as sent to everyone) and `emailRequested`; all additive. `src/lib/announcementAudience.ts` is the one rule (strict zod, OR within a dimension, AND across, resolved server-side at send time); `src/lib/announcementSend.ts` holds the shared fan-out, used by the immediate send and the new `announcement.send` job (enqueued at `scheduledAt`, claims SCHEDULED → SENDING, quota checked again at send time). New `POST /api/admin/announcements/[id]/cancel` (guarded SCHEDULED → CANCELED, 409 after it went out), `GET/POST /api/admin/announcements/estimate` (picker options + recipient estimate through the send's own functions). History shows status, the audience and delivered/read/read-rate aggregated over `Notification.read`. The reader feed shows only SENT broadcasts and a targeted one only to the people it was delivered to; the image route applies the same rule.",
+  "notes": {
+    "en": ["Send an announcement to just the people it is for — by role, programme, stage, company or tag — now or at a time you choose, and see how many have read it."],
+    "tr": ["Duyuruyu yalnızca ilgili kişilere gönderin — role, programa, aşamaya, şirkete ya da etikete göre — hemen ya da seçtiğiniz bir zamanda; kaç kişinin okuduğunu görün."],
+    "de": ["Senden Sie eine Ankündigung nur an die Richtigen — nach Rolle, Programm, Phase, Unternehmen oder Tag —, sofort oder zu einem gewählten Zeitpunkt, und sehen Sie, wie viele sie gelesen haben."]
+  }
+}
