@@ -12,6 +12,8 @@ import { NO_MATCH, scopeForRole, logScopeDenial, andScope } from '@/lib/authzSco
 import { logViewActivity } from '@/lib/activity';
 import { requirePermission, requireRoleOrPermission } from '@/lib/authz';
 import { companySelfEditRefusedFields } from '@/lib/companyVerification';
+import { isSafeWebsiteUrl } from '@/lib/employerPage';
+import { ensureEmployerSlug } from '@/lib/employerPageStore';
 
 // Tenant (#2542): every handler here looks the company up with
 // `withinTenant({ id }, await tenantWhere(session))`, so another tenant's company is a
@@ -32,6 +34,11 @@ const updateCompanySchema = z.object({
   // in by an ADMIN on /admin/companies/[id] (#2560). `null` or a blank string
   // clears it. 191 = the column's VARCHAR width.
   externalId: z.string().trim().max(191).nullable().optional(),
+  // The public employer page (#1867). The website becomes a link on a public
+  // page, so https only and no credentials; '' clears it.
+  about: z.string().max(TEXT_LIMITS.companyAbout).optional(),
+  websiteUrl: z.string().max(TEXT_LIMITS.companyWebsiteUrl).refine((v) => v === '' || isSafeWebsiteUrl(v), 'https URL').optional(),
+  isPublicProfile: z.boolean().optional(),
   // No `needs` any more (#1875). This PUT used to delete every CompanyNeed of
   // the company and recreate them — new ids on every save, so each edit handed
   // the deploy's converter a fresh set of rows to turn into requisitions. Open
@@ -153,7 +160,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       );
     }
 
-    const { contactEmail, externalId: rawExternalId, ...companyData } = parsed.data;
+    const { contactEmail, externalId: rawExternalId, about, websiteUrl, ...companyData } = parsed.data;
     // Blank means "no external id", never an empty-string id that every other
     // blank would then collide with.
     const externalId = rawExternalId === undefined ? undefined : rawExternalId || null;
@@ -201,9 +208,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           // detail page sends nothing else — must not wipe the address.
           ...(contactEmail !== undefined && { contactEmail: contactEmail || null }),
           ...(externalId !== undefined && { externalId }),
+          ...(about !== undefined && { about: about.trim() || null }),
+          ...(websiteUrl !== undefined && { websiteUrl: websiteUrl || null }),
         },
         include: { requisitions: openPositionsInclude },
       });
+    // Publishing the employer page for the first time gives it its address
+    // (#1867); a slug once given never moves, so a published link stays valid.
+    if (company.isPublicProfile && !company.slug) {
+      company.slug = await ensureEmployerSlug(company);
+    }
 
     return NextResponse.json({ company });
     });

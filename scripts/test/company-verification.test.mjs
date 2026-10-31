@@ -52,8 +52,11 @@ test('availableVerificationActions offers exactly what the transition allows', (
   }
 });
 
-test('a COMPANY self-edit may name exactly six fields', () => {
-  assert.deepEqual([...COMPANY_SELF_EDITABLE_FIELDS].sort(), ['address', 'contactEmail', 'description', 'industry', 'logoUrl', 'size']);
+test('a COMPANY self-edit may name exactly these fields', () => {
+  assert.deepEqual([...COMPANY_SELF_EDITABLE_FIELDS].sort(), [
+    'about', 'address', 'contactEmail', 'description', 'industry', 'isPublicProfile', 'logoUrl', 'size', 'websiteUrl',
+  ]);
+  assert.deepEqual(companySelfEditRefusedFields({ slug: 'mine' }), ['slug']);
   assert.deepEqual(companySelfEditRefusedFields({ description: 'x', logoUrl: '' }), []);
   assert.deepEqual(companySelfEditRefusedFields({ description: 'x', quota: 5, verificationStatus: 'VERIFIED', orgId: 'o', name: 'n' }), [
     'name',
