@@ -1,5 +1,8 @@
 import type { InteractionType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { inCallerTenant } from '@/lib/tenantFilter';
+import type { z } from 'zod';
+import type { updateInteractionSchema } from '@/lib/interactionSchema';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { emit } from '@/lib/events/emit';
 import { recordPairActivity } from '@/lib/metering';
@@ -55,4 +58,43 @@ export async function createInteraction(opts: {
     await notifyIfAllowed(relation.menteeId, 'interactions', 'interaction.logged', {}, '/portal/journey');
   }
   return interaction;
+}
+
+/**
+ * Who may edit or delete a log (#1953): the relation's mentor, or an admin the
+ * permission rule lets write relations. One answer for PUT/DELETE
+ * /api/interactions/[id] and the chat "Add notes" card. A log on another
+ * tenant's relation reads as missing — 404, never 403, so the id is not
+ * confirmed to exist (#2542); InteractionLog has no orgId of its own, its
+ * tenant is its relation's.
+ */
+export async function interactionAccess(id: string, userId: string, isAdmin: boolean, callerOrgId: string | null) {
+  const interaction = await prisma.interactionLog.findUnique({
+    where: { id },
+    include: { relation: true },
+  });
+  if (!interaction) return { interaction: null, authorized: false };
+  if (!(await inCallerTenant(interaction.relation.orgId, callerOrgId))) {
+    return { interaction: null, authorized: false };
+  }
+  return { interaction, authorized: isAdmin || interaction.relation.mentorId === userId };
+}
+
+/**
+ * Edit a log, as ONE write path (#1953): the edit route and the chat card
+ * both call this after interactionAccess() said yes. The same fields the
+ * create route takes (src/lib/interactionSchema.ts, #1356), so a Call keeps
+ * its type and a subject can be corrected. An emptied subject is stored as
+ * NULL, as the create path stores a missing one.
+ */
+export async function updateInteraction(id: string, data: z.infer<typeof updateInteractionSchema>) {
+  const { date, subject, ...rest } = data;
+  return prisma.interactionLog.update({
+    where: { id },
+    data: {
+      ...rest,
+      ...(date !== undefined ? { date: new Date(date) } : {}),
+      ...(subject !== undefined ? { subject: subject?.trim() ? subject.trim() : null } : {}),
+    },
+  });
 }

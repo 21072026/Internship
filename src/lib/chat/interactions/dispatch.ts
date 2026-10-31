@@ -5,7 +5,7 @@ import { getDictionary } from '@/i18n/dictionaries';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 import type { InteractionEnvelope } from './envelope';
-import type { CardButton } from '@/lib/chat/card';
+import type { CardButton, CardInput } from '@/lib/chat/card';
 import type { ChatPlatform } from '@prisma/client';
 
 // The ONE dispatcher behind the chat interaction endpoint (#1948). The route
@@ -41,12 +41,16 @@ export interface ChatActionContext {
   identityId: string;
   /** The button's opaque value; the handler validates it. */
   value: string | null;
+  /** Text typed into the card's field (#1953), or null; the handler validates it. */
+  input: string | null;
 }
 
 export interface ChatReply {
   text: string;
   /** Follow-up buttons (#1951), posting back here as `actionId` + `value`. */
   buttons?: CardButton[];
+  /** A text field (#1953), posting back here as `actionId` + `value` + the typed `input`. */
+  input?: CardInput;
   /** Slack: replace the card that was clicked (a decided request loses its buttons). */
   replaceOriginal?: boolean;
 }
@@ -113,7 +117,7 @@ export async function dispatchInteraction(platform: ChatPlatform, env: Interacti
     const handler = registry.get(env.actionId);
     if (!handler) return { kind: 'unknown_action', reply: { text: t.unavailable } };
     const reply = await runWithOrg(actor.orgId, () =>
-      handler({ user: actor, platform, workspaceId: ws.id, identityId, value: env.value }),
+      handler({ user: actor, platform, workspaceId: ws.id, identityId, value: env.value, input: env.input }),
     );
     return { kind: 'handled', actionId: env.actionId, reply };
   } catch (e) {

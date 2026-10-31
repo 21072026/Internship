@@ -15,6 +15,9 @@ import { INTERVIEW_DECLINE_REASON_CODES, isInterviewDeclineReasonCode } from '@/
 import { submitSurveyResponse, SurveyAnswerInvalid, SurveyConflict, surveyAcceptsAnswers } from '@/lib/surveys';
 import { mintInvitationReminderToken, surveyInviteUrl } from '@/lib/surveyTokens';
 import { pickLocalized } from '@/lib/surveySchema';
+import { actorFromSession, can } from '@/lib/authz';
+import { interactionAccess, updateInteraction } from '@/lib/interactionWrite';
+import { updateInteractionSchema } from '@/lib/interactionSchema';
 import { answerableInChat, choicesFor, decodeState, encodeState, type FlowState } from '@/lib/chat/surveyFlow';
 
 // The built-in chat actions (#1948). Each one is something the person could
@@ -338,4 +341,56 @@ registerChatAction('survey.answer', async ({ user, value }) => {
     if (error instanceof SurveyConflict) return { text: error.code === 'already_responded' ? t.surveyAnswered : t.surveyClosed, replaceOriginal: true };
     throw error;
   }
+});
+
+// ── Notes from the post-meeting card (#1953) ────────────────────────────────
+//
+// The meeting's own log row (written by src/lib/meetingAutoLog.ts) is the one
+// the card edits: "Add notes" asks for the text, Enter (Slack) or Save (Teams)
+// writes it through updateInteraction() — the body of PUT
+// /api/interactions/[id] — after interactionAccess(), the same "the relation's
+// mentor, or an admin who may write relations, in the caller's tenant" the
+// route asks. A second log for the same session is never written.
+
+async function editableInteraction(user: ChatActor, id: string | null) {
+  if (!id || !SAFE_ID.test(id)) return null;
+  const session = await sessionFor(user);
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'relation.write', undefined, session));
+  const { interaction, authorized } = await interactionAccess(id, user.id, isAdmin, user.orgId);
+  return interaction && authorized ? interaction : null;
+}
+
+function noteSubject(row: { subject: string | null; type: string }) {
+  return row.subject?.trim() || row.type;
+}
+
+/** `interaction.note` — ask for the note. Read-only, so a rerun is harmless. */
+registerChatAction('interaction.note', async ({ user, value }) => {
+  const t = getDictionary(user.locale).chatInteraction;
+  const row = await editableInteraction(user, value);
+  if (!row) return { text: t.unavailable };
+  return {
+    text: interpolate(t.noteAsk, {
+      subject: noteSubject(row),
+      date: formatInTimeZone(row.date, user.timeZone, undefined, intlLocaleFor(user.locale)),
+    }),
+    input: { actionId: 'interaction.note.save', value: row.id, label: t.noteLabel, placeholder: t.notePlaceholder, submitLabel: t.noteSave },
+  };
+});
+
+/**
+ * `interaction.note.save` — the typed note replaces the row's notes, validated
+ * by the edit route's own schema. A rerun writes the same text again.
+ */
+registerChatAction('interaction.note.save', async ({ user, value, input }) => {
+  const t = getDictionary(user.locale).chatInteraction;
+  const notes = (input ?? '').trim();
+  if (!notes) return { text: t.noteEmpty };
+  const parsed = updateInteractionSchema.pick({ notes: true }).safeParse({ notes });
+  if (!parsed.success) return { text: t.noteTooLong };
+  const row = await editableInteraction(user, value);
+  if (!row) return { text: t.unavailable };
+  await updateInteraction(row.id, parsed.data);
+  return { text: interpolate(t.noteSaved, { subject: noteSubject(row) }), replaceOriginal: true };
 });
