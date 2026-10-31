@@ -3,6 +3,7 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInViaApi } from './helpers/auth';
 import { sweepEndingSoonRelations } from '../src/lib/relationEndingSweep';
 import { makeEmailActionToken } from '../src/lib/emailActionToken';
+import { drainNotificationMail } from './helpers/notificationMail';
 
 // The end of an agreed pairing (#1786), the sweep run in-process against the
 // test DB: one ending-soon notice + mail per participant per end date, nothing
@@ -22,7 +23,7 @@ const utcDay = (offsetDays: number) => {
 };
 
 test('ending soon: one nudge per end date, extend from the app and from the mail, re-nudge for the new date', async ({ page, request, baseURL }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(120_000);
   const emails = ['end-mentor', 'end-mentee', 'end-mentee2'].map((p) => uniqueEmail(p));
   const [mentorEmail, menteeEmail, mentee2Email] = emails;
   try {
@@ -40,15 +41,17 @@ test('ending soon: one nudge per end date, extend from the app and from the mail
     const mails = () => prisma.emailLog.count({ where: { to: { in: [mentorEmail, menteeEmail, mentee2Email] }, category: 'relation-ending' } });
 
     await sweepEndingSoonRelations();
+    await drainNotificationMail([mentor.id, mentee.id, mentee2.id]);
     const stamped = await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: rel.id } });
     expect(stamped.endingSoonNotifiedAt).not.toBeNull();
     expect(await notices()).toBe(2);
-    await expect.poll(mails, { timeout: 60_000 }).toBe(2);
+    await expect.poll(mails, { timeout: 15_000 }).toBe(2);
     // A paused pair is not nudged.
     expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: paused.id } })).endingSoonNotifiedAt).toBeNull();
 
     // Running the sweep twice sends nothing the second time.
     await sweepEndingSoonRelations();
+    await drainNotificationMail([mentor.id, mentee.id, mentee2.id]);
     expect(await notices()).toBe(2);
     expect(await mails()).toBe(2);
 
@@ -76,6 +79,7 @@ test('ending soon: one nudge per end date, extend from the app and from the mail
 
     // The new date is far out: nothing to nudge.
     await sweepEndingSoonRelations();
+    await drainNotificationMail([mentor.id, mentee.id, mentee2.id]);
     expect(await notices()).toBe(2);
 
     // The link from the FIRST mail was minted for the old end date: it is spent.
@@ -88,8 +92,9 @@ test('ending soon: one nudge per end date, extend from the app and from the mail
     // stands in for the passage of time): it gets its own single nudge.
     await prisma.mentorshipRelation.update({ where: { id: rel.id }, data: { expectedEndDate: utcDay(7), endingSoonNotifiedAt: null } });
     await sweepEndingSoonRelations();
+    await drainNotificationMail([mentor.id, mentee.id, mentee2.id]);
     expect(await notices()).toBe(4);
-    await expect.poll(mails, { timeout: 60_000 }).toBe(4);
+    await expect.poll(mails, { timeout: 15_000 }).toBe(4);
 
     // The mentor extends from that mail, without a session: the page performs
     // it, and the very same link cannot extend a second time.
