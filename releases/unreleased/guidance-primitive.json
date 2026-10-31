@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**First-run tours and contextual help (#2067):** a reusable guidance primitive, no new dependency. `src/lib/tours.ts` is a declarative registry (role, steps anchored on `data-tour-id`, worded by the `guidance` dictionary block); `TourProvider` (mounted in the admin and mentor shells) offers a role's first-run tour once and `Coachmark` renders each step as an accessible modal dialog (`role=\"dialog\"` + `aria-modal`, focus trap/Escape/return via `useModalFocus`, Escape skips, keyboard-complete, `motion-safe:` only). Seen/skipped state is per user and server-side in the existing `UserGuidanceState` table (`tour:<id>` keys, no schema change) through `GET`/`POST /api/guidance`, which only ever touches the session user's row (a `userId` in the body is a 400). Not offered while impersonating, nor to an admin in the mentor shell; a step whose target is not on screen is skipped and a tour with none is not recorded. `HelpTip` is the standalone \"?\" explanation (first use: the admin board). The e2e suite's storage state turns the automatic offer off (`guidance-autostart`, like the cookie consent); `e2e/guidance-tour.spec.ts` starts clean. Adding a tour is a `tours.ts` entry plus its EN/TR/DE strings.",
+  "notes": {
+    "en": ["New admins and mentors get a short, keyboard-friendly tour of their workspace — once, remembered across devices — and “?” buttons explain screens where you use them."],
+    "tr": ["Yeni yöneticiler ve mentorlar çalışma alanlarını kısa, klavyeyle de kullanılabilen bir turla tanıyor — yalnızca bir kez, cihazlar arasında hatırlanarak — ve “?” düğmeleri ekranları kullanıldıkları yerde açıklıyor."],
+    "de": ["Neue Admins und Mentor:innen bekommen eine kurze, tastaturfreundliche Tour durch ihren Arbeitsbereich – nur einmal, geräteübergreifend gemerkt – und „?“-Buttons erklären Bildschirme dort, wo du sie nutzt."]
+  }
+}
