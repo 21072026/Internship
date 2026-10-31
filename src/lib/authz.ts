@@ -194,7 +194,9 @@ export type NonAdminRole = 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE';
  * a session (or for a deleted/inactive account).
  *
  * `admin` in the answer tells the handler which branch it is on — use it, not
- * `session.user.role`, for "admins see the whole org".
+ * `session.user.role`, for "admins see the whole org". `listing: true` works
+ * as in requirePermission(): a PROGRAM_ADMIN's `grants` come back and the
+ * handler narrows its rows to them (#1577).
  */
 export async function requireRoleOrPermission(
   roles: readonly NonAdminRole[],
@@ -202,6 +204,7 @@ export async function requireRoleOrPermission(
   opts: {
     subject?: Subject;
     request?: Request | null;
+    listing?: boolean;
     /**
      * A session the caller already resolved instead of the request's cookie —
      * the chat interaction dispatcher (#1949) calls shared services as the
@@ -209,7 +212,7 @@ export async function requireRoleOrPermission(
      */
     session?: Session | null;
   } = {},
-): Promise<{ actor: Actor; session: Session; admin: boolean } | { error: NextResponse }> {
+): Promise<{ actor: Actor; session: Session; admin: boolean; grants?: ScopeGrant[] } | { error: NextResponse }> {
   const session = opts.session ?? (await getServerSession(authOptions));
   const actor = await actorFromSession(session);
   if (!session || !actor) {
@@ -218,9 +221,9 @@ export async function requireRoleOrPermission(
   if (actor.role !== 'ADMIN' && (roles as readonly string[]).includes(actor.role)) {
     return { actor, session, admin: false };
   }
-  const { decision } = isPermission(action)
-    ? await decideFor(actor, action, opts.subject, session)
-    : { decision: { allow: false, reason: 'unknown_permission' } as Decision };
+  const { decision, grants } = isPermission(action)
+    ? await decideFor(actor, action, opts.subject, session, opts.listing === true)
+    : { decision: { allow: false, reason: 'unknown_permission' } as Decision, grants: undefined };
   if (!decision.allow) {
     await logPermissionDenial(
       { ...actor, email: session.user?.email ?? null },
@@ -235,5 +238,5 @@ export async function requireRoleOrPermission(
       ),
     };
   }
-  return { actor, session, admin: true };
+  return { actor, session, admin: true, grants };
 }

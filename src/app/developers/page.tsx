@@ -43,6 +43,7 @@ const ERROR_STATUS: Record<ApiErrorType, string> = {
   duplicate_candidate: '409',
   invalid_transition: '409',
   stage_conflict: '409',
+  stage_gate_blocked: '409',
   rate_limited: '429',
   quota_exceeded: '429',
 };

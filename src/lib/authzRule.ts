@@ -165,6 +165,15 @@ export interface Subject {
   userId?: string | null;
 }
 
+/**
+ * A mentorship relation as a subject (#1577): its org, cohort and company —
+ * what a PROGRAM_ADMIN grant is matched against. A relation with no cohort and
+ * no company is outside every grant (`unscoped_subject`), deliberately.
+ */
+export function relationSubject(r: { orgId?: string | null; cohortId?: string | null; companyId?: string | null }): Subject {
+  return { orgId: r.orgId ?? null, cohortId: r.cohortId ?? null, companyId: r.companyId ?? null };
+}
+
 /** One AdminScopeGrant row, as far as the rule needs it. */
 export interface ScopeGrant {
   orgId: string;

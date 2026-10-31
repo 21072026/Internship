@@ -102,6 +102,11 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
       exempt:
         'written by the account-event writer only (#2846): the feed carries the plan as 1–40 characters of A–Z a–z 0–9 . _ - (src/lib/accountEventSchema.ts), the width of this column. No person and no form writes it.',
     },
+    // Employer verification (#1865).
+    verificationStatus: ENUMERATED,
+    verifiedById: ID,
+    signupDomain: SERVER_SET,
+    rejectionReason: { limit: 'companyVerificationReason', files: ['src/app/api/admin/companies/[id]/verification/route.ts'] },
     createdBySource: {
       exempt:
         'written by the server only (#2959): the account-event writer stamps the slug of the registered IntegrationSource it resolved, and a slug is 2–40 characters by SOURCE_SLUG_PATTERN (src/lib/accountEventRule.ts), the width of this column and of IntegrationEvent.provider. No person and no request body writes it.',
