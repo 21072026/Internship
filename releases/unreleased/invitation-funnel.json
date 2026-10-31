@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Invitation funnel (#1921, slice 1):** `/admin/invitations` shows sent → opened → registered → signed in for the invitations sent in the board's date range, in total, per role and per inviter (`GET /api/admin/invitations/funnel`), and the report registry gains `invitation-funnel` (per role, privacy floor). Every step is an in-app event; \"signed in\" is read from `User.lastLoginAt` on the invitation's account in its own org. The rule is `src/lib/invitationFunnelRule.ts`. No schema change.",
+  "notes": {
+    "en": ["The invitation board now shows how many invitations were opened, turned into an account and led to a first sign-in — per role and per inviter."],
+    "tr": ["Davet panosu artık davetlerin kaçının açıldığını, hesaba dönüştüğünü ve ilk girişe ulaştığını gösteriyor; rol ve davet eden bazında."],
+    "de": ["Die Einladungsübersicht zeigt jetzt, wie viele Einladungen geöffnet wurden, zu einem Konto führten und mit einer ersten Anmeldung endeten – je Rolle und je einladender Person."]
+  }
+}

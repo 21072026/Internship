@@ -451,6 +451,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorWorkload: { title: 'Rep workload', description: 'Active deals per rep and how many reached the final stage.' },
         weeklyReportCompliance: { description: 'Owed, handed-in, missing and late weekly reports per person this term.' },
         col: { mentor: 'Rep', intern: 'Person' },
+        role: { MENTOR: 'Sales rep', MENTEE: 'Lead' },
       },
       analytics: {
         subtitle: 'Funnel, rep workload and activity insights',
@@ -1576,6 +1577,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorWorkload: { title: 'Temsilci iş yükü', description: 'Temsilci başına aktif fırsatlar ve kaçının son aşamaya ulaştığı.' },
         weeklyReportCompliance: { description: 'Bu dönem kişi başına beklenen, teslim edilen, eksik ve geç haftalık raporlar.' },
         col: { mentor: 'Temsilci', intern: 'Kişi' },
+        role: { MENTOR: 'Satış temsilcisi', MENTEE: 'Müşteri adayı' },
       },
       analytics: {
         subtitle: 'Satış hunisi, temsilci iş yükü ve etkinlik içgörüleri',
@@ -2595,6 +2597,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentorWorkload: { title: 'Vertriebler-Auslastung', description: 'Aktive Deals je Vertriebler und wie viele die letzte Phase erreicht haben.' },
         weeklyReportCompliance: { description: 'Fällige, abgegebene, fehlende und verspätete Wochenberichte je Person im laufenden Zeitraum.' },
         col: { mentor: 'Vertriebler', intern: 'Person' },
+        role: { MENTOR: 'Vertriebler', MENTEE: 'Lead' },
       },
       analytics: {
         subtitle: 'Funnel, Auslastung der Vertriebsmitarbeiter und Aktivitäts-Insights',

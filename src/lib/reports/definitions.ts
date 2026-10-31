@@ -169,6 +169,26 @@ export const REPORT_DEFINITIONS: readonly ReportDefinition[] = [
       { key: 'rate', labelKey: 'col.rate', type: 'percent' },
     ],
   },
+  // The invitation funnel (#1921): per role, every invitation ever sent in the
+  // org. The stages and what "signed in" means are src/lib/invitationFunnelRule.ts
+  // — the same numbers the invitation board's funnel card shows. Not segmentable:
+  // most invitees have no account, so no attribute to slice by.
+  {
+    key: 'invitation-funnel',
+    titleKey: 'invitationFunnel.title',
+    descriptionKey: 'invitationFunnel.description',
+    aggregate: true,
+    sizeColumn: 'sent',
+    labelColumn: 'role',
+    columns: [
+      { key: 'role', labelKey: 'col.role', type: 'string' },
+      { key: 'sent', labelKey: 'col.sent', type: 'number' },
+      { key: 'opened', labelKey: 'col.opened', type: 'number' },
+      { key: 'registered', labelKey: 'col.registered', type: 'number' },
+      { key: 'activated', labelKey: 'col.activated', type: 'number' },
+      { key: 'activation', labelKey: 'col.activation', type: 'percent' },
+    ],
+  },
 ];
 
 export function getReportDefinition(key: string): ReportDefinition | null {
