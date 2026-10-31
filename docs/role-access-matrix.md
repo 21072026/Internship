@@ -469,6 +469,56 @@ apply again if the tier returns.
 `permission` tag in `src/lib/navLinks.ts`: automations and nudges). This is
 **cosmetic**: the page's API answers 403, and that is the control.
 
+### Program scope — what a PROGRAM_ADMIN reads and writes (#1577)
+
+A grant is a **query filter**, not only a gate. `scopeForRole()`
+(`src/lib/authzScope.ts`) loads an ADMIN's tier and `AdminScopeGrant` rows
+**live** on every call and narrows the ADMIN builders:
+
+| Tier | `relation` | `project` | `company` |
+|---|---|---|---|
+| `ORG_ADMIN`, empty column | the tenant | the tenant | the tenant |
+| `OBSERVER` | the tenant (reads everything, writes nothing — its grants are not read, the rule of `authzRule.ts`) | the tenant | the tenant |
+| `PROGRAM_ADMIN` | relations whose cohort **or** company a grant names (a grant naming both narrows to both) | projects of those relations | a granted company, or one reached through a relation of a granted cohort |
+| `PROGRAM_ADMIN`, zero grants | **nothing** (`NO_MATCH`) | nothing | nothing |
+
+Every caller of `scopeForRole()` — `GET /api/mentorship`, `/api/projects`,
+`/api/companies`, `/api/interactions`, `/api/requisitions` and the lib readers —
+narrows by itself. A grant of another org never widens anything.
+
+**A relation with no cohort (and no company) is outside every program scope.**
+This is deliberate, not an oversight: a PROGRAM_ADMIN sees a candidate only once
+someone has put them in a programme it runs, and that is why assigning a cohort
+matters. A PROGRAM_ADMIN cannot create a relation either (`POST /api/mentorship`
+carries no cohort, so the subject names nothing → `unscoped_subject`).
+
+**Writes ask about the row, not the route.** `/api/mentorship/[id]` `GET`/`PUT`
+pass the relation as the subject (`relationSubject()` in `authzRule.ts`) to the
+one rule: out of scope the PROGRAM_ADMIN is a plain non-participant and gets
+`403`. A `PUT` that moves the relation's cohort or company is checked twice —
+before **and after** the move — so it cannot hand a relation to a cohort it does
+not hold or strip the cohort that put it in reach (`403 outside_scope`).
+
+**Lists and pages.** The fragments live in one pure module,
+`src/lib/programScopeRule.ts` (`programRelationWhere`, `programMenteeWhere`,
+`programPeopleWhere`; the audit viewer's target filter is the same function):
+
+| Surface | PROGRAM_ADMIN |
+|---|---|
+| `GET /api/candidates` (`/admin/candidates`) | `listing: true`; the mentees of relations inside the grants, and only those relations on each row |
+| `GET /api/users` (every view) | `listing: true`; either side of a relation inside the grants, plus a company-only grant's COMPANY accounts |
+| `/admin` dashboard, `/admin/re-engagement`, `/admin/mentee-activity`, the daily activity digest mail | narrowed through `programGrantsFor()` (`authzScope.ts`, live tier + grants; `null` = whole tenant) |
+| `/admin/contributor-terms` | redirected to `/admin` — an org-wide report with nothing to narrow by |
+| Bulk edit (`/api/admin/candidates/bulk`) | **403** — it asks `user.write`, which the tier does not hold |
+| `/api/admin/analytics/*` | **403** (`unscoped_subject`) — refused, so no aggregate leaks; narrowing the 20 routes is the rest of #1577 |
+| A single user by id (`/api/users/[id]`, the candidate detail) | **403** — a person is not a cohort-shaped subject yet |
+
+Background fan-outs that mail "every active ADMIN of the org" (relation health,
+SLA, report subscriptions …) still reach a PROGRAM_ADMIN unnarrowed: #3485.
+
+Runnable: `e2e/program-scoped-admin.spec.ts` (`@smoke`); the builders:
+`scripts/test/authz-scope-program-admin.test.mjs`.
+
 ## Süper-admin yalnız uçlar / Super-admin-only endpoints
 
 `role === 'ADMIN'` bir **tenant** admin'idir; kiracıların kendisini yönetmek

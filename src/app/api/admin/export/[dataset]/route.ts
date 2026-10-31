@@ -14,6 +14,7 @@ import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { analyticsWorkbook, candidatesSheet, fullAnalyticsWorkbook, skillsGapSheet } from '@/lib/reports/workbooks';
 import { toCsv } from '@/lib/reports/render';
 import { tenantWhere } from '@/lib/tenantFilter';
+import { relationProgramWhere, resolveProgramFilter } from '@/lib/programFilter';
 import { loadSurveyOverview } from '@/lib/surveyOverview';
 import { defaultOutcomePeriod, loadOutcomeReport } from '@/lib/outcomesData';
 import { loadProgramScorecard } from '@/lib/programScorecardData';
@@ -144,7 +145,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ data
           surveys,
           outcomes,
         };
-        const ctx = { orgId, locale, stageOrgId: (session.user as { orgId?: string | null }).orgId ?? null };
+        // The screen's programme filter (#1652): the sub-reads above took it from
+        // the query string; the registry sheets (Funnel, Mentors, …) take it
+        // here, so a workbook exported from a filtered view says what that view
+        // says. An invalid or foreign id has already failed the analytics read.
+        const program = await resolveProgramFilter(new URL(request.url).searchParams.get('program'), await tenantWhere(session));
+        if ('error' in program) return program.error;
+        const relation = relationProgramWhere(program.filter);
+        const ctx = {
+          orgId,
+          locale,
+          stageOrgId: (session.user as { orgId?: string | null }).orgId ?? null,
+          ...(Object.keys(relation).length > 0 ? { relation } : {}),
+        };
         const sheets = dataset === 'analytics'
           ? await analyticsWorkbook(src, ctx, t, label)
           : await fullAnalyticsWorkbook(src, ctx, t, label);

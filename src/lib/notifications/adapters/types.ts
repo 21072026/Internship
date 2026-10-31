@@ -41,6 +41,19 @@ export interface ChatCard {
   subjectKey: string;
   actionUrl: string | null;
   supersede: boolean;
+  /**
+   * Interactive buttons (#1951): each one posts back to the ONE interaction
+   * endpoint (#1948) as `actionId` + `value`, where the dispatcher re-derives
+   * the clicker. `label` is a key of the `chatCard` dictionary, rendered in
+   * the recipient's language by the adapter.
+   */
+  buttons?: ChatCardButton[] | null;
+}
+
+export interface ChatCardButton {
+  label: 'accept' | 'decline' | 'book';
+  actionId: string;
+  value: string;
 }
 
 /** One claimed delivery, everything a channel needs to perform it. */

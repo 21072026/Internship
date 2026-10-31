@@ -255,6 +255,13 @@ export const NOTIFICATION_EVENTS = [
   { key: 'outreach.declinedCompany', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'outreach.revokedCompany', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
 
+  // Employer verification (#1865): the admin's decision, told to the company's
+  // users in-app and by mail — with the reason on a refusal, because
+  // "rejected" without one is not actionable.
+  { key: 'company.verification.approved', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['company'] },
+  { key: 'company.verification.rejected', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['company', 'reason'] },
+  { key: 'company.verification.suspended', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['company', 'reason'] },
+
   // The mentorship relationship itself.
   { key: 'mentorship_request.new', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['from'] },
   { key: 'mentorship_request.newGeneric', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
@@ -361,6 +368,7 @@ export const NOTIFICATION_EVENTS = [
   { key: 'mentorship.bulkReassignedAway', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'batched', link: 'dashboard', params: ['count'] },
 
   // Goals, evaluations, and the projects they hang off.
+  { key: 'certificate.issued', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'kudo.received', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['from'] },
   { key: 'goal.assigned', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['title'] },
   { key: 'goal.completed', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: ['title'] },

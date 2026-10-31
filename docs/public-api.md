@@ -117,7 +117,7 @@ so no key can exist there and the write API is unreachable — no entry of its o
 |---|---|---|---|
 | `POST /candidates` | `candidates:write` | `prisma.user.create` as MENTEE in the key's org, password nobody knows (claimed by reset) — like the CSV import | `409 duplicate_candidate` (`matches[]`): e-mail in use in this world (id only if in the key's org); a look-alike by `findPossibleDuplicates` unless `allowPossibleDuplicate: true` |
 | `PATCH /candidates/{id}` | `candidates:write` | `planFieldUpdates(…, { authoritative: true })` (`src/lib/externalSyncPolicy.ts`) — a blank value is no opinion | `.strict()`: `role`, `orgId`, `email`, credentials → `422 unrecognized_keys` |
-| `PATCH /relationships/{id}/stage` | `relationships:write` | `stageMoveData()` + guarded `updateMany` + `recordStageMove()` (actor null, cause `api key <id>`) — history, notification, webhook, SLA | `422 unknown_stage` (keys, not labels), `422` drop-off reason, `409 invalid_transition` (not ACTIVE), `409 stage_conflict` (moved meanwhile) |
+| `PATCH /relationships/{id}/stage` | `relationships:write` | `stageMoveData()` + guarded `updateMany` + `recordStageMove()` (actor null, cause `api key <id>`) — history, notification, webhook, SLA | `422 unknown_stage` (keys, not labels), `422` drop-off reason, `409 invalid_transition` (not ACTIVE), `409 stage_gate_blocked` (the stage's entry gate is not met; `gate` names what is missing — #1589), `409 stage_conflict` (moved meanwhile) |
 | `POST /interactions` | `interactions:write` | `createInteraction()` (`src/lib/interactionWrite.ts`), shared with `POST /api/interactions` — one `interaction.logged` | `404` for another org's relationship |
 
 The free-core rule holds: the scopes gate *programmatic* access only; a mentor
