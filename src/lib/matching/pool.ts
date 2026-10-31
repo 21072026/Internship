@@ -13,9 +13,17 @@ import { selfSelectedCounts } from '@/lib/selfMatchSeats';
 import { normalizeThemes } from './semantic';
 import { notBenched } from '@/lib/participantState';
 import { withCustomAnswers, type CustomAnswerDb } from './customAnswers';
+import { withAttributeValues, type AttributeValueDb } from './attributeValues';
 
-// The custom-field answers ride along in bulk — one query per side, never per pair (#1803).
+// The custom-field answers (#1803) and the org attributes (#3424) ride along
+// in bulk — one query per side each, never per pair.
 const answerDb = prisma as unknown as CustomAnswerDb;
+const attributeDb = prisma as unknown as AttributeValueDb;
+
+/** Both bulk attachments, in the order every loader applies them. */
+async function withMatchExtras<P extends { id: string }>(tenant: TenantWhere, people: P[]) {
+  return withAttributeValues(attributeDb, tenant, await withCustomAnswers(answerDb, tenant, people));
+}
 
 export type PoolMentor = MatchMentor & { fullName: string };
 export type PoolMentee = MatchMentee & { fullName: string };
@@ -62,8 +70,7 @@ export async function loadMentorPool(tenant: TenantWhere): Promise<PoolMentor[]>
   });
   // Seats only matter for a mentor who set a limit (#1808).
   const seats = await selfSelectedCounts(rows.filter((r) => r.selfMatchLimit != null).map((r) => r.id));
-  return withCustomAnswers(
-    answerDb,
+  return withMatchExtras(
     tenant,
     rows.map(({ _count, ...m }) => ({ ...withThemes(m), activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(m.id) ?? 0 })),
   );
@@ -80,7 +87,7 @@ export async function loadMentees(tenant: TenantWhere, ids: readonly string[]): 
     where: withinTenant({ id: { in: [...ids] }, role: 'MENTEE' as const }, tenant),
     select: { ...personSelect, menteeRelations: { select: { mentorId: true } } },
   });
-  return withCustomAnswers(answerDb, tenant, rows.map(({ menteeRelations, ...m }) => ({ ...withThemes(m), pastMentorIds: menteeRelations.map((r) => r.mentorId) })));
+  return withMatchExtras(tenant, rows.map(({ menteeRelations, ...m }) => ({ ...withThemes(m), pastMentorIds: menteeRelations.map((r) => r.mentorId) })));
 }
 
 /**
@@ -112,7 +119,7 @@ export async function loadPairForScoring(
   const seats = mo.selfMatchLimit != null ? await selfSelectedCounts([mo.id]) : new Map<string, number>();
   // The caller already vetted the pair; the questions are the mentee's org's.
   const tenant: TenantWhere = mentee.orgId ? await orgWhere(mentee.orgId) : {};
-  const [withAnswersMentee, withAnswersMentor] = await withCustomAnswers(answerDb, tenant, [
+  const [withAnswersMentee, withAnswersMentor] = await withMatchExtras(tenant, [
     { ...withThemes(me), pastMentorIds: menteeRelations.map((r) => r.mentorId) } as PoolMentee,
     { ...withThemes(mo), activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(mo.id) ?? 0 } as PoolMentee & PoolMentor,
   ]);

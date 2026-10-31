@@ -49,15 +49,22 @@ export default function MatchingRulesPage() {
   // The org's matchable admin-defined questions (#1803), offered next to the built-ins.
   const [customFields, setCustomFields] = useState<{ key: string; type: string; labels: LocalizedText }[]>([]);
   const customOf = (d: string) => (d.startsWith('customField:') ? customFields.find((f) => `customField:${f.key}` === d) : undefined);
+  // …and the org's own attributes (#3424): site, level, business unit.
+  const [attributes, setAttributes] = useState<{ key: string; type: string; labels: LocalizedText }[]>([]);
+  const attributeOf = (d: string) => (d.startsWith('attribute:') ? attributes.find((a) => `attribute:${a.key}` === d) : undefined);
   const dimLabel = (d: string) => {
     const c = customOf(d);
     if (c) return `${L.customField}: ${localized(c.labels, locale) || c.key}`;
+    const a = attributeOf(d);
+    if (a) return `${L.attribute}: ${localized(a.labels, locale) || a.key}`;
+    if (d.startsWith('attribute:')) return `${L.attribute}: ${humanizeCustomKey(d)}`;
     return d.startsWith('customField:') ? `${L.customField}: ${humanizeCustomKey(d)}` : (dims[d] ?? d);
   };
   // A rule over a question that is no longer matchable (archived, switched off,
-  // the form retired): it scores nothing and the save refuses it, so the editor
-  // says so and offers to remove it rather than failing with a bare error.
-  const orphaned = (d: string) => d.startsWith('customField:') && !customOf(d);
+  // the form retired) or an attribute since deleted: it scores nothing and the
+  // save refuses it, so the editor says so and offers to remove it rather than
+  // failing with a bare error.
+  const orphaned = (d: string) => (d.startsWith('customField:') && !customOf(d)) || (d.startsWith('attribute:') && !attributeOf(d));
 
   const [sets, setSets] = useState<RuleSet[]>([]);
   const [builtIn, setBuiltIn] = useState<MatchRuleDraft[]>([]);
@@ -76,6 +83,7 @@ export default function MatchingRulesPage() {
     const d = await res.json();
     setSets(d.ruleSets ?? []);
     setCustomFields(Array.isArray(d.customFields) ? d.customFields : []);
+    setAttributes(Array.isArray(d.attributes) ? d.attributes : []);
     setBuiltIn((d.builtIn?.rules ?? []).map((r: MatchRuleDraft) => ({ ...r, config: { ...(r.config ?? {}) } })));
   }, []);
   useEffect(() => { void load(); }, [load]);
@@ -266,6 +274,9 @@ export default function MatchingRulesPage() {
                       {customFields.map((f) => (
                         <option key={f.key} value={`customField:${f.key}`}>{dimLabel(`customField:${f.key}`)}</option>
                       ))}
+                      {attributes.map((a) => (
+                        <option key={a.key} value={`attribute:${a.key}`}>{dimLabel(`attribute:${a.key}`)}</option>
+                      ))}
                       {orphaned(r.dimension) && <option value={r.dimension}>{dimLabel(r.dimension)}</option>}
                     </select>
                     {orphaned(r.dimension) && (
@@ -326,6 +337,21 @@ export default function MatchingRulesPage() {
                           className="w-16 rounded border border-gray-300 px-1.5 py-0.5 dark:border-gray-700 dark:bg-gray-800"
                           data-testid={`matching-rule-tolerance-${i}`}
                         />
+                      </label>
+                    )}
+                    {r.dimension.startsWith('attribute:') && (
+                      <label className="flex items-center gap-1 text-xs text-gray-600">
+                        {L.attributeMode}
+                        <select
+                          value={typeof r.config.attributeMode === 'string' ? r.config.attributeMode : 'same'}
+                          onChange={(e) => patchConfig(i, 'attributeMode', e.target.value)}
+                          className="rounded border border-gray-300 px-1.5 py-0.5 dark:border-gray-700 dark:bg-gray-800"
+                          data-testid={`matching-rule-attribute-mode-${i}`}
+                        >
+                          {(['same', 'different', ...(attributeOf(r.dimension)?.type === 'NUMBER' ? ['gte_mentor' as const] : [])] as const).map((m) => (
+                            <option key={m} value={m}>{L.attributeModes[m]}</option>
+                          ))}
+                        </select>
                       </label>
                     )}
                     {r.dimension === 'skills' && (
