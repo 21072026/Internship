@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Delivery log: one world's mail per super admin, by the row's tenant:** `GET /api/admin/email-log` attributed rows by recipient address, so a mailbox holding an account in both worlds showed its internship reminders in the marketing operator's log too. It now filters on `EmailLog.orgId` (the recipient's tenant, stamped by every writer) against the world's organizations (`worldOrgWhere()` in `src/lib/userWorld.ts`); a row without `orgId` falls back to the address only when that address has an account in this world alone, so an ambiguous legacy row shows in neither log rather than the wrong one. `e2e/email-log-super-admin.spec.ts` pins the two-world mailbox."
-}

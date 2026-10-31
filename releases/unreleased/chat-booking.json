@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Book a session from chat (#1951):** on the interaction endpoint (#1948), `meetings.upcoming` now offers a mentee a **Book** button; `meeting.book` answers with the next three times that work for both (the app's suggested-times answer, on the clicker's clock), `meeting.book.pick` opens a **MeetingRequest** — decided on the issue: chat adds no new right, a mentee requests and the mentor confirms, exactly as in the app — and the mentor's chat card carries **Accept/Decline** (`meeting_request.accept|decline`), which book through the app's own lock-check-write and booking rules. One write path each: the bodies of `POST /api/meeting-requests`, `PATCH /api/meeting-requests/[id]` and `GET /api/meetings/suggested-times` moved verbatim into `createMeetingRequest()` / `decideMeetingRequest()` / `suggestedTimesFor()`, which the routes and the chat handlers both call with the caller's session. Chat cards and replies gained interactive buttons (Slack Block Kit `action_id`/`value`; Teams Adaptive Card `Action.Execute`, whose `data.value` the envelope reads); a decided card is replaced so its buttons cannot be pressed twice. A pick on a time already requested opens nothing new; an accept on an hour booked meanwhile is refused (\"no longer free\"). Pinned by `e2e/chat-booking.spec.ts`.",
-  "notes": {
-    "en": ["Book a session right from Slack or Teams: pick one of three times that suit you both, and your mentor confirms it with one tap on the card."],
-    "tr": ["Randevuyu doğrudan Slack ya da Teams'ten al: ikinize de uyan üç saatten birini seç, mentorun karttaki tek dokunuşla onaylasın."],
-    "de": ["Termine direkt in Slack oder Teams buchen: Wähle eine von drei Zeiten, die euch beiden passen – deine Mentorin bzw. dein Mentor bestätigt mit einem Tippen auf der Karte."]
-  }
-}

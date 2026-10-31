@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**The pipeline board pages its columns (#1438):** `GET /api/mentorship?view=board` answers each column's true count (`counts`) and only its first 20 cards; `stage=<key>&page=<n>` loads one more page of one column (the rule is in `src/lib/boardPage.ts`). `/admin/board` takes its column headers, WIP chips and phone filter from those counts, adds a \"Show more\" button under each column, and searches on the server, so it no longer downloads every relation in the programme (243 KB at 308 relations). `?pageSize=` alone now pages the plain list instead of being silently ignored.",
-  "notes": {
-    "en": ["The admin board opens faster in large programmes: each column loads its first cards, and \"Show more\" brings the rest."],
-    "tr": ["Yönetici panosu büyük programlarda daha hızlı açılıyor: her sütun önce ilk kartlarını yüklüyor, \"Daha fazla göster\" geri kalanını getiriyor."],
-    "de": ["Das Admin-Board öffnet sich in großen Programmen schneller: Jede Spalte lädt zuerst ihre ersten Karten, „Mehr anzeigen“ holt den Rest."]
-  }
-}

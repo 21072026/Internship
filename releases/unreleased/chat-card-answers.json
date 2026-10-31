@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Answer on the card (#1949):** the meeting-invite chat card (and a move, which rewrites it) now carries **Yes / I can't make it**, and a new `interview_request.received` event (in-app + chat, no mail) tells the mentee's active mentor about a company's interview request with **Approve / Decline** on the card. One write path each: the invitee's answer goes through `recordMeetingRsvp()` (`src/lib/meetingRsvp.ts`), now shared with `POST /api/rsvp` and guarded on the answer changing — a stale card clicked twice, or the page submitted twice, writes once and notifies the organiser once; the decision goes through `decideInterviewRequest()` (`src/lib/interviewRequestDecision.ts`), the verbatim body of `PATCH /api/interview-requests/[id]`, so the capability gate, `requireRoleOrPermission` (which gained an optional `session` for callers that resolved the person themselves — the actor is still read live), `interviewRequestActorWhere` and the guarded PENDING write are the app's. Decline asks for a reason first (the company sees it) and writes only when one is picked. A decided card is replaced so nothing is left to press; a refusal is neutral. Pinned by `e2e/chat-card-actions.spec.ts`.",
-  "notes": {
-    "en": ["Answer right in Slack or Teams: say yes or no to a meeting invite, and approve or decline an interview request with one tap on the card."],
-    "tr": ["Doğrudan Slack ya da Teams'ten yanıt ver: toplantı davetine evet ya da hayır de, mülakat talebini karttaki tek dokunuşla onayla ya da reddet."],
-    "de": ["Direkt in Slack oder Teams antworten: Meeting-Einladungen zu- oder absagen und Interviewanfragen mit einem Tippen auf der Karte freigeben oder ablehnen."]
-  }
-}

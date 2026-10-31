@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Org attributes in the match score (#3424):** a rule set can weigh an org attribute (`UserAttributeValue`, directory data from SSO sync or the roster feed) with the new `attribute:<key>` dimension family and `config.attributeMode` = `same` (\"prefer the same site\"), `different` (\"a mentor from another business unit\") or `gte_mentor` (NUMBER attributes: \"mentor level ≥ mentee level\"). A value missing on either side — or an attribute deleted since — scores neutral, never a penalty or an error. Values load in bulk, one query per side (`src/lib/matching/attributeValues.ts`), so suggest, simulation and match rounds read the dimension with no N+1. The save route refuses an attribute the org does not have (`400 unknown_attribute`); the rule editor offers only the org's own attributes and the breakdown names them by their label.",
-  "notes": {
-    "en": ["Matching rules can now weigh your organisation's own attributes — for example the same site, a different business unit, or a mentor at a higher level."],
-    "tr": ["Eşleştirme kuralları artık kurumunuzun kendi niteliklerini tartabilir — örneğin aynı lokasyon, farklı iş birimi ya da daha üst seviyede bir mentor."],
-    "de": ["Matching-Regeln können jetzt die eigenen Merkmale Ihrer Organisation gewichten – etwa denselben Standort, einen anderen Geschäftsbereich oder einen Mentor auf höherer Ebene."]
-  }
-}

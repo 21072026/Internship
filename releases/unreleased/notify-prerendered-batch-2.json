@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Notification router, migration batch 2 (#1711):** four more mails leave through `notifyEvent(..., { email: { … } })` with their copy unchanged — the meeting-feedback ask (`meeting.feedbackAsk`, keyed per meeting), the nightly relationship-health digest to admins (`relation_health.digest`, keyed per admin per day), a mentor's e-mail to their mentees (`mentor.directEmail`, Reply-To kept; the hand-written `emailAllowed() && emailGroupAllowedForCategory()` conjunct is gone) and the auto-sent outcome mail (`outcome.noMatch` / `outcome.placedElsewhere` on the e-mail channel; the relation's interaction log is written only when a mail actually left). Each send now gets a `NotificationDelivery` row, the category switch, the #1714 channel matrix and quiet hours. Four new catalogue events, e-mail only by default, with EN/TR/DE templates. `check:notify` drops four files from the baseline."
-}

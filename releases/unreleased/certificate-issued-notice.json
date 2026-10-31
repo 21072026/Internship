@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "The mentee is notified when their certificate is issued (#1410): `POST /api/mentorship/[id]/certificate` sends `certificate.issued` (catalogue entry, `mentorship` preference, no params) linked to `/portal/journey`, where `PortalCertificateCard` downloads it. A reference letter notifies nobody — the card shows the certificate only.",
-  "notes": {
-    "en": ["You now get a notification as soon as your certificate is ready to download."],
-    "tr": ["Katılım belgen indirilebilir hale gelir gelmez artık bildirim alıyorsun."],
-    "de": ["Du wirst jetzt benachrichtigt, sobald dein Zertifikat zum Download bereitsteht."]
-  }
-}

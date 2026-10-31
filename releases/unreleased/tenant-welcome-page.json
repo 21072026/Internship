@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Tenant welcome page (#1664):** an organization can write a short welcome (`Organization.welcomeTitle` VARCHAR(120), `welcomeBody` TEXT — additive, nullable) in the white-label card of `/admin/organizations`. On its own VERIFIED domain (`resolveOrgFromHost()`, #1661), `/` then shows the tenant's logo, headline and text with Sign in (`/auth/signin`) and Apply (`/apply`, only where the vertical has `mentorship`) instead of our marketing landing. The text is plain: `welcomeParagraphs()` (`src/lib/tenantWelcomeRule.ts`) turns blank lines into paragraphs and React escapes the rest, so markup is shown, never run. Our own hosts ask the database nothing (`isServedHost()`), a signed-in visitor is still redirected to their role home first, an unverified domain or an empty title keeps the landing, and the fields ride the WHITE_LABEL plan gate with the rest of the branding.",
-  "notes": {
-    "en": ["Your own domain can now open on a welcome page in your words, with Sign in and Apply buttons, instead of our landing page."],
-    "tr": ["Kendi alan adınız artık bizim tanıtım sayfamız yerine, kendi sözlerinizle yazılmış bir karşılama sayfasıyla açılabilir; Giriş yap ve Başvur düğmeleriyle."],
-    "de": ["Deine eigene Domain kann jetzt mit einer Willkommensseite in deinen Worten öffnen, mit den Buttons Anmelden und Bewerben, statt mit unserer Landingpage."]
-  }
-}
