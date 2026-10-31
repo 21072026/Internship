@@ -90,6 +90,23 @@ test('two programmes report different funnels; buckets add up; a foreign program
     }
     expect((await page.request.get(`/api/admin/analytics?program=${encodeURIComponent("x' OR 1=1")}`)).status()).toBe(404);
 
+    // The export and the "what changed" paragraph follow the same filter (#1652
+    // follow-up): the workbook's registry Funnel sheet counts the programme's
+    // relations only, and a foreign id is refused there too.
+    await setOrgFeatureFor(page, 'REPORT_EXPORT', true);
+    const funnelTotal = async (program: string) => {
+      const res = await page.request.get(`/api/admin/export/analytics?program=${program}`);
+      expect(res.status()).toBe(200);
+      const { sheets } = await res.json();
+      const sheet = sheets.find((x: { name: string }) => x.name === 'Funnel');
+      return (sheet.rows as unknown[][]).reduce((n, r) => n + (typeof r[1] === 'number' ? r[1] : 0), 0);
+    };
+    expect(await funnelTotal(spring.id)).toBe(2);
+    expect(await funnelTotal(autumn.id)).toBe(1);
+    expect((await page.request.get(`/api/admin/export/analytics?program=${foreign.id}`)).status()).toBe(404);
+    expect((await page.request.get(`/api/admin/analytics/narrative?program=${spring.id}`)).status()).toBe(200);
+    expect((await page.request.get(`/api/admin/analytics/narrative?program=${foreign.id}`)).status()).toBe(404);
+
     // The single-programme filter is free; only the COMPARISON is premium.
     await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false);
     expect((await page.request.get(`/api/admin/analytics?program=${spring.id}`)).status()).toBe(200);
@@ -114,6 +131,7 @@ test('two programmes report different funnels; buckets add up; a foreign program
     await expect(page.getByTestId('analytics-program-filter')).toHaveValue(autumn.id);
   } finally {
     await setOrgFeatureFor(page, 'ADVANCED_ANALYTICS', false).catch(() => {});
+    await setOrgFeatureFor(page, 'REPORT_EXPORT', false).catch(() => {});
     await prisma.statusChange.deleteMany({ where: { relationId: { in: rels.map((r) => r.id) } } });
     await prisma.mentorshipRelation.deleteMany({ where: { id: { in: rels.map((r) => r.id) } } });
     await prisma.cohort.deleteMany({ where: { id: { in: [spring.id, autumn.id, foreign.id] } } });
