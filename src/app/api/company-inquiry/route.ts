@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
+import { ORG_LEVEL_ADMIN_WHERE } from '@/lib/programScopeRule';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { MARKETING_OPT_IN_TEXT_VERSION, PRIVACY_POLICY_VERSION } from '@/lib/privacy';
 import { requestHostHeader, resolvePublicInquiryTarget } from '@/lib/publicHostOrg';
@@ -194,7 +196,8 @@ export async function POST(request: Request) {
   // NULL-org, and so are the admins who will see it.)
   const adminOrgWhere = orgId ? await orgWhere(orgId) : { orgId: null };
   const admins = await prisma.user.findMany({
-    where: { AND: [{ role: 'ADMIN', isActive: true }, adminOrgWhere] },
+    // An org-level notice: no PROGRAM_ADMIN (#3485).
+    where: { AND: [{ role: 'ADMIN', isActive: true }, adminOrgWhere, ORG_LEVEL_ADMIN_WHERE as Prisma.UserWhereInput] },
     select: { id: true, email: true, fullName: true, preferredLanguage: true, orgId: true },
   });
   await Promise.all(

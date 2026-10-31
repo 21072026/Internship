@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
+import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -155,7 +156,7 @@ export async function POST(request: Request) {
     // The candidate's active mentor decides; without one, the org's admins do.
     const deciders = mentorship
       ? [mentorship.mentorId]
-      : (await prisma.user.findMany({ where: { orgId, role: 'ADMIN', isActive: true }, select: { id: true }, take: 20 })).map((u) => u.id);
+      : (await tenantAdminIds(orgId, { companyId })).slice(0, 20); // a PROGRAM_ADMIN only when its grant covers the company (#3485)
     for (const userId of deciders) {
       await notify(userId, 'outreach.requested', { company: company?.name ?? '', name: mentee?.fullName ?? '' }, '/messages');
     }
