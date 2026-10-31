@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { Copy, Check, Share2, UserPlus, X } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
@@ -17,6 +19,7 @@ import { orgPlanHasFeature, type OrgPlan, type OrgPlanLimits } from '@/lib/orgPl
 import { ACCENT_COLORS } from '@/lib/accent';
 import { BRAND_ACCENT, brandAssetPath, isBrandVersion } from '@/lib/brandRule';
 import { SsoRoleMappings } from '@/components/admin/SsoRoleMappings';
+import { ImpersonationPolicyCard } from '@/components/admin/ImpersonationPolicyCard';
 import { SsoAttributeMappings } from '@/components/admin/SsoAttributeMappings';
 import { SsoCertificateBadge, SsoMetadataImport, SsoTestConnection, type CertificateSummary } from '@/components/admin/SsoOnboarding';
 import { ConferencingPolicyCard } from '@/components/admin/ConferencingPolicyCard';
@@ -39,6 +42,9 @@ interface Organization {
     brandAccent: string | null;
     brandPalette: string | null;
     brandMarkVersion: string | null;
+    // The tenant welcome page (#1664).
+    welcomeTitle: string | null;
+    welcomeBody: string | null;
   };
   sso: {
     ssoEnabled: boolean;
@@ -438,6 +444,8 @@ export default function AdminOrganizationsPage() {
   const [brandTile, setBrandTile] = useState('');
   const [brandAccent, setBrandAccent] = useState('');
   const [brandPalette, setBrandPalette] = useState('');
+  const [welcomeTitle, setWelcomeTitle] = useState('');
+  const [welcomeBody, setWelcomeBody] = useState('');
   const [markFile, setMarkFile] = useState<File | null>(null);
   const [markInputKey, setMarkInputKey] = useState(0);
   const [brandMsg, setBrandMsg] = useState<string | null>(null);
@@ -453,6 +461,8 @@ export default function AdminOrganizationsPage() {
     setBrandTile(o?.branding.brandTileColor ?? '');
     setBrandAccent(o?.branding.brandAccent ?? '');
     setBrandPalette(o?.branding.brandPalette ?? '');
+    setWelcomeTitle(o?.branding.welcomeTitle ?? '');
+    setWelcomeBody(o?.branding.welcomeBody ?? '');
     setMarkFile(null);
     setMarkInputKey((k) => k + 1);
   };
@@ -466,7 +476,7 @@ export default function AdminOrganizationsPage() {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: brandOrgId, brandName, brandLogoUrl, brandColor, supportEmail: brandSupport,
-          brandTileColor: brandTile, brandAccent,
+          brandTileColor: brandTile, brandAccent, welcomeTitle, welcomeBody,
           // The palette is the operator's (#2922): only a super admin sends it,
           // so a tenant admin's save never clears one they cannot see change.
           ...(superAdmin ? { brandPalette } : {}),
@@ -612,7 +622,8 @@ export default function AdminOrganizationsPage() {
   const brandStored = !!(brandOrg && (brandOrg.branding.brandName || brandOrg.branding.brandLogoUrl
     || brandOrg.branding.brandColor || brandOrg.branding.supportEmail
     || brandOrg.branding.brandTileColor || brandOrg.branding.brandAccent
-    || brandOrg.branding.brandPalette || brandOrg.branding.brandMarkVersion));
+    || brandOrg.branding.brandPalette || brandOrg.branding.brandMarkVersion
+    || brandOrg.branding.welcomeTitle || brandOrg.branding.welcomeBody));
   const markVersion = brandOrg?.branding.brandMarkVersion ?? null;
 
   const clearBranding = async () => {
@@ -623,7 +634,7 @@ export default function AdminOrganizationsPage() {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: brandOrgId, brandName: '', brandLogoUrl: '', brandColor: '', supportEmail: '',
-          brandTileColor: '', brandAccent: '', brandPalette: '',
+          brandTileColor: '', brandAccent: '', brandPalette: '', welcomeTitle: '', welcomeBody: '',
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -837,6 +848,32 @@ export default function AdminOrganizationsPage() {
                     <p className="text-xs text-gray-500 mt-1">{t.organizations.brandPaletteHint}</p>
                   </div>
                 )}
+              </div>
+            )}
+            {brandOrgId && (
+              // The welcome page `/` shows on the org's verified domain (#1664).
+              // Plain text — the page renders it as text, never as HTML.
+              <div className="space-y-2" data-testid="welcome-section">
+                <Input
+                  label={t.organizations.welcomeTitle}
+                  value={welcomeTitle}
+                  disabled={brandLocked}
+                  maxLength={TEXT_LIMITS.orgWelcomeTitle}
+                  onChange={(e) => setWelcomeTitle(e.target.value)}
+                  data-testid="welcome-title"
+                />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300" htmlFor="welcome-body">{t.organizations.welcomeBody}</label>
+                <Textarea
+                  id="welcome-body"
+                  showCounter
+                  value={welcomeBody}
+                  disabled={brandLocked}
+                  maxLength={TEXT_LIMITS.orgWelcomeBody}
+                  rows={5}
+                  onChange={(e) => setWelcomeBody(e.target.value)}
+                  data-testid="welcome-body"
+                />
+                <p className="text-xs text-gray-500">{t.organizations.welcomeHint}</p>
               </div>
             )}
             {brandOrgId && (
@@ -1082,6 +1119,8 @@ export default function AdminOrganizationsPage() {
           />
         </div>
       )}
+
+      {orgs.length > 0 && <ImpersonationPolicyCard orgs={orgs.map((o) => ({ id: o.id, name: o.name }))} />}
 
       {superAdmin && inviteOrg && (
         <div id="invite-admin-anchor">

@@ -83,7 +83,7 @@ jobs:
       - name: Build app
         run: npm run build
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
+          NODE_OPTIONS: --max-old-space-size=7168
 
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
