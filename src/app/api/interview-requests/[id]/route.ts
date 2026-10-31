@@ -1,124 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
-import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId } from '@/lib/orgScope';
-import { requireRoleOrPermission } from '@/lib/authz';
-import { decideInterviewRequestSchema, interviewRequestActorWhere } from '@/lib/interviewRequests';
-import { isInterviewDeclineReasonCode } from '@/lib/interviewDeclineReasons';
-import { notify, notifyIfAllowed } from '@/lib/notify';
-import { logActivity } from '@/lib/activity';
-import { emit } from '@/lib/events/emit';
-import { advanceApplicationOnInterview } from '@/lib/applicationStage';
-import { stageTransaction } from '@/lib/applicationStageEvents';
+import { decideInterviewRequest } from '@/lib/interviewRequestDecision';
 
+// PATCH — a mentor (or an admin) approves or declines an interview request.
+// The body is src/lib/interviewRequestDecision.ts, shared with the chat
+// card's Approve/Decline (#1949).
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  // Placement write (#2364).
-  const capGate = await requireCapability(session.user.orgId, 'placements');
-  if (capGate) return capGate;
-  const gate = await requireRoleOrPermission(['MENTOR'], 'company.write', { request });
-  if ('error' in gate) return gate.error;
-  const orgId = resolveOrgId(session);
-  if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
-  const parsed = decideInterviewRequestSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Invalid request', code: 'validation_failed' }, { status: 400 });
   const { id } = await params;
-
-  return withTenantScope(session, async () => {
-    // The actor rule lives in the lib (#1844) and is shared with /schedule and /cancel.
-    const scope = interviewRequestActorWhere({ role: session.user.role, userId: session.user.id, orgId });
-    if (!scope) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    const current = await prisma.interviewRequest.findFirst({
-      where: { id, ...scope },
-      select: { id: true, status: true, menteeId: true, requisitionId: true, companyId: true, mentee: { select: { preferredLanguage: true } } },
-    });
-    if (!current) return NextResponse.json({ error: 'Not found', code: 'not_found' }, { status: 404 });
-    if (current.status !== 'PENDING') return NextResponse.json({ error: 'Request already decided', code: 'already_decided' }, { status: 409 });
-    if (
-      parsed.data.action === 'decline' &&
-      (!parsed.data.declineReasonCode || !isInterviewDeclineReasonCode(parsed.data.declineReasonCode))
-    ) {
-      return NextResponse.json({ error: 'A valid declineReasonCode is required', code: 'decline_reason_required' }, { status: 400 });
-    }
-    const nextStatus = parsed.data.action === 'approve' ? 'APPROVED' : 'DECLINED';
-    const decidedAt = new Date();
-    const declineReasonCode = parsed.data.action === 'decline' ? parsed.data.declineReasonCode! : null;
-    const declineNote = parsed.data.action === 'decline' ? parsed.data.declineNote?.trim() || null : null;
-    const result = await stageTransaction(async (tx) => {
-      const changed = await tx.interviewRequest.updateMany({
-        where: { id: current.id, orgId, status: 'PENDING' },
-        data: {
-          status: nextStatus,
-          decidedById: session.user.id,
-          decidedAt,
-          ...(nextStatus === 'DECLINED' ? { declineReasonCode, declineNote } : {}),
-          activeKey: null,
-        },
-      });
-      if (changed.count !== 1) return null;
-      await tx.auditLog.create({
-        data: {
-          actorId: session.user.id,
-          action: 'INTERVIEW_REQUEST_DECIDED',
-          targetId: current.id,
-          orgId: resolveOrgId(session),
-          detail: `${nextStatus}; mentee=${current.menteeId}; requisition=${current.requisitionId}${declineReasonCode ? `; reason=${declineReasonCode}` : ''}`,
-        },
-      });
-      // Write-through (#1836): an approved interview moves the shortlisted
-      // application to INTERVIEW in the same transaction; a missing or
-      // differently-staged application never blocks the approval.
-      const advanced =
-        nextStatus === 'APPROVED'
-          ? await advanceApplicationOnInterview(tx, { requisitionId: current.requisitionId, menteeId: current.menteeId, actorId: session.user.id })
-          : null;
-      return { advanced };
-    });
-    if (!result) return NextResponse.json({ error: 'Request already decided', code: 'already_decided' }, { status: 409 });
-    // After the commit (#1998); the decline note never leaves the programme.
-    const decided = { requestId: current.id, requisitionId: current.requisitionId, menteeId: current.menteeId };
-    const actor = { id: session.user.id, type: 'user' as const };
-    if (nextStatus === 'APPROVED') await emit('interview_request.approved', decided, { orgId, actor });
-    else await emit('interview_request.declined', { ...decided, reasonCode: declineReasonCode! }, { orgId, actor });
-    if (result.advanced) {
-      await logActivity({
-        action: 'application.stage.set',
-        actorId: session.user.id,
-        actorEmail: session.user.email ?? null,
-        targetType: 'application',
-        targetId: result.advanced.applicationId,
-        detail: `${result.advanced.fromStage} -> INTERVIEW; via=interview_request.approved`,
-        request,
-        orgId,
-      });
-    }
-    if (nextStatus === 'APPROVED') {
-      await notify(current.menteeId, 'interview_request.approved', {}, '/portal');
-    } else {
-      // InterviewRequest does not record which company user created it, so the
-      // decision belongs to the company account as a whole. Notify every active
-      // company user in the same tenant; each person's mentorship preference is
-      // still honoured by notifyIfAllowed.
-      const companyUsers = await prisma.user.findMany({
-        where: { orgId, companyId: current.companyId, role: 'COMPANY', isActive: true },
-        select: { id: true },
-      });
-      await Promise.all(
-        companyUsers.map((user) =>
-          notifyIfAllowed(
-            user.id,
-            'mentorship',
-            'interview_request.declined',
-            { reasonCode: declineReasonCode! },
-            `/company/requisitions/${current.requisitionId}`
-          )
-        )
-      );
-    }
-    return NextResponse.json({ ok: true, status: nextStatus, pipelineRecommendation: nextStatus === 'APPROVED' ? 'INTERVIEW_PENDING_250' : null });
-  });
+  return decideInterviewRequest(session, id, await request.json().catch(() => null), request);
 }

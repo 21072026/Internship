@@ -28,8 +28,14 @@ test('a meeting card: the batch is the subject, a cancel drops the button and su
   expect(meetingChatSubject({ id: 'm1', batchKey: 'b1' })).toBe('meeting:b1');
   expect(meetingChatSubject({ id: 'm1', batchKey: null })).toBe('meeting:m1');
   const m = { id: 'm1', batchKey: null, meetLink: 'https://meet.example.test/r' };
-  expect(meetingChatCard(m, 'reminder')).toEqual({ subjectKey: 'meeting:m1', actionUrl: m.meetLink, supersede: false });
-  expect(meetingChatCard(m, 'moved')).toEqual({ subjectKey: 'meeting:m1', actionUrl: m.meetLink, supersede: true });
-  expect(meetingChatCard(m, 'cancelled')).toEqual({ subjectKey: 'meeting:m1', actionUrl: null, supersede: true });
+  // The invitee's Yes/No (#1949) ride the invite and a move — never a reminder or a cancel.
+  const rsvp = [
+    { label: 'rsvpYes', actionId: 'meeting.rsvp.yes', value: 'm1' },
+    { label: 'rsvpNo', actionId: 'meeting.rsvp.no', value: 'm1' },
+  ];
+  expect(meetingChatCard(m, 'invite')).toEqual({ subjectKey: 'meeting:m1', actionUrl: m.meetLink, supersede: false, buttons: rsvp });
+  expect(meetingChatCard(m, 'reminder')).toEqual({ subjectKey: 'meeting:m1', actionUrl: m.meetLink, supersede: false, buttons: [] });
+  expect(meetingChatCard(m, 'moved')).toEqual({ subjectKey: 'meeting:m1', actionUrl: m.meetLink, supersede: true, buttons: rsvp });
+  expect(meetingChatCard(m, 'cancelled')).toEqual({ subjectKey: 'meeting:m1', actionUrl: null, supersede: true, buttons: [] });
   expect(meetingChatCard({ ...m, meetLink: null }, 'invite').actionUrl).toBeNull();
 });

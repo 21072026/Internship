@@ -11,6 +11,7 @@ import { groupResolvedStages } from '@/lib/pipeline';
 import { isWipSaturated } from '@/lib/boardWip';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
+import { stageGateFrom, useStageGateDialog } from '@/components/StageGateDialog';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { BoardStageFilter } from '@/components/board/BoardStageFilter';
 import { CardStageSelect } from '@/components/board/CardStageSelect';
@@ -63,6 +64,7 @@ interface Relation {
 export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: string }) {
   const t = useT();
   const label = useStageLabel();
+  const { show: showGate, dialog: gateDialog } = useStageGateDialog();
   const stages = useResolvedStages();
   const router = useRouter();
   const toast = useToast();
@@ -156,7 +158,17 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pipelineStatus, ...(opts?.reasonCode ? { reasonCode: opts.reasonCode, reasonNote: opts.reasonNote } : {}) }),
       });
-      if (!res.ok) throw new Error('Failed');
+      if (!res.ok) {
+        // A gated stage (#1590): put the card back and say what is missing.
+        const gate = await stageGateFrom(res);
+        const rel = prev.find((r) => r.id === relationId);
+        if (gate && rel) {
+          setRelations(prev);
+          showGate({ gate, stageLabel: label(pipelineStatus), documentsHref: `${detailBase}/${relationId}#documents` });
+          return;
+        }
+        throw new Error('Failed');
+      }
       if (!opts?.silent && from) {
         toast(t.board.stageChanged, 'success', {
           label: t.board.undo,
@@ -292,6 +304,7 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
 
   return (
     <div>
+      {gateDialog}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           {t.nav.board}

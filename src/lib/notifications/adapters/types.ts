@@ -51,7 +51,7 @@ export interface ChatCard {
 }
 
 export interface ChatCardButton {
-  label: 'accept' | 'decline' | 'book';
+  label: 'accept' | 'decline' | 'book' | 'rsvpYes' | 'rsvpNo' | 'approve';
   actionId: string;
   value: string;
 }

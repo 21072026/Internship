@@ -1,14 +1,9 @@
-# 2026-10-30 — searchable person picker (#1437)
 
-- **Picking a perf story**: the issue search via `gh` is GraphQL (blocked) and `search/issues` is
-  not repo-scoped (blocked). Instead, list `repos/<o>/<r>/issues?state=open&per_page=100&page=N`
-  over REST and grep the titles. The MCP `search_issues` semantic search returned nothing for
-  perf terms.
-- **Replacing a `<select>` with a combobox breaks every spec that `selectOption`s it.** Grep
-  `e2e/` for the label and the dialog's `locator('select').nth(n)` before you push.
-  `e2e/helpers/personPicker.ts` (`pickPerson`) is the replacement step.
-- **Local e2e against the default org is slow once the DB has piled up rows from earlier runs.**
-  `/admin/candidates` was still "Loading…" after 10 s, and `group-relations` hit its 60 s timeout
-  on main too. Before blaming a change, check the same spec on main with `git stash -u`. Specs
-  that seed their own organisation are not affected.
-- `fillTemplate()` returns nodes, so it can render a `{shown} of {total}` line straight into JSX.
+## Board paging (#1438)
+
+- A container restart takes MariaDB down too. The symptom is `config.webServer` timing out with
+  `Can't reach database server` in the job worker's log. Run `service mariadb start`, then
+  `prisma db push`, then run the specs again.
+- Old e2e specs drive sign-in through the form and wait 15–20 s for each navigation. A
+  cold `next dev` misses that window on a different step each run. Before you suspect the
+  change, re-run the spec alone and see whether it still fails at the same step.

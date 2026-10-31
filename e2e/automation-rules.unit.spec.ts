@@ -156,6 +156,7 @@ const relation = (over: Partial<RelationRow> = {}): RelationRow => ({
   id: 'rel1',
   orgId: 'orgA',
   kind: 'PLACEMENT',
+  cohortId: null,
   companyId: null,
   pipelineStatus: 'INTERVIEW',
   mentorId: 'm1',

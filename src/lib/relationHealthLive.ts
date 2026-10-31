@@ -26,6 +26,8 @@ export const HEALTH_RELATION_SELECT = {
   startDate: true,
   stageDeadline: true,
   cohortId: true,
+  // Who may hear about it: a PROGRAM_ADMIN's grant can name a company (#3485).
+  companyId: true,
   mentor: { select: { id: true, fullName: true, isActive: true } },
   mentee: { select: { id: true, fullName: true } },
   questions: { where: { answer: null }, select: { id: true } },

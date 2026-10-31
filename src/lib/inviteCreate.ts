@@ -36,8 +36,12 @@ import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 export const INVITATION_TTL_DAYS = 7;
 
 export interface CreateInvitationInput {
-  /** Who is inviting — becomes `invitedById` (and the invitee's `referredById`). */
-  actor: { id: string; email?: string | null };
+  /**
+   * Who is inviting — becomes `invitedById` (and the invitee's `referredById`).
+   * `id: null` only for an employer that signed itself up (#1865): nobody
+   * invited it, and a stand-in person would be a lie in the referral record.
+   */
+  actor: { id: string | null; email?: string | null };
   /** The inviter's tenant, from resolveOrgId(session). */
   orgId: string | null;
   /** null mints an email-less shareable link (#670); nothing is sent. */
