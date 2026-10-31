@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Stage gate editor and refusal dialog (#1590):** the stage editor (`/admin/organizations/[id]/pipeline`) sets each stage's entry gates (who may move a relation there; required documents, a submitted evaluation, a sent or accepted offer). The gates ride the existing atomic replace in `PUT /api/admin/organizations/[id]/pipeline-stages` and are saved on every plan: a FREE tenant may change gates only (`onlyGatesChanged()` in `stageGateRule.ts`), while label/order/colour/phase/add/remove stay paid (`403 plan_required`). A `409 stage_gate_blocked` on the admin and mentor boards, the candidate page and the mentor's relation page opens `StageGateDialog`, which names what is missing and links to the documents section (`#documents`).",
+  "notes": {
+    "en": ["Admins can set entry conditions per pipeline stage — on every plan — and a blocked move now explains exactly what is missing, with a link to fix it."],
+    "tr": ["Yöneticiler her pipeline aşaması için giriş koşulları belirleyebilir — her planda — ve engellenen bir taşıma artık neyin eksik olduğunu, düzeltme bağlantısıyla birlikte açıkça söylüyor."],
+    "de": ["Admins können pro Pipeline-Phase Eingangsbedingungen festlegen – in jedem Plan –, und ein blockierter Schritt erklärt jetzt genau, was fehlt, mit einem Link zum Beheben."]
+  }
+}

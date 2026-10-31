@@ -7,7 +7,9 @@ import { isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 import { resolveOrgId } from '@/lib/orgScope';
 import { getLocale } from '@/i18n/server';
 import { recordOrgWrite } from '@/lib/orgAudit';
-import { isPipelinePhase, removedStagesInUse } from '@/lib/pipeline';
+import { isDefaultLabel, isPipelinePhase, removedStagesInUse } from '@/lib/pipeline';
+import { isPermission } from '@/lib/authzRule';
+import { onlyGatesChanged } from '@/lib/stageGateRule';
 import { requirePermission, type Permission } from '@/lib/authz';
 
 // Per-tenant pipeline-stage management (#747). Admin-only; premium-gated (custom
@@ -57,7 +59,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // Records per stage key (#1635): the editor disables "remove" on a stage in
   // use and counts what a reset would strand. Only a hint — the PUT re-checks.
   const usage = await stageUsage(id);
-  return NextResponse.json({ stages, custom: count > 0, plan: gate.org.plan, usage });
+  // The entry gates per stage key (#1589/#1590). An org on the built-in stages
+  // has no rows and so no gates.
+  const gateRows = await prisma.pipelineStage.findMany({
+    where: { orgId: id },
+    select: { key: true, gateCapability: true, gateDocuments: true, gateEvaluation: true, gateOffer: true },
+  });
+  const gates = Object.fromEntries(gateRows.map(({ key, ...g }) => [key, g]));
+  return NextResponse.json({ stages, custom: count > 0, plan: gate.org.plan, usage, gates });
 }
 
 const stageSchema = z.object({
@@ -71,23 +80,37 @@ const stageSchema = z.object({
   // it" (canonical keys keep their built-in phase, others the custom group).
   // z.string() + the whitelist below, never z.enum (repo convention).
   phase: z.string().max(16).optional().nullable(),
+  // Entry gates (#1589/#1590). Left out = keep what the stage already has
+  // (replaceStages carries them over by key). The capability is a Permission
+  // name checked below; '' or null clears it.
+  gateCapability: z.string().max(64).optional().nullable(),
+  gateDocuments: z.boolean().optional(),
+  gateEvaluation: z.boolean().optional(),
+  gateOffer: z.boolean().optional(),
 });
 const putSchema = z.object({ stages: z.array(stageSchema).min(1).max(50) });
 
-// PUT — replace the org's stage set. Premium-gated (not FREE). Keys must be unique.
+// PUT — replace the org's stage set. Premium-gated (not FREE) except for the
+// entry gates, which any plan may save. Keys must be unique.
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const gate = await orgSettingsGate(id, 'PUT /api/admin/organizations/[id]/pipeline-stages', 'org.settings.write', req);
   if ('error' in gate) return gate.error;
-  if (gate.org.plan === 'FREE') {
-    return NextResponse.json({ error: 'Custom pipeline stages require a paid plan' }, { status: 403 });
-  }
-
   const parsed = putSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   }
   const stages = parsed.data.stages;
+
+  // The plan gate covers the stage set's look and shape only (#1590): a FREE
+  // tenant may save entry gates — a compliance control is never paywalled —
+  // as long as every key, label, order, flag, colour and phase is unchanged.
+  if (gate.org.plan === 'FREE') {
+    const current = await resolvePipelineStages(id, await getLocale());
+    if (!onlyGatesChanged(current, stages, isDefaultLabel, isPipelinePhase)) {
+      return NextResponse.json({ error: 'Custom pipeline stages require a paid plan', code: 'plan_required' }, { status: 403 });
+    }
+  }
 
   const keys = stages.map((s) => s.key);
   if (new Set(keys).size !== keys.length) {
@@ -96,6 +119,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   for (const s of stages) {
     if (s.color && s.color.trim() && !isHexColor(s.color)) {
       return NextResponse.json({ error: `Color for "${s.key}" must be a hex value like #2563eb` }, { status: 400 });
+    }
+    if (s.gateCapability && s.gateCapability.trim() && !isPermission(s.gateCapability.trim())) {
+      return NextResponse.json({ error: `Gate capability for "${s.key}" is not a known permission` }, { status: 400 });
     }
     if (s.phase != null && s.phase !== '' && !isPipelinePhase(s.phase)) {
       return NextResponse.json({ error: `Phase for "${s.key}" must be one of pre, internship, result` }, { status: 400 });

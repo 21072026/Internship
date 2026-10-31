@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { ArrowLeft, Plus, Trash2, Pencil, ExternalLink, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
+import { stageGateFrom, useStageGateDialog } from '@/components/StageGateDialog';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { referrerLabel } from '@/lib/referrer';
 import { useT, useLocale } from '@/i18n/client';
@@ -131,6 +132,7 @@ export default function MenteeDetailPage() {
   const label = useStageLabel();
   const stages = useResolvedStages();
   const toast = useToast();
+  const { show: showGate, dialog: gateDialog } = useStageGateDialog();
 
   // Keys from the shared constant, labels from the dictionary (#1354) — the
   // menu must offer every type the API accepts, in the reader's language.
@@ -334,6 +336,13 @@ export default function MenteeDetailPage() {
         body: JSON.stringify(patch),
       });
       if (!res.ok) {
+        // A gated stage (#1590): name what is missing, with the way to fix it.
+        const gate = await stageGateFrom(res.clone());
+        if (gate && patch.pipelineStatus) {
+          showGate({ gate, stageLabel: label(patch.pipelineStatus), documentsHref: '#documents' });
+          await fetchRelation();
+          return;
+        }
         const body = await res.json();
         throw new Error(body.error || 'Failed to update stage');
       }
@@ -367,6 +376,7 @@ export default function MenteeDetailPage() {
 
   return (
     <>
+    {gateDialog}
     <div>
       <div className="mb-6">
         <Link href="/mentor/mentees" className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-4">
@@ -833,7 +843,10 @@ export default function MenteeDetailPage() {
                 />
               </div>
             )}
-            <DocumentsManager targetUserId={relation.mentee.id} />
+            {/* The anchor a blocked stage move links to (#1590). */}
+            <div id="documents" className="scroll-mt-20">
+              <DocumentsManager targetUserId={relation.mentee.id} />
+            </div>
           </div>
 
           <RelationNotesPanel relationId={id} />
