@@ -17,6 +17,11 @@ import {
   visibleGoals,
 } from '@/lib/goalVisibilityRule';
 import type { Role } from '@prisma/client';
+import { getLocale } from '@/i18n/server';
+import { resolveGoalTitle, resolveTaskTitle, taskTemplateSelect, serializeTaskTemplate } from '@/lib/goalTemplates';
+import { canDeleteGoal, canRewordGoal, derivedGoalProgress, subtaskPermissions } from '@/lib/goalSubtasksRule';
+import { readsAsAdmin } from '@/lib/goalAccess';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 
@@ -41,15 +46,51 @@ export async function GET(request: Request) {
   const rel = await relationIfAllowed(session.user.id, session.user.role, relationId, resolveOrgId(session));
   if (!rel) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const rows = await prisma.goal.findMany({ where: { relationId }, orderBy: { createdAt: 'asc' } });
-  const goals = visibleGoals(rows, rel, { id: session.user.id, role: session.user.role });
+  const rows = await prisma.goal.findMany({
+    where: { relationId },
+    orderBy: { createdAt: 'asc' },
+    include: {
+      template: taskTemplateSelect,
+      // The goal's steps (#1860) — to-dos with `goalId`, archived ones included
+      // (put away is still done work) so the progress they derive is honest.
+      subtasks: {
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        select: {
+          id: true, title: true, done: true, doneAt: true, archivedAt: true, dueDate: true,
+          assigneeId: true, createdById: true, templateId: true, template: taskTemplateSelect,
+          assignee: { select: { id: true, fullName: true } },
+        },
+      },
+    },
+  });
+  const viewer = { id: session.user.id, role: session.user.role };
+  const isAdmin = readsAsAdmin(rel, session.user.id);
+  const locale = await getLocale();
+  // A pooled goal or step reads in the reader's language on every view; the
+  // stored `title` stays the snapshot the pool handed out.
+  const goals = visibleGoals(rows, rel, viewer).map(({ template, subtasks, ...g }) => ({
+    ...g,
+    title: resolveGoalTitle({ title: g.title, template }, locale),
+    template: serializeTaskTemplate(template),
+    manualProgress: g.progress,
+    progress: derivedGoalProgress(g.progress, subtasks),
+    canReword: canRewordGoal(g),
+    canDelete: canDeleteGoal(g, { id: session.user.id, isAdmin }),
+    subtasks: subtasks.map(({ template: t, archivedAt, ...st }) => ({
+      ...st,
+      title: resolveTaskTitle({ title: st.title, template: t }, locale),
+      archived: archivedAt !== null,
+      ...subtaskPermissions(st, { id: session.user.id, isAdmin }),
+    })),
+  }));
   return NextResponse.json({ goals });
   });
 }
 
 const schema = z.object({
   relationId: z.string().min(1),
-  title: z.string().min(1).max(TEXT_LIMITS.goalTitle),
+  // Optional only when `templateId` names the wording (#1860).
+  title: z.string().min(1).max(TEXT_LIMITS.goalTitle).optional(),
   description: z.string().max(TEXT_LIMITS.goalDescription).optional(),
   dueDate: z.string().optional(),
   // #1858 — all optional: the one-line "title + due date" form still works.
@@ -57,6 +98,8 @@ const schema = z.object({
   targetDate: z.string().optional(),
   progress: z.number().int().min(GOAL_PROGRESS_MIN).max(GOAL_PROGRESS_MAX).optional(),
   visibility: z.enum(GOAL_VISIBILITIES).optional(),
+  // Hand out a goal from the shared pool (#1860): its wording is the template's.
+  templateId: z.string().min(1).optional(),
 });
 
 // POST — create a goal (participants/admin).
@@ -79,10 +122,26 @@ export async function POST(request: Request) {
     return NextResponse.json(INACTIVE_RELATION_ERROR, { status: 409 });
   }
 
+  // A pooled goal (#1860): the active, tenant's own pool entry — the same pool
+  // GET /api/todos/templates offers. The pair's mentee does not hand a goal
+  // out to themselves from it; it is the giver's tool, as on /todos.
+  let template: { id: string; title: string } | null = null;
+  if (parsed.data.templateId) {
+    if (session.user.id === rel.menteeId) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    template = await prisma.projectTaskTemplate.findFirst({
+      where: withinTenant({ id: parsed.data.templateId, projectId: null, archivedAt: null }, await tenantWhere(session)),
+      select: { id: true, title: true },
+    });
+    if (!template) return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+  }
+  const title = template?.title ?? parsed.data.title?.trim();
+  if (!title) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
+
   const goal = await prisma.goal.create({
     data: {
       relationId: rel.id,
-      title: parsed.data.title,
+      title: title.slice(0, TEXT_LIMITS.goalTitle),
+      templateId: template?.id ?? null,
       description: parsed.data.description || null,
       dueDate: parsed.data.dueDate ? new Date(parsed.data.dueDate) : null,
       successCriteria: parsed.data.successCriteria?.trim() || null,
@@ -95,6 +154,8 @@ export async function POST(request: Request) {
       createdById: session.user.id,
     },
   });
+
+  if (template) await prisma.projectTaskTemplate.update({ where: { id: template.id }, data: { useCount: { increment: 1 } } });
 
   // The other side of the relation learns about the new goal (#925) — no echo
   // to whoever created it. An admin is neither side, so the mentee (whose

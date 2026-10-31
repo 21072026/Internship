@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Affiliate application review (#3362):** an **Applications** tab on `/admin/affiliates` (pending count as a badge, `GET /api/admin/affiliate/applications[?status=|?count=1]`, `affiliate.read`). `POST …/[id]/approve { code }` (`affiliate.write`) creates the partner with that referral code in one transaction under the organisation lock, marks the application `APPROVED` through a guarded `updateMany` (409 `already_decided` on a second click, 409 `code_taken`, 400 `invalid_code`) and then sends the ordinary partner invitation (`invitePartner()`); an invitation that cannot be sent leaves the approval standing and says why. `POST …/[id]/reject { reason, note? }` stores only a code from `APPLICATION_REJECTION_CODES`, mails the applicant its sentence (`affiliate-application-decision`, `inbound_requests`, held under outbound approval) and keeps the note in the audit row only. Code suggestion `suggestPartnerCode()` is pure and unit-tested; pinned by `e2e/affiliate-application-review.spec.ts` (authorization and once-only decision @smoke).",
+  "notes": {
+    "en": ["Partner applications have their own tab: approve one with a referral code and the partner is created and invited at once, or decline it with a reason the applicant receives by e-mail."],
+    "tr": ["Partner başvurularının artık kendi sekmesi var: bir başvuruyu referans koduyla onayladığınızda partner hemen oluşturulup davet edilir, ya da başvurana e-postayla gidecek bir gerekçeyle reddedebilirsiniz."],
+    "de": ["Partnerbewerbungen haben jetzt einen eigenen Reiter: Mit einem Empfehlungscode angenommen, wird der Partner sofort angelegt und eingeladen – oder Sie lehnen mit einem Grund ab, den die bewerbende Person per E-Mail erhält."]
+  }
+}

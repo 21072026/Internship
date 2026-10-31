@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { menteeRelationWhere } from '@/lib/menteeRelation';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
@@ -136,9 +137,14 @@ export async function getMentorMenteeActivity(mentorId: string, since: Date): Pr
 // tenant's mentees, and this report used to mail one product's mentee names to
 // the other product's admins. Pass `tenantWhere(session)` from a request, or
 // `orgWhere(orgId)` from a cron (both in src/lib/tenantFilter.ts).
-export async function getSystemMenteeActivity(since: Date, tenant: TenantWhere): Promise<MenteeActivity[]> {
+export async function getSystemMenteeActivity(
+  since: Date,
+  tenant: TenantWhere,
+  // A PROGRAM_ADMIN's relations only (#1577); `{}` reads the whole tenant.
+  scope: Prisma.MentorshipRelationWhereInput = {},
+): Promise<MenteeActivity[]> {
   const relations = await prisma.mentorshipRelation.findMany({
-    where: withinTenant({}, tenant),
+    where: withinTenant<Prisma.MentorshipRelationWhereInput>(scope, tenant),
     select: {
       id: true,
       menteeId: true,

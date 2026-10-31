@@ -47,6 +47,9 @@ export const ACCOUNT_EVENT_TYPES = [
   'reactivated',
   'out_of_scope',
   'deleted',
+  // A customer's payment from the billing side (#3355): no funnel move, it is
+  // recorded for the affiliate programme through recordAffiliatePayment().
+  'payment_received',
 ] as const;
 export type AccountEventType = (typeof ACCOUNT_EVENT_TYPES)[number];
 
@@ -133,6 +136,7 @@ export type IngestIntent =
   | { kind: 'won'; toStage: 'DEAL_WON' }
   | { kind: 'lost'; toStage: 'DEAL_LOST' }
   | { kind: 'reactivate' }
+  | { kind: 'payment' }
   | { kind: 'record' };
 
 export function ingestIntent(eventType: AccountEventType): IngestIntent {
@@ -147,6 +151,8 @@ export function ingestIntent(eventType: AccountEventType): IngestIntent {
       return { kind: 'lost', toStage: 'DEAL_LOST' };
     case 'reactivated':
       return { kind: 'reactivate' };
+    case 'payment_received':
+      return { kind: 'payment' };
     default:
       return { kind: 'record' };
   }
@@ -201,7 +207,7 @@ export type EventPlan =
  * that already ran, and is refused as a backward move exactly as before.
  */
 export function planAccountEvent(input: {
-  intent: Exclude<IngestIntent, { kind: 'record' }>;
+  intent: Exclude<IngestIntent, { kind: 'record' } | { kind: 'payment' }>;
   record: PlanRecord;
   stages: readonly StageForDirection[];
   occurredAt: Date;
@@ -485,4 +491,30 @@ export const REPLAY_STAGE_KEYS = [TRIAL_ACTIVE_STAGE_KEY, TRIAL_EXPIRED_STAGE_KE
 export function missingReplayStages(stages: readonly { key: string }[]): string[] {
   const keys = new Set(stages.map((s) => s.key));
   return REPLAY_STAGE_KEYS.filter((k) => !keys.has(k));
+}
+
+/**
+ * What a `payment_received` event answers when the affiliate payment writer
+ * refuses it (#3355), keyed on the writer's own error code
+ * (AffiliateWriteErrorCode, src/lib/affiliatePaymentWriter.ts). Nothing is
+ * written in any of these cases.
+ *   - no partner for the customer → `no_partner` (an unknown account and an
+ *     account no partner brought in are the same thing to the programme);
+ *   - the payment id was already recorded → `duplicate`;
+ *   - the writer was busy (lock timeout, deadlock) → a `conflict` whose claim is
+ *     released, so the same event_id can be sent again;
+ *   - anything else (currency, a suspended or ended partner, no plan, an
+ *     invalid amount) → `conflict` naming the code.
+ */
+export function paymentRefusal(code: string): { outcome: 'no_partner' | 'duplicate' | 'conflict'; detail: string; release?: true } {
+  switch (code) {
+    case 'unknown_customer':
+      return { outcome: 'no_partner', detail: 'no partner brought this customer in; nothing recorded' };
+    case 'duplicate_payment':
+      return { outcome: 'duplicate', detail: 'this payment_id is already recorded' };
+    case 'busy':
+      return { outcome: 'conflict', detail: 'busy: retry the same event', release: true };
+    default:
+      return { outcome: 'conflict', detail: `payment refused: ${code}` };
+  }
 }

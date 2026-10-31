@@ -45,7 +45,7 @@ import {
   Search, Bot, KeyRound, Link2, MessageSquareHeart, UserPlus, Users2, Share2, CalendarDays, ListChecks, GraduationCap, Sprout, Globe,
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
   MailQuestion, MailOpen, Fingerprint, Palette, Eye, HeartPulse, MailCheck, Accessibility, ScrollText, Repeat2,
-  FolderKanban, BadgeEuro, Award, Send, ImagePlus, FileSignature, Presentation, BellRing, Puzzle,
+  FolderKanban, BadgeEuro, Award, Send, ImagePlus, FileSignature, Presentation, BellRing, Puzzle, Compass,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -160,6 +160,8 @@ export function getFeatures(t: Dictionary): Feature[] {
     { key: 'accessibility', category: 'trust', icon: Accessibility, color: 'sky', title: C.accessibility.t, desc: C.accessibility.d },
     { key: 'multiTenancy', category: 'platform', icon: Building2, color: 'purple', title: C.multiTenancy.t, desc: C.multiTenancy.d },
     { key: 'whiteLabel', category: 'platform', icon: Palette, color: 'rose', title: C.whiteLabel.t, desc: C.whiteLabel.d },
+    // #2067 — first-run tours and contextual help, in every role shell that has one.
+    { key: 'guidedTours', category: 'platform', icon: Compass, color: 'sky', title: C.guidedTours.t, desc: C.guidedTours.d },
     // #2922 — an organization's uploaded mark becomes every app icon; true in
     // every vertical, so untagged.
     { key: 'brandIcons', category: 'platform', icon: ImagePlus, color: 'purple', title: C.brandIcons.t, desc: C.brandIcons.d },

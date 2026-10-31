@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "**Stage entry gates (#1589):** `PipelineStage` gains `gateCapability`, `gateDocuments`, `gateEvaluation` and `gateOffer` (all off by default). `canTransition()` (`src/lib/stageGate.ts`, pure rule in `stageGateRule.ts`) is asked before the write on `PUT /api/mentorship/[id]`, per row in the bulk advance (`blocked[]` in the response) and on `PATCH /api/v1/relationships/[id]/stage`; a refusal is `409 stage_gate_blocked` with a structured `gate` payload. Backwards moves, off-path stages, COACHING relations and orgs without configured gates are never affected. `replaceStages()` carries gates over by key."
+}

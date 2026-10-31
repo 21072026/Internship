@@ -5,7 +5,7 @@ import { getLastContacts } from '@/lib/lastContact';
 import { reminderDaysReader } from '@/lib/relationHealthLive';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 import { scoreRelation } from '@/lib/relationHealth';
-import { menteesWithOpenTodo } from '@/lib/openWork';
+import { relationsWithOpenWork } from '@/lib/openWork';
 import { TRIAL_EXPIRED_STAGE_KEY } from '@/lib/programTemplates';
 import { DEFAULT_DECISION_WINDOW_DAYS, decisionWindowEndsAt, isDecisionWindowClosing, isTrialMissingEndDate, parseDecisionWindowDays } from '@/lib/trialReminderRule';
 import { settingByOrg } from '@/lib/settingsOrg';
@@ -106,16 +106,16 @@ export async function getAttentionItems(
       mentee: { select: { id: true, fullName: true } },
       questions: { where: { answer: null }, select: { id: true } },
       meetingRequests: { where: { status: 'PENDING' }, select: { id: true } },
-      goals: { where: { status: 'OPEN' }, select: { id: true } },
       weeklyReports: { where: { status: { in: [...SUBMITTED_WEEKLY_REPORT_STATUSES] } }, select: { weekStart: true } },
       // An INTERIM/FINAL evaluation past its due date and not yet written (#1891).
       evaluationDues: { where: { completedAt: null, dueAt: { lte: new Date(now) } }, select: { id: true } },
     },
   });
 
-  // "Nothing open" counts to-dos as well as goals (#1113) — the rule lives in
-  // lib/openWork.ts, shared with the nightly health sweep (#1901).
-  const hasOpenTodo = await menteesWithOpenTodo(relations.map((r) => r.mentee.id));
+  // "Nothing open" is one question over goals, their steps and the to-dos the
+  // mentor can see (#1113, #1860) — lib/openWork.ts, shared with the nightly
+  // health sweep (#1901).
+  const openWork = await relationsWithOpenWork(relations.map((r) => ({ id: r.id, menteeId: r.mentee.id })));
 
   // Applicants who never came back after the first outreach are not work the
   // mentor can do anything about — they'd otherwise fill the queue permanently
@@ -177,7 +177,7 @@ export async function getAttentionItems(
       stageDeadline: r.stageDeadline,
       unansweredQuestions: r.questions.length,
       pendingMeetingRequests: r.meetingRequests.length,
-      hasOpenWork: r.goals.length > 0 || hasOpenTodo.has(r.mentee.id),
+      hasOpenWork: openWork.has(r.id),
       weeklyReports:
         r.pipelineStatus === 'INTERNSHIP_IN_PROGRESS_450'
           ? { submittedWeekStarts: r.weeklyReports.map((report) => report.weekStart.getTime()) }
