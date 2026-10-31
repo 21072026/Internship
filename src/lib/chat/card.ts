@@ -31,7 +31,8 @@ export interface CardButton {
   value: string;
 }
 
-const MAX_BUTTONS = 5;
+// Slack takes up to 25 elements in one actions block; an NPS question needs 11 plus Skip (#1953).
+const MAX_BUTTONS = 12;
 
 function safeButtons(buttons: CardButton[] | null | undefined): CardButton[] {
   return (buttons ?? [])
