@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireCompanySeat } from '@/lib/companySeatGate';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -144,6 +145,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       if (!session.user.companyId || session.user.companyId !== id) {
         return NextResponse.json({ error: 'Company not found' }, { status: 404 });
       }
+      // Only the company's OWNER seat edits its profile (#1870).
+      const seatGate = await requireCompanySeat(session, 'company.profile.write');
+      if (seatGate) return seatGate;
       // Named and refused, never silently stripped: quota, name, externalId,
       // orgId and verificationStatus are the programme's to set.
       const refused = companySelfEditRefusedFields(body);

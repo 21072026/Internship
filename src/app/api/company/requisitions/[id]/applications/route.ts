@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { seatScopedActor } from '@/lib/companySeatGate';
 import { getServerSession } from 'next-auth';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
@@ -42,7 +43,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if ('error' in gate) return gate.error;
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
-    const scope = visibleApplicationsWhere({ id: session.user.id, role, orgId, companyId: session.user.companyId ?? null });
+    const scope = visibleApplicationsWhere(await seatScopedActor({ id: session.user.id, role, orgId, companyId: session.user.companyId ?? null }));
     if (!scope) return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
     const parsed = parseBoardFilters(new URL(request.url).searchParams);
     if (!parsed.ok) return NextResponse.json({ error: 'Invalid filter', code: parsed.code }, { status: 400 });

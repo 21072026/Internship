@@ -203,6 +203,12 @@ export interface ApplicationActor {
   role: string;
   orgId: string;
   companyId: string | null;
+  /**
+   * A COMPANY INTERVIEWER seat (#1870) reads only the candidates of the panels
+   * it sits on: their mentee ids, resolved by seatScopedActor()
+   * (src/lib/companySeatGate.ts). Undefined for every other seat and role.
+   */
+  interviewerMenteeIds?: string[];
 }
 
 /**
@@ -218,7 +224,12 @@ export function visibleApplicationsWhere(actor: ApplicationActor): Prisma.Applic
     case 'ADMIN':
       return { orgId: actor.orgId };
     case 'COMPANY':
-      return actor.companyId ? { orgId: actor.orgId, requisition: { companyId: actor.companyId } } : null;
+      if (!actor.companyId) return null;
+      return {
+        orgId: actor.orgId,
+        requisition: { companyId: actor.companyId },
+        ...(actor.interviewerMenteeIds ? { menteeId: { in: actor.interviewerMenteeIds } } : {}),
+      };
     case 'MENTEE':
       return { orgId: actor.orgId, menteeId: actor.id };
     case 'MENTOR':

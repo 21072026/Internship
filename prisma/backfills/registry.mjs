@@ -167,4 +167,9 @@ export const BACKFILLS = [
   // a seat that exists is never touched. Nothing reads them for access — the
   // scalars stay the pair's truth — so a failed run changes no behaviour.
   { id: '0036-relation-participants', script: 'prisma/backfill-relation-participants.mjs', args: ['--apply'], once: false, optional: true, why: 'New in #1804; the mirror seats grant nothing, so a failure is visible in the ledger and harmless.' },
+  // Company team seats (#1870): one OWNER membership per existing COMPANY
+  // login — the flat permission set every login already had. Only ever adds
+  // rows (skipDuplicates), so a re-run reports created=0. AFTER the push: it
+  // writes the CompanyMembership table the push creates.
+  { id: '0037-company-memberships', script: 'scripts/backfill-company-memberships.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
 ];
