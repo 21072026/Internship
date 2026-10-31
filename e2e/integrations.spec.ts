@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { setOrgFeatureFor } from './helpers/entitlements';
+import { gotoSettled } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -90,7 +91,9 @@ test('admin sees the integration health board', async ({ page }) => {
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
 
-    await page.goto('/admin/integrations');
+    // gotoSettled: the page streams through Suspense, and the board was briefly
+    // in the DOM twice (strict-mode violation on 2026-10-31).
+    await gotoSettled(page, '/admin/integrations');
     const board = page.getByTestId('integration-health');
     await expect(board).toBeVisible();
     await expect(page.getByTestId('health-row-email')).toBeVisible();
