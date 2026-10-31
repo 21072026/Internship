@@ -33,6 +33,8 @@ export const TEXT_LIMITS = {
   companyDescription: 2000,
   /** Company.address — VARCHAR(191) */
   companyAddress: 191,
+  /** Company.rejectionReason — @db.Text; the same number as VERIFICATION_REASON_MAX (src/lib/companyVerification.ts, #1865) */
+  companyVerificationReason: 1000,
   /** Company.industry — VARCHAR(191) */
   companyIndustry: 191,
   /** Company.logoUrl — VARCHAR(191) */

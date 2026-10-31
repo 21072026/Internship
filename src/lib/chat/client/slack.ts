@@ -35,13 +35,13 @@ async function call(method: string, token: string, body: Record<string, unknown>
 }
 
 export const slackClient: ChatPlatformClient = {
-  async postMessage({ token, target, text, action }) {
-    const json = await call('chat.postMessage', token, { channel: target.id, text, blocks: slackBlocks(text, action ?? null), unfurl_links: false, unfurl_media: false });
+  async postMessage({ token, target, text, action, buttons }) {
+    const json = await call('chat.postMessage', token, { channel: target.id, text, blocks: slackBlocks(text, action ?? null, buttons), unfurl_links: false, unfurl_media: false });
     return { externalMessageId: typeof json.ts === 'string' ? json.ts : null };
   },
-  async updateMessage({ token, target, externalMessageId, text, action }) {
+  async updateMessage({ token, target, externalMessageId, text, action, buttons }) {
     // `blocks` is always sent: an update without them would keep the old button.
-    await call('chat.update', token, { channel: target.id, ts: externalMessageId, text, blocks: slackBlocks(text, action ?? null) });
+    await call('chat.update', token, { channel: target.id, ts: externalMessageId, text, blocks: slackBlocks(text, action ?? null, buttons) });
   },
   async openDm({ token, externalUserId }) {
     const json = await call('conversations.open', token, { users: externalUserId });

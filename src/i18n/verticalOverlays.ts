@@ -59,6 +59,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      // The mentor shell's first-run tour (#2067). A MARKETING MENTOR is a sales
+      // rep and is sent to /sales, so this is a safety net, not a screen.
+      guidance: { tours: { 'mentor-first-run': { steps: {
+        mentees: { title: 'Your leads', body: 'The leads you look after, with their stage and when you last spoke.' },
+        board: { body: 'Your leads by stage. Move a card on when something changes.' },
+      } } } },
       // The webhook picker's family heading (#1998), in the sales word.
       integrations: { familyMentorship: 'Customer journeys' },
       // #1745: the plan-wall prompt, in sales words (the active-pair cap is
@@ -1219,6 +1225,10 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      guidance: { tours: { 'mentor-first-run': { steps: {
+        mentees: { title: 'Potansiyel müşterilerin', body: 'İlgilendiğin potansiyel müşteriler; hangi aşamada olduklarını ve en son ne zaman konuştuğunuzu burada görürsün.' },
+        board: { body: 'Potansiyel müşterilerin aşamalarına göre dizili. Bir şey değiştiğinde kartı ilerlet.' },
+      } } } },
       // The webhook picker's family heading (#1998), in the sales word.
       integrations: { familyMentorship: 'Müşteri yolculukları' },
       upgrade: {
@@ -2236,6 +2246,10 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      guidance: { tours: { 'mentor-first-run': { steps: {
+        mentees: { title: 'Deine Leads', body: 'Die Leads, die du betreust, mit ihrer Phase und dem letzten Kontakt.' },
+        board: { body: 'Deine Leads nach Phase. Schieb eine Karte weiter, wenn sich etwas ändert.' },
+      } } } },
       // The webhook picker's family heading (#1998), in the sales word.
       integrations: { familyMentorship: 'Kundenreisen' },
       upgrade: {

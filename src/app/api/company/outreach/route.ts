@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { prisma } from '@/lib/prisma';
+import { COMPANY_NOT_VERIFIED, isCompanyVerified } from '@/lib/companyVerification';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -104,6 +105,11 @@ export async function POST(request: Request) {
   const { menteeId, message } = parsed.data;
 
   return withTenantScope(session, async () => {
+    // An unverified employer reaches no candidate (#1865), this channel included.
+    const employer = await prisma.company.findFirst({ where: { id: companyId, orgId }, select: { verificationStatus: true } });
+    if (!isCompanyVerified(employer?.verificationStatus)) {
+      return NextResponse.json({ error: 'The company is not verified yet', code: COMPANY_NOT_VERIFIED }, { status: 403 });
+    }
     const pre = await outreachPreconditions(orgId, companyId, menteeId);
     // Not shortlisted answers like an unknown candidate: the company learns
     // nothing about a person it has not shortlisted.

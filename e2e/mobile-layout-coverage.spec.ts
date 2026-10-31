@@ -92,6 +92,8 @@ const FUNNEL: Route[] = [
     '/admin/hiring',
     '/admin/requisitions',
     '/admin/offers',
+    // The placement ledger (#1765) — in the sidebar without an entry here.
+    '/admin/placements',
     '/admin/interview-requests',
     '/admin/duplicates',
     '/admin/mentor-applications',

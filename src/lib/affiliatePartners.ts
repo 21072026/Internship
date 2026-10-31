@@ -50,18 +50,28 @@ export async function lockOrganization(tx: Prisma.TransactionClient, orgId: stri
   await tx.$queryRaw`SELECT id FROM \`Organization\` WHERE id = ${orgId} FOR UPDATE`;
 }
 
+/**
+ * The partner row and its audit line, inside a transaction that already holds
+ * lockOrganization(). Shared by createPartner() and the approval of an
+ * application (src/lib/affiliateApplicationReview.ts, #3362), so both leave the
+ * same trail. A taken code surfaces as Prisma's P2002 for the caller to map.
+ */
+export async function createPartnerLocked(tx: Prisma.TransactionClient, orgId: string, input: PartnerInput, actorId: string): Promise<{ id: string }> {
+  const partner = await tx.affiliatePartner.create({
+    data: { orgId, code: input.code, displayName: input.displayName, contactEmail: input.contactEmail },
+    select: { id: true },
+  });
+  await tx.auditLog.create({
+    data: { orgId, actorId, action: 'affiliate.partner.create', targetId: partner.id, detail: JSON.stringify({ code: input.code }) },
+  });
+  return partner;
+}
+
 export async function createPartner(orgId: string, input: PartnerInput, actorId: string): Promise<{ id: string }> {
   try {
     return await prisma.$transaction(async (tx) => {
       await lockOrganization(tx, orgId);
-      const partner = await tx.affiliatePartner.create({
-        data: { orgId, code: input.code, displayName: input.displayName, contactEmail: input.contactEmail },
-        select: { id: true },
-      });
-      await tx.auditLog.create({
-        data: { orgId, actorId, action: 'affiliate.partner.create', targetId: partner.id, detail: JSON.stringify({ code: input.code }) },
-      });
-      return partner;
+      return createPartnerLocked(tx, orgId, input, actorId);
     });
   } catch (e) {
     // The code is unique per organisation; case-insensitively, like every reference (collation).
