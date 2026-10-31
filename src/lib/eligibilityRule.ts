@@ -46,8 +46,19 @@ export const MAX_RULE_VALUES = 50;
 export const MAX_RULE_VALUE_LENGTH = 191;
 export const MAX_RULES_PER_SCOPE = 100;
 
+/**
+ * Whom a rule judges (#3423). A rule stored before the column reads as
+ * MENTEE, its only meaning then; BOTH judges either side.
+ */
+export const ELIGIBILITY_TARGETS = ['MENTEE', 'MENTOR', 'BOTH'] as const;
+export type EligibilityTarget = (typeof ELIGIBILITY_TARGETS)[number];
+/** The side of a pairing being judged. */
+export type EligibilityRole = 'MENTEE' | 'MENTOR';
+
 export interface EligibilityRuleRow {
   id: string;
+  /** MENTEE | MENTOR | BOTH; absent = MENTEE. */
+  appliesTo?: string | null;
   effect: string;
   attribute: string;
   operator: string;
@@ -153,13 +164,26 @@ export function orderRules<R extends EligibilityRuleRow>(rules: readonly R[]): R
     || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
+/** The active rules that judge `role` — its own and the BOTH rules. */
+export function rulesFor(rules: readonly EligibilityRuleRow[], role: EligibilityRole): EligibilityRuleRow[] {
+  return rules.filter((r) => r.active && ((r.appliesTo ?? 'MENTEE') === role || r.appliesTo === 'BOTH'));
+}
+
 /**
  * THE evaluator. `mode` is the effective mode (effectiveMode()); `rules` are
- * every rule of the scope (org-wide + the programme's), active or not.
+ * every rule of the scope (org-wide + the programme's), active or not; `role`
+ * is the side being judged (#3423).
+ *
+ * Mentors are staff, not applicants: a scope with NO active rule for mentors
+ * leaves every mentor eligible — a RULES scope written for mentees never
+ * empties the mentor pool. For mentees the meaning is exactly #1945's: in
+ * RULES mode only an ALLOW admits, so no matching rule means not admitted.
  */
-export function evaluateEligibility(mode: string, rules: readonly EligibilityRuleRow[], profile: EligibilityProfile): EligibilityDecision {
+export function evaluateEligibility(mode: string, rules: readonly EligibilityRuleRow[], profile: EligibilityProfile, role: EligibilityRole = 'MENTEE'): EligibilityDecision {
   if (mode !== 'RULES') return { ok: true, reason: 'open' };
-  return decide(orderRules(rules.filter((r) => r.active)), profile);
+  const own = rulesFor(rules, role);
+  if (role === 'MENTOR' && own.length === 0) return { ok: true, reason: 'open' };
+  return decide(orderRules(own), profile);
 }
 
 function decide(ordered: readonly EligibilityRuleRow[], profile: EligibilityProfile): EligibilityDecision {
@@ -171,7 +195,7 @@ function decide(ordered: readonly EligibilityRuleRow[], profile: EligibilityProf
   return { ok: false, reason: 'no_matching_rule' };
 }
 
-export type RuleInputError = 'invalid_effect' | 'invalid_attribute' | 'invalid_operator' | 'invalid_value' | 'invalid_priority';
+export type RuleInputError = 'invalid_effect' | 'invalid_attribute' | 'invalid_operator' | 'invalid_value' | 'invalid_priority' | 'invalid_target';
 
 export interface RuleInput {
   effect: EligibilityEffect;
@@ -179,6 +203,7 @@ export interface RuleInput {
   operator: EligibilityOperator;
   value: string | string[] | boolean;
   priority: number;
+  appliesTo: EligibilityTarget;
 }
 
 /**
@@ -191,6 +216,8 @@ export function parseRuleInput(input: unknown): { ok: true; rule: RuleInput } | 
   if (typeof o.effect !== 'string' || !(ELIGIBILITY_EFFECTS as readonly string[]).includes(o.effect)) return { ok: false, code: 'invalid_effect' };
   if (typeof o.attribute !== 'string' || !isEligibilityAttribute(o.attribute)) return { ok: false, code: 'invalid_attribute' };
   if (typeof o.operator !== 'string' || !(ELIGIBILITY_OPERATORS as readonly string[]).includes(o.operator)) return { ok: false, code: 'invalid_operator' };
+  const appliesTo = o.appliesTo === undefined || o.appliesTo === null ? 'MENTEE' : o.appliesTo;
+  if (typeof appliesTo !== 'string' || !(ELIGIBILITY_TARGETS as readonly string[]).includes(appliesTo)) return { ok: false, code: 'invalid_target' };
   const priority = o.priority === undefined ? 0 : o.priority;
   if (typeof priority !== 'number' || !Number.isInteger(priority) || priority < -1000 || priority > 1000) return { ok: false, code: 'invalid_priority' };
   const operator = o.operator as EligibilityOperator;
@@ -217,13 +244,15 @@ export function parseRuleInput(input: unknown): { ok: true; rule: RuleInput } | 
     if ((operator === 'GTE' || operator === 'LTE') && compare(t, t) === null) return { ok: false, code: 'invalid_value' };
     value = t;
   }
-  return { ok: true, rule: { effect: o.effect as EligibilityEffect, attribute: o.attribute, operator, value, priority } };
+  return { ok: true, rule: { effect: o.effect as EligibilityEffect, attribute: o.attribute, operator, value, priority, appliesTo: appliesTo as EligibilityTarget } };
 }
 
-/** How many of `profiles` the rule set admits — the builder's dry run. */
-export function countAdmitted(mode: string, rules: readonly EligibilityRuleRow[], profiles: readonly EligibilityProfile[]): number {
+/** How many of `profiles` the rule set admits for `role` — the builder's dry run. */
+export function countAdmitted(mode: string, rules: readonly EligibilityRuleRow[], profiles: readonly EligibilityProfile[], role: EligibilityRole = 'MENTEE'): number {
   if (mode !== 'RULES') return profiles.length;
-  const ordered = orderRules(rules.filter((r) => r.active)); // once, not per person
+  const own = rulesFor(rules, role);
+  if (role === 'MENTOR' && own.length === 0) return profiles.length;
+  const ordered = orderRules(own); // once, not per person
   let n = 0;
   for (const p of profiles) if (decide(ordered, p).ok) n += 1;
   return n;
