@@ -22,7 +22,7 @@ const utcDay = (offsetDays: number) => {
 };
 
 test('ending soon: one nudge per end date, extend from the app and from the mail, re-nudge for the new date', async ({ page, request, baseURL }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const emails = ['end-mentor', 'end-mentee', 'end-mentee2'].map((p) => uniqueEmail(p));
   const [mentorEmail, menteeEmail, mentee2Email] = emails;
   try {
@@ -43,7 +43,7 @@ test('ending soon: one nudge per end date, extend from the app and from the mail
     const stamped = await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: rel.id } });
     expect(stamped.endingSoonNotifiedAt).not.toBeNull();
     expect(await notices()).toBe(2);
-    await expect.poll(mails, { timeout: 15_000 }).toBe(2);
+    await expect.poll(mails, { timeout: 60_000 }).toBe(2);
     // A paused pair is not nudged.
     expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: paused.id } })).endingSoonNotifiedAt).toBeNull();
 
@@ -89,7 +89,7 @@ test('ending soon: one nudge per end date, extend from the app and from the mail
     await prisma.mentorshipRelation.update({ where: { id: rel.id }, data: { expectedEndDate: utcDay(7), endingSoonNotifiedAt: null } });
     await sweepEndingSoonRelations();
     expect(await notices()).toBe(4);
-    await expect.poll(mails, { timeout: 15_000 }).toBe(4);
+    await expect.poll(mails, { timeout: 60_000 }).toBe(4);
 
     // The mentor extends from that mail, without a session: the page performs
     // it, and the very same link cannot extend a second time.

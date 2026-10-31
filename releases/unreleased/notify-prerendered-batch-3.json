@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Notification router, migration batch 3 (#1711):** the eight mentorship-lifecycle mails in `src/services/emailService.ts` now leave through `notifyEvent(…, { channels: ['email'], email: { … } })` with their copy unchanged: request decision, mentee/mentor assigned, mentor offer, relation ending soon, new mentorship request, rematch request and the outgoing mentor's rematch notice. Each reuses its existing catalogue event (`mentorship_request.*`, `mentor_offer.new`, `mentorship.ending_soon`) on the e-mail channel, so every send gets a `NotificationDelivery` row, the channel matrix and quiet hours. The helpers no longer take a `to` address — `userId` is required and the router reads the address from the account; the relation-ending mail keeps its per-end-date dedupe key. `check:notify` baseline: `emailService.ts` 60 → 52."
+}

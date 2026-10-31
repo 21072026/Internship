@@ -323,7 +323,6 @@ export async function decideMentorshipRequest(opts: {
     ) {
       try {
         await sendMentorshipDecisionEmail({
-          to: req.mentee.email,
           fullName: req.mentee.fullName,
           approved: true,
           mentorName: mentor.fullName,
@@ -344,7 +343,6 @@ export async function decideMentorshipRequest(opts: {
     ) {
       try {
         await sendMenteeAssignedEmail({
-          to: mentor.email,
           mentorName: mentor.fullName,
           menteeName: req.mentee.fullName,
           orgId: mentor.orgId,
@@ -376,7 +374,6 @@ export async function decideMentorshipRequest(opts: {
       ) {
         try {
           await sendRematchMentorNoticeEmail({
-            to: outgoing.email,
             mentorName: outgoing.fullName,
             menteeName: req.mentee.fullName,
             orgId: outgoing.orgId,
@@ -435,7 +432,6 @@ export async function decideMentorshipRequest(opts: {
   ) {
     try {
       await sendMentorshipDecisionEmail({
-        to: req.mentee.email,
         fullName: req.mentee.fullName,
         approved: false,
         orgId: req.mentee.orgId,
