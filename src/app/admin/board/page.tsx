@@ -26,6 +26,7 @@ import { FollowUpChip } from '@/components/FollowUpPanel';
 import { TrialEndChip } from '@/components/TrialEndPanel';
 import { SavedViews } from '@/components/SavedViews';
 import { isWipSaturated, type WipColumn } from '@/lib/boardWip';
+import { HelpTip } from '@/components/guidance/HelpTip';
 
 interface Relation {
   id: string;
@@ -278,7 +279,10 @@ export default function AdminBoardPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.nav.board}</h1>
+        <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
+          {t.nav.board}
+          <HelpTip helpKey="board" />
+        </h1>
         <p className="text-gray-500 mt-1">{t.adminBoard.subtitle}</p>
       </div>
 

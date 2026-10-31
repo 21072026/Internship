@@ -3313,6 +3313,36 @@ const en = {
   },
   // The tenant welcome page at `/` on an organization's own domain (#1664).
   // Only the chrome: the headline and body are the tenant's stored text.
+  // In-app tours and contextual help (#2067, src/lib/tours.ts). Step copy is
+  // keyed by tour id, then step key.
+  guidance: {
+    next: 'Next',
+    back: 'Back',
+    skip: 'Skip tour',
+    done: 'Done',
+    progress: 'Step {n} of {total}',
+    helpLabel: 'What is this?',
+    tours: {
+      'admin-first-run': {
+        steps: {
+          board: { title: 'Your pipeline board', body: 'Everyone in your pipeline sits on this board in their current stage. Drag a card to move it on.' },
+          candidates: { title: 'Candidates', body: 'Everyone who applied or was invited, with their profile and documents. Start matching from here.' },
+          invite: { title: 'Invite people', body: 'Add people and give each one a role here. Everyone receives an invitation e-mail in the language you choose.' },
+          settings: { title: 'Settings', body: 'Your programme rules, reminders and branding live here. You can come back to them at any time.' },
+        },
+      },
+      'mentor-first-run': {
+        steps: {
+          mentees: { title: 'Your mentees', body: 'The people you mentor, with their stage and when you last spoke.' },
+          board: { title: 'Your board', body: 'Your mentees by stage. Move a card on when something changes.' },
+          interactions: { title: 'Interaction log', body: 'Note each meeting or piece of feedback here. It keeps the programme in the loop without extra reporting.' },
+        },
+      },
+    },
+    help: {
+      board: 'Each column is a pipeline stage. Drag a card, or use its stage menu, to move it on; the change is recorded and the people involved are notified.',
+    },
+  },
   tenantWelcome: {
     signIn: 'Sign in',
     apply: 'Apply',
@@ -8546,6 +8576,7 @@ const en = {
       groupSessions: { t: 'Group sessions and office hours', d: 'Publish a kickoff briefing, a mentor office hour or an employer info session to a programme or the whole organisation. People register for a place; past the cap they join a waitlist and move up automatically — and are told — when someone cancels. The host records who attended, and each participant sees their own record.' },
       offers: { t: 'Offer management', d: 'Create, preview and send a job offer from a candidate’s Mentorship card in three steps; the candidate accepts or declines (with a reason) from their portal, sees a persistent decision state, and overdue offers expire on their own — every step logged and notified. An admin offer index answers what is still outstanding, what expires this week and what was declined, and why. Every sent offer carries a branded offer letter from your own template, frozen when sent, with a recorded click-to-accept.' },
       multiTenancy: { t: 'Multi-tenant organisations', d: 'Keep each organisation’s data, plan and configuration separate in one CRM.' },
+      guidedTours: { t: 'First-run tours and contextual help', d: 'A new admin or team member is shown around their workspace once, step by step, and never again — the record is kept with the account, not the browser. Small “?” buttons explain a screen where it is used. Fully keyboard-operable, and still under reduced motion.' },
       whiteLabel: { t: 'Per-tenant branding settings', d: 'Brand name, logo, colours and support contact are stored for each organisation, and tenant branding is applied across the product — the role layouts, every e-mail a member receives including the career newsletter, and generated certificates. A verified own domain can open on the tenant’s own welcome page instead of ours.' },
       brandIcons: { t: 'Your logo as the app icon', d: 'Upload one square logo mark and every app icon is generated from it — home-screen and maskable icons, favicon, shortcut icons and the iOS launch screens — together with your tile colour and, optionally, your own accent palette. A public address mapped to your organisation installs under your name and icons, and your members see your mark in the app, in e-mail and in push notifications.' },
       enterpriseSso: { t: 'Enterprise SSO configuration', d: 'Connect an enterprise directory over SAML or OpenID Connect. Sign-in via /auth/sso provisions people just in time, and SSO can be enforced so no password works for the organisation.' },
@@ -14864,6 +14895,34 @@ const tr: Dict = {
     insightsD: 'Aşamadan aşamaya dönüşüm, kazanmaya kadar geçen süre ve aylık kohortlar — bir tabloya elle yazılmaz, pipeline’dan hesaplanır.',
     insightsAlt: 'Analiz ekranı: kayıt, kazanma oranı ve etkileşim toplamları, en büyük kaybı işaretleyen aşamadan aşamaya dönüşüm grafiği, kazanmaya kadar geçen süre ve aylık kohort tablosu.',
   },
+  guidance: {
+    next: 'İleri',
+    back: 'Geri',
+    skip: 'Turu atla',
+    done: 'Bitti',
+    progress: 'Adım {n} / {total}',
+    helpLabel: 'Bu nedir?',
+    tours: {
+      'admin-first-run': {
+        steps: {
+          board: { title: 'Süreç panon', body: 'Sürecindeki herkes bu panoda bulunduğu aşamada durur. Kartı sürükleyerek bir sonraki aşamaya taşı.' },
+          candidates: { title: 'Adaylar', body: 'Başvuran ya da davet edilen herkes, profili ve belgeleriyle burada. Eşleştirmeye buradan başla.' },
+          invite: { title: 'Kişi davet et', body: 'Kişileri buradan ekler ve her birine bir rol verirsin. Herkes seçtiğin dilde bir davet e-postası alır.' },
+          settings: { title: 'Ayarlar', body: 'Program kuralların, hatırlatmalar ve marka ayarların burada. İstediğin zaman geri dönebilirsin.' },
+        },
+      },
+      'mentor-first-run': {
+        steps: {
+          mentees: { title: 'Mentee’lerin', body: 'Mentorluk ettiğin kişiler; hangi aşamada olduklarını ve en son ne zaman konuştuğunuzu burada görürsün.' },
+          board: { title: 'Panon', body: 'Mentee’lerin aşamalarına göre dizili. Bir şey değiştiğinde kartı ilerlet.' },
+          interactions: { title: 'Etkileşim kaydı', body: 'Her görüşmeyi ya da geri bildirimi buraya not et; ayrıca rapor yazmana gerek kalmadan program haberdar olur.' },
+        },
+      },
+    },
+    help: {
+      board: 'Her sütun bir süreç aşaması. Bir kartı ilerletmek için onu sürükle ya da aşama menüsünü kullan; değişiklik kaydedilir ve ilgili kişilere bildirilir.',
+    },
+  },
   tenantWelcome: {
     signIn: 'Giriş yap',
     apply: 'Başvur',
@@ -19940,6 +19999,7 @@ const tr: Dict = {
       reportSegments: { t: 'Raporları kendi kırılımınızla görün', d: 'Kendi özniteliklerinizi tanımlayın — bölüm, seviye, konum, kıdem olarak okunan bir başlangıç tarihi — CSV ile içe aktarın ve pipeline, dönem, kaynak, iş yükü, yerleştirme ve haftalık rapor raporlarını bunlara göre yan yana ya da tek tek kırın. Beş kişiden küçük segmentler her zaman tek bir adlandırılmış satırda birleştirilir; kimse tek başına ayırt edilemez ve toplamlar tutar.' },
       programJourney: { t: 'Gün gün program akışı', d: 'Ne zaman ne olacağını kurgula: 3. günde bir hatırlatma, 7. günde ilk hedef, 6. hafta için okuma — eşleşmenin başlangıcından ya da bir aşamaya girildiği günden sayılır, üç dilde. Yayınlamadan önce herhangi bir ikilinin tarihlerini önizle; her adım ikiliye uygulama içinde bir kez ulaşır, zaten yapılmış olan atlanır.' },
       multiTenancy: { t: 'Çok kiracılı organizasyonlar', d: 'Her organizasyonun verilerini, planını ve ayarlarını aynı CRM içinde ayrı tutun.' },
+      guidedTours: { t: 'İlk kullanım turları ve bağlamsal yardım', d: 'Yeni bir yönetici ya da ekip üyesi çalışma alanında bir kez, adım adım gezdirilir ve bir daha gösterilmez; kayıt tarayıcıda değil hesapta tutulur. Küçük “?” düğmeleri bir ekranı kullanıldığı yerde açıklar. Tamamen klavyeyle kullanılabilir, azaltılmış harekette de hareketsizdir.' },
       whiteLabel: { t: 'Kurum bazlı marka ayarları', d: 'Her organizasyon için marka adı, logo, renkler ve destek iletişim bilgileri saklanır; kiracı markası ürün geneline uygulanır — rol yerleşimleri, üyeye giden her e-posta (kariyer bülteni dâhil) ve üretilen sertifikalar. Doğrulanmış kendi alan adı, bizim sayfamız yerine kurumun kendi karşılama sayfasıyla açılabilir.' },
       brandIcons: { t: 'Logonuz uygulama simgesi olarak', d: 'Tek bir kare logo işareti yükleyin, bütün uygulama simgeleri ondan üretilsin — ana ekran ve maskelenebilir simgeler, favicon, kısayol simgeleri ve iOS açılış ekranları — zemin renginiz ve isterseniz kendi vurgu paletinizle birlikte. Kurumunuza eşlenmiş herkese açık bir adres sizin adınız ve simgelerinizle yüklenir; üyeleriniz işaretinizi uygulamada, e-postada ve anlık bildirimlerde görür.' },
       enterpriseSso: { t: 'Kurumsal SSO yapılandırması', d: 'Kurumsal dizini SAML veya OpenID Connect ile bağlayın. /auth/sso girişi kullanıcıları anında açar; SSO zorunlu kılınabilir, böylece kurum için hiçbir şifre çalışmaz.' },
@@ -26268,6 +26328,34 @@ const de: Dict = {
     insightsD: 'Konversion von Phase zu Phase, Zeit bis zum Abschluss und monatliche Kohorten – aus der Pipeline berechnet, nicht in eine Tabelle getippt.',
     insightsAlt: 'Die Analyse-Ansicht: Summen für Datensätze, Gewinnquote und Interaktionen, ein Diagramm der Konversion von Phase zu Phase mit dem größten Abfall markiert, die Zeit bis zum Abschluss und eine Kohortentabelle nach Monat.',
   },
+  guidance: {
+    next: 'Weiter',
+    back: 'Zurück',
+    skip: 'Tour überspringen',
+    done: 'Fertig',
+    progress: 'Schritt {n} von {total}',
+    helpLabel: 'Was ist das?',
+    tours: {
+      'admin-first-run': {
+        steps: {
+          board: { title: 'Dein Pipeline-Board', body: 'Alle in deiner Pipeline stehen auf diesem Board in ihrer aktuellen Phase. Zieh eine Karte weiter, um sie voranzubringen.' },
+          candidates: { title: 'Kandidat:innen', body: 'Alle, die sich beworben haben oder eingeladen wurden, mit Profil und Dokumenten. Von hier aus startest du das Matching.' },
+          invite: { title: 'Personen einladen', body: 'Hier fügst du Personen hinzu und gibst jeder eine Rolle. Alle erhalten eine Einladung in der Sprache, die du wählst.' },
+          settings: { title: 'Einstellungen', body: 'Hier liegen deine Programmregeln, Erinnerungen und dein Branding. Du kannst jederzeit zurückkommen.' },
+        },
+      },
+      'mentor-first-run': {
+        steps: {
+          mentees: { title: 'Deine Mentees', body: 'Die Personen, die du begleitest, mit ihrer Phase und dem letzten Kontakt.' },
+          board: { title: 'Dein Board', body: 'Deine Mentees nach Phase. Schieb eine Karte weiter, wenn sich etwas ändert.' },
+          interactions: { title: 'Interaktionsprotokoll', body: 'Halte hier jedes Treffen und jedes Feedback fest. So bleibt das Programm informiert, ohne dass du zusätzlich berichten musst.' },
+        },
+      },
+    },
+    help: {
+      board: 'Jede Spalte ist eine Pipeline-Phase. Zieh eine Karte oder nutze ihr Phasenmenü, um sie voranzubringen; die Änderung wird gespeichert und die Beteiligten werden benachrichtigt.',
+    },
+  },
   tenantWelcome: {
     signIn: 'Anmelden',
     apply: 'Bewerben',
@@ -31345,6 +31433,7 @@ const de: Dict = {
       reportSegments: { t: 'Berichte nach Ihren Kriterien', d: 'Legen Sie eigene Attribute an — Abteilung, Ebene, Standort, ein Eintrittsdatum als Betriebszugehörigkeit —, importieren Sie sie per CSV und schlüsseln Sie Pipeline-, Kohorten-, Quellen-, Auslastungs-, Vermittlungs- und Wochenberichte danach auf, nebeneinander oder einzeln. Segmente unter fünf Personen werden immer in einer benannten Zeile zusammengefasst — niemand wird erkennbar, und die Summen stimmen.' },
       programJourney: { t: 'Ein Programmablauf, Tag für Tag', d: 'Leg fest, was wann passiert: eine Erinnerung an Tag 3, ein erstes Ziel an Tag 7, Lesestoff für Woche 6 — gezählt ab dem Start des Paares oder ab dem Tag, an dem eine Phase erreicht ist, in drei Sprachen. Sieh dir vor dem Veröffentlichen die Termine jedes Paares an; jeder Schritt erreicht das Paar einmal in der App, und was schon erledigt ist, wird übersprungen.' },
       multiTenancy: { t: 'Mandantenfähige Organisationen', d: 'Daten, Tarif und Einstellungen jeder Organisation bleiben innerhalb eines CRM getrennt.' },
+      guidedTours: { t: 'Einführungstouren und kontextbezogene Hilfe', d: 'Neue Admins und Teammitglieder werden einmal Schritt für Schritt durch ihren Arbeitsbereich geführt und danach nie wieder – gespeichert wird das am Konto, nicht im Browser. Kleine „?“-Buttons erklären einen Bildschirm dort, wo er genutzt wird. Vollständig per Tastatur bedienbar und bei reduzierter Bewegung ohne Animation.' },
       whiteLabel: { t: 'Mandantenbezogene Marken-Einstellungen', d: 'Markenname, Logo, Farben und Supportkontakt werden je Organisation gespeichert; das Mandanten-Branding wird produktweit angewendet — die Rollen-Layouts, jede E-Mail an ein Mitglied inklusive Karriere-Newsletter und erzeugte Zertifikate. Eine verifizierte eigene Domain kann mit der eigenen Willkommensseite des Mandanten statt mit unserer öffnen.' },
       brandIcons: { t: 'Ihr Logo als App-Icon', d: 'Ein quadratisches Logo-Zeichen hochladen, und alle App-Icons werden daraus erzeugt — Homescreen- und maskierbare Icons, Favicon, Shortcut-Icons und die iOS-Startbildschirme — zusammen mit Ihrer Kachelfarbe und auf Wunsch Ihrer eigenen Akzentpalette. Eine öffentliche Adresse, die Ihrer Organisation zugeordnet ist, installiert sich mit Ihrem Namen und Ihren Icons, und Ihre Mitglieder sehen Ihr Zeichen in der App, in E-Mails und in Push-Benachrichtigungen.' },
       enterpriseSso: { t: 'Enterprise-SSO-Konfiguration', d: 'Ein Unternehmensverzeichnis per SAML oder OpenID Connect anbinden. Die Anmeldung über /auth/sso legt Personen bei Bedarf an, und SSO lässt sich erzwingen, sodass für die Organisation kein Passwort mehr funktioniert.' },
