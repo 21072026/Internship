@@ -52,3 +52,34 @@ test('the capability: a Permission, none, or fail-closed', () => {
   assert.equal(gateCapability({ gateCapability: ' ' }), null);
   assert.equal(gateCapability({ gateCapability: 'pipeline.transiton' }), 'invalid');
 });
+
+const { onlyGatesChanged } = await import('../../src/lib/stageGateRule.ts');
+const isDefault = (key, label) => label.trim() === '' || label === `default:${key}` || label === `varsayılan:${key}`;
+const isPhase = (v) => v === 'pre' || v === 'internship' || v === 'result';
+const set = [
+  { key: 'A', label: 'default:A', order: 0, isTerminal: false, isOffPath: false, color: null, phase: null },
+  { key: 'B', label: 'Custom B', order: 1, isTerminal: false, isOffPath: false, color: '#2563EB', phase: 'pre' },
+];
+
+test('FREE: a body that changes only gates is allowed (#1590)', () => {
+  const next = set.map((s) => ({ ...s, gateDocuments: s.key === 'B', gateCapability: 'pipeline.transition' }));
+  assert.equal(onlyGatesChanged(set, next, isDefault, isPhase), true);
+  // A built-in label echoed in another language, a lower-cased colour, '' for null.
+  const echoed = [{ ...set[0], label: 'varsayılan:A', color: '' }, { ...set[1], color: '#2563eb' }];
+  assert.equal(onlyGatesChanged(set, echoed, isDefault, isPhase), true);
+});
+
+test('FREE: any change of the shape or look is refused', () => {
+  const variants = [
+    [{ ...set[0], label: 'Renamed' }, set[1]],
+    [set[0], { ...set[1], color: '#000000' }],
+    [set[0], { ...set[1], phase: 'result' }],
+    [{ ...set[0], isOffPath: true }, set[1]],
+    [{ ...set[0], isTerminal: true }, set[1]],
+    [{ ...set[1], order: 0 }, { ...set[0], order: 1 }],
+    [set[0]],
+    [...set, { key: 'C', label: 'New', order: 2 }],
+    [set[0], { ...set[1], key: 'B2' }],
+  ];
+  for (const v of variants) assert.equal(onlyGatesChanged(set, v, isDefault, isPhase), false, JSON.stringify(v));
+});
