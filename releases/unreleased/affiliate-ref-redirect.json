@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Affiliate partner links on the public page (#3365):** `/partner?ref=<code>` redirects to the landing's `productSignupUrl` with `ref=<code>` set, so the programme page can become the referral address without breaking links already shared. Only the code is carried and only to the configured address (no open redirect); a value that is not a partner code (`REFERRAL_CODE_RE`, pinned to `PARTNER_CODE_RE` by the unit test) or a missing sign-up page shows the page; whether the code is an active partner's is deliberately not asked. Rule `customerSignupRedirect()` in `src/lib/affiliateLandingRule.ts`; switch-over runbook in `docs/affiliate-module.md`; pinned in `e2e/affiliate-public-page.spec.ts`.",
+  "notes": {
+    "en": ["Partner links can now point at your partner programme page: visitors who arrive with a referral code are sent straight to your sign-up page with that code."],
+    "tr": ["Partner linkleri artık partner programı sayfanızı gösterebilir: referans koduyla gelen ziyaretçiler aynı kodla doğrudan kayıt sayfanıza yönlendirilir."],
+    "de": ["Partnerlinks können jetzt auf Ihre Partnerprogrammseite zeigen: Besucher mit einem Empfehlungscode werden mit diesem Code direkt zu Ihrer Registrierungsseite weitergeleitet."]
+  }
+}

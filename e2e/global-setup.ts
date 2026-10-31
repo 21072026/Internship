@@ -2,6 +2,7 @@ import { writeFileSync, mkdirSync } from 'fs';
 import path from 'path';
 import { COOKIE_CONSENT_KEY, COOKIE_CONSENT_VERSION } from '../src/lib/cookieConsent';
 import { ISOLATION_URL } from '../playwright.config';
+import { GUIDANCE_AUTOSTART_KEY } from '../src/lib/tours';
 
 // Pre-seed the cookie-consent choice so the consent banner doesn't overlap
 // bottom-of-page actions during tests (a returning visitor wouldn't see it).
@@ -12,6 +13,10 @@ export default async function globalSetup() {
   const origin = process.env.BASE_URL || 'http://localhost:3000';
   const consent = [
     { name: COOKIE_CONSENT_KEY, value: JSON.stringify({ version: COOKIE_CONSENT_VERSION, necessary: true, analytics: false, marketing: false, ts: '2026-01-01T00:00:00.000Z' }) },
+    // The first-run tour (#2067) would open over every spec's first admin or
+    // mentor page, exactly like the consent banner. This only turns off the
+    // automatic OFFER; e2e/guidance-tour.spec.ts starts from a clean slate.
+    { name: GUIDANCE_AUTOSTART_KEY, value: 'off' },
   ];
   // localStorage is per-origin, and the `isolation` project (#1566) talks to a
   // second server on its own port — a different origin, which would otherwise

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { headers } from 'next/headers';
 import { notFound } from 'next/navigation';
 import { getServerDictionary } from '@/i18n/server';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { hostBrand } from '@/lib/hostBrand';
 import { requestHostHeader } from '@/lib/publicHostOrg';
 import { affiliateProgrammeForHost } from '@/lib/affiliatePublicPage';
@@ -23,14 +24,17 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function PartnerApplyPage() {
   const programme = await affiliateProgrammeForHost(requestHostHeader(await headers()));
   if (!programme) notFound();
-  const { t } = await getServerDictionary();
+  const { t, locale } = await getServerDictionary();
   const brand = await hostBrand();
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-10 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
       <main id="main-content" className="mx-auto max-w-xl space-y-6">
-        <Link href="/partner" className="text-sm font-medium hover:underline" style={{ color: brand.themeColor }}>
-          ← {t.affiliateApply.back}
-        </Link>
+        <div className="flex items-center justify-between gap-4">
+          <Link href="/partner" className="text-sm font-medium hover:underline" style={{ color: brand.themeColor }}>
+            ← {t.affiliateApply.back}
+          </Link>
+          <LanguageSwitcher current={locale} />
+        </div>
         <div className="space-y-2">
           <h1 className="text-3xl font-bold">{t.affiliateApply.title}</h1>
           <p className="text-gray-600 dark:text-gray-400">{t.affiliateApply.intro}</p>
