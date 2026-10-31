@@ -177,7 +177,7 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     id: ID,
     relationId: ID,
     requestedById: ID,
-    topic: { limit: 'meetingTopic', files: ['src/app/api/meeting-requests/route.ts'] },
+    topic: { limit: 'meetingTopic', files: ['src/lib/meetingRequestCreate.ts'] },
     counterOfMeetingId: ID,
   },
   Document: {
