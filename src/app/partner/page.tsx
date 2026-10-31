@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { Phone, Mail } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { hostBrand } from '@/lib/hostBrand';
 import { brandAssetPath } from '@/lib/brandRule';
 import { formatMinorPrice } from '@/lib/money';
@@ -83,9 +84,13 @@ export default async function PartnerProgrammePage({ searchParams }: { searchPar
             {mark && <img src={mark} alt="" width={32} height={32} className="h-8 w-8 rounded" />}
             <span>{brand.productName}</span>
           </Link>
-          <div className="flex items-center gap-4 text-sm font-medium">
-            <Link href="/partner" className="hover:underline">{L.navHome}</Link>
-            <Link href={PORTAL_HREF} className="hover:underline">{L.navSignIn}</Link>
+          <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-sm font-medium">
+            <Link href="/partner" className="whitespace-nowrap hover:underline">{L.navHome}</Link>
+            <Link href={PORTAL_HREF} className="whitespace-nowrap hover:underline">{L.navSignIn}</Link>
+            {/* On a light pill: the switcher's own colours are made for a white page. */}
+            <div className="rounded-md bg-white px-1 py-0.5 dark:!bg-white">
+              <LanguageSwitcher current={locale} />
+            </div>
           </div>
         </nav>
 

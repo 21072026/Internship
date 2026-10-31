@@ -108,6 +108,8 @@ test('the marketing host shows the org’s copy, a table from its plan and every
   await expect(page.getByTestId('partner-call')).toHaveAttribute('href', 'tel:+49301234567');
   await expect(page.getByTestId('partner-contact-mail')).toHaveAttribute('href', 'mailto:partners@acme.example');
   for (const href of ['/imprint', '/privacy', '/terms']) await expect(page.locator(`footer a[href="${href}"]`)).toHaveCount(1);
+  // A visitor can pick the language of the page (and of the form behind it).
+  await expect(page.getByTestId('language-switcher')).toBeVisible();
 });
 
 test('the internship host has no partner page', async ({ page }) => {
