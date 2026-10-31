@@ -16,6 +16,7 @@ import { REAL_STAGE_MOVE } from '@/lib/stageChange';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import type { Locale } from '@/i18n/config';
 import { computeMentorImpact, internshipOrBeyondKeys, type MentorImpact } from '@/lib/mentorImpactRule';
+import { isOurHire, isPlacementRelation } from '@/lib/placement';
 
 export type { MentorImpact } from '@/lib/mentorImpactRule';
 
@@ -49,6 +50,8 @@ export async function getMentorImpact(session: Session, locale: Locale): Promise
       menteeId: true,
       status: true,
       pipelineStatus: true,
+      kind: true,
+      employmentAttribution: true,
       // A handover successor inherits its starting stage (mentorImpactRule.ts).
       previousRelationId: true,
       // Real moves only (#2264): a no-op "move" to the same stage is not a visit.
@@ -68,6 +71,9 @@ export async function getMentorImpact(session: Session, locale: Locale): Promise
       pipelineStatus: r.pipelineStatus,
       moves: r.statusChanges,
       startsInherited: r.previousRelationId !== null,
+      // The one placement rule (#3472), decided here so the rule stays dependency-free.
+      inFunnel: isPlacementRelation(r.kind),
+      ourHire: isOurHire(r.employmentAttribution),
     })),
     { finishedKeys: outcome.finished, internshipKeys: internshipOrBeyondKeys(stages, internshipPhase) },
   );

@@ -31,6 +31,12 @@ export interface ReferralInput {
     pipelineStatus: string;
     /** Stage arrivals on this relation, any order. */
     changes: { toStatus: string; at: Date }[];
+    /**
+     * False when reaching a finished stage on this relation is not a placement
+     * (#3472: a COACHING relation, or a hire that is not ours — the loader
+     * decides with src/lib/placement.ts). Absent = it is, as before.
+     */
+    countsAsHire?: boolean;
   }[];
 }
 
@@ -69,6 +75,7 @@ export function referralRow(input: ReferralInput, finished: readonly string[], a
   const newest = [...input.relations].sort((a, b) => b.startedAt.getTime() - a.startedAt.getTime())[0];
   let placedAt: Date | null = null;
   for (const r of input.relations) {
+    if (r.countsAsHire === false) continue;
     const arrivals = r.changes.filter((c) => done.has(c.toStatus)).map((c) => c.at);
     // A relation created straight onto a finished stage has no change row for
     // it; its start is the arrival.

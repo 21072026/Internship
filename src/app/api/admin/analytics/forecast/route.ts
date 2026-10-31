@@ -12,6 +12,7 @@ import { cutChurnLinks, mergeChainJourney, relationChains, type Journey } from '
 import { computeStageAging } from '@/lib/stageAging';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { capacityRequirement, horizonDaysFrom, projectPlacements, resolvedConversions } from '@/lib/forecast';
+import { OUR_HIRE_WHERE, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
 
 // GET /api/admin/analytics/forecast?horizon=YYYY-MM-DD — the forecast and
 // capacity panel of the executive dashboard (#1897).
@@ -82,7 +83,11 @@ export async function GET(request: Request) {
     // The tenant is a hand-written conjunct (#2542).
     const tenant = await tenantWhere(session);
     const [relations, stages, capabilities] = await Promise.all([
-      prisma.mentorshipRelation.findMany({ where: withinTenant({}, tenant), select: RELATION_SELECT }),
+      // The one placement rule (#3472): the forecast projects OUR placements, so
+      // it learns from — and projects — PLACEMENT relations whose hire is ours.
+      // A coaching pair's stages, or a self-found hire, would teach it a
+      // conversion that was never ours.
+      prisma.mentorshipRelation.findMany({ where: withinTenant({ ...PLACEMENT_RELATION_WHERE, ...OUR_HIRE_WHERE }, tenant), select: RELATION_SELECT }),
       resolvePipelineStages(settingsOrg, locale),
       shellCapabilities(settingsOrg),
     ]);
