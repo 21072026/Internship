@@ -56,6 +56,8 @@ const TASK_WRITERS = [
   'src/app/api/todos/route.ts',
   'src/app/api/projects/[id]/tasks/route.ts',
   'src/app/api/project-tasks/[taskId]/route.ts',
+  'src/app/api/goals/[id]/subtasks/route.ts',
+  'src/components/GoalSubtasks.tsx',
   'src/components/todos/MyTodos.tsx',
   'src/components/todos/PersonTodos.tsx',
   'src/components/todos/TodoRow.tsx',
@@ -135,6 +137,7 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     assigneeId: ID,
     createdById: ID,
     templateId: ID,
+    goalId: ID,
     title: { limit: 'todoTitle', files: TASK_WRITERS },
   },
   ProjectTaskTemplate: {
@@ -177,6 +180,7 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     createdById: ID,
     successCriteria: { limit: 'goalSuccessCriteria', files: GOAL_WRITERS },
     visibility: ENUMERATED,
+    templateId: ID,
   },
   MeetingRequest: {
     id: ID,

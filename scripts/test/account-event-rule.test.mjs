@@ -24,6 +24,7 @@ const {
   accountNameFor,
   contactFullName,
   ingestIntent,
+  paymentRefusal,
   ingestTrialWindow,
   isStaleEvent,
   normalizeExternalId,
@@ -42,10 +43,12 @@ test('trial, conversion, loss and reactivation act on the funnel; every other ty
   assert.deepEqual(ingestIntent('cancelled'), { kind: 'lost', toStage: 'DEAL_LOST' });
   assert.deepEqual(ingestIntent('deactivated'), { kind: 'lost', toStage: 'DEAL_LOST' });
   assert.deepEqual(ingestIntent('reactivated'), { kind: 'reactivate' });
+  // A payment (#3355) is its own intent: no funnel move, the affiliate payment writer.
+  assert.deepEqual(ingestIntent('payment_received'), { kind: 'payment' });
   // deleted and out_of_scope stay record-only (an owner decision, #2966).
   assert.deepEqual(ingestIntent('deleted'), { kind: 'record' });
   assert.deepEqual(ingestIntent('out_of_scope'), { kind: 'record' });
-  const acting = new Set(['account_created', 'trial_started', 'converted', 'cancelled', 'deactivated', 'reactivated']);
+  const acting = new Set(['account_created', 'trial_started', 'converted', 'cancelled', 'deactivated', 'reactivated', 'payment_received']);
   for (const type of ACCOUNT_EVENT_TYPES) {
     if (!acting.has(type)) assert.deepEqual(ingestIntent(type), { kind: 'record' }, type);
   }
@@ -233,4 +236,28 @@ test('the v1 envelope: ids lower-cased, dropped fields stripped, a changed versi
   const badPlan = accountEventSchema.safeParse({ ...base, plan: 'free plan' });
   assert.ok(!badPlan.success);
   assert.deepEqual(badPlan.error.issues.map((i) => i.path.join('.')), ['plan']);
+});
+
+test('payment_received: the envelope carries the payment, and every refusal of the writer has its own answer (#3355)', async () => {
+  const { accountEventSchema } = await import('../../src/lib/accountEventSchema.ts');
+  const base = { event_id: 'pay-1', schema_version: 1, event_type: 'payment_received', occurred_at: '2026-10-30T10:00:00Z', external_id: 'Acct-1' };
+  const ok = accountEventSchema.safeParse({ ...base, payment: { id: 'inv-1', amount_minor: 4_900, currency: 'EUR' } });
+  assert.equal(ok.success, true);
+  assert.deepEqual(ok.data.payment, { id: 'inv-1', amount_minor: 4_900, currency: 'EUR', received_at: null });
+  // Required on a payment, refused malformed; other event types ignore it being absent.
+  assert.equal(accountEventSchema.safeParse(base).success, false);
+  for (const bad of [{ amount_minor: 0 }, { amount_minor: 1.5 }, { currency: 'eur' }, { id: '' }, { id: 'x'.repeat(121) }]) {
+    assert.equal(accountEventSchema.safeParse({ ...base, payment: { id: 'inv-1', amount_minor: 100, currency: 'EUR', ...bad } }).success, false, JSON.stringify(bad));
+  }
+  assert.equal(accountEventSchema.safeParse({ ...base, event_type: 'converted' }).success, true);
+
+  assert.deepEqual(paymentRefusal('unknown_customer').outcome, 'no_partner');
+  assert.deepEqual(paymentRefusal('duplicate_payment').outcome, 'duplicate');
+  assert.deepEqual(paymentRefusal('busy'), { outcome: 'conflict', detail: 'busy: retry the same event', release: true });
+  for (const code of ['currency_mismatch', 'partner_suspended', 'partner_terminated', 'no_plan', 'invalid_input']) {
+    const r = paymentRefusal(code);
+    assert.equal(r.outcome, 'conflict', code);
+    assert.equal(r.release, undefined, code);
+    assert.match(r.detail, new RegExp(code));
+  }
 });

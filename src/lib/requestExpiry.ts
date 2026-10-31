@@ -10,6 +10,7 @@
 //
 // Notifications are in-app (`notify`), like every other step of the request
 // lifecycle; the nudge is ONE per request, ever.
+import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { defaultOrgId } from '@/lib/defaultOrg';
@@ -72,9 +73,8 @@ export async function sweepMentorshipRequests(now: Date = new Date()): Promise<R
       } else {
         if (req.mentee.orgId == null && fallbackOrg === undefined) fallbackOrg = await defaultOrgId();
         const orgId = req.mentee.orgId ?? fallbackOrg ?? null;
-        recipients = (
-          await prisma.user.findMany({ where: { role: 'ADMIN', isActive: true, orgId }, select: { id: true } })
-        ).map((u) => u.id);
+        // A request has no programme yet: an org-level notice, no PROGRAM_ADMIN (#3485).
+        recipients = await tenantAdminIds(orgId);
       }
       for (const userId of recipients) {
         await notify(userId, 'mentorship_request.nudge', { from: req.mentee.fullName }, mentor && recipients[0] === mentor.id ? '/mentor/applications' : '/admin/mentorship');

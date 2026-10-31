@@ -19,9 +19,9 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export const dynamic = 'force-dynamic';
 
-// The first real page a company can land on (#1102). Companies have no
-// self-service sign-up, so the page ends in an enquiry form (#1104) rather than
-// a register button. The six benefit items are the SAME strings the landing's
+// The first real page a company can land on (#1102). It ends in an enquiry
+// form (#1104), with the employer self-signup (#1865) linked beside it for a
+// company that would rather start alone. The six benefit items are the SAME strings the landing's
 // company section uses (landing.audCompany*) — one source of truth, so a claim
 // can never drift between the two pages.
 export default async function ForCompaniesPage() {
@@ -119,6 +119,12 @@ export default async function ForCompaniesPage() {
           <div className="text-center max-w-2xl mx-auto mb-8">
             <h2 className="text-2xl font-bold text-gray-900">{c.formTitle}</h2>
             <p className="text-gray-600 mt-3">{c.formSubtitle}</p>
+            {/* Or straight in, without a conversation (#1865). */}
+            <p className="mt-3">
+              <Link href="/for-companies/signup" className="font-medium text-blue-600 hover:underline" data-testid="for-companies-signup-link">
+                {t.companySignup.title} →
+              </Link>
+            </p>
           </div>
           <div className="max-w-2xl mx-auto">
             <CompanyInquiryForm />

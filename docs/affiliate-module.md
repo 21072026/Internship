@@ -495,6 +495,18 @@ with `referral_code: "<code>"`, and the ingest links the customer:
 Pinned by `e2e/affiliate-auto-attribution.spec.ts` (@smoke: the four-step flow, repeat
 and dry run, another org's code, suspended/terminated partners).
 
+## Payments from the source system (#3355)
+
+A customer's payment can arrive through the account-event feed as
+`payment_received` ([account-events.md](integrations/account-events.md#customer-payments-3355))
+instead of being typed on `/admin/affiliates`. It calls the same writer,
+`recordAffiliatePayment()`, with `source: 'API'` and `enteredById: null`, so the
+commission, the partner lock, the duplicate rule (`externalPaymentRef`, unique per
+org) and the `affiliate.payment.record` audit row are identical. The writer takes
+an optional transaction (`recordAffiliatePayment(input, tx)`): the feed's batch
+dry run passes its own, which is rolled back with everything else. Refunds and
+cancellations are not handled yet (#3475).
+
 ## Migration from a previous system
 
 An admin screen (`/admin/affiliates/migration`, `affiliate.write`) — not a script on

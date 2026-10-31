@@ -60,6 +60,7 @@ Unknown keys are ignored, so a sender may add fields without breaking anything. 
 | `acquisition_source` | string \| null | no | The channel the person reported at sign-up: `search_engine`, `social_media`, `youtube`, `referral`, `advertisement` or `other` (the list in `src/lib/leadSourceName.ts`). |
 | `referral_code` | string \| null | no | An affiliate or referral code, at most 100 characters (the longest a partner code can be). |
 | `plan` | string \| null | no | The account's plan in the source product: 1–40 characters of `A–Z a–z 0–9 . _ -`, stored lower-cased on the account (`Company.productPlan`) on **any** event type, `plan_changed` included. The source owns the field, so it overwrites, but only forward in time: an event older than the one that wrote the stored plan leaves it alone. `free` means the free plan, and feeds the `free_quota_exceeded` upsell signal (an account on it past the org's monthly transaction quota, `freePlanTransactionQuota`, default 10, shows in its owner's attention queue; nothing is blocked or billed — #2846). Omitted or empty = no opinion. |
+| `payment` | object \| null | on `payment_received` | `id` (the billing side's payment reference, 1–120 characters, unique per organization), `amount_minor` (a positive integer in minor units), `currency` (ISO 4217, capitals) and an optional `received_at` (ISO 8601, defaults to `occurred_at`). Required on `payment_received`, ignored on every other type. See [Customer payments](#customer-payments-3355). |
 | `contact` | object \| null | no | `first_name`, `last_name`, `company_name` (each at most 191 characters) and `email` (a valid address, at most 191). The account's contact name is `first_name` and `last_name` joined, cut to 191 characters. Without `email` a new account gets no funnel record (see [What an event does](#what-an-event-does)). |
 
 No field of the envelope is ever a marketing permission. A new account gets the machine `NONE` contact-permission row and nothing else ([contact-permission.md](../contact-permission.md)).
@@ -95,6 +96,7 @@ Example:
 | `converted` | The record moves to `DEAL_WON`; on a lost record, a [new journey](#new-journeys) at `DEAL_WON`. An unknown account answers `unknown_account`. |
 | `cancelled`, `deactivated` | The record moves to `DEAL_LOST` with a drop-off reason: `CUSTOMER_CANCELLED` when the record had been won (it is at `DEAL_WON`, or its history shows it reached it), otherwise `OTHER` with the fixed note `"<source slug>: ended during trial"`. An unknown account answers `unknown_account`. |
 | `reactivated` | On a lost record, a [new journey](#new-journeys): at `DEAL_WON` when the lost record had been won, otherwise a new trial. On any other record it moves nothing (`recorded`). An unknown account answers `unknown_account`. |
+| `payment_received` | No funnel move. The customer's payment is recorded for the affiliate programme ([Customer payments](#customer-payments-3355)). |
 | `commitment_confirmed`, `plan_changed`, `cancellation_requested`, `out_of_scope`, `deleted` | Recorded (an `IntegrationEvent` row and an `integration.event` activity entry) and nothing moves. A funnel mapping for any of them is a product decision for a later change. |
 
 Any other value is a `400`.
@@ -124,6 +126,35 @@ Any event that carries `referral_code` or `acquisition_source` fills the lead's 
 ### Affiliate attribution
 
 An event that carries `referral_code` also links the account's customer to the partner whose code it names (#3354), on any event type, after the account exists. Only an `ACTIVE` partner **of the key's organization** matches: another organization's code, an unknown code, a suspended partner, and a terminated one whose notice period has ended (the event's time, `occurred_at` on a replay, is not before `noticeEffectiveAt`), link nothing, and the event is otherwise handled as usual. The customer reference is the event's `external_id`; **the first link wins**, so a later event naming another partner changes nothing and leaves an `integration.affiliate_kept_first` activity line. A repeated event writes no second row. A [dry run](#dry-run) links nobody. The partner then sees the customer in the portal, and a later manual payment entry finds it without choosing a partner. The rule is in [affiliate-module.md](../affiliate-module.md#automatic-attribution-3354).
+
+### Customer payments (#3355)
+
+`payment_received` carries one payment of the account's customer from the
+billing side. It goes to the **one** affiliate payment writer,
+`recordAffiliatePayment({ source: 'API' })` (`src/lib/affiliatePaymentWriter.ts`):
+the same checks, the same partner lock and the same commission reconciliation
+as an admin's manual entry, so an API payment earns exactly the commission a
+typed one would. It moves nothing on the funnel.
+
+- **The customer** is the event's `external_id`, the reference the referral
+  link stored ([Affiliate attribution](#affiliate-attribution)). A
+  `referral_code` on the same event links the customer first.
+- **Answers.** Every refusal writes nothing:
+  - `applied`: the payment and its commissions were written.
+  - `no_partner`: no partner brought this customer in, or it is another
+    organization's customer.
+  - `duplicate`: the `payment.id` was already recorded. The event's own
+    `event_id` claim answers `duplicate` too.
+  - `conflict` with `detail: "payment refused: <code>"`: the plan's currency
+    differs (`currency_mismatch`, EUR only today), the partner is suspended, a
+    terminated partner's new customer, no plan, or an invalid amount or date.
+  - `conflict` with `detail: "busy: …"`: the writer was busy. The claim is
+    released and the same `event_id` can be sent again.
+  - `recorded`: the organization has no affiliate programme (`affiliate`
+    capability, MARKETING only).
+- A [dry run](#dry-run) judges the payment inside its transaction and keeps
+  nothing.
+- Refunds and cancellations are not part of this event: a later change, #3475.
 
 ## What an event does
 
@@ -212,7 +243,7 @@ A claim whose processing crashed is taken over after ten minutes, and a request 
 
 | Status | Body | Meaning |
 |---|---|---|
-| `200` | `{ "outcome": "applied" \| "duplicate" \| "stale" \| "refused_backward" \| "recorded" \| "unknown_account" \| "conflict", "companyId"?, "relationId"?, "detail"?, "historic"? }` | The event was handled (`historic: true` when in [historic mode](#historic-mode)). Only `applied` changed an account or the funnel: a new account, a funnel move, or both (an `applied` without `relationId` is an account created without a funnel record). |
+| `200` | `{ "outcome": "applied" \| "duplicate" \| "stale" \| "refused_backward" \| "recorded" \| "unknown_account" \| "conflict" \| "no_partner", "companyId"?, "relationId"?, "detail"?, "historic"? }` | The event was handled (`historic: true` when in [historic mode](#historic-mode)). Only `applied` changed an account or the funnel: a new account, a funnel move, or both (an `applied` without `relationId` is an account created without a funnel record). |
 | `400` | `{ "error": "Invalid event", "issues": [{ "path", "message" }] }` | The envelope is invalid. Do not retry unchanged. (Batch: also `{ "code": "too_many_events" }`.) |
 | `401` | `{ "error": … }` | No usable API key. |
 | `403` | `{ "error": … }`, `{ "code": "wrong_source_key" }`, `{ "code": "capability_unavailable" }` | Wrong scope, wrong key for this source, or the product has no accounts. |

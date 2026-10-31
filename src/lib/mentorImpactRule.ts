@@ -67,6 +67,14 @@ export interface ImpactRelation {
    * starting stage was inherited, not reached under this mentor.
    */
   startsInherited?: boolean;
+  /**
+   * False for a relation outside the hiring funnel (#3472, a COACHING pair):
+   * it is mentoring and counts as such, but its stages say nothing about an
+   * internship or an outcome. Absent = in the funnel, as before.
+   */
+  inFunnel?: boolean;
+  /** False when the hire is not ours (SELF_FOUND / ALREADY_EMPLOYED). Absent = ours. */
+  ourHire?: boolean;
 }
 
 export interface MentorImpact {
@@ -131,9 +139,10 @@ export function computeMentorImpact(
   for (const r of relations) {
     mentored.add(r.menteeId);
     if (r.status === 'ACTIVE') active.add(r.menteeId);
+    if (r.inFunnel === false) continue;
     const visited = stagesVisited(r);
     for (const key of visited) {
-      if (finished.has(key)) reachedOutcome.add(r.menteeId);
+      if (finished.has(key) && r.ourHire !== false) reachedOutcome.add(r.menteeId);
       if (internship?.has(key)) reachedInternship.add(r.menteeId);
     }
   }

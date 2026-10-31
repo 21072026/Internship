@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "The forecast, deal-value, ROI, mentor-impact and source-outcome readers count hires through the one placement rule (`src/lib/placement.ts`, #3472): coaching pairs and hires that are not ours no longer read as placements there either. Data with no kind or attribution set reads exactly as before.",
+  "notes": {
+    "en": ["Forecasts, ROI, mentor impact and partner outcomes now count only placements made through your programme."],
+    "tr": ["Tahminler, ROI, mentor etkisi ve partner sonuçları artık yalnızca programınız aracılığıyla yapılan yerleştirmeleri sayıyor."],
+    "de": ["Prognose, ROI, Mentoren-Wirkung und Partnerergebnisse zählen jetzt nur Vermittlungen über Ihr Programm."]
+  }
+}

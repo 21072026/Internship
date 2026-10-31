@@ -63,6 +63,13 @@ export default function AdminBoardPage() {
   // moveTo is also called much later from a toast's "Undo", where the closed-over
   // `relations` would be stale — read the live list through a ref instead.
   const relationsRef = useRef<Relation[]>([]);
+  // Each column's TRUE size (#1438): the board holds only the first page of
+  // every column, so the header counts, the WIP chips and the phone filter read
+  // these, never the number of cards loaded.
+  const [counts, setCounts] = useState<Record<string, number>>({});
+  const countsRef = useRef<Record<string, number>>({});
+  const [pagesLoaded, setPagesLoaded] = useState<Record<string, number>>({});
+  const [loadingMore, setLoadingMore] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const { search, setSearch, hideEmpty, setHideEmpty } = useBoardFilters();
@@ -71,16 +78,61 @@ export default function AdminBoardPage() {
   // so a customized pipeline is not silently dropped on the desktop board.
   const groups = useMemo(() => groupResolvedStages(stages), [stages]);
 
+  // The search runs on the server (#1438) — a client-side filter would only
+  // search the cards that happen to be loaded. Debounced; the cards already on
+  // screen are still filtered in place while it settles.
+  const [serverSearch, setServerSearch] = useState(search.trim());
+  useEffect(() => {
+    const id = setTimeout(() => setServerSearch(search.trim()), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+
+  const boardUrl = useCallback(
+    (extra: Record<string, string> = {}) => {
+      const params = new URLSearchParams({ view: 'board', ...extra });
+      if (serverSearch) params.set('search', serverSearch);
+      return `/api/mentorship?${params}`;
+    },
+    [serverSearch]
+  );
+
   const fetchRelations = useCallback(async () => {
-    const res = await fetch('/api/mentorship');
+    const res = await fetch(boardUrl());
     const data = await res.json();
     setRelations(data.relations ?? []);
+    setCounts(data.counts ?? {});
+    setPagesLoaded({});
     setLoading(false);
-  }, []);
+  }, [boardUrl]);
+
+  // One more page of one column, appended without duplicates (a card moved in
+  // meanwhile may already be on screen).
+  const loadMore = async (stage: string) => {
+    setLoadingMore(stage);
+    try {
+      const page = (pagesLoaded[stage] ?? 1) + 1;
+      const res = await fetch(boardUrl({ stage, page: String(page) }));
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      setRelations((rs) => {
+        const seen = new Set(rs.map((r) => r.id));
+        return [...rs, ...((data.relations ?? []) as Relation[]).filter((r) => !seen.has(r.id))];
+      });
+      setPagesLoaded((p) => ({ ...p, [stage]: page }));
+    } catch {
+      toast(t.board.loadMoreFailed, 'error');
+    } finally {
+      setLoadingMore(null);
+    }
+  };
 
   useEffect(() => {
     relationsRef.current = relations;
   }, [relations]);
+
+  useEffect(() => {
+    countsRef.current = counts;
+  }, [counts]);
 
   useEffect(() => {
     fetchRelations();
@@ -91,9 +143,9 @@ export default function AdminBoardPage() {
   // leave the stage you were looking at.
   useEffect(() => {
     if (mobileStage || loading || stages.length === 0) return;
-    const firstWithItems = stages.find((s) => relations.some((r) => r.pipelineStatus === s.key));
+    const firstWithItems = stages.find((s) => (counts[s.key] ?? 0) > 0);
     setMobileStage(firstWithItems?.key ?? stages[0].key);
-  }, [mobileStage, loading, stages, relations]);
+  }, [mobileStage, loading, stages, counts]);
 
   // `silent` suppresses the undo offer, so undoing a move can't offer to undo itself.
   // reasonCode/reasonNote (#810): required server-side when pipelineStatus is a
@@ -104,9 +156,14 @@ export default function AdminBoardPage() {
   // silently bypassing validation.
   const moveTo = async (relationId: string, pipelineStatus: string, opts?: { silent?: boolean; reasonCode?: string; reasonNote?: string }) => {
     const prev = relationsRef.current;
+    const prevCounts = countsRef.current;
     const from = prev.find((r) => r.id === relationId)?.pipelineStatus;
     if (from === pipelineStatus) return;
     setRelations((rs) => rs.map((r) => (r.id === relationId ? { ...r, pipelineStatus } : r)));
+    // The column totals move with the card, so a header never disagrees with it.
+    if (from) {
+      setCounts((c) => ({ ...c, [from]: Math.max(0, (c[from] ?? 0) - 1), [pipelineStatus]: (c[pipelineStatus] ?? 0) + 1 }));
+    }
     try {
       const res = await fetch(`/api/mentorship/${relationId}`, {
         method: 'PUT',
@@ -122,6 +179,7 @@ export default function AdminBoardPage() {
       }
     } catch {
       setRelations(prev);
+      setCounts(prevCounts);
       toast(t.board.stageChangeFailed, 'error');
     }
   };
@@ -142,15 +200,8 @@ export default function AdminBoardPage() {
   // focus, so the result count is a visual-only change. Announce it once the
   // typing settles (the hook debounces and de-duplicates).
   const q = search.trim().toLowerCase();
-  const matchCount = useMemo(
-    () =>
-      q
-        ? relations.filter(
-            (r) => r.mentee.fullName.toLowerCase().includes(q) || r.mentor.fullName.toLowerCase().includes(q)
-          ).length
-        : 0,
-    [relations, q]
-  );
+  // The server's total for the search, not the cards loaded.
+  const matchCount = useMemo(() => (q ? Object.values(counts).reduce((a, b) => a + b, 0) : 0), [counts, q]);
   useFilterAnnouncement(
     q
       ? matchCount === 0
@@ -170,11 +221,15 @@ export default function AdminBoardPage() {
         (!q || r.mentee.fullName.toLowerCase().includes(q) || r.mentor.fullName.toLowerCase().includes(q))
     );
 
-  // Every column as the WIP rule sees it — counted AFTER the search filter, so
-  // the chips and this agree about what is on screen.
+  // A column's true size (#1438) — after the search, which the server applies.
+  const countFor = (status: string) => counts[status] ?? 0;
+  const totalCount = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  // Every column as the WIP rule sees it — the server's count after the search
+  // filter, so the chips and the header agree.
   const wipColumns: WipColumn[] = stages.map((s) => ({
     status: s.key,
-    count: itemsFor(s.key).length,
+    count: countFor(s.key),
     limit: resolvedWipLimit(s.key),
   }));
   // When every column breaches, the amber chips have stopped comparing
@@ -243,6 +298,21 @@ export default function AdminBoardPage() {
     );
   };
 
+  // "Show more" under a column whose cards are not all loaded (#1438).
+  const renderLoadMore = (status: string, shown: number) =>
+    // Hidden only while a typed search has not reached the server yet.
+    (!q || q === serverSearch.toLowerCase()) && shown < countFor(status) ? (
+      <button
+        type="button"
+        data-testid={`board-load-more-${status}`}
+        disabled={loadingMore === status}
+        onClick={() => loadMore(status)}
+        className="mt-2 w-full rounded-lg border border-dashed border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-blue-300 hover:text-blue-700 disabled:opacity-60"
+      >
+        {loadingMore === status ? t.common.loading : t.board.loadMore.replace('{shown}', String(shown)).replace('{total}', String(countFor(status)))}
+      </button>
+    ) : null;
+
   const renderColumn = (status: string) => {
     const items = itemsFor(status);
     return (
@@ -267,11 +337,12 @@ export default function AdminBoardPage() {
           dragOver === status ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50'
         }`}
       >
-        <BoardColumnHeader status={status} label={label(status)} count={items.length} limit={wipLimitFor(status)} />
+        <BoardColumnHeader status={status} label={label(status)} count={countFor(status)} limit={wipLimitFor(status)} />
 
         <div className="space-y-2 min-h-[40px]">
           {items.map(renderCard)}
         </div>
+        {renderLoadMore(status, items.length)}
       </div>
     );
   };
@@ -312,7 +383,7 @@ export default function AdminBoardPage() {
         />
       </div>
 
-      {relations.length === 0 ? (
+      {totalCount === 0 && !serverSearch ? (
         /* Day one for a whole tenant: no mentorships at all, so no board. The
            step that fills it is inviting people, which is an admin route. */
         <Card>
@@ -335,12 +406,13 @@ export default function AdminBoardPage() {
         <div data-testid="board-mobile">
           <BoardStageFilter
             stages={stages}
-            countFor={(s) => itemsFor(s).length}
+            countFor={countFor}
             value={activeStage}
             onChange={setMobileStage}
           />
           <div className="space-y-2">
             {itemsFor(activeStage).map(renderCard)}
+            {renderLoadMore(activeStage, itemsFor(activeStage).length)}
             {itemsFor(activeStage).length === 0 && (
               <EmptyState
                 testId="admin-board-stage"
@@ -367,7 +439,7 @@ export default function AdminBoardPage() {
         )}
         <BoardPhaseGroups
           groups={groups}
-          countFor={(s) => itemsFor(s).length}
+          countFor={countFor}
           hideEmpty={hideEmpty}
           renderColumns={(statuses) => statuses.map(renderColumn)}
         />

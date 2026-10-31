@@ -514,8 +514,22 @@ not hold or strip the cohort that put it in reach (`403 outside_scope`).
 | `/api/admin/analytics/*` (every sub-route, the AI narrative included) | **403** (`unscoped_subject`) — refused, so no aggregate leaks; each one opens only with its own narrowing |
 | A single user by id (`/api/users/[id]`, the candidate detail) | **403** — a person is not a cohort-shaped subject yet |
 
-Background fan-outs that mail "every active ADMIN of the org" (relation health,
-SLA, report subscriptions …) still reach a PROGRAM_ADMIN unnarrowed: #3485.
+**Who hears about it (#3485).** A notice to "the org's admins" carries names,
+so it is a read and follows the same scope — one pure rule, `adminReceives()`
+in `programScopeRule.ts`:
+
+| Notice | ORG_ADMIN, OBSERVER | PROGRAM_ADMIN |
+|---|---|---|
+| Org-level (sign-up, support ticket or report, company inquiry, mentor application, plan limit, SSO certificate, webhook disabled, document expiry, request nudge, retention summaries) | ✅ | **never** — it has no programme to be inside |
+| About a relation or account (re-match request, SLA escalation/resolution, stage automation to admins, relation-health digest, trial reminder, company outreach) | ✅ | only when a grant covers its cohort/company (`grantCovers()`) |
+| Scheduled analytics report (a subscription naming the admin) | ✅ | **skipped** (`recipient_out_of_scope`) — analytics is org-wide |
+| Daily activity digest | ✅ | its programmes' mentees and to-dos only |
+
+The recipient helpers in `src/lib/tenantAdmins.ts` apply it: `tenantAdminWhere()`
+/ `tenantAdminIds(orgId)` are org-level (no PROGRAM_ADMIN), `tenantAdminIds(orgId,
+subject)` / `tenantAdminRows(orgId, subject, select)` add the PROGRAM_ADMINs whose
+grants cover `subject`. A new fan-out picks one of them — never a raw
+`role: 'ADMIN'` query. Runnable: `e2e/admin-fanout-program-scope.spec.ts` (`@smoke`).
 
 Runnable: `e2e/program-scoped-admin.spec.ts` (`@smoke`); the builders:
 `scripts/test/authz-scope-program-admin.test.mjs`.

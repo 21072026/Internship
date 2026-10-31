@@ -101,6 +101,7 @@ import {
   isHistoricEvent,
   isStaleEvent,
   missingReplayStages,
+  paymentRefusal,
   planAccountEvent,
   shouldUndoHistoricExpiry,
   batchOrder,
@@ -114,6 +115,8 @@ import {
   referralCodeKey,
 } from '@/lib/affiliateAttributionRule';
 import type { AccountEvent } from '@/lib/accountEventSchema';
+import { AffiliateWriteError, recordAffiliatePayment } from '@/lib/affiliatePaymentWriter';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 
 /** A `processing` claim older than this belongs to a run that died. */
 export const CLAIM_STALE_MS = 10 * 60 * 1000;
@@ -133,7 +136,9 @@ export type IngestOutcome =
   | 'recorded'
   | 'unknown_account'
   | 'conflict'
-  | 'no_default_owner';
+  | 'no_default_owner'
+  // payment_received (#3355): no partner brought this customer in.
+  | 'no_partner';
 
 export interface IngestResult {
   outcome: IngestOutcome;
@@ -339,6 +344,7 @@ async function claim(db: Db, orgId: string, source: EventSource, event: AccountE
 async function apply(ctx: Ctx): Promise<Applied> {
   const { orgId, source, event, db } = ctx;
   const intent = ingestIntent(event.event_type);
+  if (intent.kind === 'payment') return recordPayment(ctx);
   if (intent.kind === 'record') {
     await note(ctx, {
       action: 'integration.event',
@@ -400,6 +406,55 @@ async function apply(ctx: Ctx): Promise<Applied> {
   await attributeToAffiliate(ctx);
   await recordPlan(ctx, companyId);
   return result;
+}
+
+/**
+ * `payment_received` (#3355): the customer's payment goes to the ONE affiliate
+ * payment writer, `recordAffiliatePayment({ source: 'API' })` — the same checks,
+ * partner lock and commission reconciliation as the admin's manual entry, so
+ * an API payment and a typed one produce the same commissions. It moves nothing
+ * on the funnel. The customer is the event's `external_id` (customerRefFor, the
+ * reference the referral link stored); a referral code on the same event links
+ * the customer first. Inside a dry run the write runs in the run's transaction
+ * (`ctx.db`) and is rolled back with it. Every refusal writes nothing and
+ * answers through paymentRefusal().
+ */
+async function recordPayment(ctx: Ctx): Promise<Applied> {
+  const { orgId, event, db } = ctx;
+  if (!(await shellCapabilities(orgId)).includes('affiliate')) {
+    return { outcome: 'recorded', detail: 'payment_received: this organisation has no affiliate programme; nothing recorded' };
+  }
+  const payment = event.payment;
+  const customerRef = customerRefFor(event.external_id);
+  if (!payment || !customerRef) return { outcome: 'conflict', detail: 'payment refused: invalid_input' };
+  await attributeToAffiliate(ctx);
+  try {
+    const written = await recordAffiliatePayment(
+      {
+        orgId,
+        customerExternalRef: customerRef,
+        amountMinor: payment.amount_minor,
+        currency: payment.currency,
+        receivedAt: payment.received_at ?? event.occurred_at,
+        externalPaymentRef: payment.id,
+        source: 'API',
+        enteredById: null,
+        now: ctx.now,
+      },
+      db === prisma ? undefined : (db as Prisma.TransactionClient),
+    );
+    await note(ctx, {
+      action: 'integration.affiliate_payment',
+      orgId,
+      targetType: 'AffiliatePartner',
+      targetId: written.partnerId,
+      detail: `${ctx.source.slug}: payment ${payment.id} recorded for customer ${customerRef} (commissions: +${written.created} ~${written.updated} -${written.removed})`,
+    });
+    return { outcome: 'applied', detail: `payment ${payment.id} recorded` };
+  } catch (e) {
+    if (e instanceof AffiliateWriteError) return paymentRefusal(e.code);
+    throw e;
+  }
 }
 
 /** A stage the event needs is missing from the org's funnel: a conflict, and a retryable one. */
@@ -622,7 +677,7 @@ async function recordWasWon(ctx: Ctx, relation: RelationRow): Promise<boolean> {
 async function moveAccount(
   ctx: Ctx,
   companyId: string,
-  intent: Exclude<IngestIntent, { kind: 'record' }>,
+  intent: Exclude<IngestIntent, { kind: 'record' } | { kind: 'payment' }>,
   stages: Stages,
 ): Promise<Applied> {
   const { orgId, source, event, db } = ctx;

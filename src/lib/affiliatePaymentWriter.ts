@@ -215,8 +215,14 @@ function mapPrismaError(e: unknown): unknown {
   return e;
 }
 
-/** Records one customer payment and brings the partner's commissions in line. */
-export async function recordAffiliatePayment(raw: RecordPaymentInput): Promise<RecordPaymentResult> {
+/**
+ * Records one customer payment and brings the partner's commissions in line.
+ *
+ * `tx` (#3355): a caller that already holds a transaction — the account-event
+ * ingest's dry run, which rolls everything back — passes it, and the write runs
+ * inside it instead of opening its own. Same checks, same lock, same rows.
+ */
+export async function recordAffiliatePayment(raw: RecordPaymentInput, tx?: Tx): Promise<RecordPaymentResult> {
   const now = raw.now ?? new Date();
   const issues = checkPaymentInput(raw, now);
   if (issues.length > 0) throw new AffiliateWriteError('invalid_input', issues);
@@ -227,7 +233,7 @@ export async function recordAffiliatePayment(raw: RecordPaymentInput): Promise<R
   };
 
   // Only to choose which partner to lock; the link is read again under the lock.
-  const known = await prisma.affiliateCustomer.findUnique({
+  const known = await (tx ?? prisma).affiliateCustomer.findUnique({
     where: { orgId_externalRef: { orgId: input.orgId, externalRef: input.customerExternalRef } },
     select: { partnerId: true },
   });
@@ -236,88 +242,92 @@ export async function recordAffiliatePayment(raw: RecordPaymentInput): Promise<R
   if (!partnerId) throw new AffiliateWriteError('unknown_customer');
 
   try {
-    return await prisma.$transaction(async (tx) => {
-      const partner = await lockPartner(tx, input.orgId, partnerId);
-      if (partner.status === 'SUSPENDED') throw new AffiliateWriteError('partner_suspended');
-      const loaded = await loadPlan(tx, input.orgId);
-      if (input.currency !== loaded.plan.currency) throw new AffiliateWriteError('currency_mismatch');
-
-      const duplicate = await tx.affiliatePayment.findUnique({
-        where: { orgId_externalPaymentRef: { orgId: input.orgId, externalPaymentRef: input.externalPaymentRef } },
-        select: { id: true },
-      });
-      if (duplicate) throw new AffiliateWriteError('duplicate_payment');
-
-      const current = await tx.affiliateCustomer.findUnique({
-        where: { orgId_externalRef: { orgId: input.orgId, externalRef: input.customerExternalRef } },
-        select: { id: true, partnerId: true },
-      });
-      if (current && current.partnerId !== partner.id) throw new AffiliateWriteError('customer_of_another_partner');
-      // After a termination takes effect the partner brings no NEW customer: the
-      // link would be permanent (a returning partner gets a new record and code,
-      // and a customer cannot move to it). Known customers still pay in (RUN_OUT).
-      if (
-        !current &&
-        partner.status === 'TERMINATED' &&
-        partner.noticeEffectiveAt !== null &&
-        input.receivedAt.getTime() >= partner.noticeEffectiveAt.getTime()
-      ) {
-        throw new AffiliateWriteError('partner_terminated');
-      }
-      let customerId = current?.id;
-      if (!customerId) {
-        // INSERT IGNORE, then read back: the account-event ingest (#3354) links
-        // customers without this partner lock, so it can land between the read
-        // above and this insert. A unique-key throw would be misreported as
-        // `customer_of_another_partner`; reading the row decides honestly.
-        await tx.affiliateCustomer.createMany({
-          data: [{ orgId: input.orgId, partnerId: partner.id, externalRef: input.customerExternalRef }],
-          skipDuplicates: true,
-        });
-        const row = await tx.affiliateCustomer.findUniqueOrThrow({
-          where: { orgId_externalRef: { orgId: input.orgId, externalRef: input.customerExternalRef } },
-          select: { id: true, partnerId: true },
-        });
-        if (row.partnerId !== partner.id) throw new AffiliateWriteError('customer_of_another_partner');
-        customerId = row.id;
-      }
-
-      const payment = await tx.affiliatePayment.create({
-        data: {
-          orgId: input.orgId,
-          customerId,
-          amountMinor: input.amountMinor,
-          currency: input.currency,
-          receivedAt: input.receivedAt,
-          source: input.source,
-          externalPaymentRef: input.externalPaymentRef,
-          enteredById: input.enteredById ?? null,
-        },
-        select: { id: true },
-      });
-
-      const sync = await syncLocked(tx, input.orgId, partner, loaded);
-      await tx.auditLog.create({
-        data: {
-          orgId: input.orgId,
-          actorId: input.enteredById ?? 'system',
-          action: 'affiliate.payment.record',
-          targetId: payment.id,
-          detail: auditDetail({
-            partnerId: partner.id,
-            customerId,
-            amountMinor: input.amountMinor,
-            currency: input.currency,
-            source: input.source,
-            ...sync,
-          }),
-        },
-      });
-      return { paymentId: payment.id, customerId, partnerId: partner.id, ...sync };
-    }, TX_OPTIONS);
+    if (tx) return await writePayment(tx, input, partnerId);
+    return await prisma.$transaction((t) => writePayment(t, input, partnerId), TX_OPTIONS);
   } catch (e) {
     throw mapPrismaError(e);
   }
+}
+
+/** The payment write itself, under the partner lock, inside `tx`. */
+async function writePayment(tx: Tx, input: RecordPaymentInput, partnerId: string): Promise<RecordPaymentResult> {
+  const partner = await lockPartner(tx, input.orgId, partnerId);
+  if (partner.status === 'SUSPENDED') throw new AffiliateWriteError('partner_suspended');
+  const loaded = await loadPlan(tx, input.orgId);
+  if (input.currency !== loaded.plan.currency) throw new AffiliateWriteError('currency_mismatch');
+
+  const duplicate = await tx.affiliatePayment.findUnique({
+    where: { orgId_externalPaymentRef: { orgId: input.orgId, externalPaymentRef: input.externalPaymentRef } },
+    select: { id: true },
+  });
+  if (duplicate) throw new AffiliateWriteError('duplicate_payment');
+
+  const current = await tx.affiliateCustomer.findUnique({
+    where: { orgId_externalRef: { orgId: input.orgId, externalRef: input.customerExternalRef } },
+    select: { id: true, partnerId: true },
+  });
+  if (current && current.partnerId !== partner.id) throw new AffiliateWriteError('customer_of_another_partner');
+  // After a termination takes effect the partner brings no NEW customer: the
+  // link would be permanent (a returning partner gets a new record and code,
+  // and a customer cannot move to it). Known customers still pay in (RUN_OUT).
+  if (
+    !current &&
+    partner.status === 'TERMINATED' &&
+    partner.noticeEffectiveAt !== null &&
+    input.receivedAt.getTime() >= partner.noticeEffectiveAt.getTime()
+  ) {
+    throw new AffiliateWriteError('partner_terminated');
+  }
+  let customerId = current?.id;
+  if (!customerId) {
+    // INSERT IGNORE, then read back: the account-event ingest (#3354) links
+    // customers without this partner lock, so it can land between the read
+    // above and this insert. A unique-key throw would be misreported as
+    // `customer_of_another_partner`; reading the row decides honestly.
+    await tx.affiliateCustomer.createMany({
+      data: [{ orgId: input.orgId, partnerId: partner.id, externalRef: input.customerExternalRef }],
+      skipDuplicates: true,
+    });
+    const row = await tx.affiliateCustomer.findUniqueOrThrow({
+      where: { orgId_externalRef: { orgId: input.orgId, externalRef: input.customerExternalRef } },
+      select: { id: true, partnerId: true },
+    });
+    if (row.partnerId !== partner.id) throw new AffiliateWriteError('customer_of_another_partner');
+    customerId = row.id;
+  }
+
+  const payment = await tx.affiliatePayment.create({
+    data: {
+      orgId: input.orgId,
+      customerId,
+      amountMinor: input.amountMinor,
+      currency: input.currency,
+      receivedAt: input.receivedAt,
+      source: input.source,
+      externalPaymentRef: input.externalPaymentRef,
+      enteredById: input.enteredById ?? null,
+    },
+    select: { id: true },
+  });
+
+  const sync = await syncLocked(tx, input.orgId, partner, loaded);
+  await tx.auditLog.create({
+    data: {
+      orgId: input.orgId,
+      actorId: input.enteredById ?? 'system',
+      action: 'affiliate.payment.record',
+      targetId: payment.id,
+      detail: auditDetail({
+        partnerId: partner.id,
+        customerId,
+        amountMinor: input.amountMinor,
+        currency: input.currency,
+        source: input.source,
+        ...sync,
+      }),
+    },
+  });
+  return { paymentId: payment.id, customerId, partnerId: partner.id, ...sync };
 }
 
 /** Re-evaluates a partner after a plan or termination change. */
