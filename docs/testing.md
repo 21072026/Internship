@@ -12,7 +12,7 @@ the newer non-functional tests (stress + nightly automation) are wired.
 | **Build test** | Production build compiles | `npm run build` | CI (`ci.yml`) |
 | **i18n parity** | EN/TR/DE translation keys stay in sync | `npm run check:i18n` | CI (`ci.yml`) |
 | **Unit + coverage floor** | Pure logic, no browser and no database, with a per-file line-coverage floor on the modules that have suites | `scripts/test/*.test.mjs` (`node --test`) + `scripts/check-unit-coverage.mjs` | CI (`ci.yml`) on every PR |
-| **Smoke / functional (E2E)** | App boots, auth works, core pages render without errors | `e2e/*.spec.ts` (Playwright) | CI (`e2e.yml`) on every PR |
+| **Smoke / functional (E2E)** | App boots, auth works, core pages render without errors | `e2e/*.spec.ts` (Playwright) | CI (`e2e.yml`) on every PR — one `Build app for E2E` job builds `.next` once and the smoke shards, a11y and isolation jobs download it (#3509) |
 | **Accessibility (a11y)** | Landmarks, roles, keyboard/contrast basics, status messages (4.1.3), reflow at 320px; OS media preferences (reduced motion, increased contrast, forced colors) | `e2e/a11y.spec.ts`, `e2e/board-a11y.spec.ts`, `e2e/live-region.spec.ts`, `e2e/mobile-layout-audit.spec.ts`, `e2e/mobile-layout-coverage.spec.ts`, `e2e/a11y-media-preferences.spec.ts` | with E2E |
 | **Security** | Headers, IDOR/RBAC, rate limiting, 2FA, login hardening | `e2e/security-headers.spec.ts`, `e2e/authz-idor.spec.ts`, `e2e/idor-hardening.spec.ts`, `e2e/rate-limit.spec.ts`, `e2e/login-security.spec.ts`, `e2e/two-factor-*.spec.ts` | with E2E |
 | **Protocol round trips against a stub** | Third-party protocols we cannot reach from CI, driven end to end against a local server that speaks the real wire format: Google Calendar OAuth, and SAML/OIDC SSO with signed assertions and ID tokens | `e2e/support/google-mock.mjs` + `e2e/google-calendar.spec.ts`, `e2e/support/idp-mock.mjs` + `e2e/sso-roundtrip.spec.ts` | with E2E (the SAML happy path is `@smoke`) |
@@ -130,7 +130,8 @@ project — an ordinary `npm run test:e2e` and the CI smoke gate never pay for a
 `e2e-json-shard-isolation` so a red isolation run reaches the same Turkish summary email
 (`E2E_EXPECTED_REPORTS` counts it as the fifth report, so a job that crashes before
 writing one is caught too). Since #1568 it is **also on every PR**: the `Playwright
-tenant isolation gate` job in `e2e.yml` (own MySQL, own build, `--project=isolation`,
+tenant isolation gate` job in `e2e.yml` (own MySQL, the shared build from the `build`
+job (#3509), `--project=isolation`,
 the same docs-only skip as the smoke shards, no path filter). It stays outside the
 `@smoke` set — `@smoke` tags under `e2e/isolation/` would be unreachable anyway, the
 default project ignores that folder. The leak matrix it runs is described in
