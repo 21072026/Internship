@@ -510,7 +510,8 @@ not hold or strip the cohort that put it in reach (`403 outside_scope`).
 | `/admin` dashboard, `/admin/re-engagement`, `/admin/mentee-activity`, the daily activity digest mail | narrowed through `programGrantsFor()` (`authzScope.ts`, live tier + grants; `null` = whole tenant) |
 | `/admin/contributor-terms` | redirected to `/admin` — an org-wide report with nothing to narrow by |
 | Bulk edit (`/api/admin/candidates/bulk`) | **403** — it asks `user.write`, which the tier does not hold |
-| `/api/admin/analytics/*` | **403** (`unscoped_subject`) — refused, so no aggregate leaks; narrowing the 20 routes is the rest of #1577 |
+| `GET /api/admin/analytics` (the overview) | `listing: true`; `loadAdminAnalytics({ scope })` computes every number over the grants — funnel, conversion, engagement, RSVP, trends and mentor workload through the covered relations, projects only with one of them, the signup funnel over the people the grants reach (`programPeopleWhere`), the programme picker only the granted cohorts. The `?program=` filter ANDs on top |
+| `/api/admin/analytics/*` (every sub-route, the AI narrative included) | **403** (`unscoped_subject`) — refused, so no aggregate leaks; each one opens only with its own narrowing |
 | A single user by id (`/api/users/[id]`, the candidate detail) | **403** — a person is not a cohort-shaped subject yet |
 
 Background fan-outs that mail "every active ADMIN of the org" (relation health,
