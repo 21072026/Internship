@@ -32,6 +32,7 @@ import { announceNewRelation, createGuardedRelation } from '@/lib/relationCreate
 import { MATCH_DECISION_NOTE_MAX } from '@/lib/matching/decisionRule';
 import { getLocale } from '@/i18n/server';
 import { isEligible } from '@/lib/eligibility';
+import { boardPageParams, listIsPaged } from '@/lib/boardPage';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -92,9 +93,11 @@ export async function GET(request: Request) {
     const agreementParam = searchParams.get('agreement');
     const showsAgreement = isAdmin && (await shellCapabilities(session.user.orgId)).includes('mentorship');
     const activeAgreement = showsAgreement ? await getActiveAgreement(resolveOrgId(session)) : null;
-    // Pagination is opt-in: only applied when `page` is explicitly passed, so
-    // the many callers that expect the full list (board views, mentee/mentor
-    // dashboards, meeting/email composers) keep working unchanged.
+    // Pagination is opt-in, so the callers that expect the full list
+    // (mentee/mentor dashboards, meeting/email composers) keep working. It used
+    // to switch on `page` alone, which made `?pageSize=20` silently return the
+    // whole list (#1438); either parameter pages now (src/lib/boardPage.ts).
+    const paged = listIsPaged(searchParams);
     const pageParam = searchParams.get('page');
     const page = Math.max(1, parseInt(pageParam || '1', 10) || 1);
     const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10) || 20));
@@ -206,7 +209,36 @@ export async function GET(request: Request) {
       return rows.map((r) => ({ ...r, agreementStatus: statuses.get(r.id) ?? null }));
     };
 
-    if (!pageParam) {
+    // The pipeline board (#1438): each column's TRUE count, plus only that
+    // column's first page of cards — or, with `stage`, one further page of one
+    // column. Same `where` (scope, search, filters) as every other read here,
+    // so a count can never include a card the caller may not see.
+    if (searchParams.get('view') === 'board') {
+      const board = boardPageParams(searchParams);
+      if ('error' in board) return NextResponse.json({ error: 'Invalid stage', code: board.error }, { status: 400 });
+      const counts = await prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where, _count: { _all: true } });
+      const countByStage = Object.fromEntries(counts.map((c) => [c.pipelineStatus, c._count._all]));
+      const stages = board.stage ? [board.stage] : Object.keys(countByStage);
+      const pages = await Promise.all(
+        stages.map((stage) =>
+          prisma.mentorshipRelation.findMany({
+            where: andScope<Prisma.MentorshipRelationWhereInput>(where, { pipelineStatus: stage }),
+            include,
+            orderBy: [{ startDate: 'desc' }, { id: 'asc' }],
+            skip: (board.page - 1) * board.perStage,
+            take: board.perStage,
+          })
+        )
+      );
+      return NextResponse.json({
+        relations: await withAgreement(withStageClock(pages.flat())),
+        counts: countByStage,
+        perStage: board.perStage,
+        page: board.page,
+      });
+    }
+
+    if (!paged) {
       const relations = await prisma.mentorshipRelation.findMany({ where, include, orderBy: { startDate: 'desc' } });
       return NextResponse.json({ relations: await withAgreement(withStageClock(relations)) });
     }

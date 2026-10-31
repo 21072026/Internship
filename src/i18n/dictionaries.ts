@@ -3901,6 +3901,8 @@ const en = {
     salesHint: 'Sales view: only the leads and accounts assigned to you.',
   },
   board: {
+    loadMore: 'Show more ({shown} of {total})',
+    loadMoreFailed: 'Could not load more cards',
     moveTo: 'Move to stage',
     stageFilter: 'Stage',
     stageChanged: 'Stage updated',
@@ -15568,6 +15570,8 @@ const tr: Dict = {
     salesHint: 'Satış görünümü: yalnızca sana atanmış müşteri adayları ve hesaplar.',
   },
   board: {
+    loadMore: 'Daha fazla göster ({total} kartın {shown} tanesi)',
+    loadMoreFailed: 'Daha fazla kart yüklenemedi',
     moveTo: 'Aşamaya taşı',
     stageFilter: 'Aşama',
     stageChanged: 'Aşama güncellendi',
@@ -27088,6 +27092,8 @@ const de: Dict = {
     salesHint: 'Vertriebsansicht: nur die dir zugewiesenen Leads und Accounts.',
   },
   board: {
+    loadMore: 'Mehr anzeigen ({shown} von {total})',
+    loadMoreFailed: 'Weitere Karten konnten nicht geladen werden',
     moveTo: 'In Phase verschieben',
     stageFilter: 'Phase',
     stageChanged: 'Phase aktualisiert',
