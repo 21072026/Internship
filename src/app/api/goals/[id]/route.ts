@@ -9,29 +9,15 @@ import { notifyIfAllowed } from '@/lib/notify';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { resolveOrgId } from '@/lib/orgScope';
-import { inCallerTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
+import { goalIfAllowed, readsAsAdmin } from '@/lib/goalAccess';
+import { canDeleteGoal, canRewordGoal } from '@/lib/goalSubtasksRule';
 import {
-  canReachGoals,
-  canReadGoal,
   canSetGoalVisibility,
   GOAL_PROGRESS_MAX,
   GOAL_PROGRESS_MIN,
   GOAL_VISIBILITIES,
 } from '@/lib/goalVisibilityRule';
-
-// 'missing' covers another tenant's goal too (#2542): Goal has no orgId, the
-// nested relation include is never scoped, so the tenant is checked here, and
-// the answer is the 404 a missing id gets — a 403 would confirm the id exists.
-// A PRIVATE goal of someone else (#1858) gets the same 'missing' for the same
-// reason: the other side must not learn that a goal they cannot read exists.
-async function goalIfAllowed(userId: string, role: string, goalId: string, callerOrgId: string | null) {
-  const goal = await prisma.goal.findUnique({ where: { id: goalId }, include: { relation: true } });
-  if (!goal || !(await inCallerTenant(goal.relation.orgId, callerOrgId))) return 'missing' as const;
-  const viewer = { id: userId, role };
-  if (!canReachGoals(goal.relation, viewer)) return null;
-  return canReadGoal(goal, goal.relation, viewer) ? goal : ('missing' as const);
-}
 
 const patchSchema = z.object({
   status: z.enum(['OPEN', 'DONE']).optional(),
@@ -67,6 +53,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const parsed = patchSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   const { status, title, description, dueDate, successCriteria, targetDate, progress, visibility } = parsed.data;
+
+  // A goal from the shared pool keeps the pool's wording (#1860), in every
+  // language it was written in — the same rule as a pooled to-do.
+  if (title !== undefined && title !== goal.title && !canRewordGoal(goal)) {
+    return NextResponse.json({ error: 'This goal comes from the shared pool — edit the template instead', code: 'pooled_goal' }, { status: 409 });
+  }
 
   // The sharing scope is the author's to set (#1858): the other participant
   // may tick and edit a shared goal, but not widen or narrow who reads it.
@@ -125,6 +117,12 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const goal = await goalIfAllowed(session.user.id, session.user.role, id, resolveOrgId(session));
   if (goal === 'missing') return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!goal) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+
+  // A pooled goal is not its recipient's to make disappear (#1860); its steps
+  // survive a deletion either way (ProjectTask.goalId is SetNull).
+  if (!canDeleteGoal(goal, { id: session.user.id, isAdmin: readsAsAdmin(goal.relation, session.user.id) })) {
+    return NextResponse.json({ error: 'This goal comes from the shared pool', code: 'pooled_goal' }, { status: 403 });
+  }
 
   await prisma.goal.delete({ where: { id } }).catch(() => null);
   return NextResponse.json({ ok: true });
