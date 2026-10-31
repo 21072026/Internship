@@ -11,11 +11,17 @@ import { DEFAULT_RULE_SET } from '@/lib/matching/score';
 import { requirePermission, type Permission } from '@/lib/authz';
 import { tenantWhere } from '@/lib/tenantFilter';
 import { matchableCustomFields, unmatchableCustomFields, type CustomAnswerDb } from '@/lib/matching/customAnswers';
+import { matchableAttributes, unknownAttributes, type AttributeValueDb } from '@/lib/matching/attributeValues';
 
-// A custom-field rule must name a matchable question of THIS org (#1803).
+// A custom-field rule must name a matchable question of THIS org (#1803), an
+// attribute rule one of THIS org's attributes (#3424).
 async function refuseUnmatchable(session: Parameters<typeof tenantWhere>[0], rules: readonly { dimension: string }[] | undefined) {
-  const bad = await unmatchableCustomFields(prisma as unknown as CustomAnswerDb, await tenantWhere(session), (rules ?? []).map((r) => r.dimension));
-  return bad.length > 0 ? NextResponse.json({ error: 'not_matchable_field', code: 'not_matchable_field', dimensions: bad }, { status: 400 }) : null;
+  const tenant = await tenantWhere(session);
+  const dimensions = (rules ?? []).map((r) => r.dimension);
+  const bad = await unmatchableCustomFields(prisma as unknown as CustomAnswerDb, tenant, dimensions);
+  if (bad.length > 0) return NextResponse.json({ error: 'not_matchable_field', code: 'not_matchable_field', dimensions: bad }, { status: 400 });
+  const unknown = await unknownAttributes(prisma as unknown as AttributeValueDb, tenant, dimensions);
+  return unknown.length > 0 ? NextResponse.json({ error: 'unknown_attribute', code: 'unknown_attribute', dimensions: unknown }, { status: 400 }) : null;
 }
 
 // The org's matching rule sets (#1783): list, create, edit, set default.
@@ -48,8 +54,11 @@ export async function GET(request: Request) {
     // The built-in set is what an org with no default scores with; the editor
     // starts a new set from it.
     // The editor offers the org's MATCHABLE questions next to the built-ins (#1803).
-    const customFields = await matchableCustomFields(prisma as unknown as CustomAnswerDb, await tenantWhere(session));
-    return NextResponse.json({ ruleSets: rows.map(serializeRuleSet), builtIn: DEFAULT_RULE_SET, customFields });
+    const tenant = await tenantWhere(session);
+    const customFields = await matchableCustomFields(prisma as unknown as CustomAnswerDb, tenant);
+    // …and the org's own attributes (#3424) — never another org's.
+    const attributes = await matchableAttributes(prisma as unknown as AttributeValueDb, tenant);
+    return NextResponse.json({ ruleSets: rows.map(serializeRuleSet), builtIn: DEFAULT_RULE_SET, customFields, attributes });
   });
 }
 

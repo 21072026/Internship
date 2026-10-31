@@ -474,6 +474,9 @@ const en = {
   // /admin/matching — rule-set editor and dry-run simulation (#1783).
   adminMatching: {
     customField: 'Question',
+    attribute: 'Attribute',
+    attributeMode: 'Compare',
+    attributeModes: { same: 'Same value', different: 'Different value', gte_mentor: 'Mentor ≥ mentee' },
     tolerance: 'Tolerance',
     orphanedRule: 'No longer matchable',
     orphanedRules: '{n} rule(s) use a question that is no longer matchable. They score nothing, and the rule set cannot be saved until they are removed.',
@@ -518,6 +521,7 @@ const en = {
   },
   matchScore: {
     customField: 'Question',
+    attribute: 'Attribute',
     title: 'Match score',
     // The visible figure. Turkish writes the sign first (%78) and German puts a
     // space before it — hardcoding "{pct}%" in JSX left the one number a
@@ -12228,6 +12232,9 @@ const tr: Dict = {
   // edilebilir kılan cümle odur.
   adminMatching: {
     customField: 'Soru',
+    attribute: 'Nitelik',
+    attributeMode: 'Karşılaştır',
+    attributeModes: { same: 'Aynı değer', different: 'Farklı değer', gte_mentor: 'Mentor ≥ mentee' },
     tolerance: 'Tolerans',
     orphanedRule: 'Artık eşleştirmeye açık değil',
     orphanedRules: '{n} kural artık eşleştirmeye açık olmayan bir soruyu kullanıyor. Puana katkıları yok ve bunlar kaldırılmadan kural seti kaydedilemez.',
@@ -12272,6 +12279,7 @@ const tr: Dict = {
   },
   matchScore: {
     customField: 'Soru',
+    attribute: 'Nitelik',
     title: 'Eşleşme skoru',
     percent: '%{n}',
     srScore: 'Kural karşılama: %{n}',
@@ -23747,6 +23755,9 @@ const de: Dict = {
   // beeinflusst, erklärbar und anfechtbar.
   adminMatching: {
     customField: 'Frage',
+    attribute: 'Merkmal',
+    attributeMode: 'Vergleich',
+    attributeModes: { same: 'Gleicher Wert', different: 'Anderer Wert', gte_mentor: 'Mentor ≥ Mentee' },
     tolerance: 'Toleranz',
     orphanedRule: 'Nicht mehr für das Matching freigegeben',
     orphanedRules: '{n} Regel(n) verwenden eine Frage, die nicht mehr für das Matching freigegeben ist. Sie zählen nicht, und der Regelsatz kann erst nach dem Entfernen gespeichert werden.',
@@ -23791,6 +23802,7 @@ const de: Dict = {
   },
   matchScore: {
     customField: 'Frage',
+    attribute: 'Merkmal',
     title: 'Match-Score',
     percent: '{n} %',
     srScore: '{n} % Regelerfüllung',

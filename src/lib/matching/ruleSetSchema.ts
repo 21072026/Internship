@@ -10,6 +10,7 @@
 
 import { z } from 'zod';
 import { MATCH_DIMENSIONS, SOFT_ONLY_DIMENSIONS } from './types';
+import { ATTRIBUTE_MODES } from './dimensions';
 
 export const MATCH_RULE_LIMIT = 20;
 
@@ -27,6 +28,8 @@ const configSchema = z
     selfSelect: z.boolean().optional(),
     // customField:<key> on a NUMBER/SCALE answer: the widest gap that still matches (#1803).
     tolerance: z.number().min(0).max(1000).optional(),
+    // attribute:<key> (#3424): same | different | gte_mentor (NUMBER attributes).
+    attributeMode: z.enum(ATTRIBUTE_MODES).optional(),
   })
   .strict();
 
@@ -35,7 +38,13 @@ export const matchRuleSchema = z
     // A built-in, or an admin-defined question (`customField:<fieldKey>`, #1803).
     // The shape is checked here; that the field exists and is matchable in the
     // caller's org is checked at the save route (unmatchableCustomFields()).
-    dimension: z.union([z.enum(MATCH_DIMENSIONS), z.string().regex(/^customField:[a-z][a-z0-9_]{0,79}$/) as z.ZodType<`customField:${string}`>]),
+    // An org attribute (`attribute:<key>`, #3424) the same way: shape here,
+    // existence in the caller's org at the save route (unknownAttributes()).
+    dimension: z.union([
+      z.enum(MATCH_DIMENSIONS),
+      z.string().regex(/^customField:[a-z][a-z0-9_]{0,79}$/) as z.ZodType<`customField:${string}`>,
+      z.string().regex(/^attribute:[a-z][a-z0-9_]{0,63}$/) as z.ZodType<`attribute:${string}`>,
+    ]),
     kind: z.enum(['WEIGHTED', 'HARD_REQUIRE', 'HARD_EXCLUDE']),
     weight: z.number().int().min(0).max(100),
     config: configSchema.default({}),

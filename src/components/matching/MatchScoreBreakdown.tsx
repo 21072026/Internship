@@ -83,12 +83,15 @@ export function MatchScoreBreakdown({
   const kindNames = m.kinds as Record<string, string>;
 
   // An admin-defined question (#1803) reads as "Question: <its label>".
-  const custom = useCustomFieldLabels([...breakdown.map((e) => e.dimension), ...blockedBy].some((d) => d.startsWith('customField:')));
+  // An org attribute (#3424) as "Attribute: <its label>".
+  const custom = useCustomFieldLabels([...breakdown.map((e) => e.dimension), ...blockedBy].some((d) => d.startsWith('customField:') || d.startsWith('attribute:')));
   /** Unknown dimensions fall back to their raw key rather than vanishing. */
   const dimLabel = (dimension: string) =>
     dimension.startsWith('customField:')
       ? `${m.customField}: ${custom[dimension] ?? humanizeCustomKey(dimension)}`
-      : (dimensionNames[dimension] ?? dimension);
+      : dimension.startsWith('attribute:')
+        ? `${m.attribute}: ${custom[dimension] ?? humanizeCustomKey(dimension)}`
+        : (dimensionNames[dimension] ?? dimension);
 
   /**
    * Why a rule blocked. A registry newer than this bundle gets the generic

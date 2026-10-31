@@ -50,6 +50,13 @@ export interface MatchPerson {
    * `customField:<key>` family.
    */
   customAnswers?: Readonly<Record<string, unknown>>;
+  /**
+   * The person's org attributes (#3424), attribute key → stored value, loaded
+   * in bulk by ./attributeValues.ts — directory data (site, level, business
+   * unit) the IdP or the roster feed writes. Read only by the
+   * `attribute:<key>` family.
+   */
+  attributes?: Readonly<Record<string, string>>;
 }
 
 export interface MatchMentee extends MatchPerson {
@@ -261,6 +268,45 @@ export function customFieldDimension(fieldKey: string, mentee: MatchMentee, ment
   return { matched: same, ratio: same ? 1 : 0, detail: same ? [String(a)] : [] };
 }
 
+/** The prefix of the org-attribute family: `attribute:<attributeKey>` (#3424). */
+export const ATTRIBUTE_PREFIX = 'attribute:';
+const ATTRIBUTE_KEY_RE = /^attribute:[a-z][a-z0-9_]{0,63}$/;
+
+/** Is `key` a well-formed `attribute:<attributeKey>` dimension? */
+export function isAttributeDimension(key: string): boolean {
+  return ATTRIBUTE_KEY_RE.test(key);
+}
+
+/** How an attribute rule compares the two values (`config.attributeMode`). */
+export const ATTRIBUTE_MODES = ['same', 'different', 'gte_mentor'] as const;
+export type AttributeMode = (typeof ATTRIBUTE_MODES)[number];
+
+/**
+ * One org attribute compared between mentee and mentor (#3424):
+ *   · same        — "prefer the same site": equal values match;
+ *   · different   — "a mentor from another business unit": unequal values match;
+ *   · gte_mentor  — "mentor level ≥ mentee level", NUMBER attributes: a value
+ *                   that is not a number on either side is not applicable.
+ * A value missing on either side — or an attribute deleted since the rule was
+ * written, whose values went with it — is not applicable: the same 0 for every
+ * mentor, never a penalty and never an error.
+ */
+export function attributeDimension(attributeKey: string, mentee: MatchMentee, mentor: MatchMentor, config: DimensionConfig): DimensionResult {
+  const a = mentee.attributes?.[attributeKey]?.trim();
+  const b = mentor.attributes?.[attributeKey]?.trim();
+  if (!a || !b) return notApplicable('no value');
+  const mode = (ATTRIBUTE_MODES as readonly string[]).includes(String(config.attributeMode)) ? (config.attributeMode as AttributeMode) : 'same';
+  if (mode === 'gte_mentor') {
+    const [x, y] = [Number(a), Number(b)];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return notApplicable('not a number');
+    const hit = y >= x;
+    return { matched: hit, ratio: hit ? 1 : 0, detail: [`${a} / ${b}`] };
+  }
+  const same = a.toLowerCase() === b.toLowerCase();
+  const hit = mode === 'same' ? same : !same;
+  return { matched: hit, ratio: hit ? 1 : 0, detail: hit ? (same ? [a] : [`${a} / ${b}`]) : [] };
+}
+
 export function isKnownDimension(key: string): key is MatchDimension {
   return (MATCH_DIMENSIONS as readonly string[]).includes(key);
 }
@@ -274,6 +320,7 @@ export function evaluateDimension(
   ctx: ScoreContext
 ): DimensionResult {
   if (isCustomFieldDimension(key)) return customFieldDimension(key.slice(CUSTOM_FIELD_PREFIX.length), mentee, mentor, config);
+  if (isAttributeDimension(key)) return attributeDimension(key.slice(ATTRIBUTE_PREFIX.length), mentee, mentor, config);
   if (!isKnownDimension(key)) return { matched: false, ratio: 0, detail: ['unknown dimension'] };
   return DIMENSIONS[key](mentee, mentor, config, ctx);
 }

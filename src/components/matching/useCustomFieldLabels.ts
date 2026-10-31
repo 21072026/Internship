@@ -10,33 +10,43 @@ import type { LocalizedText } from '@/lib/forms/schema';
 // per page load, shared by every breakdown on the page; a reader without
 // access (or a failed fetch) just gets an empty map and the readable fallback.
 
-let pending: Promise<{ key: string; labels: LocalizedText }[]> | null = null;
+// The org attributes (#3424) ride on the same fetch: `attribute:<key>` reads
+// as the attribute's own label, in the reader's language.
+
+type Labelled = { key: string; labels: LocalizedText };
+let pending: Promise<{ customFields: Labelled[]; attributes: Labelled[] }> | null = null;
 
 function load() {
   pending ??= fetch('/api/admin/matching/custom-fields')
-    .then((r) => (r.ok ? r.json() : { customFields: [] }))
-    .then((d) => (Array.isArray(d.customFields) ? d.customFields : []))
-    .catch(() => []);
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((d: { customFields?: unknown; attributes?: unknown }) => ({
+      customFields: Array.isArray(d.customFields) ? (d.customFields as Labelled[]) : [],
+      attributes: Array.isArray(d.attributes) ? (d.attributes as Labelled[]) : [],
+    }))
+    .catch(() => ({ customFields: [], attributes: [] }));
   return pending;
 }
 
-/** `customField:<key>` → the question's label in the reader's language. */
+/** `customField:<key>` / `attribute:<key>` → its label in the reader's language. */
 export function useCustomFieldLabels(enabled: boolean): Record<string, string> {
   const locale = useLocale();
-  const [fields, setFields] = useState<{ key: string; labels: LocalizedText }[]>([]);
+  const [labels, setLabels] = useState<{ customFields: Labelled[]; attributes: Labelled[] }>({ customFields: [], attributes: [] });
   useEffect(() => {
     if (!enabled) return;
     let live = true;
-    void load().then((f) => live && setFields(f));
+    void load().then((f) => live && setLabels(f));
     return () => {
       live = false;
     };
   }, [enabled]);
-  return Object.fromEntries(fields.map((f) => [`customField:${f.key}`, localized(f.labels, locale) || f.key]));
+  return Object.fromEntries([
+    ...labels.customFields.map((f) => [`customField:${f.key}`, localized(f.labels, locale) || f.key]),
+    ...labels.attributes.map((a) => [`attribute:${a.key}`, localized(a.labels, locale) || a.key]),
+  ]);
 }
 
 /** A key the label list does not know: `customField:target_industry` → "Target industry". */
 export function humanizeCustomKey(dimension: string): string {
-  const key = dimension.slice('customField:'.length).replace(/_/g, ' ');
+  const key = dimension.slice(dimension.indexOf(':') + 1).replace(/_/g, ' ');
   return key.charAt(0).toUpperCase() + key.slice(1);
 }
