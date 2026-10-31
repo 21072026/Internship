@@ -14,6 +14,7 @@ import { canIssueCertificate } from '@/lib/certificateEligibility';
 import { certificateTitle } from '@/lib/certificateTemplates';
 import { generateCertificatePdf } from '@/lib/certificatePdf';
 import { logActivity } from '@/lib/activity';
+import { notifyIfAllowed } from '@/lib/notify';
 import type { DocumentType } from '@prisma/client';
 
 // Kept in sync with the single-page layout budget in certificatePdf.ts — long
@@ -139,6 +140,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       { documentId: doc.id, ownerId: relation.menteeId, type: 'CERTIFICATE', requirementId: null, version: (prior?.version ?? 0) + 1, generated: true },
       { actor: { id: session.user.id, type: 'user' } },
     );
+
+    // The mentee learns it is ready (#1410) — under their own 'mentorship'
+    // preference, linked to the portal card that downloads it. Only for the
+    // certificate: that card (PortalCertificateCard) shows the CERTIFICATE
+    // variant alone, so a reference letter would point at nothing. No text or
+    // title travels — the title is in the generator's locale, not the reader's.
+    if (variant === 'CERTIFICATE') {
+      await notifyIfAllowed(relation.menteeId, 'mentorship', 'certificate.issued', {}, '/portal/journey');
+    }
 
     return NextResponse.json({ document: doc }, { status: 201 });
   });
