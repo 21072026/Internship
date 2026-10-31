@@ -22,6 +22,12 @@ on:
     paths:
       - 'apps/zapier/**'
 
+# A new push to the same PR cancels its stale run; a main push or a manual
+# run is never cancelled (its own run id is its group).
+concurrency:
+  group: zapier-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 

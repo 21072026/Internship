@@ -56,6 +56,8 @@ const TASK_WRITERS = [
   'src/app/api/todos/route.ts',
   'src/app/api/projects/[id]/tasks/route.ts',
   'src/app/api/project-tasks/[taskId]/route.ts',
+  'src/app/api/goals/[id]/subtasks/route.ts',
+  'src/components/GoalSubtasks.tsx',
   'src/components/todos/MyTodos.tsx',
   'src/components/todos/PersonTodos.tsx',
   'src/components/todos/TodoRow.tsx',
@@ -102,6 +104,11 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
       exempt:
         'written by the account-event writer only (#2846): the feed carries the plan as 1–40 characters of A–Z a–z 0–9 . _ - (src/lib/accountEventSchema.ts), the width of this column. No person and no form writes it.',
     },
+    // Employer verification (#1865).
+    verificationStatus: ENUMERATED,
+    verifiedById: ID,
+    signupDomain: SERVER_SET,
+    rejectionReason: { limit: 'companyVerificationReason', files: ['src/app/api/admin/companies/[id]/verification/route.ts'] },
     createdBySource: {
       exempt:
         'written by the server only (#2959): the account-event writer stamps the slug of the registered IntegrationSource it resolved, and a slug is 2–40 characters by SOURCE_SLUG_PATTERN (src/lib/accountEventRule.ts), the width of this column and of IntegrationEvent.provider. No person and no request body writes it.',
@@ -130,6 +137,7 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     assigneeId: ID,
     createdById: ID,
     templateId: ID,
+    goalId: ID,
     title: { limit: 'todoTitle', files: TASK_WRITERS },
   },
   ProjectTaskTemplate: {
@@ -172,12 +180,13 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     createdById: ID,
     successCriteria: { limit: 'goalSuccessCriteria', files: GOAL_WRITERS },
     visibility: ENUMERATED,
+    templateId: ID,
   },
   MeetingRequest: {
     id: ID,
     relationId: ID,
     requestedById: ID,
-    topic: { limit: 'meetingTopic', files: ['src/app/api/meeting-requests/route.ts'] },
+    topic: { limit: 'meetingTopic', files: ['src/lib/meetingRequestCreate.ts'] },
     counterOfMeetingId: ID,
   },
   Document: {

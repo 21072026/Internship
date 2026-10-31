@@ -22,9 +22,11 @@ on:
     # Weekly, so a newly published query still finds old code.
     - cron: '27 4 * * 1'
 
+# A new push to the same PR cancels its stale run; a main push or the
+# schedule is never cancelled — it queues behind the one already running.
 concurrency:
   group: codeql-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   analyze:

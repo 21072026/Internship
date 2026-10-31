@@ -108,6 +108,8 @@ test('the marketing host shows the org’s copy, a table from its plan and every
   await expect(page.getByTestId('partner-call')).toHaveAttribute('href', 'tel:+49301234567');
   await expect(page.getByTestId('partner-contact-mail')).toHaveAttribute('href', 'mailto:partners@acme.example');
   for (const href of ['/imprint', '/privacy', '/terms']) await expect(page.locator(`footer a[href="${href}"]`)).toHaveCount(1);
+  // A visitor can pick the language of the page (and of the form behind it).
+  await expect(page.getByTestId('language-switcher')).toBeVisible();
 });
 
 test('the figure cards show live counts, a typed figure and nothing for a hidden card', async ({ page }) => {
@@ -150,4 +152,17 @@ test('the figure cards show live counts, a typed figure and nothing for a hidden
 
 test('the internship host has no partner page', async ({ page }) => {
   expect((await page.goto('/partner'))?.status()).toBe(404);
+});
+
+test('a partner link sends the visitor to the sign-up page with the code only (#3365)', async ({ request }) => {
+  const get = (q: string) => request.get(`/partner${q}`, { headers: asHost(MARKETING_HOST), maxRedirects: 0 });
+  const res = await get('?ref=demo-1&next=https://evil.example');
+  expect(res.status()).toBeGreaterThanOrEqual(300);
+  expect(res.status()).toBeLessThan(400);
+  expect(res.headers()['location']).toBe('https://app.acme.example/register?ref=demo-1');
+  // Not a code: the page itself, never a redirect.
+  for (const q of ['?ref=https://evil.example', '?ref=', `?ref=${'x'.repeat(101)}`]) expect((await get(q)).status(), q).toBe(200);
+  // No sign-up page configured: the page itself.
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { landing: { ...LANDING, productSignupUrl: null } } });
+  expect((await get('?ref=demo-1')).status()).toBe(200);
 });

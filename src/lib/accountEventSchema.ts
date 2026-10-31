@@ -7,6 +7,8 @@
 import { z } from 'zod';
 import { PARTNER_CODE_MAX } from '@/lib/affiliateAttributionRule';
 import { normalizePlanKey } from '@/lib/usageRule';
+import { MAX_REF_LENGTH } from '@/lib/affiliateCommissionSync';
+import { MAX_AMOUNT_MINOR } from '@/lib/affiliateCommissionRule';
 import {
   ACCOUNT_ACQUISITION_SOURCES,
   ACCOUNT_EVENT_SCHEMA_VERSION,
@@ -20,62 +22,81 @@ const isoDate = z.string().datetime({ offset: true }).transform((v) => new Date(
 const nullableIsoDate = isoDate.nullable().optional().transform((v) => v ?? null);
 const shortText = (max: number) => z.string().trim().max(max).nullable().optional();
 
-export const accountEventSchema = z.object({
-  event_id: z
-    .string()
-    .regex(EVENT_ID_PATTERN, 'event_id: 1–64 characters of A–Z a–z 0–9 . _ : -')
-    .transform((v) => v.toLowerCase()),
-  schema_version: z.literal(ACCOUNT_EVENT_SCHEMA_VERSION),
-  event_type: z.enum(ACCOUNT_EVENT_TYPES),
-  occurred_at: isoDate,
-  // Historic mode (docs/integrations/account-events.md § Historic mode): the
-  // sender marks a replay of its own past. Optional and additive — an event
-  // older than HISTORIC_EVENT_AGE_DAYS is historic without it.
-  replay: z.boolean().nullable().optional(),
-  external_id: z
-    .string()
-    .transform((v, ctx) => {
-      const id = normalizeExternalId(v);
-      if (id === null) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `external_id: 1–${EXTERNAL_ID_MAX} characters of printable ASCII after trimming`,
-        });
-        return z.NEVER;
-      }
-      return id;
-    }),
-  trial_started_at: nullableIsoDate,
-  trial_ends_at: nullableIsoDate,
-  // Accepted and validated, not stored: nothing reads a decision window yet.
-  decision_ends_at: nullableIsoDate,
-  acquisition_source: z.enum(ACCOUNT_ACQUISITION_SOURCES).nullable().optional(),
-  referral_code: shortText(PARTNER_CODE_MAX),
-  // The account's plan in the source product (#2846): stored on the account as
-  // `productPlan`, `free` feeds the free-quota upsell signal. Any key the
-  // source uses is accepted; a malformed one is refused, never guessed at.
-  plan: z
-    .string()
-    .nullable()
-    .optional()
-    .transform((v, ctx) => {
-      if (v === null || v === undefined || v.trim() === '') return null;
-      const key = normalizePlanKey(v);
-      if (key === null) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'plan: 1–40 characters of A–Z a–z 0–9 . _ -' });
-        return z.NEVER;
-      }
-      return key;
-    }),
-  contact: z
-    .object({
-      first_name: shortText(191),
-      last_name: shortText(191),
-      email: z.string().trim().email().max(191).nullable().optional(),
-      company_name: shortText(191),
-    })
-    .nullable()
-    .optional(),
-});
+export const accountEventSchema = z
+  .object({
+    event_id: z
+      .string()
+      .regex(EVENT_ID_PATTERN, 'event_id: 1–64 characters of A–Z a–z 0–9 . _ : -')
+      .transform((v) => v.toLowerCase()),
+    schema_version: z.literal(ACCOUNT_EVENT_SCHEMA_VERSION),
+    event_type: z.enum(ACCOUNT_EVENT_TYPES),
+    occurred_at: isoDate,
+    // Historic mode (docs/integrations/account-events.md § Historic mode): the
+    // sender marks a replay of its own past. Optional and additive — an event
+    // older than HISTORIC_EVENT_AGE_DAYS is historic without it.
+    replay: z.boolean().nullable().optional(),
+    external_id: z
+      .string()
+      .transform((v, ctx) => {
+        const id = normalizeExternalId(v);
+        if (id === null) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `external_id: 1–${EXTERNAL_ID_MAX} characters of printable ASCII after trimming`,
+          });
+          return z.NEVER;
+        }
+        return id;
+      }),
+    trial_started_at: nullableIsoDate,
+    trial_ends_at: nullableIsoDate,
+    // Accepted and validated, not stored: nothing reads a decision window yet.
+    decision_ends_at: nullableIsoDate,
+    acquisition_source: z.enum(ACCOUNT_ACQUISITION_SOURCES).nullable().optional(),
+    referral_code: shortText(PARTNER_CODE_MAX),
+    // The account's plan in the source product (#2846): stored on the account as
+    // `productPlan`, `free` feeds the free-quota upsell signal. Any key the
+    // source uses is accepted; a malformed one is refused, never guessed at.
+    plan: z
+      .string()
+      .nullable()
+      .optional()
+      .transform((v, ctx) => {
+        if (v === null || v === undefined || v.trim() === '') return null;
+        const key = normalizePlanKey(v);
+        if (key === null) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'plan: 1–40 characters of A–Z a–z 0–9 . _ -' });
+          return z.NEVER;
+        }
+        return key;
+      }),
+    contact: z
+      .object({
+        first_name: shortText(191),
+        last_name: shortText(191),
+        email: z.string().trim().email().max(191).nullable().optional(),
+        company_name: shortText(191),
+      })
+      .nullable()
+      .optional(),
+    // A customer's payment (#3355), on `payment_received` only. `id` is the
+    // billing side's payment reference (unique per organisation: a repeat writes
+    // nothing); the amount is integer minor units; `received_at` defaults to
+    // `occurred_at`.
+    payment: z
+      .object({
+        id: z.string().trim().min(1).max(MAX_REF_LENGTH),
+        amount_minor: z.number().int().positive().max(MAX_AMOUNT_MINOR),
+        currency: z.string().regex(/^[A-Z]{3}$/, 'payment.currency: an ISO 4217 code in capitals'),
+        received_at: nullableIsoDate,
+      })
+      .nullable()
+      .optional(),
+  })
+  .superRefine((event, ctx) => {
+    if (event.event_type === 'payment_received' && !event.payment) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['payment'], message: 'payment: required on payment_received' });
+    }
+  });
 
 export type AccountEvent = z.output<typeof accountEventSchema>;

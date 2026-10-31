@@ -63,6 +63,15 @@ export interface WorkerOptions {
   workerId: string;
   /** Jobs this process runs at once. Default 2. */
   concurrency?: number;
+  /**
+   * How long one tick keeps claiming (ms). After a claim that filled the free
+   * capacity has settled, the tick claims again until a claim comes back short
+   * or this much time has passed. Default 0: one claim per tick — which caps
+   * the throughput at `concurrency` jobs per tick interval however fast the
+   * jobs are (2 per 5 s), so a burst of instant subscriber deliveries queued
+   * for minutes behind each other.
+   */
+  drainMs?: number;
   /** Lease window the reap applies. Default `DEFAULT_LEASE_MS` (5 min). */
   leaseMs?: number;
   /** How often `lockedAt` is refreshed while jobs run. Default leaseMs / 3. */
@@ -143,6 +152,7 @@ export function workerEnabled(raw: string | undefined): boolean {
 export function createWorker(opts: WorkerOptions): JobWorker {
   const { store, registry, workerId } = opts;
   const concurrency = Math.max(1, Math.trunc(opts.concurrency ?? DEFAULT_CONCURRENCY));
+  const drainMs = Math.max(0, Math.trunc(opts.drainMs ?? 0));
   const leaseMs = Math.max(1_000, Math.trunc(opts.leaseMs ?? DEFAULT_LEASE_MS));
   const heartbeatMs = Math.max(50, Math.trunc(opts.heartbeatMs ?? leaseMs / 3));
   const now = opts.now ?? (() => new Date());
@@ -268,26 +278,31 @@ export function createWorker(opts: WorkerOptions): JobWorker {
         log.warning('job_worker.reap_failed', { error: errorText(e) });
       }
 
-      const free = concurrency - running.size;
-      if (free <= 0) return summary;
-      let rows: JobRecord[] = [];
-      try {
-        rows = await claim(workerId, { store, now, limit: free, leaseMs, names });
-      } catch (e) {
-        log.warning('job_worker.claim_failed', { error: errorText(e) });
-        return summary;
-      }
-      // A shutdown that began while the claim was in the air: hand them back.
-      if (stopping) {
-        for (const job of rows) {
-          if (await settle(job, { status: 'PENDING', attempts: job.attempts, lastError: job.lastError })) summary.released += 1;
+      // Wall time, not `now()`: that clock dates the jobs and may be a test's fixed one.
+      const deadline = Date.now() + drainMs;
+      for (;;) {
+        const free = concurrency - running.size;
+        if (free <= 0) return summary;
+        let rows: JobRecord[] = [];
+        try {
+          rows = await claim(workerId, { store, now, limit: free, leaseMs, names });
+        } catch (e) {
+          log.warning('job_worker.claim_failed', { error: errorText(e) });
+          return summary;
         }
-        return summary;
+        // A shutdown that began while the claim was in the air: hand them back.
+        if (stopping) {
+          for (const job of rows) {
+            if (await settle(job, { status: 'PENDING', attempts: job.attempts, lastError: job.lastError })) summary.released += 1;
+          }
+          return summary;
+        }
+        summary.claimed += rows.length;
+        const outcomes = await Promise.all(rows.map((job) => start(job).done));
+        for (const o of outcomes) summary[o] += 1;
+        // A short claim means nothing more is due; a full one may have left some.
+        if (rows.length < free || stopping || Date.now() >= deadline) return summary;
       }
-      summary.claimed = rows.length;
-      const outcomes = await Promise.all(rows.map((job) => start(job).done));
-      for (const o of outcomes) summary[o] += 1;
-      return summary;
     },
 
     async shutdown(graceMs) {

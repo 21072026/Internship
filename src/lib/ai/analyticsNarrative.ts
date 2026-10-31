@@ -19,6 +19,7 @@ import { wrapUntrusted } from '@/lib/ai/untrusted';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { loadAdminAnalytics } from '@/lib/adminAnalyticsData';
+import type { ProgramFilter } from '@/lib/programFilterRule';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { acceptNarrative, analyticsFacts, factsText, type Fact } from '@/lib/ai/narrativeRules';
 
@@ -49,7 +50,12 @@ export interface NarrativeBody {
   locked: boolean;
 }
 
-async function factsFor(session: Session, params: { from: string | null; to: string | null }, locale: Locale): Promise<Fact[]> {
+// `program` is the screen's programme filter (#1652): the paragraph describes the
+// figures the reader is looking at, and the facts — hence the cache key — differ
+// per programme, so a filtered view never reads an unfiltered paragraph.
+type NarrativeParams = { from: string | null; to: string | null; program?: ProgramFilter };
+
+async function factsFor(session: Session, params: NarrativeParams, locale: Locale): Promise<Fact[]> {
   const analytics = await loadAdminAnalytics(session, params, locale);
   const stages = await resolvePipelineStages((session.user as { orgId?: string | null }).orgId ?? null, locale);
   return analyticsFacts(analytics, (key) => stageLabel(stages, key, locale));
@@ -57,7 +63,7 @@ async function factsFor(session: Session, params: { from: string | null; to: str
 
 export async function analyticsNarrative(
   session: Session,
-  params: { from: string | null; to: string | null },
+  params: NarrativeParams,
   locale: Locale,
   mode: { run: false } | { run: true; regenerate?: boolean },
 ): Promise<NarrativeBody> {
