@@ -80,3 +80,11 @@ workload and count every pairing; internship and outcome count the funnel, the o
 hires) and a SOURCE's referral outcomes (a coaching pair or a hire that is not ours is no
 placement). The two pure rules stay dependency-free: their loaders pass the flags
 (`inFunnel`/`ourHire`, `countsAsHire`), and an absent flag reads as before.
+
+**Durations start at funnel entry (#1505).** A journey's start is `funnelStartedAt()`
+(`src/lib/placement.ts`): `funnelEnteredAt ?? startDate`. The pairing and the funnel entry are
+not the same event: a coaching pair that turned into a job search months later used to carry
+the coaching months into its time to hire. Every journey builder (the funnel route, the forecast,
+deal value) and the mentor's average days to hired read it; a row without a stamp (before #1503,
+and every PLACEMENT pair since, which stamps it to the start) measures from `startDate` as before.
+A SOURCE's time to placement is unchanged: it measures from the referral, a different question.

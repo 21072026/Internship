@@ -29,6 +29,7 @@ import { shellCapabilities } from '@/lib/shellCapabilities';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { tenantWhere, withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { relationProgramWhere, resolveProgramFilter } from '@/lib/programFilter';
+import { funnelStartedAt } from '@/lib/placement';
 
 // Hiring-funnel KPIs (#815): the two numbers HR reports upward — stage-to-stage
 // conversion and time-to-hire — plus mentor capacity, all from the StatusChange
@@ -88,6 +89,7 @@ const RELATION_SELECT = {
   lifecycleState: true,
   pipelineStatus: true,
   startDate: true,
+  funnelEnteredAt: true,
   trialStartedAt: true,
   trialEndsAt: true,
   mentee: { select: { sourceId: true, role: true } },
@@ -105,7 +107,8 @@ function relationJourney(r: RelationRow): Journey {
     // Where the journey began: the stage the first recorded move came FROM,
     // else — for a relation that never moved — where it sits now.
     startStatus: r.statusChanges[0]?.fromStatus ?? r.pipelineStatus,
-    startedAt: r.startDate.getTime(),
+    // When it entered the funnel, not when the pair was made (#1505).
+    startedAt: funnelStartedAt(r).getTime(),
     changes: r.statusChanges.map((c) => ({ toStatus: c.toStatus, at: c.createdAt.getTime() })),
   };
 }
@@ -211,6 +214,10 @@ export async function GET(request: Request) {
               // this a past month's trial count would change with the range
               // preset.
               { trialStartedAt: { gte: from!, lte: to! } },
+              // A journey starts at funnel entry (#1505), and a kind change
+              // stamps that with no StatusChange — without this a pair that
+              // entered the funnel inside the window would be invisible to it.
+              { funnelEnteredAt: { gte: from!, lte: to! } },
             ],
           }
         : { ...programWhere }, tenant),
