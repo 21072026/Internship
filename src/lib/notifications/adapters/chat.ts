@@ -138,9 +138,11 @@ export async function deliverChat(input: {
       const target = await resolveTarget(identity, client, token);
       targetId = target.id;
       const text = await cardText(input.eventKey, input.params, input.link, input.locale, input.orgId ?? ws.orgId);
-      const action = input.card?.actionUrl
-        ? { label: getDictionary(input.locale).chatCard.join, url: input.card.actionUrl }
-        : null;
+      const labels = getDictionary(input.locale).chatCard;
+      const action = input.card?.actionUrl ? { label: labels.join, url: input.card.actionUrl } : null;
+      // Interactive buttons (#1951) post back to the interaction endpoint; the
+      // label is the recipient's language, the actionId/value are opaque.
+      const buttons = (input.card?.buttons ?? []).map((b) => ({ label: labels[b.label], actionId: b.actionId, value: b.value }));
 
       // SUPERSEDE (#1942): a reschedule or a cancel rewrites this person's live
       // cards about the same subject in place, so no earlier card is left
@@ -156,7 +158,7 @@ export async function deliverChat(input: {
         if (live.length > 0) {
           let last: string | null = null;
           for (const card of live) {
-            await client.updateMessage({ token, target, externalMessageId: card.externalMessageId as string, text, action });
+            await client.updateMessage({ token, target, externalMessageId: card.externalMessageId as string, text, action, buttons });
             await prisma.chatDelivery.updateMany({ where: { id: card.id, supersededAt: null }, data: { supersededAt: new Date() } });
             last = card.externalMessageId;
           }
@@ -167,7 +169,7 @@ export async function deliverChat(input: {
         // Nothing to rewrite (the earlier card was never sent): post this one.
       }
 
-      const sent = await client.postMessage({ token, target, text, action });
+      const sent = await client.postMessage({ token, target, text, action, buttons });
       const row = await record('SENT', targetId, { externalMessageId: sent.externalMessageId?.slice(0, 128) ?? null });
       await prisma.chatWorkspace.update({ where: { id: ws.id }, data: { lastDeliveryAt: new Date(), lastError: null } });
       return { status: 'SENT', deliveryId: row.id };

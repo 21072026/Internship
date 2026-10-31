@@ -7,6 +7,7 @@ import { relationshipSelect, serializeRelationship } from '@/lib/api/v1Resources
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { isStageTransition, validateDropoffReason } from '@/lib/stageChange';
 import { recordStageMove, stageMoveData } from '@/lib/stageMove';
+import { canTransition } from '@/lib/stageGate';
 
 // PATCH /api/v1/relationships/{id}/stage (#1996) — move a relationship's
 // pipeline stage from another system.
@@ -23,6 +24,8 @@ import { recordStageMove, stageMoveData } from '@/lib/stageMove';
 //     drop-off rule the UI enforces (validateDropoffReason)
 //   - a relationship that is not ACTIVE → 409 invalid_transition with the
 //     current stage: a finished relationship's stage is history
+//   - the target stage's entry gate is not met → 409 stage_gate_blocked with
+//     the structured `gate` (#1589, src/lib/stageGate.ts)
 //   - the stage changed between the read and the write → 409 stage_conflict
 //     (a guarded updateMany, so two writers cannot both move it)
 // The stage it already has is a 200 with `changed: false` and no history row.
@@ -40,7 +43,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     apiWrite(request, key, schema, async (body) => {
       const relation = await prisma.mentorshipRelation.findFirst({
         where: { id, orgId: key.orgId },
-        select: { id: true, menteeId: true, orgId: true, status: true, pipelineStatus: true, trialStartedAt: true, trialEndsAt: true },
+        select: { id: true, menteeId: true, orgId: true, cohortId: true, companyId: true, kind: true, status: true, pipelineStatus: true, trialStartedAt: true, trialEndsAt: true },
       });
       if (!relation) return apiNotFound();
 
@@ -65,6 +68,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         return apiError(422, 'validation_failed', 'The request body is invalid', undefined, {
           errors: [{ path: body.reasonCode ? 'reasonNote' : 'reasonCode', code: 'dropoff_reason', message: reason.error }],
         });
+      }
+      // The stage's entry gate (#1589) — the same answer the board gets. The
+      // key's `relationships:write` scope stands in for the capability half.
+      const gate = await canTransition({ apiKey: true }, relation, body.stage, 'en');
+      if (gate) {
+        return apiError(409, 'stage_gate_blocked', 'The stage entry conditions are not met', 'Satisfy what `gate` names, then retry.', { gate });
       }
 
       const moved = await prisma.mentorshipRelation.updateMany({

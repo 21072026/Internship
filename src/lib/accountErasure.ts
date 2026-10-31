@@ -543,6 +543,9 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     // mentor's private note is — body and every kept revision.
     prisma.sessionNote.updateMany({ where: asSubject, data: { body: '' } }),
     prisma.sessionNoteRevision.updateMany({ where: { note: asSubject }, data: { body: '' } }),
+    // A thank-you (#1868) is prose about its recipient written by its sender:
+    // the words go either way, the dated row stays.
+    prisma.kudo.updateMany({ where: { OR: [{ senderId: userId }, { recipientId: userId }] }, data: { reason: '' } }),
     prisma.personalNote.updateMany({
       where: { OR: [{ meeting: asSubject }, { meeting: directMeeting }] },
       data: { body: '' },
@@ -709,6 +712,9 @@ export async function anonymizeUser(userId: string): Promise<void> {
     // name. A hard delete cascades them; anonymise keeps the user row, and a
     // linked identity would keep delivering to a person who is gone.
     prisma.chatIdentity.deleteMany({ where: { userId } }),
+    // Social sign-in identities (#1962): a provider subject and an address. An
+    // anonymised account must not be reachable through Google any more either.
+    prisma.userIdentity.deleteMany({ where: { userId } }),
     // The remember-me rows carry the same two columns. They are revoked below
     // (outside this transaction, through the one revoker), not deleted: a
     // revoked row is what turns a replayed cookie into a refusal.

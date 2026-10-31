@@ -52,3 +52,31 @@ a guarded `updateMany` (409 `state_conflict` on a race) and an `AuditLog`
 
 No public per-hire fee page: placement/brokerage rules in DE and TR need a legal
 check first. No usage counter yet.
+
+## What a placement NUMBER counts (#1504)
+
+Every analytics reader that counts placements reads one rule, `src/lib/placement.ts`:
+`countsAsPlacement()` in memory, `PLACEMENT_RELATION_WHERE` + `OUR_HIRE_WHERE` in SQL, on top of
+the tenant's own finished stages (`outcomeStageKeys()`).
+
+- **COACHING relations leave both sides of a placement rate and the funnel** — their stage means
+  nothing to a hiring funnel. A mentor's *workload* still counts every pairing.
+- **A hire is ours when it came `THROUGH_US` or says nothing** (NULL, every row from before #1503).
+  `SELF_FOUND` / `ALREADY_EMPLOYED` stay in the denominator as placement relations, but are not
+  placements; in a cohort row they are neither hired nor in progress.
+- With every relation `PLACEMENT` and no attribution stated, every number is exactly what it was —
+  `e2e/placement-counts.spec.ts` pins that.
+
+Readers on the rule: the admin analytics screen (`adminAnalyticsData.ts`: funnel, total,
+conversion, mentor workload), programme/cohort comparison (`analyticsReports.ts`), benchmark,
+source conversion (both `/api/admin/analytics/sources` and `/api/admin/sources`) and the mentor's
+own analytics.
+
+The remaining hire counters read the same rule since #3472: the forecast (learns from and
+projects PLACEMENT relations whose hire is ours), the deal-value book (a no-op for a sales book,
+which sets neither column), the ROI report (stage-trail hires on our placements only; a ledgered
+hire stamped SELF_FOUND / ALREADY_EMPLOYED is not counted), mentor impact (`mentored`/`active` are
+workload and count every pairing; internship and outcome count the funnel, the outcome only our
+hires) and a SOURCE's referral outcomes (a coaching pair or a hire that is not ours is no
+placement). The two pure rules stay dependency-free: their loaders pass the flags
+(`inFunnel`/`ourHire`, `countsAsHire`), and an absent flag reads as before.

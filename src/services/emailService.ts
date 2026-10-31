@@ -43,6 +43,8 @@ import { RETENTION_GRACE_DAYS } from '@/lib/retention';
 // imports nothing of ours, so this stays a leaf dependency and cannot cycle.
 import { pruneInBatches } from '@/lib/retentionPrune';
 import { getMentorMenteeActivity, getSystemMenteeActivity, type MenteeActivity } from '@/lib/activityReport';
+import { programGrantsFor } from '@/lib/authzScope';
+import { programRelationWhere } from '@/lib/programScopeRule';
 import { orgWhere } from '@/lib/tenantFilter';
 import { runUnscoped } from '@/lib/tenantAmbient';
 import { activeAdminsByOrg, tenantAdminIds } from '@/lib/tenantAdmins';
@@ -3396,43 +3398,6 @@ export async function sendMentorApplicationReceivedEmail({
   });
 }
 
-// --- Partner applications (#3361) --------------------------------------------
-// The acknowledgement of a public partner application. Like the mentor
-// application above, the applicant has no account yet, so the language is the
-// one the form was shown in, and the copy goes through emailDictionary() so the
-// org's product name reaches it.
-export async function sendAffiliateApplicationReceivedEmail({
-  to,
-  firstName,
-  locale,
-  orgId,
-}: {
-  to: string;
-  firstName: string;
-  locale?: string | null;
-  orgId: string;
-}) {
-  const brand = await emailBrand(orgId);
-  const M = (await emailDictionary(resolveLocale(locale), orgId)).affiliateApplicationEmail;
-  await sendEmail({
-    to,
-    orgId,
-    // no-user-row: the applicant is an AffiliateApplication and nothing else —
-    // no User row exists to hold a preference, so no footer is emitted.
-    category: 'affiliate-application-received',
-    locale,
-    fromName: brand.name,
-    subject: M.received.subject,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, esc(M.received.heading))}
-        <p>${esc(M.greeting.replace('{name}', firstName))}</p>
-        <p>${esc(M.received.body)}</p>
-      </div>
-    `,
-  });
-}
-
 export async function sendMentorApplicationUnderReviewEmail({
   to,
   fullName,
@@ -6081,6 +6046,10 @@ export async function sendDailyActivityDigests() {
         skipped++;
         continue;
       }
+      // A PROGRAM_ADMIN's table holds its own programmes' mentees only (#1577).
+      const grants = await programGrantsFor({ id: a.id, role: 'ADMIN', orgId });
+      const items = grants ? await getSystemMenteeActivity(since, orgFilter, programRelationWhere(grants) as Prisma.MentorshipRelationWhereInput) : adminItems;
+      if (items.length === 0) continue;
       const aLocale = resolveLocale(a.preferredLanguage);
       const A = (await dictionaryOf(aLocale, a.orgId)).notifications.activityDigestEmail;
       // Their own organisation's to-dos, by the same org rule as the table.
@@ -6098,7 +6067,7 @@ export async function sendDailyActivityDigests() {
           html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
             ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
             <p>${esc(A.greetingAdmin.replace('{name}', a.fullName))}</p>
-            ${activityDigestTable(adminItems, aLocale, A)}
+            ${activityDigestTable(items, aLocale, A)}
             ${overdue}
             <p style="margin-top:16px;"><a href="${base}/admin/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
           </div>`,

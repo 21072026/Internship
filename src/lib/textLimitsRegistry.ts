@@ -56,6 +56,8 @@ const TASK_WRITERS = [
   'src/app/api/todos/route.ts',
   'src/app/api/projects/[id]/tasks/route.ts',
   'src/app/api/project-tasks/[taskId]/route.ts',
+  'src/app/api/goals/[id]/subtasks/route.ts',
+  'src/components/GoalSubtasks.tsx',
   'src/components/todos/MyTodos.tsx',
   'src/components/todos/PersonTodos.tsx',
   'src/components/todos/TodoRow.tsx',
@@ -140,6 +142,7 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     assigneeId: ID,
     createdById: ID,
     templateId: ID,
+    goalId: ID,
     title: { limit: 'todoTitle', files: TASK_WRITERS },
   },
   ProjectTaskTemplate: {
@@ -166,6 +169,14 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     demoUrl: { limit: 'projectUrl', files: PROJECT_WRITERS },
     boardUrl: { limit: 'projectUrl', files: PROJECT_WRITERS },
   },
+  Kudo: {
+    id: ID,
+    relationId: ID,
+    senderId: ID,
+    recipientId: ID,
+    reason: { limit: 'kudoReason', files: ['src/app/api/kudos/route.ts', 'src/components/KudosPanel.tsx'] },
+    presetKey: ENUMERATED,
+  },
   Goal: {
     id: ID,
     relationId: ID,
@@ -174,12 +185,13 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     createdById: ID,
     successCriteria: { limit: 'goalSuccessCriteria', files: GOAL_WRITERS },
     visibility: ENUMERATED,
+    templateId: ID,
   },
   MeetingRequest: {
     id: ID,
     relationId: ID,
     requestedById: ID,
-    topic: { limit: 'meetingTopic', files: ['src/app/api/meeting-requests/route.ts'] },
+    topic: { limit: 'meetingTopic', files: ['src/lib/meetingRequestCreate.ts'] },
     counterOfMeetingId: ID,
   },
   Document: {
@@ -312,6 +324,8 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
   Organization: {
     // OPEN | RULES, checked by isEligibilityMode() before any write (#1945).
     eligibilityMode: ENUMERATED,
+    // full | read_only | off, checked by isImpersonationPolicy() before any write (#1586).
+    impersonationPolicy: ENUMERATED,
     id: ID,
     stripeCustomerId: ID,
     // Minted by the server for the DNS ownership proof (#1661/#1662), never typed.
@@ -346,6 +360,9 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     brandTileColor: { limit: 'orgBrandTileColor', files: ORG_WRITERS },
     brandAccent: { limit: 'orgBrandAccent', files: ORG_WRITERS },
     brandPalette: { limit: 'orgBrandPalette', files: ORG_WRITERS },
+    // The tenant welcome page (#1664): the route's zod and the editor's maxLength.
+    welcomeTitle: { limit: 'orgWelcomeTitle', files: [...ORG_WRITERS, 'src/app/admin/organizations/page.tsx'] },
+    welcomeBody: { limit: 'orgWelcomeBody', files: [...ORG_WRITERS, 'src/app/admin/organizations/page.tsx'] },
     brandMarkVersion: { exempt: 'a 16-character hash written by src/lib/brandAssets.ts after an upload, never typed into a form' },
   },
   // An organization's generated brand icons (#2922): every column is set by the

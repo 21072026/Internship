@@ -97,6 +97,7 @@
     "check:openapi": "node scripts/check-openapi.mjs",
     "check:direct-sendmail": "node scripts/check-direct-sendmail.mjs",
     "check:mail-dictionary": "node scripts/check-mail-dictionary.mjs",
+    "check:locale-list": "node scripts/check-locale-list.mjs",
     "check:settings-accessor": "node scripts/check-settings-accessor.mjs",
     "gen:openapi": "node scripts/openapi-generate.cjs",
     "gen:pwa-images": "node --experimental-strip-types scripts/generate-pwa-images.ts",

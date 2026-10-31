@@ -12,6 +12,7 @@ import { outcomeStageKeysFrom, resolvePipelineStages, stageLabel } from '@/lib/p
 import { DEFAULT_MIN_COHORT } from '@/lib/reports/definitions';
 import { flooredRate, referralRow, summarizeOutcomes, type ReferralInput } from '@/lib/sourceOutcomesRule';
 import { getLocale } from '@/i18n/server';
+import { isOurHire, isPlacementRelation } from '@/lib/placement';
 
 // GET /api/source/outcomes?from=&to= — the SOURCE outcome panel (#1914): of the
 // candidates THIS referral partner sent, how many were placed, where they stand,
@@ -55,6 +56,8 @@ async function referrals(where: Prisma.UserWhereInput) {
         select: {
           startDate: true,
           pipelineStatus: true,
+          kind: true,
+          employmentAttribution: true,
           statusChanges: { select: { toStatus: true, createdAt: true } },
         },
       },
@@ -69,6 +72,8 @@ async function referrals(where: Prisma.UserWhereInput) {
         startedAt: r.startDate,
         pipelineStatus: r.pipelineStatus,
         changes: r.statusChanges.map((c) => ({ toStatus: c.toStatus, at: c.createdAt })),
+        // The one placement rule (#3472): coaching and a hire that is not ours are no placement.
+        countsAsHire: isPlacementRelation(r.kind) && isOurHire(r.employmentAttribution),
       })),
     } satisfies ReferralInput,
   }));

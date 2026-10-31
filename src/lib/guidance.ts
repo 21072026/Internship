@@ -40,3 +40,33 @@ export async function setGuidanceDismissed(
     update: { dismissedAt },
   });
 }
+
+// ── Tours (#2067, src/lib/tours.ts) ──────────────────────────────────────────
+// The same table, keyed `tour:<id>`. `seenAt` = finished, `dismissedAt` =
+// skipped; either one means the tour is not offered again.
+
+export type TourState = 'new' | 'completed' | 'dismissed';
+
+/** The state of each of `keys` for ONE user (the session's — callers never take it from a request). */
+export async function readTourStates(userId: string, keys: string[]): Promise<Record<string, TourState>> {
+  const rows = keys.length
+    ? await prisma.userGuidanceState.findMany({
+        where: { userId, key: { in: keys } },
+        select: { key: true, seenAt: true, dismissedAt: true },
+      })
+    : [];
+  const out: Record<string, TourState> = Object.fromEntries(keys.map((k) => [k, 'new' as TourState]));
+  for (const r of rows) out[r.key] = r.dismissedAt ? 'dismissed' : r.seenAt ? 'completed' : 'new';
+  return out;
+}
+
+/** Record that ONE user finished or skipped a tour. Idempotent: a rerun only moves the timestamp. */
+export async function recordTourOutcome(userId: string, key: string, outcome: 'completed' | 'dismissed'): Promise<void> {
+  const now = new Date();
+  const data = outcome === 'completed' ? { seenAt: now, dismissedAt: null } : { dismissedAt: now };
+  await prisma.userGuidanceState.upsert({
+    where: { userId_key: { userId, key } },
+    create: { userId, key, ...data },
+    update: data,
+  });
+}

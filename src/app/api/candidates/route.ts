@@ -7,12 +7,16 @@ import { isTagMode, parseTagIds } from '@/lib/tags';
 import { markOrphanApplicants, orphanApplicantWhere } from '@/lib/orphanApplicant';
 import { skillTermsWhere } from '@/lib/skillFilter';
 import { resolveOrgId } from '@/lib/orgScope';
+import { programMenteeWhere, programRelationWhere } from '@/lib/programScopeRule';
 
 export async function GET(request: Request) {
   try {
-    const gate = await requirePermission('user.read', { request });
+    // A list (#1577): a PROGRAM_ADMIN with grants passes and gets them back —
+    // its rows are narrowed to the candidates of its granted cohorts/companies
+    // below. Every other tier gets `grants` undefined and reads its whole org.
+    const gate = await requirePermission('user.read', { request, listing: true });
     if ('error' in gate) return gate.error;
-    const { session } = gate;
+    const { session, grants } = gate;
 
     return await withTenantScope(session, async () => {
     const { searchParams } = new URL(request.url);
@@ -130,7 +134,8 @@ export async function GET(request: Request) {
       // Tag chips on the row, so a filtered list shows WHY each person matched.
       tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
       menteeRelations: {
-        where: { status: 'ACTIVE' as const },
+        // A PROGRAM_ADMIN sees the candidate's relations inside its grants only (#1577).
+        where: grants ? { status: 'ACTIVE' as const, ...programRelationWhere(grants) } : { status: 'ACTIVE' as const },
         include: {
           mentor: { select: { id: true, fullName: true } },
           company: { select: { id: true, name: true } },
@@ -152,7 +157,8 @@ export async function GET(request: Request) {
     // this is the admin's whole candidate book (src/lib/tenantFilter.ts).
     const tenant = await tenantWhere(session);
     const skillWhere = skillList.length ? await skillTermsWhere(resolveOrgId(session), skillList) : null;
-    const base = orphanOnly ? { AND: [where, orphanApplicantWhere()] } : where;
+    const programScope = grants ? [programMenteeWhere(grants)] : [];
+    const base = { AND: [where, ...(orphanOnly ? [orphanApplicantWhere()] : []), ...programScope] };
     const query = withinTenant(skillWhere ? { AND: [base, skillWhere] } : base, tenant);
 
     // One branch: every filter, the skill terms included, is SQL (#1820), so the

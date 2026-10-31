@@ -52,8 +52,9 @@ import { notificationLink, type NotificationRole } from '@/lib/notificationLink'
 import { capabilitiesMemo } from '@/lib/shellCapabilities';
 import { chatCapableUsers, deliverChat } from '@/lib/notifications/adapters/chat';
 import { CHANNEL_ADAPTERS } from '@/lib/notifications/adapters';
-import type { SkipReason } from '@/lib/notifications/adapters/types';
+import type { PrerenderedEmail, SkipReason } from '@/lib/notifications/adapters/types';
 import { claimDelivery, recordSkipped, settleDelivery, type LedgerRow } from '@/lib/notifications/ledger';
+import { openEmail, sealEmail } from '@/lib/notifications/sealedEmail';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { enqueue } from '@/lib/jobs/queue';
 import { prismaQueueStore } from '@/lib/jobs/queueStore';
@@ -128,6 +129,11 @@ export interface NotifyOptions {
   chatCard?: ChatCard | null;
   /** The push body — a new message's text, truncated by the push adapter (#1715). */
   preview?: string | null;
+  /**
+   * The mail the call site already rendered (#1711): sent byte-for-byte instead
+   * of the event's catalogue template, once the router has said yes.
+   */
+  email?: PrerenderedEmail | null;
 }
 
 export interface NotifyResult {
@@ -290,6 +296,8 @@ export interface DeferredDelivery {
   params: NotificationParams;
   link: string;
   dedupeKey: string;
+  /** A pre-rendered mail (#1711), sealed — the queue row never holds it clear. */
+  sealedEmail?: string;
   card?: ChatCard | null;
 }
 
@@ -333,7 +341,7 @@ export async function runDeferredDelivery(d: DeferredDelivery): Promise<'sent' |
   }
   const adapter = CHANNEL_ADAPTERS[d.channel];
   const outcome = await adapter
-    .deliver({ deliveryId: d.deliveryId, def, userId: d.userId, orgId: d.orgId, locale: d.locale, params: d.params, link: d.link, dedupeKey: d.dedupeKey, card: d.card ?? null })
+    .deliver({ deliveryId: d.deliveryId, def, userId: d.userId, orgId: d.orgId, locale: d.locale, params: d.params, link: d.link, dedupeKey: d.dedupeKey, card: d.card ?? null, email: d.sealedEmail ? openEmail(d.sealedEmail) : null })
     .catch((e: unknown) => ({ status: 'FAILED' as const, error: String(e) }));
   const templateId = `notifications.events.${def.key}`;
   if (outcome.status === 'SENT') {
@@ -495,7 +503,7 @@ export async function notifyEvent<K extends NotificationEventKey>(
         if (DEFERRABLE_CHANNELS.includes(channel) && !isEssentialGroup(def.emailGroup)) {
           const openAt = nextOpenInstant(new Date(), await calendarFor(user, orgId, blackoutOf));
           if (openAt) {
-            const held = await deferDelivery({ deliveryId, channel, eventKey: def.key, userId: rec.id, orgId, locale, params, link, dedupeKey: row.dedupeKey, card: opts?.chatCard ?? null }, openAt);
+            const held = await deferDelivery({ deliveryId, channel, eventKey: def.key, userId: rec.id, orgId, locale, params, link, dedupeKey: row.dedupeKey, card: opts?.chatCard ?? null, ...(channel === 'email' && opts?.email ? { sealedEmail: sealEmail(opts.email) } : {}) }, openAt);
             if (held) {
               result.queued += 1;
               await settleDelivery(deliveryId, 'QUEUED', { templateId: `notifications.events.${def.key}` });
@@ -516,7 +524,7 @@ export async function notifyEvent<K extends NotificationEventKey>(
           continue;
         }
         const outcome = await adapter
-          .deliver({ deliveryId, def, userId: rec.id, orgId, locale, params, link, dedupeKey: row.dedupeKey, card: opts?.chatCard ?? null, preview: opts?.preview ?? null })
+          .deliver({ deliveryId, def, userId: rec.id, orgId, locale, params, link, dedupeKey: row.dedupeKey, card: opts?.chatCard ?? null, preview: opts?.preview ?? null, email: opts?.email ?? null })
           .catch((e: unknown) => ({ status: 'FAILED' as const, error: String(e) }));
         const templateId = `notifications.events.${def.key}`;
         if (outcome.status === 'SENT') {

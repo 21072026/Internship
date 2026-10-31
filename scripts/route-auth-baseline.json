@@ -50,6 +50,14 @@
     "methods": ["GET"],
     "why": "The OIDC redirect URI (#1929): the IdP sends a signed-out browser here with code + state. Pre-auth by nature; the caller is authenticated by the single-use state row, the browser-binding cookie and the ID token verified against the IdP's JWKS."
   },
+  "src/app/api/auth/social/consent/route.ts": {
+    "methods": ["POST"],
+    "why": "Social sign-up's consent step (#1962): a signed-out browser accepts the privacy notice before its new account exists. The caller is authenticated by the sealed, httpOnly, browser-bound ticket the callback minted after verifying the provider's ID token; the session is still minted by the `magic` provider."
+  },
+  "src/app/api/auth/social/[provider]/callback/route.ts": {
+    "methods": ["GET"],
+    "why": "The social sign-in redirect URI (#1962): the provider sends a signed-out browser here with code + state. Pre-auth by nature; the caller is authenticated by the single-use state row, the browser-binding cookie and the ID token verified against the provider's JWKS — and the session is still minted only by the `magic` provider (every account rule, 2FA included)."
+  },
   "src/app/api/auth/sso/[slug]/login/route.ts": {
     "methods": ["GET"],
     "why": "SP-initiated SSO: resolves the tenant and redirects to the IdP. Pre-auth by definition, and it falls back to the password page when SSO is not active so a wrong slug never dead-ends."
@@ -118,6 +126,10 @@
   "src/app/api/inbound-email/poll/route.ts": {
     "methods": ["POST"],
     "why": "Drains one batch from the reply mailbox, ticked by a timer in src/instrumentation.ts. INBOUND_SECRET is mandatory here (timingSafeEqual) precisely because the handler makes the server open an outbound IMAP connection; the 'imap-bridge' lease gate deliberately sits behind the secret check."
+  },
+  "src/app/api/integrations/chat/[platform]/interactions/route.ts": {
+    "methods": ["POST"],
+    "why": "The one public entry point for Slack/Teams buttons (#1948). Platforms have no session; the caller is authenticated by Slack's HMAC over the raw body (SLACK_SIGNING_SECRET, 5-minute window, each signature accepted once) or the Bot Framework JWT (published keys, our TEAMS_APP_ID, serviceUrl-bound) before anything is parsed — every refusal is the same 401. The person is then re-derived from an enabled workspace and a person-confirmed ChatIdentity; an unlinked member gets a link-your-account reply and no action runs."
   },
   "src/app/api/integrations/chat/[platform]/messages/route.ts": {
     "methods": ["POST"],

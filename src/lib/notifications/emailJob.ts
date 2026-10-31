@@ -27,13 +27,14 @@ import { sendEmail } from '@/services/emailService';
 import { isEmailGroupId } from '@/lib/emailGroups';
 import { renderNotificationEmail } from '@/lib/notifications/emailRender';
 import { EVENT_MAIL_CATEGORY } from '@/lib/notifications/eventMailRule';
+import { openEmail } from '@/lib/notifications/sealedEmail';
 import type { JobPayloadMap } from '@/lib/jobs/types';
 import type { JobRecord } from '@/lib/jobs/queue';
 
 export const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
 type Payload = JobPayloadMap['notification.email'];
-export type NotificationEmailOutcome = 'sent' | 'claimed_elsewhere' | 'batched_deferred' | 'stale' | 'no_user' | 'skipped_by_send';
+export type NotificationEmailOutcome = 'sent' | 'claimed_elsewhere' | 'batched_deferred' | 'stale' | 'no_user' | 'skipped_by_send' | 'unreadable';
 
 function ledgerKey(job: Pick<JobRecord, 'idempotencyKey'>): string | null {
   const k = job.idempotencyKey;
@@ -51,6 +52,9 @@ async function settle(dedupeKey: string | null, from: 'QUEUED' | 'SENT', to: 'SE
 
 export async function runNotificationEmail(payload: Payload, job: JobRecord, now: Date = new Date()): Promise<NotificationEmailOutcome> {
   const key = ledgerKey(job);
+  // A pre-rendered mail (#1711) is the site's own, sent now: the batching that
+  // defers catalogue mails into a digest does not apply to it.
+  if (payload.sealedEmail) return sendPrerendered(payload, payload.sealedEmail, key, job, now);
   if (payload.delivery === 'batched') {
     await settle(key, 'QUEUED', 'SKIPPED', { skipReason: 'batched_deferred' });
     return 'batched_deferred';
@@ -93,6 +97,54 @@ export async function runNotificationEmail(payload: Payload, job: JobRecord, now
       category: EVENT_MAIL_CATEGORY[group],
       group,
       locale: mail.locale,
+      ...(key ? { dedupeKey: `notify:${key}` } : {}),
+    });
+    if (result === 'SKIPPED') {
+      await settle(key, 'SENT', 'SKIPPED', { skipReason: 'send_skipped' });
+      return 'skipped_by_send';
+    }
+    return 'sent';
+  } catch (e) {
+    const error = e instanceof Error ? e.message : String(e);
+    logger.error('notification_email.failed', { eventKey: payload.eventKey, error });
+    await settle(key, 'SENT', 'QUEUED', { error });
+    throw e;
+  }
+}
+
+/**
+ * The pre-rendered path (#1711, option 2a): the call site built the mail, the
+ * router decided it may leave, and this hands sendEmail() exactly the fields the
+ * site used to pass — so the person receives the same bytes as before, now with
+ * a ledger row, the matrix and quiet hours. Same claim-then-send as above.
+ */
+async function sendPrerendered(payload: Payload, sealed: string, key: string | null, job: JobRecord, now: Date): Promise<NotificationEmailOutcome> {
+  if (now.getTime() - job.runAt.getTime() > STALE_AFTER_MS) {
+    await settle(key, 'QUEUED', 'SKIPPED', { skipReason: 'stale' });
+    return 'stale';
+  }
+  const mail = openEmail(sealed);
+  if (!mail) {
+    await settle(key, 'QUEUED', 'FAILED', { error: 'sealed mail could not be opened' });
+    return 'unreadable';
+  }
+  const user = await prisma.user.findUnique({ where: { id: payload.userId }, select: { id: true, email: true, orgId: true } });
+  if (!user?.email) {
+    await settle(key, 'QUEUED', 'SKIPPED', { skipReason: 'no_address' });
+    return 'no_user';
+  }
+  if ((await settle(key, 'QUEUED', 'SENT')) === 0) return 'claimed_elsewhere';
+  try {
+    const result = await sendEmail({
+      to: user.email,
+      userId: user.id,
+      orgId: job.orgId ?? user.orgId,
+      subject: mail.subject,
+      html: mail.html,
+      category: mail.category,
+      ...(mail.fromName !== undefined ? { fromName: mail.fromName } : {}),
+      ...(mail.replyTo ? { replyTo: mail.replyTo } : {}),
+      ...(mail.locale !== undefined ? { locale: mail.locale } : {}),
       ...(key ? { dedupeKey: `notify:${key}` } : {}),
     });
     if (result === 'SKIPPED') {

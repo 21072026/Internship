@@ -14,6 +14,8 @@ import { MAX_TAGS_PER_USER } from '@/lib/tags';
 import { transferMentorship } from '@/lib/mentorTransfer';
 import { notify } from '@/lib/notify';
 import { requirePermission } from '@/lib/authz';
+import { canTransition, createStageGateCache, type GateFailure } from '@/lib/stageGate';
+import { getLocale } from '@/i18n/server';
 
 const bodySchema = z.object({
   candidateIds: z.array(z.string().min(1)).min(1).max(200),
@@ -45,7 +47,7 @@ const BULK_OWNER_REASON = 'mentor_unavailable' as const;
 export async function POST(request: Request) {
   const gate = await requirePermission('user.write', { request });
   if ('error' in gate) return gate.error;
-  const { session } = gate;
+  const { session, actor } = gate;
 
   // One try/catch around the whole handler, the same shape as GET /api/candidates
   // and POST /api/mentorship/[id]/transfer. It matters most for assignOwner,
@@ -281,7 +283,7 @@ export async function POST(request: Request) {
     // Find active relations for these mentees.
     const relations = await prisma.mentorshipRelation.findMany({
       where: withinTenant({ menteeId: { in: candidateIds }, status: 'ACTIVE' as const }, tenant),
-      select: { id: true, menteeId: true, pipelineStatus: true, orgId: true, trialStartedAt: true, trialEndsAt: true },
+      select: { id: true, menteeId: true, pipelineStatus: true, orgId: true, cohortId: true, companyId: true, kind: true, trialStartedAt: true, trialEndsAt: true },
     });
 
     // The RESOLVED stage order of each relation's own org (#1637), not the
@@ -310,6 +312,10 @@ export async function POST(request: Request) {
     const withRelation = new Set(relations.map((r) => r.menteeId));
     for (const id of new Set(candidateIds)) if (!withRelation.has(id)) skip('no_active_relation');
 
+    const blocked: { menteeId: string; relationId: string; gate: GateFailure }[] = [];
+    const gateStagesOf = createStageGateCache();
+    const locale = await getLocale();
+
     const notifiedMentees = new Set<string>();
     for (const rel of relations) {
       // Advance along the happy path only — the next ON-PATH key of the
@@ -331,6 +337,15 @@ export async function POST(request: Request) {
       const reasonCheck = await validateDropoffReason({ orgId: rel.orgId, toStatus: nextStatus });
       if (!reasonCheck.ok) {
         skip('needs_reason');
+        continue;
+      }
+
+      // The stage's entry gate (#1589), per ROW: a blocked relation stays put
+      // and is reported with what it is missing; the rest of the batch moves.
+      const stageGate = await canTransition({ actor, session }, rel, nextStatus, locale, gateStagesOf);
+      if (stageGate) {
+        skip('stage_gate_blocked');
+        blocked.push({ menteeId: rel.menteeId, relationId: rel.id, gate: stageGate });
         continue;
       }
 
@@ -381,7 +396,7 @@ export async function POST(request: Request) {
     });
 
     // `updated` stays (= advanced) for the callers that read it.
-    return NextResponse.json({ ok: true, updated: advanced, advanced, skipped, reasons });
+    return NextResponse.json({ ok: true, updated: advanced, advanced, skipped, reasons, blocked });
   }
 
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });

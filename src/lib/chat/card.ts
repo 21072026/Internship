@@ -20,18 +20,69 @@ export function safeAction(action: CardAction | null | undefined): CardAction | 
   return { label: action.label.slice(0, 75), url: action.url };
 }
 
-/** Slack Block Kit: the sentence as a section, the action as a link button. `text` stays the notification fallback. */
-export function slackBlocks(text: string, action: CardAction | null) {
+/**
+ * An interactive button (#1951): it posts `actionId` + `value` back to the
+ * interaction endpoint (#1948). Slack caps an action_id at 255 and a value at
+ * 2000 characters; the envelope parser enforces the same on the way back in.
+ */
+export interface CardButton {
+  label: string;
+  actionId: string;
+  value: string;
+}
+
+const MAX_BUTTONS = 5;
+
+function safeButtons(buttons: CardButton[] | null | undefined): CardButton[] {
+  return (buttons ?? [])
+    .filter((b) => /^[a-z][a-z0-9_.-]{0,63}$/.test(b.actionId) && b.value.length <= 2000)
+    .slice(0, MAX_BUTTONS)
+    .map((b) => ({ ...b, label: b.label.slice(0, 75) }));
+}
+
+/** Slack Block Kit: the sentence as a section, the link and the buttons as one actions block. `text` stays the notification fallback. */
+export function slackBlocks(text: string, action: CardAction | null, buttons?: CardButton[] | null) {
   const a = safeAction(action);
+  const elements = [
+    ...(a ? [{ type: 'button', text: { type: 'plain_text', text: a.label }, url: a.url }] : []),
+    ...safeButtons(buttons).map((b) => ({ type: 'button', text: { type: 'plain_text', text: b.label }, action_id: b.actionId, value: b.value })),
+  ];
   return [
     { type: 'section', text: { type: 'mrkdwn', text: text.slice(0, 3000) } },
-    ...(a ? [{ type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: a.label }, url: a.url }] }] : []),
+    ...(elements.length > 0 ? [{ type: 'actions', elements }] : []),
   ];
 }
 
-/** Bot Framework activity: plain text, plus a hero card whose one button opens the URL. */
-export function teamsActivity(text: string, action: CardAction | null) {
+/**
+ * A Teams Adaptive Card with Universal Actions (`Action.Execute`, verb =
+ * actionId) — the card type whose clicks arrive as `adaptiveCard/action`
+ * invokes at the one interaction endpoint. A hero card cannot do that.
+ */
+export function teamsAdaptiveCard(text: string, action: CardAction | null, buttons?: CardButton[] | null) {
   const a = safeAction(action);
+  return {
+    type: 'AdaptiveCard',
+    $schema: 'http://adaptivecards.io/schemas/adaptive-card.json',
+    version: '1.4',
+    body: [{ type: 'TextBlock', text, wrap: true }],
+    actions: [
+      ...(a ? [{ type: 'Action.OpenUrl', title: a.label, url: a.url }] : []),
+      ...safeButtons(buttons).map((b) => ({ type: 'Action.Execute', title: b.label, verb: b.actionId, data: { value: b.value } })),
+    ],
+  };
+}
+
+/** Bot Framework activity: plain text, plus a hero card whose one button opens the URL — or an Adaptive Card when there are interactive buttons. */
+export function teamsActivity(text: string, action: CardAction | null, buttons?: CardButton[] | null) {
+  const a = safeAction(action);
+  if (safeButtons(buttons).length > 0) {
+    return {
+      type: 'message',
+      text,
+      textFormat: 'plain',
+      attachments: [{ contentType: 'application/vnd.microsoft.card.adaptive', content: teamsAdaptiveCard(text, action, buttons) }],
+    };
+  }
   return {
     type: 'message',
     text,

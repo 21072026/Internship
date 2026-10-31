@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**The Zapier app (#2004):** `apps/zapier/` is a Zapier Platform CLI project over the public API. Custom auth with the API key, tested with `GET /api/v1/me`, labelled with the organisation's name. Five REST-hook triggers through `/api/v1/hooks` (`new_application`, `pipeline_stage_changed`, `offer_accepted`, `meeting_scheduled`, `interview_request_created`), each with a sample in the catalogue's payload shape. Three actions (`create_candidate`, `log_interaction`, `update_stage`), each sending an `Idempotency-Key` derived from the Zap and its input. A `find_candidate` search by id or e-mail, plus find-or-create. The base URL is the `ICRM_BASE_URL` Zapier env var, defaulting to preview, never production. Offline tests (`node --test` + nock) and `zapier-platform validate` run in `.github/workflows/zapier.yml`; `npm run smoke` exercises auth, a hook cycle and a search against a deployed environment and refuses the production host. `docs/zapier.md` covers versioning, the PR-environment workflow, the breaking-change procedure and the directory checklist (blocker: the app is not yet registered on the maintainer's Zapier account).",
+  "notes": {
+    "en": ["A Zapier app is ready: connect the CRM to thousands of tools with triggers for applications, stage changes, accepted offers, meetings and interview requests, and actions to create candidates, log interactions and move stages."],
+    "tr": ["Zapier uygulaması hazır: başvurular, aşama değişiklikleri, kabul edilen teklifler, toplantılar ve mülakat talepleri için tetikleyiciler; aday oluşturma, etkileşim kaydetme ve aşama değiştirme eylemleriyle CRM'i binlerce araca bağlayın."],
+    "de": ["Eine Zapier-App ist bereit: Verbinden Sie das CRM mit Tausenden Tools – mit Triggern für Bewerbungen, Phasenwechsel, angenommene Angebote, Meetings und Interviewanfragen sowie Aktionen zum Anlegen von Kandidat:innen, Erfassen von Interaktionen und Wechseln der Phase."]
+  }
+}

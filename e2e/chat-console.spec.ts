@@ -68,7 +68,9 @@ test('install → disable → uninstall: real state, admin-only, nothing left be
     const res = await a.get('/api/admin/integrations/chat/status');
     expect(res.status()).toBe(200);
     const raw = await res.text();
-    expect(raw).not.toContain('xoxb');
+    // The token's own shape, `xoxb-…` — a bare 'xoxb' also occurs inside a
+    // random cuid (cmvvi-xoxb-013…), which failed this check on an innocent id.
+    expect(raw).not.toContain('xoxb-');
     expect(raw).not.toContain('TokenEnc');
     const status = JSON.parse(raw);
     expect(status.platforms.map((p: { platform: string }) => p.platform)).toEqual(['SLACK', 'TEAMS']);
@@ -132,7 +134,7 @@ test('install → disable → uninstall: real state, admin-only, nothing left be
     const audit = await prisma.auditLog.findMany({ where: { orgId: org.id, action: { startsWith: 'CHAT_' } }, orderBy: { createdAt: 'asc' }, select: { action: true, actorId: true, detail: true } });
     expect(audit.map((r) => r.action)).toEqual(['CHAT_INSTALL', 'CHAT_DISABLE', 'CHAT_ENABLE', 'CHAT_UNINSTALL', 'CHAT_INSTALL', 'CHAT_UNINSTALL']);
     expect(audit.every((r) => r.actorId === admin.id)).toBe(true);
-    expect(audit.map((r) => r.detail).join('')).not.toContain('xoxb');
+    expect(audit.map((r) => r.detail).join('')).not.toContain('xoxb-');
     expect(audit[5].detail).toContain('failed:invalid_auth');
   } finally {
     for (const c of ctxs) await c.dispose();

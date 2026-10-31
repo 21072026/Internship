@@ -66,3 +66,15 @@ test('the answer list is stable (stored codes)', () => {
   assert.equal(AFFILIATE_HEARD_FROM.length, 9);
   assert.equal(AFFILIATE_HEARD_FROM.at(-1), 'other');
 });
+
+test('a code suggestion is a valid, readable partner code', async () => {
+  const { suggestPartnerCode, isRejectionCode } = await import('../../src/lib/affiliateApplicationRule.ts');
+  assert.equal(suggestPartnerCode('Ada', 'Example'), 'ada-example');
+  assert.equal(suggestPartnerCode('Jürgen', 'Weiß'), 'jurgen-weiss');
+  assert.equal(suggestPartnerCode('Işıl', "O'Neil"), 'isil-o-neil');
+  assert.equal(suggestPartnerCode('李', '王'), 'partner');
+  assert.ok(suggestPartnerCode('A'.repeat(30), 'B'.repeat(30)).length <= 40);
+  for (const code of ['ada-example', 'partner']) assert.match(code, /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/);
+  assert.equal(isRejectionCode('duplicate'), true);
+  assert.equal(isRejectionCode('rude'), false);
+});
