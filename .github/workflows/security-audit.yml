@@ -31,9 +31,11 @@ on:
     # carried exception reaches us without anyone going looking.
     - cron: '17 5 * * 1'
 
+# A new push to the same PR cancels its stale run; a main push or the
+# schedule is never cancelled — it queues behind the one already running.
 concurrency:
   group: security-audit-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   audit:
