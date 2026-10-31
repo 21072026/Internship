@@ -10,8 +10,12 @@ import { gotoSettled, signInAndSettle, signInViaApi } from './helpers/auth';
 // rule, with an audit row.
 
 const PW = 'PlacementLedger123!';
-// The worker ticks every 5 s; a subscriber job lands within a couple of ticks.
-const POLL = { timeout: 30_000, intervals: [500, 1000, 2000] };
+// The worker ticks every 5 s and takes 8 jobs at a time, oldest first. Alone,
+// a subscriber job lands within a couple of ticks; in a full-suite shard it
+// queues behind every earlier spec's subscriber jobs, and run 41163479357 saw
+// ~30 s. Same 60 s ceiling as the other worker-driven specs (api-v1-imports,
+// automation-builder).
+const POLL = { timeout: 60_000, intervals: [500, 1000, 2000] };
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -63,8 +67,8 @@ async function seed(prefix: string, opts: { customPipeline?: boolean; attributio
 const placementOf = (relationId: string) => prisma.placement.findUnique({ where: { relationId } });
 
 test('a hire stamps one attributed placement; leaving the stage reverses it, returning reinstates it', async ({ request }) => {
-  // Three worker round-trips in one test.
-  test.setTimeout(150_000);
+  // Three worker round-trips in one test, each up to POLL.timeout.
+  test.setTimeout(240_000);
   const s = await seed('stamp');
   try {
     expect((await signInViaApi(request, s.adminEmail, PW)).ok).toBe(true);
@@ -112,6 +116,8 @@ test('a hire stamps one attributed placement; leaving the stage reverses it, ret
 });
 
 test('a custom pipeline stamps on its own hire stage, and a self-found job is not invoiceable', async ({ request }) => {
+  // One worker round-trip of up to POLL.timeout, past the 60 s default.
+  test.setTimeout(120_000);
   const s = await seed('custom', { customPipeline: true, attribution: 'SELF_FOUND' });
   try {
     expect((await signInViaApi(request, s.adminEmail, PW)).ok).toBe(true);
