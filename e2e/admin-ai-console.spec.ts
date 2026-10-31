@@ -26,13 +26,12 @@ test.beforeAll(async ({ playwright }, info) => {
   }
   // This month: cv_feedback — 3 answered, 1 unreadable, 2 provider failures, one flagged by the tripwire.
   const { gte } = periodRange(currentPeriod());
-  const at = (h: number) => new Date(Math.min(Date.now() - 1000, gte.getTime() + h * 3600_000));
-  // The flagged call must also sit inside the tripwire's 30-day window, which
-  // the start of the month leaves on the 31st of a 31-day month: it is dated
-  // a minute ago instead (still this month — now always is).
+  // Minutes before now, in the same order, never before the month began: the
+  // flagged count is a rolling 30-day window, and rows written at the month's
+  // first hours fell out of it on the 31st of a 31-day month.
+  const at = (h: number) => new Date(Math.max(gte.getTime(), Date.now() - (10 - h) * 60_000));
   const ok = (latencyMs: number, h: number, flags: string | null = null) => ({
-    scope: 'cv_feedback', taskId: 'cv_feedback', orgId, outcome: 'ok', model: 'claude-opus-4-8', inputTokens: 1000, outputTokens: 200, costMicros: 40_000, latencyMs, flags,
-    createdAt: flags ? new Date(Math.max(gte.getTime(), Date.now() - 60_000)) : at(h),
+    scope: 'cv_feedback', taskId: 'cv_feedback', orgId, outcome: 'ok', model: 'claude-opus-4-8', inputTokens: 1000, outputTokens: 200, costMicros: 40_000, latencyMs, flags, createdAt: at(h),
   });
   await prisma.aiUsage.createMany({
     data: [
