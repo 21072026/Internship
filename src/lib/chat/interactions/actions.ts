@@ -9,6 +9,9 @@ import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 import { suggestedTimesFor } from '@/lib/suggestedTimesFor';
 import { createMeetingRequest } from '@/lib/meetingRequestCreate';
 import { decideMeetingRequest } from '@/lib/meetingRequestDecision';
+import { recordMeetingRsvp } from '@/lib/meetingRsvp';
+import { decideInterviewRequest } from '@/lib/interviewRequestDecision';
+import { INTERVIEW_DECLINE_REASON_CODES, isInterviewDeclineReasonCode } from '@/lib/interviewDeclineReasons';
 
 // The built-in chat actions (#1948). Each one is something the person could
 // do in the app, asking the same rule the app asks.
@@ -154,3 +157,82 @@ for (const action of ['accept', 'decline'] as const) {
     return { text: t.unavailable };
   });
 }
+
+// ── Answering on the card (#1949) ────────────────────────────────────────────
+//
+// Two flows that already exist and are already authorized; these handlers are
+// wiring only. Each calls the SAME function its web route calls —
+// recordMeetingRsvp() for the token page's yes/no, decideInterviewRequest()
+// for the mentor's decision — as the person the dispatcher verified, and
+// answers by REPLACING the card it was clicked on, so a decided card offers
+// nothing to press again.
+
+/**
+ * `meeting.rsvp.yes` / `.no` — the invitee's answer. The invitee is the one
+ * the row was written for (the mentee of its relation, the same person whose
+ * mail carries the row's RSVP token); anyone else gets the neutral "no longer
+ * available". A meeting that was called off or has ended takes no answer.
+ * recordMeetingRsvp() is guarded on the answer changing, so a second click
+ * writes nothing and tells the organiser nothing twice.
+ */
+for (const answer of ['yes', 'no'] as const) {
+  registerChatAction(`meeting.rsvp.${answer}`, async ({ user, value }) => {
+    const t = getDictionary(user.locale).chatInteraction;
+    if (!value || !SAFE_ID.test(value)) return { text: t.unavailable };
+    const meeting = await prisma.meeting.findFirst({
+      where: { id: value, relation: { is: { menteeId: user.id } } },
+      select: { id: true, title: true, createdById: true, projectId: true, conversationId: true, status: true, endedAt: true, relation: { select: { menteeId: true } } },
+    });
+    if (!meeting) return { text: t.unavailable };
+    if (meeting.status !== 'SCHEDULED' || meeting.endedAt) return { text: t.rsvpClosed, replaceOriginal: true };
+    await recordMeetingRsvp(meeting, answer === 'yes' ? 'ACCEPTED' : 'DECLINED');
+    return { text: answer === 'yes' ? t.rsvpYesDone : t.rsvpNoDone, replaceOriginal: true };
+  });
+}
+
+/** What decideInterviewRequest() answered, as the clicker reads it. */
+async function interviewOutcome(res: Response, done: string, t: ReturnType<typeof getDictionary>['chatInteraction']) {
+  if (res.ok) return { text: done, replaceOriginal: true };
+  const body = (await res.json().catch(() => ({}))) as { code?: string };
+  if (res.status === 409 && body.code === 'already_decided') return { text: t.interviewHandled, replaceOriginal: true };
+  // A permission or tenant refusal is neutral — it never says why.
+  return { text: t.unavailable };
+}
+
+/**
+ * `interview_request.approve` — through decideInterviewRequest(): only the
+ * mentee's active mentor (or an admin of the org) may decide, the write is
+ * guarded on PENDING, and a decided request answers "already decided".
+ */
+registerChatAction('interview_request.approve', async ({ user, value }) => {
+  const t = getDictionary(user.locale).chatInteraction;
+  if (!value || !SAFE_ID.test(value)) return { text: t.unavailable };
+  const res = await decideInterviewRequest(await sessionFor(user), value, { action: 'approve' });
+  return interviewOutcome(res, t.interviewApproved, t);
+});
+
+/**
+ * `interview_request.decline` — a decline needs a reason (the company sees
+ * it), so the first click answers with the reasons as buttons; nothing is
+ * written until one is picked (`interview_request.decline.reason`).
+ */
+registerChatAction('interview_request.decline', async ({ user, value }) => {
+  const dict = getDictionary(user.locale);
+  if (!value || !SAFE_ID.test(value)) return { text: dict.chatInteraction.unavailable };
+  return {
+    text: dict.chatInteraction.interviewPickReason,
+    buttons: INTERVIEW_DECLINE_REASON_CODES.map((code) => ({
+      label: dict.interviewDeclineReasons[code],
+      actionId: 'interview_request.decline.reason',
+      value: `${value}|${code}`,
+    })),
+  };
+});
+
+registerChatAction('interview_request.decline.reason', async ({ user, value }) => {
+  const t = getDictionary(user.locale).chatInteraction;
+  const [id, code] = (value ?? '').split('|');
+  if (!id || !SAFE_ID.test(id) || !code || !isInterviewDeclineReasonCode(code)) return { text: t.unavailable };
+  const res = await decideInterviewRequest(await sessionFor(user), id, { action: 'decline', declineReasonCode: code });
+  return interviewOutcome(res, t.interviewDeclined, t);
+});

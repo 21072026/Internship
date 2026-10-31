@@ -299,6 +299,9 @@ export const NOTIFICATION_EVENTS = [
   { key: 'interview_panel.outcome.advance', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
   { key: 'interview_panel.outcome.offer', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
   { key: 'interview_panel.outcome.reject', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
+  // A company asked to interview one of the mentor's mentees (#1949). In-app and
+  // chat only — the chat card carries Approve/Decline; there is no mail for it.
+  { key: 'interview_request.received', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'chat'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
   { key: 'interview_request.approved', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'interview_request.declined', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['reasonCode'] },
   // The confirmed interview time, on the recipient's own clock (#1844); the cancellation of it.

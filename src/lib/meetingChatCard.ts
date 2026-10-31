@@ -22,5 +22,15 @@ export function meetingChatCard(
     subjectKey: meetingChatSubject(meeting),
     actionUrl: kind === 'cancelled' ? null : link,
     supersede: kind === 'moved' || kind === 'cancelled',
+    // The invitee answers on the card (#1949): on the invite, and again on a
+    // move (it rewrites the invite in place, and the new time needs an answer).
+    // The value is THIS row's id — a bulk schedule writes one row per invitee.
+    buttons:
+      kind === 'invite' || kind === 'moved'
+        ? [
+            { label: 'rsvpYes', actionId: 'meeting.rsvp.yes', value: meeting.id },
+            { label: 'rsvpNo', actionId: 'meeting.rsvp.no', value: meeting.id },
+          ]
+        : [],
   };
 }

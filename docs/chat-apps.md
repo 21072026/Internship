@@ -90,6 +90,17 @@ builds a Session-shaped view of the person the dispatcher verified (never a
 sign-in) and calls them as that person. Chat adds **no new right** (decided on
 #1951): a mentee requests, the mentor confirms — a pick never writes a Meeting.
 
+**Answering on the card** (#1949): the meeting-invite card (and a move, which
+rewrites it) carries Yes / I can't make it (`meeting.rsvp.yes|no`, value = the
+Meeting row's id), answered only by the row's invitee through
+`recordMeetingRsvp()` — the same write `POST /api/rsvp` does, guarded on the
+answer changing so a second click writes and notifies nothing. A company's
+interview request now tells the mentee's active mentor (`interview_request.received`,
+in-app + chat) with Approve / Decline (`interview_request.approve|decline`);
+both go through `decideInterviewRequest()`, the route's own body, and Decline
+first asks for one of `INTERVIEW_DECLINE_REASON_CODES` (`…decline.reason`, value
+`<id>|<code>`) because the company sees the reason. A decided card is replaced.
+
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the
 store-submission burden and the commercial decision are the parts that get lost

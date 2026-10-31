@@ -3,6 +3,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
+import { recordMeetingRsvp, rsvpCreatorLink } from '@/lib/meetingRsvp';
 import { formatInTimeZone, isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { intlLocaleFor } from '@/lib/interviewRequests';
 
@@ -104,13 +105,7 @@ export async function POST(request: Request) {
   });
   if (!meeting) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const creatorLink = meeting.projectId
-    ? `/projects/${meeting.projectId}`
-    : meeting.conversationId
-      ? `/messages/c/${meeting.conversationId}`
-      : meeting.relation?.menteeId === meeting.createdById
-        ? '/portal'
-        : '/mentor/meetings';
+  const creatorLink = rsvpCreatorLink(meeting);
 
   if (resolved.kind === 'guest') {
     // A guest has no relation to file a request in, so a counter is offered to
@@ -141,13 +136,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, rsvp: status, counterProposal: { id: counter.id, proposedAt: counter.proposedAt } });
   }
 
-  await prisma.meeting.update({ where: { id: meeting.id }, data: { rsvp: status } });
-  await notify(
-    meeting.createdById,
-    status === 'ACCEPTED' ? 'rsvp.accepted' : 'rsvp.declined',
-    { title: meeting.title },
-    creatorLink
-  );
+  // The one write of an invitee's answer (#1949), shared with the chat card.
+  await recordMeetingRsvp(meeting, status);
   return NextResponse.json({ ok: true, rsvp: status });
 }
 
