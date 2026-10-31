@@ -199,9 +199,18 @@ export type NonAdminRole = 'MENTOR' | 'MENTEE' | 'COMPANY' | 'SOURCE';
 export async function requireRoleOrPermission(
   roles: readonly NonAdminRole[],
   action: Permission,
-  opts: { subject?: Subject; request?: Request | null } = {},
+  opts: {
+    subject?: Subject;
+    request?: Request | null;
+    /**
+     * A session the caller already resolved instead of the request's cookie —
+     * the chat interaction dispatcher (#1949) calls shared services as the
+     * person it verified. The actor is still read LIVE from the database.
+     */
+    session?: Session | null;
+  } = {},
 ): Promise<{ actor: Actor; session: Session; admin: boolean } | { error: NextResponse }> {
-  const session = await getServerSession(authOptions);
+  const session = opts.session ?? (await getServerSession(authOptions));
   const actor = await actorFromSession(session);
   if (!session || !actor) {
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
