@@ -69,6 +69,8 @@ export interface RelationRow {
   id: string;
   orgId: string | null;
   kind: string;
+  /** What a PROGRAM_ADMIN's grant is matched against when the admins are told (#3485). */
+  cohortId: string | null;
   companyId: string | null;
   pipelineStatus: string;
   mentorId: string;

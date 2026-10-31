@@ -11,6 +11,8 @@
 // Scheduled as the queued job `relationHealth.sweep` (src/lib/jobs/schedules.ts,
 // handler in src/jobs/platform.ts, #1677); sweepRelationHealth() is the body.
 
+import { adminTierFor } from '@/lib/authzRule';
+import { adminReceives } from '@/lib/programScopeRule';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -31,6 +33,9 @@ const BATCH = 500;
 export interface Crossing {
   orgId: string;
   relationOrgId: string | null;
+  /** What a PROGRAM_ADMIN's grant is matched against (#3485). */
+  cohortId: string | null;
+  companyId: string | null;
   menteeId: string;
   menteeName: string;
   mentorName: string;
@@ -116,6 +121,8 @@ export async function sweepRelationHealth(opts: { now?: Date; orgIds?: string[] 
         crossings.push({
           orgId: await settingsOrgOfRow(r.orgId),
           relationOrgId: r.orgId,
+          cohortId: r.cohortId,
+          companyId: r.companyId,
           menteeId: r.mentee.id,
           menteeName: r.mentee.fullName,
           mentorName: r.mentor.fullName,
@@ -146,7 +153,14 @@ async function mailCrossingDigests(crossings: Crossing[]): Promise<number> {
 
   const admins = await prisma.user.findMany({
     where: { role: 'ADMIN', isActive: true },
-    select: { id: true, orgId: true, email: true, fullName: true, preferredLanguage: true },
+    select: { id: true, orgId: true, email: true, fullName: true, preferredLanguage: true, adminLevel: true },
+  });
+  // A PROGRAM_ADMIN reads only the relations its grants cover, so its digest
+  // lists only those (#3485, programScopeRule.ts adminReceives). One query for
+  // every PROGRAM_ADMIN's grants.
+  const grants = await prisma.adminScopeGrant.findMany({
+    where: { userId: { in: admins.filter((a) => a.adminLevel === 'PROGRAM_ADMIN').map((a) => a.id) } },
+    select: { userId: true, orgId: true, cohortId: true, companyId: true },
   });
   const labels = new Map<string, Promise<(key: string) => string>>();
   const labelFor = (orgId: string | null, locale: Locale) => {
@@ -158,8 +172,10 @@ async function mailCrossingDigests(crossings: Crossing[]): Promise<number> {
   let mailed = 0;
   for (const admin of admins) {
     const org = await settingsOrgOfRow(admin.orgId);
-    const list = byOrg.get(org);
-    if (!list) continue;
+    const own = grants.filter((g) => g.userId === admin.id && g.orgId === org);
+    const tier = adminTierFor('ADMIN', admin.adminLevel);
+    const list = (byOrg.get(org) ?? []).filter((c) => adminReceives(tier, own, { cohortId: c.cohortId, companyId: c.companyId }));
+    if (list.length === 0) continue;
     const locale: Locale = isLocale(admin.preferredLanguage ?? undefined) ? (admin.preferredLanguage as Locale) : defaultLocale;
     const t = await emailDictionary(locale, org);
     const H = t.relationHealth;

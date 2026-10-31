@@ -43,7 +43,7 @@ export const prismaAutomationStore: AutomationStore = {
   loadRelation: (relationId) =>
     prisma.mentorshipRelation.findUnique({
       where: { id: relationId },
-      select: { id: true, orgId: true, kind: true, companyId: true, pipelineStatus: true, mentorId: true, menteeId: true, startDate: true },
+      select: { id: true, orgId: true, kind: true, cohortId: true, companyId: true, pipelineStatus: true, mentorId: true, menteeId: true, startDate: true },
     }),
   stageEnteredAt: async (relationId, stage, before) => {
     const row = await prisma.statusChange.findFirst({

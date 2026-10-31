@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
+import { tenantAdminWhere } from '@/lib/tenantAdmins';
 import { prisma } from '@/lib/prisma';
 import { markSupportNotificationsRead } from '@/lib/messageNotifications';
 import { notify } from '@/lib/notify';
@@ -12,7 +13,6 @@ import {
   readSupportMessageRequest,
 } from '@/lib/supportMessageRequest';
 import { withTenantScope } from '@/lib/orgContext';
-import { orgWhere } from '@/lib/tenantFilter';
 import { resolveOrgId } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { enforceRateLimit } from '@/lib/rateLimit';
@@ -186,10 +186,9 @@ export async function POST(request: Request) {
     // rule.
     const requester = await prisma.user.findUnique({ where: { id: session.user.id }, select: { orgId: true } });
     const ticketOrgId = requester?.orgId ?? resolveOrgId(session) ?? (await defaultOrgId());
+    // An org-level notice: no PROGRAM_ADMIN (#3485).
     const admins = await prisma.user.findMany({
-      where: {
-        AND: [{ role: 'ADMIN', isActive: true }, await orgWhere(ticketOrgId)],
-      },
+      where: await tenantAdminWhere(ticketOrgId),
       select: {
         id: true,
       },
