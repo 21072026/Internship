@@ -99,7 +99,6 @@ export async function sweepEndingSoonRelations(now: Date = new Date()): Promise<
       await notifyIfAllowed(side.me.id, 'mentorship', 'mentorship.ending_soon', { name: side.other.fullName, date: endDay }, side.link);
       if (side.me.email && emailAllowed(side.me, 'mentorship') && emailGroupAllowedForCategory(side.me, 'relation-ending')) {
         await sendRelationEndingEmail({
-          to: side.me.email,
           userId: side.me.id,
           orgId: side.me.orgId,
           locale: side.me.preferredLanguage,

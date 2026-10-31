@@ -102,14 +102,14 @@ export async function announceNewRelation({ relation, mentor, mentee, companyId,
   // mail carries an unsubscribe token for its own recipient's account.
   if (mentee.email && emailAllowed(mentee, 'mentorship') && emailGroupAllowedForCategory(mentee, 'mentor-assigned')) {
     try {
-      await sendMentorAssignedEmail({ to: mentee.email, menteeName: mentee.fullName, mentorName: mentor.fullName, orgId: mentee.orgId, userId: mentee.id });
+      await sendMentorAssignedEmail({ menteeName: mentee.fullName, mentorName: mentor.fullName, orgId: mentee.orgId, userId: mentee.id });
     } catch (e) {
       console.error('Mentor assignment email failed:', e);
     }
   }
   if (mentor.email && emailAllowed(mentor, 'mentorship') && emailGroupAllowedForCategory(mentor, 'mentee-assigned')) {
     try {
-      await sendMenteeAssignedEmail({ to: mentor.email, mentorName: mentor.fullName, menteeName: mentee.fullName, orgId: mentor.orgId, userId: mentor.id });
+      await sendMenteeAssignedEmail({ mentorName: mentor.fullName, menteeName: mentee.fullName, orgId: mentor.orgId, userId: mentor.id });
     } catch (e) {
       console.error('Mentee assignment email failed:', e);
     }

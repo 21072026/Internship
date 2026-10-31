@@ -393,7 +393,6 @@ export async function transferMentorship(opts: {
   ) {
     try {
       await sendMentorAssignedEmail({
-        to: mentee.email,
         menteeName: mentee.fullName,
         mentorName: incoming.fullName,
         orgId: mentee.orgId,
@@ -412,7 +411,6 @@ export async function transferMentorship(opts: {
   ) {
     try {
       await sendMenteeAssignedEmail({
-        to: incoming.email,
         mentorName: incoming.fullName,
         menteeName: mentee.fullName,
         orgId: incoming.orgId,
@@ -437,7 +435,6 @@ export async function transferMentorship(opts: {
   ) {
     try {
       await sendRematchMentorNoticeEmail({
-        to: outgoing.email,
         mentorName: outgoing.fullName,
         menteeName: mentee.fullName,
         orgId: outgoing.orgId,

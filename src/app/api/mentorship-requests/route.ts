@@ -199,7 +199,6 @@ export async function POST(request: Request) {
       if (!a.email || !emailAllowed(a, 'mentorship') || !emailGroupAllowedForCategory(a, 'mentorship-request')) continue;
       try {
         await sendMentorshipRequestEmail({
-          to: a.email,
           adminName: a.fullName,
           menteeName: menteeName ?? 'a mentee',
           targetPosition,
