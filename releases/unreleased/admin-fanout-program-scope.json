@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Admin fan-outs follow the program scope (#3485):** one pure rule, `adminReceives()` in `src/lib/programScopeRule.ts` (on the shared `grantCovers()`): ORG_ADMIN/OBSERVER hear everything, a PROGRAM_ADMIN only about a subject its grants cover and never about an org-level event, an unknown tier nothing. `tenantAdminWhere()`/`tenantAdminIds(orgId)` are now org-level recipients (no PROGRAM_ADMIN); `tenantAdminIds(orgId, subject)` and the new `tenantAdminRows(orgId, subject, select)` add the covering PROGRAM_ADMINs. Moved onto them: re-match request, SLA escalation/resolution, stage automation to admins, trial reminders, company outreach (subject-aware); support ticket and report, company inquiry, SSO certificate expiry, webhook disabled, document expiry, request nudge (org-level). The relation-health digest and the daily activity digest/to-do block narrow per PROGRAM_ADMIN; a scheduled analytics report to a PROGRAM_ADMIN is skipped (`recipient_out_of_scope`). Pinned by `scripts/test/program-scope-rule.test.mjs` and `e2e/admin-fanout-program-scope.spec.ts` (@smoke).",
-  "notes": {
-    "en": ["Program admins no longer receive notifications and digests about people outside their own programmes."],
-    "tr": ["Program yöneticileri artık kendi programları dışındaki kişilerle ilgili bildirim ve özet almıyor."],
-    "de": ["Programm-Admins erhalten keine Benachrichtigungen und Zusammenfassungen mehr über Personen außerhalb ihrer eigenen Programme."]
-  }
-}

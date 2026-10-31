@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Notes from the post-meeting card (#1953):** when a relation meeting that took place is auto-logged with the placeholder note, its mentor gets a Slack/Teams card (`meeting.logPrompt`, chat only). \"Add notes\" answers with a text field (Slack `input` block dispatching on Enter, Teams `Input.Text` + `Action.Execute`; the envelope's new `input`) and the note replaces that log row's notes through `updateInteraction()` after `interactionAccess()` — both extracted from `PUT /api/interactions/[id]`, which now calls them too. No second log row, no schema change.",
-  "notes": {
-    "en": ["Mentors can add what was discussed in a meeting straight from the Slack or Microsoft Teams card that follows it."],
-    "tr": ["Mentorlar bir toplantıda görüşülenleri, toplantıdan sonra gelen Slack veya Microsoft Teams kartından doğrudan ekleyebilir."],
-    "de": ["Mentoren können direkt auf der Slack- oder Microsoft-Teams-Karte nach einem Meeting ergänzen, was besprochen wurde."]
-  }
-}

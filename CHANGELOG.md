@@ -24,6 +24,1656 @@ each fragment — so only the *recording* was late, not the numbering. The app
 had been serving these versions correctly all along, deriving them from
 base+fragments at build time.
 
+## [0.619.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 07:47 UTC · commit [25aa69c](https://github.com/21072026/Internship/commit/25aa69c87360cc4939fb1db23ca9955d969c77ca)_
+
+**Notes from the post-meeting card (#1953):** when a relation meeting that took place is auto-logged with the placeholder note, its mentor gets a Slack/Teams card (`meeting.logPrompt`, chat only). "Add notes" answers with a text field (Slack `input` block dispatching on Enter, Teams `Input.Text` + `Action.Execute`; the envelope's new `input`) and the note replaces that log row's notes through `updateInteraction()` after `interactionAccess()` — both extracted from `PUT /api/interactions/[id]`, which now calls them too. No second log row, no schema change.
+
+## [0.618.1-beta] - 2026-10-31
+
+_Shipped 2026-10-31 07:42 UTC · commit [abaddca](https://github.com/21072026/Internship/commit/abaddcacb53989fcb83c9d560acadc3f2a144888)_
+
+**MeetingsManager on the shared `AsyncSection` (#1450):** both sections of the meetings screen (invitees, upcoming) now use the one loading → error → empty contract instead of hand-written ternaries. `AsyncSection` gains `errorDisplay="none"`, for a screen that reports one request's failure once above several sections, and `testIdPrefix`, so the screen keeps its testids. `CalendarView` stays out on purpose: its loading and error states are overlays that keep the grid, and a comment there now says so.
+
+## [0.618.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 07:30 UTC · commit [c5e519a](https://github.com/21072026/Internship/commit/c5e519a84f1ba587f918c5a6ed5762fa5c5eddb5)_
+
+**Company team seats (#1870):** additive `CompanyMembership` (`orgId`, `companyId`, `userId`, `seatRole` OWNER|RECRUITER|HIRING_MANAGER|INTERVIEWER, `@@unique([companyId, userId])`, `TENANT_MODELS`) and `InvitationToken.companySeatRole`; `User.companyId` unchanged, nothing re-keyed. A COMPANY login without a row reads as OWNER (the flat set it always had); backfill `0037-company-memberships` makes those rows explicit (adds only, idempotent) and registration writes the row for every new COMPANY login. Pure rule `companyCan()` in `src/lib/companySeats.ts`; ONE server gate `requireCompanySeat()` (`src/lib/companySeatGate.ts`, `403 insufficient_seat_role`) on requisition writes, application stage moves (single + bulk), interests, interview requests, talent pool (seat AND entitlement), outreach and the company's own profile PUT; `seatScopedActor()` narrows an INTERVIEWER's application reads to its panels' candidates inside `visibleApplicationsWhere()`. `/company/team` (`GET/POST /api/company/team`, `PATCH/DELETE /api/company/team/[userId]`): OWNER-only invite/role/remove, last-owner guard (`409 last_owner`), removal detaches + deactivates + revokes sessions and trusted devices, audited. `Company.quota` is the seat limit (`403 seat_limit_reached` with `limit`/`used`; null = unlimited). The onboarding checklist gains "invite a teammate". `docs/company-team-seats.md`.
+
+## [0.617.1-beta] - 2026-10-31
+
+_Shipped 2026-10-31 07:21 UTC · commit [f2be12c](https://github.com/21072026/Internship/commit/f2be12c86aefabd8822d5790e037b408759fdc46)_
+
+**Notification router, migration batch 3 (#1711):** the eight mentorship-lifecycle mails in `src/services/emailService.ts` now leave through `notifyEvent(…, { channels: ['email'], email: { … } })` with their copy unchanged: request decision, mentee/mentor assigned, mentor offer, relation ending soon, new mentorship request, rematch request and the outgoing mentor's rematch notice. Each reuses its existing catalogue event (`mentorship_request.*`, `mentor_offer.new`, `mentorship.ending_soon`) on the e-mail channel, so every send gets a `NotificationDelivery` row, the channel matrix and quiet hours. The helpers no longer take a `to` address — `userId` is required and the router reads the address from the account; the relation-ending mail keeps its per-end-date dedupe key. `check:notify` baseline: `emailService.ts` 60 → 52.
+
+## [0.617.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 07:01 UTC · commit [163c689](https://github.com/21072026/Internship/commit/163c6899569d6b6098373826380d7858dab613f5)_
+
+**Analytics overview for a program admin (#1577):** `GET /api/admin/analytics` opens to a PROGRAM_ADMIN with `listing: true`; `loadAdminAnalytics()` takes the grants as `scope` and narrows like an always-on filter — relations AND `programRelationWhere`, interactions/meetings through them, projects and mentors only with a covered relation, the signup funnel over `programPeopleWhere`, the programme picker only the granted cohorts; the `?program=` filter ANDs on top. Every other reader's numbers are unchanged. The analytics sub-routes and the AI narrative still answer 403 to the tier. Pinned in `e2e/program-scoped-admin.spec.ts` (@smoke).
+
+## [0.616.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 06:59 UTC · commit [4b37fa3](https://github.com/21072026/Internship/commit/4b37fa38abac46ae417b092311aabf7b22a1ba04)_
+
+**Searchable people picker (#1437):** `GET /api/users?view=mentorAvailability` returns only the picker roles (ADMIN/MENTOR/MENTEE, never COMPANY/SOURCE), takes `roles=<CSV>` to narrow, and `limit` (clamped to 50, `src/lib/userPickerQuery.ts`) turns it into one bounded, name-sorted page with `total` beside it. A new `<PersonPicker>` combobox (`src/components/ui/PersonPicker.tsx`, `usePeopleSearch()`) searches on the server as you type. It replaces the native mentee `<select>` in the assign form and the invite form, and the person select in the group-members panel; the group dialog's mentee list is searched too. The mentor pickers ask for `roles=ADMIN,MENTOR` only, so the assign form no longer downloads the whole tenant (228 KB at 1 000 users).
+
+## [0.615.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 06:58 UTC · commit [3e1249e](https://github.com/21072026/Internship/commit/3e1249eee61cfff93f9fe48d25396db8d7158a5f)_
+
+**Check-ins in chat (#1953):** a survey campaign's invitation is also offered as a Slack/Teams card (`survey.invited`, chat only, `surveys` opt-out group). "Answer now" asks SELECT/BOOLEAN/SCALE/NPS questions one at a time as buttons, carries the answers so far in the next button's value (`src/lib/chat/surveyFlow.ts`) and submits the whole response through `submitSurveyResponse()` on the last click — invitation claimed, reminders stop, ANONYMOUS surveys store no respondent. A survey with a free-text, number, date or multi-select question links to the survey page instead. No schema change.
+
+## [0.614.1-beta] - 2026-10-31
+
+_Shipped 2026-10-31 06:52 UTC · commit [5ac6275](https://github.com/21072026/Internship/commit/5ac62757bc248e04da80c7a86ba4c81cdfa1f51c)_
+
+**Time to hire starts at funnel entry (#1505):** journeys in the funnel, forecast and deal-value routes and the mentor's average days to hired start at `funnelStartedAt()` (`src/lib/placement.ts`, `funnelEnteredAt ?? startDate`) instead of the pairing's `startDate`, so a coaching pair that later entered the funnel no longer carries its coaching months. Rows without a stamp read exactly as before. Unit-tested in `scripts/test/placement-kind.test.mjs`.
+
+## [0.614.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 06:49 UTC · commit [5761916](https://github.com/21072026/Internship/commit/5761916f9d5ba15ac683104723815374a50819cf)_
+
+**Org attributes in the match score (#3424):** a rule set can weigh an org attribute (`UserAttributeValue`, directory data from SSO sync or the roster feed) with the new `attribute:<key>` dimension family and `config.attributeMode` = `same` ("prefer the same site"), `different` ("a mentor from another business unit") or `gte_mentor` (NUMBER attributes: "mentor level ≥ mentee level"). A value missing on either side — or an attribute deleted since — scores neutral, never a penalty or an error. Values load in bulk, one query per side (`src/lib/matching/attributeValues.ts`), so suggest, simulation and match rounds read the dimension with no N+1. The save route refuses an attribute the org does not have (`400 unknown_attribute`); the rule editor offers only the org's own attributes and the breakdown names them by their label.
+
+## [0.613.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 06:49 UTC · commit [0ada266](https://github.com/21072026/Internship/commit/0ada266559524beda19f6f19f60c95bfa0aad873)_
+
+**Public employer page (#1867):** `/employers/[slug]` (new top-level dir with its `I18nScope`) and `GET /api/public/employers/[slug]` share one read, `loadPublicEmployer()` (`src/lib/employerPageStore.ts`): name, logo, `about`, industry, size, `websiteUrl` (https only, `rel="noopener nofollow"`) and the OPEN roles with a free seat — never `contactEmail` or `address`. 404 unless `isPublicProfile` AND `VERIFIED` (`isPublicEmployer()`, pure, unit-tested). Additive `Company` columns `slug` (`@@unique([orgId, slug])` — per tenant, the host decides the tenant), `websiteUrl`, `about`, `isPublicProfile` (default false). The slug is assigned on first publish by `ensureEmployerSlug()` (Turkish-safe `kebabSlug()`, `-2`/`-3` on collision, guarded on `slug: null`) and never moves — no backfill. COMPANY users publish from `/company/profile` (`about`, `websiteUrl`, `isPublicProfile` join the self-editable fields); the job detail links the employer page. Own page metadata. `docs/employer-page.md`.
+
+## [0.612.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 06:44 UTC · commit [bdc0627](https://github.com/21072026/Internship/commit/bdc06278bffdea8fa7e5245e206a466d382bae1b)_
+
+**The e-mail composer's recipient list pages and searches on the server (#1438):** `GET /api/mentorship?view=recipients` is the composer's own narrow read: a relation id plus the mentee's name and language (no e-mail address), 50 per page, or every match of the search with `all=1` (capped at 2 000; `src/lib/boardPage.ts`). `/admin/email` and `/mentor/email` list one page with "Show more" and a recipient search. "Select all" picks every match of the current search and shows how many. A pick survives a change of search. The outcome prefill link asks for its one relation by id.
+
+## [0.611.1-beta] - 2026-10-31
+
+_Shipped 2026-10-31 06:30 UTC · commit [d56932b](https://github.com/21072026/Internship/commit/d56932b7d1c387282e654ff28b1f7517dea8bbdd)_
+
+**Notification router, migration batch 2 (#1711):** four more mails leave through `notifyEvent(..., { email: { … } })` with their copy unchanged — the meeting-feedback ask (`meeting.feedbackAsk`, keyed per meeting), the nightly relationship-health digest to admins (`relation_health.digest`, keyed per admin per day), a mentor's e-mail to their mentees (`mentor.directEmail`, Reply-To kept; the hand-written `emailAllowed() && emailGroupAllowedForCategory()` conjunct is gone) and the auto-sent outcome mail (`outcome.noMatch` / `outcome.placedElsewhere` on the e-mail channel; the relation's interaction log is written only when a mail actually left). Each send now gets a `NotificationDelivery` row, the category switch, the #1714 channel matrix and quiet hours. Four new catalogue events, e-mail only by default, with EN/TR/DE templates. `check:notify` drops four files from the baseline.
+
+## [0.611.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 06:27 UTC · commit [ba0d7ec](https://github.com/21072026/Internship/commit/ba0d7ecb3d6d436b5ab1c0cd57780110002c3a7b)_
+
+**Figure cards on the public partner page (#3364):** `landing.stats` adds three cards (active partners, customers referred, partner satisfaction), each `live`, `manual` or `hidden`, edited on `/admin/affiliates/settings`. Live values are `affiliateOverview()`'s own counts through `liveStatCounts()` (`src/lib/affiliatePublicStats.ts`), cached per organisation for an hour (`makeTtlCache`, unit-tested), and every live card is hidden below 10 active partners. Satisfaction has no source, so it is typed or hidden only; a live satisfaction card is refused at save. The rule (`statCards()`, the parse, the canonical comparison) is pure in `src/lib/affiliateLandingRule.ts`. Pinned by `scripts/test/affiliate-landing-rule.test.mjs`, `e2e/affiliate-public-page.spec.ts` and `e2e/affiliate-admin-settings.spec.ts`.
+
+## [0.610.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 06:19 UTC · commit [665347f](https://github.com/21072026/Internship/commit/665347f2aed0870f52da6948e2e1bf990df383a2)_
+
+**Stage gate editor and refusal dialog (#1590):** the stage editor (`/admin/organizations/[id]/pipeline`) sets each stage's entry gates (who may move a relation there; required documents, a submitted evaluation, a sent or accepted offer). The gates ride the existing atomic replace in `PUT /api/admin/organizations/[id]/pipeline-stages` and are saved on every plan: a FREE tenant may change gates only (`onlyGatesChanged()` in `stageGateRule.ts`), while label/order/colour/phase/add/remove stay paid (`403 plan_required`). A `409 stage_gate_blocked` on the admin and mentor boards, the candidate page and the mentor's relation page opens `StageGateDialog`, which names what is missing and links to the documents section (`#documents`).
+
+## [0.609.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 06:11 UTC · commit [0bb5096](https://github.com/21072026/Internship/commit/0bb5096d77dbfd7cb178bfe82f49a1bccfe77a67)_
+
+**Answer on the card (#1949):** the meeting-invite chat card (and a move, which rewrites it) now carries **Yes / I can't make it**, and a new `interview_request.received` event (in-app + chat, no mail) tells the mentee's active mentor about a company's interview request with **Approve / Decline** on the card. One write path each: the invitee's answer goes through `recordMeetingRsvp()` (`src/lib/meetingRsvp.ts`), now shared with `POST /api/rsvp` and guarded on the answer changing — a stale card clicked twice, or the page submitted twice, writes once and notifies the organiser once; the decision goes through `decideInterviewRequest()` (`src/lib/interviewRequestDecision.ts`), the verbatim body of `PATCH /api/interview-requests/[id]`, so the capability gate, `requireRoleOrPermission` (which gained an optional `session` for callers that resolved the person themselves — the actor is still read live), `interviewRequestActorWhere` and the guarded PENDING write are the app's. Decline asks for a reason first (the company sees it) and writes only when one is picked. A decided card is replaced so nothing is left to press; a refusal is neutral. Pinned by `e2e/chat-card-actions.spec.ts`.
+
+## [0.608.1-beta] - 2026-10-31
+
+_Shipped 2026-10-31 06:01 UTC · commit [54b89c4](https://github.com/21072026/Internship/commit/54b89c43153abf4f2242de0e3e585ea90d4f6f74)_
+
+**Admin fan-outs follow the program scope (#3485):** one pure rule, `adminReceives()` in `src/lib/programScopeRule.ts` (on the shared `grantCovers()`): ORG_ADMIN/OBSERVER hear everything, a PROGRAM_ADMIN only about a subject its grants cover and never about an org-level event, an unknown tier nothing. `tenantAdminWhere()`/`tenantAdminIds(orgId)` are now org-level recipients (no PROGRAM_ADMIN); `tenantAdminIds(orgId, subject)` and the new `tenantAdminRows(orgId, subject, select)` add the covering PROGRAM_ADMINs. Moved onto them: re-match request, SLA escalation/resolution, stage automation to admins, trial reminders, company outreach (subject-aware); support ticket and report, company inquiry, SSO certificate expiry, webhook disabled, document expiry, request nudge (org-level). The relation-health digest and the daily activity digest/to-do block narrow per PROGRAM_ADMIN; a scheduled analytics report to a PROGRAM_ADMIN is skipped (`recipient_out_of_scope`). Pinned by `scripts/test/program-scope-rule.test.mjs` and `e2e/admin-fanout-program-scope.spec.ts` (@smoke).
+
+## [0.608.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 06:00 UTC · commit [7522835](https://github.com/21072026/Internship/commit/7522835a0289d6e8d385ea5b0ed1abda3174af53)_
+
+**Employer self-signup (#1865, part 2):** `/for-companies/signup` → `POST /api/public/signup/company` (internship hosts only; per-IP rate limit, honeypot + min fill time answered with the same 202, free-mail domains refused as `free_mail_domain`). `provisionSelfSignupCompany()` creates a PENDING company (with `signupDomain`) and its COMPANY invitation in one transaction; the invitation's sender is null (`CreateInvitationInput.actor.id` may now be null), the set-password link is mailed and never returned, and a taken address answers the same 202. Admins are told via `notifyEvent('signup.companySelf')`. Domain-proof fast path: `GET /api/company/onboarding` gives a PENDING company its `interncrm-verification=<HMAC>` TXT record and `POST /api/company/onboarding/domain-proof` checks the stored `signupDomain` and flips PENDING → VERIFIED (guarded, audited, `verifiedById` null; never overrides REJECTED/SUSPENDED). Onboarding card on `/company` with a checklist derived from live data, and `/company/profile` where a COMPANY user edits its six fields. Pure rules in `src/lib/companySignup.ts`, unit-tested.
+
+## [0.607.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 05:58 UTC · commit [251c783](https://github.com/21072026/Internship/commit/251c7834f47f1d800b7fac724f599d6ebfb5671a)_
+
+**The pipeline board pages its columns (#1438):** `GET /api/mentorship?view=board` answers each column's true count (`counts`) and only its first 20 cards; `stage=<key>&page=<n>` loads one more page of one column (the rule is in `src/lib/boardPage.ts`). `/admin/board` takes its column headers, WIP chips and phone filter from those counts, adds a "Show more" button under each column, and searches on the server, so it no longer downloads every relation in the programme (243 KB at 308 relations). `?pageSize=` alone now pages the plain list instead of being silently ignored.
+
+## [0.606.2-beta] - 2026-10-31
+
+_Shipped 2026-10-31 05:49 UTC · commit [6225fc8](https://github.com/21072026/Internship/commit/6225fc8f03bda76d141988d28800bf6ea5f74b97)_
+
+The forecast, deal-value, ROI, mentor-impact and source-outcome readers count hires through the one placement rule (`src/lib/placement.ts`, #3472): coaching pairs and hires that are not ours no longer read as placements there either. Data with no kind or attribution set reads exactly as before.
+
+## [0.606.1-beta] - 2026-10-31
+
+_Shipped 2026-10-31 05:44 UTC · commit [8825dbf](https://github.com/21072026/Internship/commit/8825dbffffcb4c3333166c83c2b00125e9f063c8)_
+
+**The job worker drains within a tick:** `createWorker({ drainMs })` keeps claiming after a claim that filled the free capacity has settled, until a claim comes back short or `drainMs` has passed; `/api/jobs/worker/tick` passes 4 s (under the 5 s tick interval). Before, one claim per tick capped throughput at `concurrency` jobs per 5 s however fast the jobs were (2 per 5 s by default), so instant `event.deliver` subscriber jobs queued behind each other — the e2e full suite's `placement-ledger` poll ran out at 30 s waiting for its `placement` delivery. Default `drainMs` is 0, so a worker built without it behaves as before.
+
+## [0.606.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 05:38 UTC · commit [2234be8](https://github.com/21072026/Internship/commit/2234be822b42d1fb4b0388c747460545ef2e2138)_
+
+**Customer payments through the account-event feed (#3355):** a new `payment_received` event type with a `payment` block (`id`, `amount_minor`, `currency`, optional `received_at`; required on that type, validated at the door) goes to the one affiliate payment writer, `recordAffiliatePayment({ source: 'API' })`. That means the same checks, partner lock, commission reconciliation and `affiliate.payment.record` audit as a manual entry. Answers: `applied`; `no_partner` (a new outcome — no partner brought the customer in, or another org's customer); `duplicate` (repeated payment id); `conflict` with the writer's code (currency, suspended/terminated partner, no plan) or a released `busy`; `recorded` in an org without the affiliate programme. The writer now takes an optional transaction, so the feed's batch dry run judges a payment and rolls it back. Pure mapping in `paymentRefusal()` (`src/lib/accountEventRule.ts`). Refunds are #3475. Pinned by `scripts/test/account-event-rule.test.mjs` and `e2e/affiliate-payment-events.spec.ts` (@smoke).
+
+## [0.605.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 05:30 UTC · commit [ea4131f](https://github.com/21072026/Internship/commit/ea4131f54f0d02b11de4422270e7808a2bab8bfb)_
+
+**Goal sub-tasks and pooled goals (#1860):** a goal's steps are to-dos — `ProjectTask.goalId` (nullable, `SetNull`: deleting a goal keeps the work done under it), added through `POST /api/goals/[id]/subtasks`, ticked on `/todos` or in the goals panel through the one to-do write path (`/api/project-tasks/[taskId]` now reaches a step through the goal's own reading rule). `Goal.progress` derives from the steps once there are any (`derivedGoalProgress`, pure, unit-tested); the hand-entered figure stays as `manualProgress`. `Goal.templateId` hands a goal out from the shared pool: `resolveGoalTitle()` reads it in the reader's language on every view, and its recipient can neither reword (`409 pooled_goal`) nor delete it (`403`). "Has open development work" is one query over goals, their steps and the mentor-visible to-dos (`relationsWithOpenWork`, `src/lib/openWork.ts`), shared by the attention queue and the health sweep. No model merged or re-keyed.
+
+## [0.604.1-beta] - 2026-10-31
+
+_Shipped 2026-10-31 05:27 UTC · commit [d4d3c34](https://github.com/21072026/Internship/commit/d4d3c341366c18b03959a667f44cb7e291e91e9d)_
+
+**Pre-rendered mail through the notification router (#1711, batch 1):** `notifyEvent(..., { email: { subject, html, category, … } })` sends a call site's own mail byte-for-byte once the router has said yes — so the send gains a `NotificationDelivery` row, the category/e-mail-group check, the #1714 channel matrix and quiet hours without a copy change. The mail is sealed (`src/lib/notifications/sealedEmail.ts`, secretBox) in the `notification.email` / `notification.deferred` job payload, never stored in the clear; `emailJob.ts` opens it and hands `sendEmail()` the site's own subject, html, category, fromName, replyTo and locale. Migrated: the evaluation-due reminder (`src/lib/evaluationDue.ts`, bell + mail in one call, keyed per reminder) and the public-apply mentor mail (`/api/apply`, whose hand-written `emailAllowed() && emailGroupAllowedForCategory()` conjunct is gone). `check:notify` baseline shrinks to 73 sites in 14 files.
+
+## [0.604.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 05:17 UTC · commit [c41048c](https://github.com/21072026/Internship/commit/c41048ca38bba19158c75431ebe2de3eb0172ef2)_
+
+**Program-scoped delegated admin (#1577):** `scopeForRole()` now loads an ADMIN's tier and `AdminScopeGrant` rows live and narrows the `relation` / `project` / `company` builders — ORG_ADMIN and OBSERVER keep the tenant, a PROGRAM_ADMIN reads only its granted cohorts/companies, zero grants is `NO_MATCH`; every existing caller (`/api/mentorship`, `/api/projects`, `/api/companies`, `/api/interactions`, `/api/requisitions`, the board) narrows with it. `/api/mentorship/[id]` GET/PUT pass the relation as the subject (`relationSubject()` in `authzRule.ts`) to the one permission rule, and a PUT that moves cohort/company is checked after the move too (`403 outside_scope`). Cohort-less relations are outside every program scope, by decision (`docs/role-access-matrix.md` § Program scope). Pinned by `scripts/test/authz-scope-program-admin.test.mjs` and `e2e/program-scoped-admin.spec.ts` (@smoke). The candidate list (`/api/candidates`) and `/api/users` are opened to a PROGRAM_ADMIN with `listing: true` and narrowed through the new pure `src/lib/programScopeRule.ts` (also the audit viewer's target filter); the `/admin` dashboard, `/admin/re-engagement`, `/admin/mentee-activity` and the daily activity digest narrow through `programGrantsFor()`; `/admin/contributor-terms` redirects a PROGRAM_ADMIN. Analytics and bulk edit stay 403 for the tier; admin fan-out mails are #3485.
+
+## [0.603.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 05:15 UTC · commit [fac528c](https://github.com/21072026/Internship/commit/fac528c4aa002b288d10213009421f64ea2e2182)_
+
+**Stage entry gates (#1589):** `PipelineStage` gains `gateCapability`, `gateDocuments`, `gateEvaluation` and `gateOffer` (all off by default). `canTransition()` (`src/lib/stageGate.ts`, pure rule in `stageGateRule.ts`) is asked before the write on `PUT /api/mentorship/[id]`, per row in the bulk advance (`blocked[]` in the response) and on `PATCH /api/v1/relationships/[id]/stage`; a refusal is `409 stage_gate_blocked` with a structured `gate` payload. Backwards moves, off-path stages, COACHING relations and orgs without configured gates are never affected. `replaceStages()` carries gates over by key.
+
+## [0.602.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 05:13 UTC · commit [0a5366d](https://github.com/21072026/Internship/commit/0a5366dc8c4f3ccb2ac8e83c6ba36deef3720190)_
+
+**Employer verification gate (#1865, part 1):** `Company.verificationStatus` (`PENDING|VERIFIED|REJECTED|SUSPENDED`, **default `VERIFIED`** so every existing company stays visible; only self-signup will write `PENDING`) plus `verifiedAt`, `verifiedById`, `signupDomain`, `rejectionReason` — additive. The gate is in the queries: `visibleJobsWhere()` adds `VERIFIED_COMPANY_WHERE` inside the board's Prisma `where` (counts and pages stay right, detail 404s); publishing a requisition (`status: OPEN` on POST/PATCH) and `POST /api/company/outreach` answer `403 company_not_verified`. `POST /api/admin/companies/[id]/verification` (`approve|reject|suspend|reinstate`, `company.write`, guarded `updateMany`, `AuditLog` `COMPANY_VERIFICATION`, in-app notice to the company with the reason) and a `?verification=` filter + badge/actions on `/admin/companies`. `PUT /api/companies/[id]` now admits a COMPANY user for its own company, for six fields only (`protected_fields` names the rest). Pure rule in `src/lib/companyVerification.ts`, unit-tested; `docs/company-verification.md`.
+
+## [0.601.2-beta] - 2026-10-31
+
+_Shipped 2026-10-31 05:04 UTC · commit [18eb5a4](https://github.com/21072026/Internship/commit/18eb5a43fd1d53f304d2dff84fe7c00252cfa4b6)_
+
+**Programme filter reaches the export and the narrative (#1652 follow-up):** the analytics Excel export and the "what changed" paragraph now take the screen's `?program=`. The export's registry sheets (Funnel, Mentors, …) narrow through a new optional `ReportContext.relation`, applied wherever a loader already filtered relations by segment (`menteeIn`), so subscriptions and the registry route are unchanged; the narrative's facts — and so its cache key — are the filtered figures. A foreign programme id is a 404 on both. Pinned in `e2e/program-analytics-filter.spec.ts`.
+
+## [0.601.1-beta] - 2026-10-31
+
+_Shipped 2026-10-31 05:04 UTC · commit [a9c921a](https://github.com/21072026/Internship/commit/a9c921a0474a8afaf6d654732efd83c9657d712a)_
+
+**Language switcher on the partner pages (#3465):** `/partner` and `/partner/apply` carry the shared `LanguageSwitcher`, and the header links no longer break onto two lines on a phone. The marketing demo seed now fills the TR and DE steps, contact text and call-to-action of the programme page, which used to fall back to English.
+
+## [0.601.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 05:02 UTC · commit [e33abdd](https://github.com/21072026/Internship/commit/e33abdd7b21e8dde56d8578482519f9769508d5b)_
+
+**Affiliate partner links on the public page (#3365):** `/partner?ref=<code>` redirects to the landing's `productSignupUrl` with `ref=<code>` set, so the programme page can become the referral address without breaking links already shared. Only the code is carried and only to the configured address (no open redirect); a value that is not a partner code (`REFERRAL_CODE_RE`, pinned to `PARTNER_CODE_RE` by the unit test) or a missing sign-up page shows the page; whether the code is an active partner's is deliberately not asked. Rule `customerSignupRedirect()` in `src/lib/affiliateLandingRule.ts`; switch-over runbook in `docs/affiliate-module.md`; pinned in `e2e/affiliate-public-page.spec.ts`.
+
+## [0.600.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 05:02 UTC · commit [60bd089](https://github.com/21072026/Internship/commit/60bd0899f66a2c859fa6c5999f7af822311195e2)_
+
+**Affiliate application review (#3362):** an **Applications** tab on `/admin/affiliates` (pending count as a badge, `GET /api/admin/affiliate/applications[?status=|?count=1]`, `affiliate.read`). `POST …/[id]/approve { code }` (`affiliate.write`) creates the partner with that referral code in one transaction under the organisation lock, marks the application `APPROVED` through a guarded `updateMany` (409 `already_decided` on a second click, 409 `code_taken`, 400 `invalid_code`) and then sends the ordinary partner invitation (`invitePartner()`); an invitation that cannot be sent leaves the approval standing and says why. `POST …/[id]/reject { reason, note? }` stores only a code from `APPLICATION_REJECTION_CODES`, mails the applicant its sentence (`affiliate-application-decision`, `inbound_requests`, held under outbound approval) and keeps the note in the audit row only. Code suggestion `suggestPartnerCode()` is pure and unit-tested; pinned by `e2e/affiliate-application-review.spec.ts` (authorization and once-only decision @smoke).
+
+## [0.599.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 05:00 UTC · commit [cc28ccd](https://github.com/21072026/Internship/commit/cc28ccd3864d9771b8f87fb6b6c9689f5635094d)_
+
+**One verified chat interaction endpoint (#1948):** `POST /api/integrations/chat/[platform]/interactions` is the single public entry point for Slack and Teams buttons. In strict order: raw body read once → platform signature (Slack v0 HMAC via `verifySlackSignature`, Teams Bot Framework JWT via `verifyBotFrameworkRequest`) → replay window (±5 min, and a Slack signature is accepted once) → rate limit per (workspace, member) → parse + dispatch; every refusal is the same opaque 401. `src/lib/chat/interactions/` holds the pure envelope parser, the action registry (`registerChatAction`) and the dispatcher, which re-derives the person from an ENABLED workspace + a person-confirmed `ChatIdentity` + an active user of the same org on every request — a payload id is only a lookup key; an unlinked or unconfirmed member gets an ephemeral "link your account first" reply and no handler runs. Slack is acked at once and answered on its `response_url` (hooks.slack.com only, SSRF-checked; `CHAT_RESPONSE_URL_ALLOW_INSECURE_STUB=1` is the e2e sink's switch); a Teams Universal Action (also via the bot's messages endpoint) is answered in the invoke response. First built-in action: `meetings.upcoming` (the clicker's own next three meetings, in their zone and language). New `chatInteraction` i18n namespace (EN/TR/DE). Pinned by `e2e/chat-interactions.spec.ts` and `e2e/chat-interaction-envelope.unit.spec.ts` (@smoke).
+
+## [0.598.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 05:00 UTC · commit [cc28ccd](https://github.com/21072026/Internship/commit/cc28ccd3864d9771b8f87fb6b6c9689f5635094d)_
+
+**Book a session from chat (#1951):** on the interaction endpoint (#1948), `meetings.upcoming` now offers a mentee a **Book** button; `meeting.book` answers with the next three times that work for both (the app's suggested-times answer, on the clicker's clock), `meeting.book.pick` opens a **MeetingRequest** — decided on the issue: chat adds no new right, a mentee requests and the mentor confirms, exactly as in the app — and the mentor's chat card carries **Accept/Decline** (`meeting_request.accept|decline`), which book through the app's own lock-check-write and booking rules. One write path each: the bodies of `POST /api/meeting-requests`, `PATCH /api/meeting-requests/[id]` and `GET /api/meetings/suggested-times` moved verbatim into `createMeetingRequest()` / `decideMeetingRequest()` / `suggestedTimesFor()`, which the routes and the chat handlers both call with the caller's session. Chat cards and replies gained interactive buttons (Slack Block Kit `action_id`/`value`; Teams Adaptive Card `Action.Execute`, whose `data.value` the envelope reads); a decided card is replaced so its buttons cannot be pressed twice. A pick on a time already requested opens nothing new; an accept on an hour booked meanwhile is refused ("no longer free"). Pinned by `e2e/chat-booking.spec.ts`.
+
+## [0.597.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 03:43 UTC · commit [1b35bcd](https://github.com/21072026/Internship/commit/1b35bcd0f1c5afb31d470c0d27edea84fc3422f7)_
+
+**First-run tours and contextual help (#2067):** a reusable guidance primitive, no new dependency. `src/lib/tours.ts` is a declarative registry (role, steps anchored on `data-tour-id`, worded by the `guidance` dictionary block); `TourProvider` (mounted in the admin and mentor shells) offers a role's first-run tour once and `Coachmark` renders each step as an accessible modal dialog (`role="dialog"` + `aria-modal`, focus trap/Escape/return via `useModalFocus`, Escape skips, keyboard-complete, `motion-safe:` only). Seen/skipped state is per user and server-side in the existing `UserGuidanceState` table (`tour:<id>` keys, no schema change) through `GET`/`POST /api/guidance`, which only ever touches the session user's row (a `userId` in the body is a 400). Not offered while impersonating, nor to an admin in the mentor shell; a step whose target is not on screen is skipped and a tour with none is not recorded. `HelpTip` is the standalone "?" explanation (first use: the admin board). The e2e suite's storage state turns the automatic offer off (`guidance-autostart`, like the cookie consent); `e2e/guidance-tour.spec.ts` starts clean. Adding a tour is a `tours.ts` entry plus its EN/TR/DE strings.
+
+## [0.596.0-beta] - 2026-10-31
+
+_Shipped 2026-10-31 03:19 UTC · commit [0c0a22e](https://github.com/21072026/Internship/commit/0c0a22ef648d0e288322cced650b3cfd88273b26)_
+
+The mentee is notified when their certificate is issued (#1410): `POST /api/mentorship/[id]/certificate` sends `certificate.issued` (catalogue entry, `mentorship` preference, no params) linked to `/portal/journey`, where `PortalCertificateCard` downloads it. A reference letter notifies nobody — the card shows the certificate only.
+
+## [0.595.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 23:22 UTC · commit [dc294ad](https://github.com/21072026/Internship/commit/dc294adac68d9d592acf57591c86fb23e659f2c6)_
+
+Fixed: sending an in-app bug report with a screenshot answered 500 since support attachments started carrying alt text (#3441); the report stores only the file's own fields.
+
+## [0.595.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 22:45 UTC · commit [aa4f4f1](https://github.com/21072026/Internship/commit/aa4f4f1c5e6e5df81c4987799e494ae0b87697e9)_
+
+**Group mentoring relations, admin surface (#1804):** `POST /api/admin/relations/group` forms a GROUP — one mentor, 2…25 mentees, ONE relation: the first mentee is the scalar pair (shared create path), the others are `RelationParticipant` seats, every mentee asked the one-active-mentor question (#419) inside one transaction, so a single refusal rolls the whole group back. `GET/POST/DELETE /api/admin/relations/[id]/participants` lists members (left seats kept as history), seats a mentee, co-mentor or facilitator in a GROUP (a one-to-one answers `409 not_group`), and lets a seat go with `leftAt`; the pair answers `409 primary_pair` (it changes through the mentor transfer). Bench, eligibility and the plan cap apply as for a direct assignment; a group counts once. `/admin/mentorship` gets a "Form a group" dialog, a Group chip and a members panel.
+
+## [0.594.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 22:42 UTC · commit [a674077](https://github.com/21072026/Internship/commit/a674077538693ac7eee2461ccf35450abf93a4e9)_
+
+Placement numbers count only PLACEMENT relations whose hire is ours (#1504): coaching pairs leave the funnel and both sides of every placement rate, and SELF_FOUND / ALREADY_EMPLOYED hires are not placements — one rule in `src/lib/placement.ts`, read by admin analytics, cohort/programme comparison, benchmark, source conversion and mentor analytics. Data with no kind or attribution set reads exactly as before.
+
+## [0.594.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 22:39 UTC · commit [d0dd7fa](https://github.com/21072026/Internship/commit/d0dd7fa089877d99d668e22237f5b06c5039ff67)_
+
+**Social sign-in — Google, Microsoft, LinkedIn (#1962):** on the tenant-SSO OIDC engine, now split into a provider-agnostic `OidcClient` core (`providerDocs` / `beginAuthorization` / `exchangeAndVerify`; the org functions are thin adapters). Operator config from env behind the `SOCIAL_SIGN_IN` flag; a provider without credentials is invisible (no button, 404). New `UserIdentity` (linked on provider SUBJECT, `@@unique([provider, subject])`), `SsoAuthRequest.linkUserId` and a wider `kind`. Linking rule pure in `src/lib/socialProvidersRule.ts`: known subject signs in; connect from `/account` links to the signed-in account; an email match links only on a VERIFIED email (missing claim = unverified; Microsoft via `xms_edov`); no match creates a MENTEE in the default org (pending under manual self-registration). The callback mints no session — it mints a single-use sign-in link redeemed through the `magic` provider, so enforced SSO, pending/inactive, world and the account's own 2FA all apply. `/account` lists and unlinks identities; the last way in is refused (409). Docs `docs/social-sign-in.md`; tests `scripts/test/social-sign-in.test.mjs`, `e2e/social-sign-in.spec.ts` (@smoke, all three providers against the stub IdP).
+
+## [0.593.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 22:31 UTC · commit [63d3f71](https://github.com/21072026/Internship/commit/63d3f7168a0cc3e58cc17870e64c2e24743a6ef9)_
+
+**Tenant welcome page (#1664):** an organization can write a short welcome (`Organization.welcomeTitle` VARCHAR(120), `welcomeBody` TEXT — additive, nullable) in the white-label card of `/admin/organizations`. On its own VERIFIED domain (`resolveOrgFromHost()`, #1661), `/` then shows the tenant's logo, headline and text with Sign in (`/auth/signin`) and Apply (`/apply`, only where the vertical has `mentorship`) instead of our marketing landing. The text is plain: `welcomeParagraphs()` (`src/lib/tenantWelcomeRule.ts`) turns blank lines into paragraphs and React escapes the rest, so markup is shown, never run. Our own hosts ask the database nothing (`isServedHost()`), a signed-in visitor is still redirected to their role home first, an unverified domain or an empty title keeps the landing, and the fields ride the WHITE_LABEL plan gate with the rest of the branding.
+
+## [0.592.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 22:26 UTC · commit [c2cd127](https://github.com/21072026/Internship/commit/c2cd127bf745885dbc8d035f436f8a5b22920f58)_
+
+**Lifecycle badge wherever a pairing is listed (#1774, story #1767):** new `RelationLifecycleBadge` (`src/components/ui/`) — live green, paused amber, completed blue, every other ending grey, the localized end reason as its tooltip — on `/admin/mentorship`, the admin dashboard, the candidate detail panel, the mentor's dashboard, mentee list and mentee page, and the mentee portal and journey; it replaces the two ad-hoc chips on `/admin/mentorship`. The `/admin/mentorship` filter gains PAUSED and ENDED next to ALL/ACTIVE/COMPLETED, through a new `lifecycle=` parameter on `GET /api/mentorship` (`status=` keeps its meaning for every other caller); COMPLETED now means a real completion. Saved views restore the new chips.
+
+## [0.592.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 22:18 UTC · commit [345d8c1](https://github.com/21072026/Internship/commit/345d8c15b06ea5de80f2f7352e1156660de919b1)_
+
+Kudos (#1868): a written, attributed thank-you inside a mentorship — `Kudo` model (no numeric column by design), `GET/POST /api/kudos` with the rule in `src/lib/kudosRule.ts` (only the other side of the pair, or an admin, may send; pair + admins read), trilingual reason presets, a `KudosPanel` on the mentor's mentee page and `/portal/goals`, received thank-yous on `/account`, and a `kudo.received` notification under the `mentorship` preference. Covered by account erasure, `sanitize-db` and user merge.
+
+## [0.591.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 22:17 UTC · commit [1b635b8](https://github.com/21072026/Internship/commit/1b635b82bae7edf6b9694e883467e78c5b4b0c17)_
+
+Score breakdowns name a `customField:<key>` dimension by its question label (`GET /api/admin/matching/custom-fields`), and the rule editor flags and removes rules over a question that is no longer matchable instead of failing the save with a bare error (#1803 follow-ups).
+
+## [0.591.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 22:17 UTC · commit [b107b16](https://github.com/21072026/Internship/commit/b107b1635c555b7c6b1cf2025f6ffae858cb76d0)_
+
+**Relation shapes, the data foundation (#1804, slice 1):** `MentorshipRelation.relationType` (`ONE_TO_ONE` default | `GROUP` | `PEER` | `REVERSE` | `FLASH`; whitelist in client-safe `src/lib/relationShapes.ts` — a different question from `kind`) and the new child model `RelationParticipant` (relationId, userId, role `MENTOR|MENTEE|FACILITATOR`, `isPrimaryPair`, `joinedAt`, `leftAt`; `@@unique([relationId, userId])`). Purely additive: `mentorId`/`menteeId` stay non-null and stay the pair's truth. Seats that mirror the pair (`isPrimaryPair`) grant nothing — a mentor corrected in place can never keep access through a stale row — while seats beyond the pair grant membership until `leftAt` is stamped (a seat is never deleted). `src/lib/relationParticipants.ts`: `isParticipant()`, `memberIdsOf()`, `participantsOf()`, `mentorsOf()`, `menteesOf()`, `writePairSeats()`, `addSeat()`, `leaveSeat()`. Authorization moved to it in `GET /api/mentorship/[id]`, the relation thread (`getThreadIfAllowed`) and `loadAccessibleMeeting`; a thread post and the typing signal reach every current member (`threadRecipients()`). One active mentor (#419) now counts an open MENTEE seat too (`findActiveMentorship`), so a group's mentee cannot also hold a one-to-one. The shared create path writes the pair's mirror seats; a duplicate-account merge moves seats; the insert-only backfill `0036-relation-participants` (`prisma/backfill-relation-participants.mjs`, also on topic deploys) seats every existing relation and is a no-op on re-run.
+
+## [0.590.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 22:15 UTC · commit [652dfa6](https://github.com/21072026/Internship/commit/652dfa682f555b431a0e10704f4d240deadaa50f)_
+
+**Per-organization impersonation policy (#1586):** `Organization.impersonationPolicy` (`full` default | `read_only` | `off`, rule in `src/lib/impersonationPolicyRule.ts`), judged on the TARGET user's org. `off`: `POST /api/admin/impersonate` → 403 `impersonation_off`, no grant/audit/notice. `read_only`: the START grant carries `ImpersonationGrant.readOnly`, the JWT `impersonationReadOnly`, and `src/middleware.ts` refuses every API write from that session centrally (403 `impersonation_read_only`) — before the general allowlist; only `/api/impersonate/stop`, `/api/auth/*` and `/api/csp-report` pass. The banner shows "Read-only". Set on `/admin/organizations` / `PATCH /api/admin/organizations/[id]/impersonation-policy` (org's own ADMIN or a super admin of its world, audited). Docs `docs/impersonation-policy.md`; tests `scripts/test/impersonation-policy.test.mjs`, `e2e/impersonation-governance.spec.ts` (@smoke).
+
+## [0.589.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 22:09 UTC · commit [abe9b3f](https://github.com/21072026/Internship/commit/abe9b3f110ca28b8c3a3f65491fc6f8b97e40f95)_
+
+**The Zapier app (#2004):** `apps/zapier/` is a Zapier Platform CLI project over the public API. Custom auth with the API key, tested with `GET /api/v1/me`, labelled with the organisation's name. Five REST-hook triggers through `/api/v1/hooks` (`new_application`, `pipeline_stage_changed`, `offer_accepted`, `meeting_scheduled`, `interview_request_created`), each with a sample in the catalogue's payload shape. Three actions (`create_candidate`, `log_interaction`, `update_stage`), each sending an `Idempotency-Key` derived from the Zap and its input. A `find_candidate` search by id or e-mail, plus find-or-create. The base URL is the `ICRM_BASE_URL` Zapier env var, defaulting to preview, never production. Offline tests (`node --test` + nock) and `zapier-platform validate` run in `.github/workflows/zapier.yml`; `npm run smoke` exercises auth, a hook cycle and a search against a deployed environment and refuses the production host. `docs/zapier.md` covers versioning, the PR-environment workflow, the breaking-change procedure and the directory checklist (blocker: the app is not yet registered on the maintainer's Zapier account).
+
+## [0.588.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 22:05 UTC · commit [90bf4f5](https://github.com/21072026/Internship/commit/90bf4f5d6827ebb53577f1f7890aab36fd2970c1)_
+
+**Adding a locale is one command, and hand-written locale lists are a ratchet (#2082, slice 2):** `npm run i18n:import -- <file> --create` builds a new locale's block from a complete, reviewed translation file (the English block with every literal replaced, so `Dict` type-checks it), adds it to `dictionaries` and to `locales` in `src/i18n/config.ts`, and refuses any MISSING/MT string or changed placeholder. `npm run check:locale-list` (CI) fails on a new hand-written `['en', 'tr', 'de']` / `'en' | 'tr' | 'de'` outside config.ts; the 36 older copies are pinned in `scripts/locale-list-baseline.json` and only shrink. `PUT /api/profile` (`preferredLanguage`) and `POST /api/mentor-applications` now validate against `locales` and the document review label reads `isLocale()`, so a new language is not refused there. `docs/i18n.md` records what a fourth locale costs today: 755 type errors in 34 files, 636 of them the release-note history.
+
+## [0.588.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 22:05 UTC · commit [5eaced1](https://github.com/21072026/Internship/commit/5eaced132c18773ba7d76d0d14d9c74eeafd8ab3)_
+
+**Placement ledger (#1765):** a hire now stamps a `Placement` row automatically — the new `placement` subscriber of `pipeline.stage_change` (`src/lib/events/subscribers/placement.ts` → `syncPlacementForRelation()` in `src/lib/placementLedger.ts`) reconciles the relation's CURRENT stage against the org's resolved hire stages (`outcomeStageKeys().finished`, never a hardcoded `HIRED_660`), so every stage write path stamps through one place and a redelivered or out-of-order event converges on the same row. The row carries company, accepted offer + requisition, credited mentor, the mentee's source and the relation's `employmentAttribution`; `SELF_FOUND`/`ALREADY_EMPLOYED` get `feeModel: NONE` and `NOT_INVOICEABLE`. Leaving the hire stage sets `reversedAt` (never a delete); returning clears it. COACHING relations and verticals without `placements` are skipped. Additive `Placement` columns (`requisitionId`, `creditedMentorId`, `sourceId`, `attribution`, `feeModel`, `invoiceState` default `NOT_INVOICEABLE`, `invoiceRef`, `invoicedAt`, `reversedAt`). Pure rule in `src/lib/placementRule.ts` (`reconcilePlacement`, `canChangeInvoiceState`, unit-tested). `/admin/placements` ledger (nav `placements`) with filters and a CSV export through the `REPORT_EXPORT`-gated export door (`placements` dataset); `PATCH /api/admin/placements/[id]` moves the invoice state (`org.settings.write`, guarded `updateMany`, `AuditLog` `PLACEMENT_INVOICE_STATE`). The ROI report and the `placement-outcomes` report ignore reversed rows. No public fee page (legal check pending, see the issue).
+
+## [0.587.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 19:05 UTC · commit [8f7d38d](https://github.com/21072026/Internship/commit/8f7d38d250b9810356cee6d29899e3c53a594ef1)_
+
+**Meeting events in chat (#1942):** the meeting invite, the 15-minute reminder, a reschedule and a cancellation now reach a person's verified Slack/Teams identity through the router's `chat` channel (catalog `defaultChannels`; e-mail stays inline). A card carries a "Join the meeting" button (Slack Block Kit `actions`, Teams hero-card `openUrl`, https-only via `safeAction`). New `NotifyOptions.chatCard` (`subjectKey`, `actionUrl`, `supersede`) rides the router, the quiet-hours deferral job and the adapter port; `ChatDelivery` gains `subjectKey` + `supersededAt` (additive). A move or cancel rewrites the person's live cards about the same meeting in place (`chat.update` / Bot Framework PUT) instead of posting a second one, marks them superseded and records one ledger row with the same `externalMessageId`; a cancelled card loses its button. `ChatPlatformClient.updateMessage()` added (stub + recording clients). The reminder's single-shot guard stays `reminderSentAt`, the router dedupes on `meeting-reminder:<id>:<user>:<slot>`. Pinned by `e2e/meeting-chat-cards.spec.ts` and `e2e/chat-card.unit.spec.ts` (@smoke).
+
+## [0.586.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 18:36 UTC · commit [6f1f686](https://github.com/21072026/Internship/commit/6f1f686dde8c2d36f4dacfead1d0fb31df8a8f2e)_
+
+Admin-defined REGISTRATION questions on the public apply link and the become-a-mentor form (#1803): `GET /api/forms/public`, answers validated before any account exists (`invalid_answers`), written onto the account `/api/apply` creates, and staged on `MentorApplication.formAnswers` until approval or invitation registration carries them over.
+
+## [0.585.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 18:32 UTC · commit [ba6463b](https://github.com/21072026/Internship/commit/ba6463be4e72f9484348e12b09a3fc83bc05c687)_
+
+**Bench reason cap (#1778 follow-up):** `TEXT_LIMITS.benchReason` lowered from 500 to 240 so the bench reason meets the single-line bar `e2e/text-limits-columns.unit.spec.ts` sets for every VARCHAR-backed reason (a 250-character paste is refused by the route, not by the database). The `User.benchedReason` column is unchanged.
+
+## [0.585.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 18:32 UTC · commit [f7d86bc](https://github.com/21072026/Internship/commit/f7d86bcd1f9d2024f9e66861f4c9547355662c27)_
+
+**Admin tier & scope assignment (#1579):** an "Admin tiers" panel on `/admin/users` and `/api/admin/roles` (GET/PATCH tier/POST grant/DELETE grant) behind the new `admin.grant` permission (ORG_ADMIN only, through `requirePermission()` — no second authorization path). Guards are pure in `src/lib/adminTierRule.ts` and applied by the one writer `src/lib/adminTiers.ts`: no self-change, never above one's own tier, scope grants only for PROGRAM_ADMIN and only the org's own cohorts/companies, and the org's last ACTIVE ORG_ADMIN cannot be demoted, deactivated (`PATCH /api/users/[id]`) or delete their account (`DELETE /api/account`, now tier-aware). A tier change stamps `sessionsValidFrom` and revokes trusted devices, writes `AuditLog` `ADMIN_LEVEL_CHANGE` and notifies the target (`admin_tier.changed`); grants write `ADMIN_SCOPE_GRANT`/`ADMIN_SCOPE_REVOKE`. `AdminNav` hides write-only links (automations, nudges) from tiers that cannot open them — cosmetic, the 403 is the control. Tests: `scripts/test/admin-tier-rule.test.mjs`, `e2e/admin-tiers.spec.ts` (@smoke).
+
+## [0.584.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 18:30 UTC · commit [22d095a](https://github.com/21072026/Internship/commit/22d095a66ef7efcb1e68516d7bafbf88b147e983)_
+
+**Affiliate partner application (#3361):** `/partner/apply` on the marketing host — first/last name, e-mail, optional company and phone, "how did you hear about us?" (`AFFILIATE_HEARD_FROM`, `other` with text) and a required privacy consent; no password, no account. New tenant model `AffiliateApplication` (`PENDING`/`APPROVED`/`REJECTED`, consent time + privacy text version, decision fields for #3362) written only by `submitAffiliateApplication()` through the sessionless `POST /api/partner/apply`: org from the host's programme (`affiliateProgrammeForHost()`, 503 without one), 3/hour per IP, honeypot, minimum render time, one pending application and three rows per address and org per day, the same 200 for every accepted body. Admins get `affiliate_application.new` in the app; the applicant an acknowledgement (`affiliate-application-received`, `inbound_requests`, outbound-exempt). Rows are deleted after 180 days by the new `affiliateApplication` retention entry. Rule pure in `src/lib/affiliateApplicationRule.ts` (unit-tested); pinned by `e2e/affiliate-application.spec.ts` (tenant routing @smoke).
+
+## [0.583.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 18:26 UTC · commit [f52d41b](https://github.com/21072026/Internship/commit/f52d41b19d441c4dfa3525e36d12c21038cc26c5)_
+
+**`GET /api/v1/candidates?email=` (#2004):** an exact, case-insensitive e-mail lookup on the candidate list — the "do we already have this person?" step a connector (the Zapier app's `find_candidate` search) runs before it creates. The address is matched, never returned; the lookup stays inside the key's organisation (and its source, for a source key). Documented in the OpenAPI document; pinned in `e2e/api-v1-read-breadth.spec.ts`.
+
+## [0.582.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 18:23 UTC · commit [8fe9259](https://github.com/21072026/Internship/commit/8fe9259e0fc5bbdcd32a2ef7eaeb1ad6ef60b1d3)_
+
+**Programme filter on the analytics screens (#1652):** optional `?program=<id>|unassigned` on `/api/admin/analytics`, `/funnel` and `/aging` narrows every relation-based number (funnel, KPI cards, trend, mentor workload, interactions and relation meetings) to one programme — free on every plan. The id is checked against the caller's tenant before anything is computed (`src/lib/programFilter.ts`; another org's id is a 404), and `all` adds nothing to any `where`, so the unfiltered screen is unchanged. `/admin/analytics` gets a selector (`data-testid="analytics-program-filter"`) kept in the URL. The premium comparison moves to `/api/admin/analytics/programs` with an explicit `unassigned` row so the programmes add up to the tenant total; `/api/admin/analytics/cohorts` stays as a one-release alias. Pinned by `scripts/test/program-filter.test.mjs` and `e2e/program-analytics-filter.spec.ts` (@smoke).
+
+## [0.581.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 18:21 UTC · commit [553eb75](https://github.com/21072026/Internship/commit/553eb758cb9c3299b389437466af797982ca80d1)_
+
+Fixed: `/notifications` no longer jumps back to page 1 when "Next" is clicked right after the page opens (the search debounce reset the page on mount), and the announcement audience checkboxes are 24px tap targets (WCAG 2.5.8) at phone width.
+
+## [0.581.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 18:17 UTC · commit [906967b](https://github.com/21072026/Internship/commit/906967b260c53f64f901c4c765e06ca03a07b743)_
+
+Admin-defined questions on onboarding (mentee and mentor wizards) and the mentorship request panel, and a read-only answers panel on the admin candidate and mentor pages (`GET /api/admin/users/[id]/form-answers`, #1803).
+
+## [0.580.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 18:16 UTC · commit [000dca9](https://github.com/21072026/Internship/commit/000dca9a6f4ed3e50bd1de20a4cde9aff952fa25)_
+
+**The bench (#1778, story #1776):** new `User.participantState` (`ACTIVE` | `BENCHED`, free String + whitelist in `src/lib/participantState.ts`) with `benchedAt` / `benchedReason` / `benchedById`. A benched person still signs in — `isActive`, `sessionsValidFrom` and `consentAt` are never touched (`src/lib/bench.ts`, the one writer) — but is left out of the mentor pool, the cohort pass, the mentor directory and the attention list, refused server-side with `409 mentor_benched` by every assignment path (direct, request approval, the mentor's own accept, match-round publish, mentor offers, a mentor adding a mentee), and skipped by the nudge engine, the dormant check-in, the weekly-report reminder, the mentor digests and the ending-soon nudge. `/admin/users` gets an *On the bench* tab, per-row Bench/Return, a checkbox bulk action and **Re-invite the bench** (the existing re-engagement reminder, `checkReEngagementReminders({ userIds })`). APIs: `PATCH /api/admin/users/[id]/bench`, `POST /api/admin/users/bench` (ids or a cohort's mentees, ≤500), `POST /api/admin/users/bench/reinvite`. docs/bench.md.
+
+## [0.579.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 18:10 UTC · commit [cf726ab](https://github.com/21072026/Internship/commit/cf726ab54b0ff46db3b494a0d049fabcc2aac033)_
+
+Mentors can set and clear the stage deadline of their own mentee on the mentee detail page (`PUT /api/mentorship/[id]`), so the attention queue's "Stage overdue" reason can finally fire for them (#1373). The relation's company stays an admin decision (#2613).
+
+## [0.578.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 18:09 UTC · commit [193c430](https://github.com/21072026/Internship/commit/193c430cfdb74283f09adfa04522b1f530b39311)_
+
+**`requisition.status_changed` (#1998):** a public event `{ requisitionId, from, to }` raised by every writer of `Requisition.status` through `raiseRequisitionStatus()` (`src/lib/requisitionEvents.ts`): the create route (`from` null), the edit route and the acceptance that takes the last opening (both inside their transaction, via `emitInTransaction`, so a rolled-back edit raises nothing), and the sample programme. Company webhooks may subscribe to it (delivered only for their own requisitions). `docs/domain-events.md` maps #1998's requested names to the published ones.
+
+## [0.577.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 18:04 UTC · commit [647cebe](https://github.com/21072026/Internship/commit/647cebe71f1f36fc096a0a09d8a52f7dc0a0fede)_
+
+**Translator pipeline (#2082, slice 1):** `npm run i18n:export` writes one flat JSON file per locale (`i18n/exports/<locale>.json`, gitignored) with the English source and the code comment beside every string and `MISSING` where there is none. `npm run i18n:import` merges a returned file back into `src/i18n/dictionaries.ts` by rewriting only the changed literals in place, and refuses the whole file when it would drop a key, names an unknown one, still has MISSING or unreviewed `MT` strings, or changes a string's `{placeholders}`. Both parse the dictionary with the TypeScript compiler (`scripts/i18n-dict-lib.mjs`). Export → import with no edits is byte-identical, pinned against the real dictionary in `scripts/test/i18n-pipeline.test.mjs`. The procedure, glossary and add-a-locale checklist are in `docs/i18n.md`.
+
+## [0.577.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:56 UTC · commit [4eb1893](https://github.com/21072026/Internship/commit/4eb18937d67e9956f40b6bbc3d8e0cf754bfd917)_
+
+**Account mails in the template editor (#3399):** the invitation, password-reset and e-mail-verification mails are catalogue events (`account.invitation`, `account.passwordReset`, `account.verification`) and take an org's own template from `/admin/notification-templates`. The one-time link is never a merge tag: `renderNotificationEmail({ actionUrl })` always draws it as the button and the copy line, so a template can change the wording but not remove or replace the link. With no template the mail is unchanged; SET_INITIAL keeps its own copy. The reset and verification mails now read `emailDictionary(locale, orgId)` (`check:mail-dictionary` ratchet 25 → 23).
+
+## [0.576.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:52 UTC · commit [0e067b2](https://github.com/21072026/Internship/commit/0e067b29af1824f7a329d423f8a07dcff74bc899)_
+
+**Alt text for support-conversation images (EN 301 549 11.8.2, #3407):** `SupportAttachment.altText` (nullable `VarChar(500)`). Both support composers (`/messages/support`, `/admin/support`) show the shared "Describe this image" field (`PendingAttachmentList` `onAltChange`); `/api/support` (through `readSupportMessageRequest` + `buildSupportAttachments`) and `/api/admin/support` pair one `altText` per `files` entry (images only, trimmed, over 500 → 400); `SupportAttachmentList` renders it as `alt` and button name, the filename as fallback. VPAT 11.8.2 and 504.2 now read `Supports`; 504.3 stays Partially (no other author checking, #2864).
+
+## [0.575.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:46 UTC · commit [e266b92](https://github.com/21072026/Internship/commit/e266b921b89f069a7bf6680ff9478a11e83e30b4)_
+
+**SOURCE outcome panel (#1914):** `GET /api/source/outcomes?from=&to=` (role SOURCE, `sourcing` capability, scoped server-side to the caller's own `sourceId` — a SOURCE login without one gets 403, never an unscoped read) and `/source/outcomes` (nav + a link from the portal): referred / in progress / placed counts, the tenant's resolved stage distribution, a censoring-aware median time to placement (unplaced referrals excluded), a monthly trend and the source's own referral rows with an XLSX export. "Placed" is the tenant's finished stage set (`outcomeStageKeys`, #1882); the conversion and the programme comparison are withheld below `DEFAULT_MIN_COHORT` (#1903). Placing companies are not named — no disclosure rule exists for that. Arithmetic is pure in `src/lib/sourceOutcomesRule.ts` (`scripts/test/source-outcomes.test.mjs`); isolation and the 403 path pinned by `e2e/source-outcomes.spec.ts` (@smoke).
+
+## [0.574.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:44 UTC · commit [4b331e9](https://github.com/21072026/Internship/commit/4b331e9c8ffd5d52d8034472d3162306914e6eb5)_
+
+**Profile digests for the semantic match rule (#2038, slice 2):** new AI task `profile_digest` (operator, `AI_CV_PARSING` consent of the person, `fast` tier) turns a person's OWN labelled text — bio, interests, target position, skills and the titles of goals they wrote, each field bounded, contact details masked — into a 2-3 sentence neutral summary and ≤ 12 English theme tokens on `ProfileDigest` (`src/lib/ai/profileDigest.ts`; rules pure in `src/lib/profileDigestRule.ts`; the one writer `refreshProfileDigest()` in `src/lib/profileDigest.ts`). The model is called only when the text's sha256 differs from the stored `sourceHash` or the person asks; skills alone make no digest, and a profile emptied of text removes it. A nightly queued job `profileDigest.refresh` (02:35 UTC) scans up to 500 consenting MENTORs/MENTEEs — no-digest-yet by most recent edit, existing ones by longest unchecked, marking checked rows — and makes at most 50 model calls; an org whose AI is off, unpaid or out of quota is skipped silently. `GET`/`POST /api/profile/digest` let a person read exactly what is stored about them and regenerate it (session user only, 3/hour, `mentorship` capability); the profile page shows it in a new card (`ProfileDigestCard`, EN/TR/DE). Without a digest the semantic rule stays not applicable and matching runs on the deterministic rules.
+
+## [0.573.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:44 UTC · commit [f3d3dea](https://github.com/21072026/Internship/commit/f3d3dea2def0c3fff20d099ca56bf230a200d8f3)_
+
+Matchable admin-defined questions feed matching (#1803): a `customField:<key>` dimension family (exact / overlap / closeness with tolerance), answers loaded in bulk for the whole pass (`src/lib/matching/customAnswers.ts`), offered in the rule editor and refused at the save unless the field is matchable in the org (`not_matchable_field`).
+
+## [0.572.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:40 UTC · commit [c11edf8](https://github.com/21072026/Internship/commit/c11edf8cfe10a49698719551113bd58472ece7ca)_
+
+**Closure plan, close-loop survey and the closure report (#1795, story #1788):** ending a pairing (`POST /api/mentorship/[id]/lifecycle`) takes an optional `closurePlan` — the pair's agreed next steps, new `MentorshipRelation.closurePlan`, shown to both sides on the archived pairing and scrubbed on erasure. The close-loop survey is a new `relation_close` survey template (overall 1–5, goals met 1–5, the NPS item, a comment; CONFIDENTIAL) run by the existing survey engine through a day-0 `DAYS_AFTER_END` campaign for BOTH sides — no second survey engine, so invitations, signed links, the two-reminder cap and opt-outs are the engine's. `/admin/analytics/closure` (`GET/POST /api/admin/analytics/closure`, `src/lib/closureReport.ts`, unit-tested) switches it on and reports the pairings ended in a period by lifecycle outcome and end reason, with response rate, median length and aggregate scores above the response floor; only `COMPLETED` counts as a success. Engine fix: a `DAYS_AFTER_END` period (and its invitation round) is now per relation (`after:<n>:<relationId>`), so a mentor who ends two pairings is asked about each; sends under the old key count as sent.
+
+## [0.571.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:36 UTC · commit [f6b3d6b](https://github.com/21072026/Internship/commit/f6b3d6b0aec4121df05b514fd8f6d3b36cb80c62)_
+
+**Admin oversight of self-served credentials (#2006):** the admin integrations screen labels every API key and webhook a COMPANY or SOURCE owner minted with whose it is (`api-key-scope-owner-*`, `webhook-scope-owner-*`), next to who issued it; org-wide credentials carry no label. Pinned by `e2e/admin-integrations-owner.spec.ts`.
+
+## [0.571.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:32 UTC · commit [f773798](https://github.com/21072026/Internship/commit/f77379830b7840c4ab82136e01b7fe046afbff67)_
+
+**A programme's own vocabulary on its pages (#3400):** the page dictionary now reads the terminology's programme layer for a signed-in mentee (their active mentorship's programme) or mentor (the programme all their active mentorships share), derived from the database in `requestProgramId()` (`src/i18n/server.ts`), never from request input. `/admin/programs/[id]/…` mounts `ProgramTerminologyScope` (`src/i18n/programScope.tsx`), which honours the route id only for a programme of the caller's org and applies the programme document over the overlaid base (`overlaidDictionary()`). With no programme row nothing changes.
+
+## [0.570.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:28 UTC · commit [ad34dc5](https://github.com/21072026/Internship/commit/ad34dc57d83da33846dc6c78e30123c616d2c921)_
+
+**Per-tenant SSO discovery (#1665):** on a tenant's DNS-verified host (or `<slug>.<APP_ROOT_DOMAIN>`), `/auth/signin` leads with "Continue with <brand> SSO" and `/auth/sso` redirects straight to the tenant's login route — no organisation code. `src/lib/ssoDiscovery.ts` resolves only through `resolveOrgFromHost()` and offers only an SSO-active, unarchived org; the default host, unverified domains and SSO-off tenants keep the code form. With `ssoEnforced` the page says the password form is for exempt admins; the refusal stays server-side (#1950). SP identifiers are unchanged (one registered endpoint, #2494). e2e `e2e/sso-discovery.spec.ts` (@smoke).
+
+## [0.569.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:24 UTC · commit [31fa389](https://github.com/21072026/Internship/commit/31fa38965737188c7109391418b4d7d5d6058367)_
+
+**`npm run check:notify` (#1711):** a CI guard that fails on a raw `sendEmail(` / `sendPushToUser(` / `prisma.notification.create` outside `src/lib/notifications/`. The 75 sites in 16 files not yet moved behind `notifyEvent()` are pinned in `scripts/notify-baseline.json`, which only shrinks (`-- --shrink`, same ratchet as `check:authz`); the sends that stay by decision — newsletter dispatch, the security notices' inline mail, operator alerts, admin test mails and the in-app transport itself — are in its `allowed` block with a reason. Unit-tested in `scripts/test/check-notify.test.mjs`.
+
+## [0.569.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:23 UTC · commit [0ca240c](https://github.com/21072026/Internship/commit/0ca240c47140bab2f696c2f814faa56f0efe5c18)_
+
+**Cross-replica realtime (#1698):** with `REALTIME_REDIS_URL` set, `publishRealtime()` still delivers locally first and also publishes the signal on a per-deployment Redis pub/sub channel (`src/lib/realtimeBroker.ts`, reusing the rate-limit store's dependency-free RESP), so SSE streams on another replica get it instantly; a replica ignores its own echo by origin. Only the signal crosses — type, ids, recipients — enforced on both ends by `src/lib/realtimeBrokerRule.ts`; never message content. Unset, behaviour is unchanged; a broker outage degrades to local delivery plus the heartbeat re-check, logged once, redialled with 1 s→60 s backoff. Proven over a real socket in `scripts/test/realtime-broker.test.mjs`.
+
+## [0.568.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:21 UTC · commit [0206396](https://github.com/21072026/Internship/commit/02063965a8e8990ca4f79b096b96e1253a09f790)_
+
+**Edit an interaction log (#1356):** the mentee detail page gets an edit (pencil) button next to each log, which reuses the add form in edit mode and sends `PUT /api/interactions/[id]` with only the changed fields (an untouched date is not re-sent, so a log's time of day survives). The create and edit routes now share one schema, `src/lib/interactionSchema.ts`: the PUT gains `subject` (an empty value clears it) and both refuse an unparseable `date` with a 400 instead of a 500. Who may edit is unchanged — the pair's mentor or an admin with `relation.write`, another mentor's log is 403.
+
+## [0.567.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:16 UTC · commit [549b834](https://github.com/21072026/Internship/commit/549b834ec7cbc4291f5bf8af81b7cf238a1e89c2)_
+
+**Self-serve webhooks for SOURCE owners (#2006):** the company hook model applied to a referring source — `Webhook.sourceId` (relation `ownerSource`), `SOURCE_WEBHOOK_EVENTS` (`user.created` and the mentorship events; `src/lib/sourceWebhookRule.ts`, above it `403 event_above_ceiling`), and a delivery-time check `sourceReceiverCheck()` (`src/lib/sourceWebhookScope.ts`) that resolves the event's candidate and delivers only when that source referred it — fail closed. Fan-out and replay compose both owner checks in one `ownerReceiverCheck()`. `POST/GET/DELETE /api/source/integrations/webhooks` (SSRF guard, plan gate, 10 per source, warning-level audit, demo blocklist), the admin hook list shows the owning source, and the webhook form is now the shared `OwnerWebhooks` (company and source pages). Pinned by `e2e/source-webhooks.spec.ts` (@smoke).
+
+## [0.566.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:14 UTC · commit [c8a0456](https://github.com/21072026/Internship/commit/c8a045608dff704ffdbb7dd6458ddf0d93e0f6b1)_
+
+**Reply by e-mail in project group chats (#1713):** a new conversation-scoped reply token `c=<conversationId>~<recipientUserId>` (`makeConversationReplyToken` / `conversationReplyAddress` in `src/lib/replyToken.ts`; `=` is RFC 5322 atext and never inside a cuid, so it cannot collide with a relation token). Message mail from a thread with no mentorship behind it — a project group chat or a project DM — now carries a working `Reply-To`. `routeInboundEmail()` branches on the token kind: the conversation branch attributes the sender from the conversation's own participants (`From`, else the token's recipient while still a participant, logged), re-checks the right to post with `canPostToConversation()` at write time (a member removed from the project gets 403), keeps the Message-ID idempotency and the EN/TR/DE quote stripping, and notifies the other room members as the in-app composer does. Old bare and `relationId~userId` tokens verify unchanged. Tests: `e2e/inbound-email.spec.ts` (group case), `e2e/reply-token.unit.spec.ts`.
+
+## [0.565.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:10 UTC · commit [ef1951b](https://github.com/21072026/Internship/commit/ef1951bd95bb03cd8e0625f93b8ce2e916b69699)_
+
+- **Affiliate: automatic attribution from account events** (#3354). An account event whose `referral_code` matches an ACTIVE `AffiliatePartner.code` of the same org now creates the `AffiliateCustomer` row (`externalRef` = the event's `external_id`) inside the ingest, idempotently (`INSERT IGNORE` on `(orgId, externalRef)`); first link wins (an `integration.affiliate_kept_first` activity line instead of a re-point), suspended/terminated partners and other orgs' codes never link, a batch dry run writes nothing. The decision is the pure `planAffiliateAttribution()` (`src/lib/affiliateAttributionRule.ts`, unit-tested); the later manual payment entry finds the customer without a partner pick. Pinned by `e2e/affiliate-auto-attribution.spec.ts` (@smoke).
+
+## [0.564.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:05 UTC · commit [9e29603](https://github.com/21072026/Internship/commit/9e2960327669927fee409987f33872c661e98e6d)_
+
+**Self-serve API keys for SOURCE owners (#2006):** the company model applied to a referring source — `ApiKey.sourceId`, `SOURCE_KEY_SCOPE_CEILING = ['candidates:read']` (`src/lib/sourceApiKeyRule.ts`; above it is `403 scope_above_ceiling`), `withApiKey(…, { sourceScoped: true })` + `sourceOnly(key)` on `GET /api/v1/candidates` (list and item) and `/me`, every other route answering `403 source_key_not_allowed`. `POST/GET/DELETE /api/source/integrations/api-keys` (`ownSource()`, `403 source_not_assigned`, warning-level audit, demo blocklist) and a `/source/integrations` page; the company page's key screen is now the shared `OwnerApiKeys` component. The admin key list shows the owning source. Pinned by `e2e/source-api-keys.spec.ts` (@smoke).
+
+## [0.563.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:01 UTC · commit [bc33c6d](https://github.com/21072026/Internship/commit/bc33c6df32cb529afb0a2a4ced1e4a0a079159b7)_
+
+**Programme eligibility rules (#1945):** `ProgramEligibilityRule` (tenant model; effect ALLOW/DENY, allowlisted attribute or `attr:<key>`, operator EQUALS/IN/NOT_IN/GTE/LTE/EXISTS, priority, active) plus `Organization.eligibilityMode` and `Cohort.eligibilityMode` (`OPEN` default, `RULES` = ineligible by default). One evaluator in `src/lib/eligibilityRule.ts` (priority, DENY beats ALLOW at equal priority, deterministic), loaded by `src/lib/eligibility.ts`. Enforced server-side: `POST /api/mentorship` and `mentor-suggest` 403 `not_eligible` with the rule, the public apply form 403 before an account exists, SSO JIT provisions an unadmitted new mentee inactive + pendingApproval (`?error=sso_pending_approval`, `eligibility.denied`), match rounds drop ineligible mentees before scoring; invitation registration exempt. Builder at `/admin/cohorts/eligibility` with a live "who does this admit?" dry run (`/api/admin/eligibility/preview`, two queries). Docs `docs/program-eligibility.md`; tests `scripts/test/eligibility.test.mjs`, `e2e/program-eligibility.spec.ts` (@smoke).
+
+## [0.562.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:01 UTC · commit [dc58201](https://github.com/21072026/Internship/commit/dc58201af0de7f9f252c4eab8c0c4dee2af95ba4)_
+
+**Message push through the notification router (#1715):** `message.new`, `message.newGeneric` and `message.newByEmail` now list `push` and their two send sites (`POST /api/messages`, inbound e-mail replies) call `notifyEvent(..., { channels: ['push'], preview, dedupeKey: 'message:<id>' })` instead of the retired `sendNewMessagePush()`. Every message push is a `NotificationDelivery` row — a muted category or the channel matrix is a recorded `SKIPPED`, a phone-less recipient `no_device`, a retried POST deduped — and quiet hours hold it (title only, so no message text sits in the queue). The push adapter keeps the 140-char preview and collapses every `thread` event per thread; `notificationLink()` gains a `conversationId` link id (`/messages/c/<id>`). The /account channel matrix now shows push as on for Messages, which is what has always happened.
+
+## [0.562.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:00 UTC · commit [4ddf69e](https://github.com/21072026/Internship/commit/4ddf69e700268c1f77346e49a5e88df4770c9a8a)_
+
+**Semantic match rule, the scoring half (#2038, story #2019):** new soft dimension `semanticAffinity` in the #1781 registry — it compares two people's cached profile THEMES (`ProfileDigest.themes`, new tenant model: `userId @unique`, `digest`, `themes`, `sourceHash`, `model`) with deterministic arithmetic in the pure, client-safe `src/lib/matching/semantic.ts` (an exact theme counts 1, a theme sharing a significant word counts ½, over the mentee's themes) and names the shared themes in the breakdown row. No provider call happens at query time; a person without a digest leaves the rule not applicable (the same 0 for everybody), and weight 0 reproduces the ranking without the rule exactly. The rule is soft-only (`SOFT_ONLY_DIMENSIONS`): the rule-set schema refuses a hard kind for it and the scorer reads a stray one as weighted; the `/admin/matching` editor locks its kind. The pool loaders read the digest in the same query as the person, so suggestions, the dry run, the cohort pass, swaps and decision records all score it. Not in the built-in default set — an org adds it with its own weight. Account erasure deletes the digest. Generation of the digests (the AI task, refresh job, and a person's own read/regenerate) follows in the next slice.
+
+## [0.561.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 17:00 UTC · commit [726767d](https://github.com/21072026/Internship/commit/726767d781f6f5833cfb093cd3e2bbf4f47c69c8)_
+
+Admin-defined questions now appear on the profile (#1803): `GET /api/forms/active`, `GET|PUT /api/forms/responses` (answers written only by their owner, validated with the shared `validateResponse()`), and the `DynamicFields` renderer mounted in `ProfileForm`.
+
+## [0.560.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 16:52 UTC · commit [db89720](https://github.com/21072026/Internship/commit/db897209166f4c2a929b46505f52a68912535e73)_
+
+**Ending-soon nudge, one-click extend and the below-rhythm signal (#1786, story #1782):** a daily `reminders.relationEnding` job (09:00 batch; `/api/cron?job=relation-ending`) gives every live, unpaused pairing whose `expectedEndDate` falls inside the programme → org setting `relationEndingLeadDays` (default 14) ONE ending-soon notice + mail to both participants in their own language, claimed by a guarded update of `endingSoonNotifiedAt` before anyone is told (mail category `relation-ending`, dedupe key per recipient and end date). Never a second chase, never an automatic closure or extension. `POST /api/mentorship/[id]/extend` (ADMIN or the relation's mentor; a mentee gets 403) and the mentor's signed one-click mail link (`/m/<token>`, new `extend` email-action kind bound to the announced end date, so a replay is refused as `stale`) both go through `extendRelation()` (`src/lib/relationExtend.ts`): moves the date later, `durationExtendedCount + 1`, clears the stamp, writes a `RelationLifecycleEvent` (reason `extended`, state unchanged), raises `mentorship.extended` and tells the mentee. New public webhook events `mentorship.ending_soon` and `mentorship.extended`. The mentor attention queue gains `behind_cadence` — the gap since the pair last met exceeds 1.5 × the agreed `expectedMeetingIntervalWeeks`; a pair with no agreed rhythm shows nothing. Rules pure in `src/lib/relationEnding.ts` (unit-tested); docs/relation-ending.md.
+
+## [0.559.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:53 UTC · commit [8250a64](https://github.com/21072026/Internship/commit/8250a64c5a65f8c0923e7e67c9124e67ff784074)_
+
+**Affiliate public programme page (#3360):** `/partner` on the marketing host, signed out — hero with three doors (apply, partner portal, the product's sign-up page), introduction, a commission table built from the org's plan on every render (`commissionTableRows()` / `maxOneOffCommission()` in `src/lib/affiliateLandingRule.ts`, unit-tested), the percent phase in one sentence, the steps, a call button (`tel:`), the closing call to action with an e-mail button (`mailto:`) and this host's imprint/privacy/terms in the footer. The org is the one an operator mapped the host to, through the public company-inquiry resolver (`resolvePublicInquiryTarget`, same trust note); the page exists only for a MARKETING org with the `affiliate` capability, a valid plan and some copy (#3359) — anything less is a 404. Colours and mark follow the host's brand; every organisation-specific word is data. Deliberately not in `PUBLIC_ROUTES` (it 404s where no programme is configured). Pinned by `e2e/affiliate-public-page.spec.ts`.
+
+## [0.558.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:53 UTC · commit [a191a4d](https://github.com/21072026/Internship/commit/a191a4d87f555ab79412999e2fa960f34709a20b)_
+
+- **Partner portal: "Your commission terms" box** (#3349). The portal home shows the organisation's current commission plan read-only: one-off bands, the commission above the last band, the percent phase (rate, the paying customer it starts with, what that customer's own first payment earns, window in months), the due days, the rule after a termination, the plan version and its effective date, and the note that a change applies only to later payments. The plan is read through `partnerPlanTerms()` from the partner's own org (session, never the request) behind the existing contract gate; the reshaping is the pure, unit-tested `affiliatePlanTerms.ts`. No write path.
+
+## [0.557.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:53 UTC · commit [cd47c0f](https://github.com/21072026/Internship/commit/cd47c0f262b08c6f06f2025ade25a13aabf32df5)_
+
+- **Partner portal: payouts get their own name in Turkish** (#3350). "Ödemeler" meant both a customer's payments (admin) and the payouts to a partner (portal). The portal's payout menu entry, page title, empty state, detail title, back link and bank-details hint now say "Hak ediş ödemeleri". EN (Payouts / Payments) and DE (Auszahlungen / Zahlungen) already separated the two.
+
+## [0.557.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:53 UTC · commit [e77c53e](https://github.com/21072026/Internship/commit/e77c53e5793258b9d5391ec1c5d62566ac3280b8)_
+
+**Form builder (#1802):** `/admin/forms` lists every admin-defined form by surface and audience with its live/draft/archived versions, and creates one; `/admin/forms/[id]` is the builder — reorder, add a field of any `FORM_FIELD_TYPES` type, EN/TR/DE labels and help text side by side, options for choice types, `required`, and `matchable` (disabled with its reason for free text; the API refuses it too). A field whose key or label reads like a protected characteristic shows a warning that never blocks (`proxyWarnings`). The live preview renders through `FormFieldInput` (`src/components/forms/FormFieldInput.tsx`, the component the real forms will use, #1803) and validates with the shared `validateResponse()`, in a chosen language. The screen lists untranslated fields and holds the publish button (`missingLocales`, the same rule the server refuses `missing_locales` on); publishing confirms with the diff against the live version (`diffFields`) and states that answers already given are kept. Admin nav link (`mentorship` capability), mobile menu icon, EN/TR/DE builder chrome (`formsAdmin`, `LEAK_EXEMPT` with its reason). e2e `form-builder.spec.ts`.
+
+## [0.556.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:49 UTC · commit [07249fb](https://github.com/21072026/Internship/commit/07249fb05bdedfb10167c7ec7b3fe72348734b85)_
+
+**Alt text for announcement and newsletter images (EN 301 549 11.8.2 / Section 508 504.3, #3388):** `AnnouncementImage.altText` and `NewsletterImage.altText` (nullable `VarChar(500)`). Both admin composers show a "Describe this image" field when an image is attached (`imageAlt` multipart field; announcement and newsletter PATCH accept `imageAlt` to change it on an existing image, '' = decorative; over 500 → 400 `too_long`). The feed, the /announcements page, the admin history, the newsletter archive and both mails (announcement `cid:` image, newsletter hero) render it as `alt`, empty when none was given. Support-conversation images follow in #3407; VPAT 11.8.2, 504.2, 504.3 updated.
+
+## [0.555.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:46 UTC · commit [cb40d1f](https://github.com/21072026/Internship/commit/cb40d1fac60cd2c26cf24c21f516d2ce04b7e6db)_
+
+**SSO directory sync (#1943):** every SSO sign-in (SAML and OIDC, through `completeSsoSignIn()`) refreshes the profile from the IdP's claims. New `SsoAttributeMapping` (claim → allowlisted target: `fullName`, `department`, `targetPosition`, `city`, `country`, `timezone`, `phone`, `photo`, `attr:<OrgAttribute.key>`; tenant model), `Organization.ssoAuthoritative`, `User.ssoLastSyncedAt` / `ssoSyncError` / `ssoPhotoUrlHash` (all additive). Overwrites go through `planFieldUpdates()` (fill gaps unless authoritative). The photo is fetched through the SSRF guard (5 s, 2 MB, image signature) or decoded from inline base64, stored as `AvatarFile` bytes after the response, never hotlinked; no sync problem fails a sign-in. API `/api/admin/organizations/[id]/sso-attribute-mappings`, card on `/admin/organizations`, `sso.profile_synced` audit line with field names only. Rule in `src/lib/ssoDirectorySyncRule.ts` (`scripts/test/sso-directory-sync.test.mjs`), e2e `e2e/sso-directory-sync.spec.ts` (@smoke).
+
+## [0.554.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:39 UTC · commit [cfa743a](https://github.com/21072026/Internship/commit/cfa743a874c4281facef2aad73ecb1eba5a4634b)_
+
+**Matching round review board (#1796, closes story #1791's last task):** `/admin/matching/rounds` lists the tenant's rounds and opens a new one (optional programme the published pairs land in); `/admin/matching/rounds/[id]` is the board — run (and re-run) the pass, stats header, every proposal with the compact `MatchScoreBreakdown` and an expandable full view, state filters (draft / locked / discarded / published / unmatched), lock / unlock / discard / restore per row and for all visible rows, swap from the proposal's alternatives or a free mentor search (`data-testid="round-swap-search"`; the score comes back from the server), move to review, and publish through a confirmation dialog that states how many mentorships it creates and that both sides are e-mailed. The unmatched panel groups people by reason with names, names the rule that ruled out the most pairs and the skills short of mentors with room. `GET /api/admin/match-rounds/[id]` now also returns the names of everyone the round mentions and the accepting mentor pool for the search. New `matchRounds` i18n namespace (EN/TR/DE; MARKETING-exempt, the pages are capability-gated); link from `/admin/matching`.
+
+## [0.553.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:37 UTC · commit [a0eb5be](https://github.com/21072026/Internship/commit/a0eb5be7543c36cb566cd2484042683e4d5848e1)_
+
+**One writer for User rows + `user.created` (#1998):** `createUser(db, args, { source, actorId })` in `src/lib/userCreate.ts` is now the only `user.create` (16 paths moved: register/invite, signup, apply, SSO, admin/company/source users, mentor/source mentees, admin import, v1 candidates, v1 imports, roster feed, marketing import, migration, sample programme); `npm run check:user-create` (CI) fails on a new one. Each create raises the public `user.created` v1 `{ userId, role, source }` — no address, no name. Inside a transaction it uses the new `emitInTransaction(tx, …)`, which writes the DomainEvent row and its `event.deliver` jobs through `tx`, so a rolled-back create raises nothing (pinned in `e2e/signup-org.spec.ts`). `prismaQueueStore()` takes an optional client.
+
+## [0.552.2-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:33 UTC · commit [1a46ede](https://github.com/21072026/Internship/commit/1a46ede19577b2f8da4d30880b0f275460d0d6c1)_
+
+**Mentor Offers on #1775's request clock (#1809):** an offer's 14 days are now `REQUEST_TTL_DAYS`, the offer sweep runs inside the morning `requests.expirySweep` job (its own `mentorOffers.sweep` schedule is gone; the handler stays registered for rows queued before), and "the mentee has a request waiting" is #1775's rule — new pure `livePendingRequestWhere()` in `src/lib/requestExpiryRule.ts`, the SQL twin of `isLivePending()` — so a PENDING request past its expiry no longer blocks an offer before the sweep has marked it EXPIRED. The request an accepted offer creates now carries `expiresAt`.
+
+## [0.552.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:31 UTC · commit [e6ea53c](https://github.com/21072026/Internship/commit/e6ea53ca7d60e7493596709045c5cbf9ae84018a)_
+
+**Form builder rules (#1802, slice 1):** `src/lib/forms/builderRule.ts` (pure, client-safe) — `missingLocales()` (a live field's label, every option label and any help text in EN/TR/DE), `proxyWarnings()` (key or label pointing at a protected characteristic — age, ethnicity, religion, disability, gender, marital status, nationality — in EN/TR/DE; whole words unless a term is a `*` prefix, so `agenda` and `alternative` stay quiet) and `diffFields()` (added / removed / changed props against the live version, for the publish confirmation). `publishFormDefinition()` now refuses a draft with an untranslated live field: `400 missing_locales` with `{ fields: [{ key, locales }] }`. Unit-tested in `e2e/form-builder-rule.unit.spec.ts`; `e2e/form-definitions.spec.ts` asserts the refusal.
+
+## [0.552.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:24 UTC · commit [3f555b8](https://github.com/21072026/Internship/commit/3f555b872ce0c7fb9168c98c05cfcf929f7b28a4)_
+
+**Agreed end date and rhythm per pairing (#1784, story #1782):** `MentorshipRelation` gains `expectedEndDate` (when the pairing is meant to end — not `completedAt`, not the stage clock `stageDeadline`), `durationExtendedCount` and the ending-soon stamp `endingSoonNotifiedAt` (both for #1786). The rhythm reuses the existing `expectedMeetingIntervalWeeks` (#2014) instead of a second cadence column. Every match-time path accepts or applies them: `POST /api/mentorship`, the admin queue and the mentor's own accept through `decideMentorshipRequest()` and `POST /api/mentor/mentees` accept `expectedEndDate` / `durationMonths` / `expectedMeetingIntervalWeeks`; a published match round (#1796) applies its programme's defaults; what is left out comes from the new programme → org → global settings `relationDefaultDurationMonths` / `relationDefaultCadenceWeeks` ('' = none, so nothing changes until an admin sets one). A pairing that joins a programme fills only its still-empty agreement from the programme's defaults. `PUT /api/mentorship/[id]` takes `expectedEndDate`; an edit re-arms the nudge and never counts as an extension. Rules pure in `src/lib/relationSchedule.ts` (unit-tested); shown on the admin assignment form, the relation's rhythm panel (mentor + admin, editable) and read-only on the mentee portal.
+
+## [0.551.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:15 UTC · commit [b161bed](https://github.com/21072026/Internship/commit/b161bedb5f855e341e004a5930f5c2ff58fd03da)_
+
+**SAML protocol hardening (#1955):** signed AuthnRequests (per tenant, `Organization.ssoSignRequests`, default off — the SP metadata then says `AuthnRequestsSigned="true"`), encrypted assertions (decrypted with the tenant's sealed SP key whenever it exists; the metadata now publishes the certificate for `use="encryption"` as well as `use="signing"`) and `InResponseTo` correlation — the AuthnRequest ID is stored in `SsoAuthRequest` (`kind = 'saml'`) and spent once by a conditional update (`SamlRequestStore`, node-saml's cache provider), `ifPresent` by default so IdP-initiated sign-in keeps working, `always` as the opt-in `ssoRequireInResponseTo`. `ssoCertificate` may hold several PEM blocks, all trusted, so an IdP key rotation is not an outage; each block is validated on save. Admin card toggles carry the breakage warnings; `docs/sso-saml.md` § Protocol hardening replaces the stateless-SP paragraph.
+
+## [0.550.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:15 UTC · commit [28c1403](https://github.com/21072026/Internship/commit/28c1403478fea8f0b5cc57aea95bab2b3b47a5cb)_
+
+Fixed: the CSV import panels on `/admin/mentors` (mentor limits) and the attribute import no longer push their card wider than a phone screen — the native file input now takes the card's width.
+
+## [0.550.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:06 UTC · commit [9932913](https://github.com/21072026/Internship/commit/993291311fd3618b058520f64dc06e62e9f36dec)_
+
+**Matching round review & publish API (#1796, story #1791):** `PATCH /api/admin/match-rounds/[id]/proposals` — `lock | unlock | discard | restore` per row or in bulk (`{ ids, action }`, ≤ 500, guarded `updateMany` on the states each action may come from — `PROPOSAL_ACTIONS` in `round.ts` — with every skipped row reported and why; `lock` needs a mentor) and `swap` (`{ id, mentorId }`, DRAFT rows only): the score is recomputed server-side by the same engine and inputs as the pass (`scoreSwap()`, `roundSwap.ts`, the round's own seat reservations counted against the mentor's capacity); the strict schema refuses a browser-sent score and a blocked pair is 409 with the rule. `POST /api/admin/match-rounds/[id]/publish` (REVIEW rounds only) creates one relation per LOCKED proposal inside ONE transaction through the shared create path now extracted from `POST /api/mentorship` (`src/lib/relationCreate.ts`: `createGuardedRelation()` with the one-active-mentor guard in the transaction, `announceNewRelation()` after the commit — `mentorship.created` webhook, `MatchDecision` with `source = BULK_ROUND`, `roundId` and the proposal's frozen score via the new `snapshot` input of `recordMatchDecision()`, both sides' notices, agreement prompt and mails). The plan cap is checked for all pairs at once (`checkActiveRelationLimit(orgId, n)`) and a refusal or a mentee paired elsewhere meanwhile rolls the whole publish back — never a half-published round. Relations land in the round's cohort. `GET /api/admin/match-rounds/[id]/diagnostics` groups unmatched mentees by reason, names the hard rule that blocked the most pairs (`stats.blockedPairsByRule`, now written by the pass, and `blockedBy` ordered most-eliminating first) and lists skills more unmatched mentees need than mentors with room hold (pure `roundDiagnostics.ts`).
+
+## [0.549.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:01 UTC · commit [f5ad141](https://github.com/21072026/Internship/commit/f5ad14174483b69496207a7b6307d1aa2829448c)_
+
+**Webhook event picker grouped by family (#1998, 9/n):** the admin integrations screen (new and edit forms) groups the subscribable events under Applications & pipeline, Mentorships, Progress & activity, Meetings, Interviews and Hiring & offers instead of one wall of checkboxes. The family is decided by `webhookEventFamily()` (`src/lib/webhookEventFamilies.ts`, pure); a browserless spec fails if a public event falls into "other". EN/TR/DE labels, MARKETING overlay for the mentorship family.
+
+## [0.549.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 14:01 UTC · commit [d868b25](https://github.com/21072026/Internship/commit/d868b25463d5c2c9fea073cb96f393addc195e1f)_
+
+**Targeted, scheduled announcements with read tracking (#1721):** `Announcement` gains `audience` (criteria — roles, programmes, pipeline stages, companies, tags — never a recipient list), `targeted`, `scheduledAt`, `status` (`AnnouncementStatus`, default `SENT`, so every existing row reads as sent to everyone) and `emailRequested`; all additive. `src/lib/announcementAudience.ts` is the one rule (strict zod, OR within a dimension, AND across, resolved server-side at send time); `src/lib/announcementSend.ts` holds the shared fan-out, used by the immediate send and the new `announcement.send` job (enqueued at `scheduledAt`, claims SCHEDULED → SENDING, quota checked again at send time). New `POST /api/admin/announcements/[id]/cancel` (guarded SCHEDULED → CANCELED, 409 after it went out), `GET/POST /api/admin/announcements/estimate` (picker options + recipient estimate through the send's own functions). History shows status, the audience and delivered/read/read-rate aggregated over `Notification.read`. The reader feed shows only SENT broadcasts and a targeted one only to the people it was delivered to; the image route applies the same rule.
+
+## [0.548.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 13:58 UTC · commit [3a6b88d](https://github.com/21072026/Internship/commit/3a6b88d88878737293937382aec64b2b333c2164)_
+
+**First-run checklist counts only your organisation (fix):** `GET /api/onboarding` counted companies, mentorships and interaction logs across every tenant, so a brand-new organisation's admin saw "Add a company", "Assign the first mentorship" and "Log the first conversation" already ticked off by other tenants' rows. The three counts are now scoped like the user counts beside them (`InteractionLog` through its relation). Regression test in `e2e/onboarding-checklist.spec.ts`.
+
+## [0.548.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 13:50 UTC · commit [9655154](https://github.com/21072026/Internship/commit/9655154a37a269d2cf436d72592ad4ac934b9db0)_
+
+**Relationship lifecycle events on the bus (#1998, 8/n):** four new public catalogue events, each raised from every writer of its transition after the write: `weekly_report.submitted` (`{ reportId, relationId, weekStart, resubmission }` — the first hand-in and a resubmission after changes were requested), `document.uploaded` (`{ documentId, ownerId, type, requirementId, version, generated }` — uploads and generated certificates), `goal.completed` (`{ goalId, relationId }` on a genuine OPEN → DONE; a PRIVATE goal raises nothing) and `meeting.attendance_recorded` (`{ attendanceId, meetingId, seriesId, relationId, userId, state }`, one per person written, the derived LATE_CANCEL included). Never the report text, the mentor's comment, a file name, a goal title or an attendance note. `user.created` stays unraised: sixteen code paths create a user and none is shared yet.
+
+## [0.547.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 13:47 UTC · commit [dabbe4c](https://github.com/21072026/Internship/commit/dabbe4cd194026609ffccee342057580709ac2f7)_
+
+**OpenID Connect SSO (#1929):** `provider: oidc` is a working sign-in path. The login route builds an authorization-code request with PKCE (S256), `state` and `nonce`, kept in a single-use `SsoAuthRequest` row (10-minute expiry, swept nightly, tenant-registered) and bound to the starting browser by an `HttpOnly` cookie; `GET /api/auth/sso/[slug]/callback` spends the row with a conditional update, exchanges the code and verifies the ID token with `jose` against the IdP's JWKS (asymmetric algorithms only, `iss`, `aud`/`azp`, `exp`, `nonce`; a JWKS refetch on an unknown `kid`), then ends in the same provisioning and single-use `SsoLoginGrant` as SAML (`src/lib/ssoCompletion.ts`, now shared by the ACS). Discovery, JWKS and token fetches go through the SSRF guard (`SSO_ALLOW_INSECURE_STUB=1` is the e2e stub's switch). #1537's refusal is lifted, the admin card gains the OIDC fields and the redirect URI to register, "Test connection" fetches discovery + JWKS, and SAML Single Logout no longer fires for an OIDC tenant. `jose` becomes a direct dependency (it was already in the lockfile).
+
+## [0.546.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 13:44 UTC · commit [4ca7c49](https://github.com/21072026/Internship/commit/4ca7c496094f563a2f16524f68b2c64645338745)_
+
+**Visual regression (#1614, part 2):** `e2e/visual-regression.spec.ts` compares landing, `/auth/signin`, `/admin`, `/admin/board`, `/messages`, `/mentor` and `/portal` in EN/TR/DE × light/dark (42 PNGs) with `toHaveScreenshot()`, in the scheduled full suite only. Deterministic by construction: fixed viewport, viewport-sized capture, animations/transitions/caret off, its own organisation with fixed names, and masks over `<time>`, the account menu, avatars, the nav count badges and the first-run checklist. Baselines come only from the CI image: the new `visual-baselines.yml` (`workflow_dispatch`) builds exactly like `e2e-full.yml`, writes them, compares twice against what it wrote, and pushes them to `bot/visual-baselines-<run>` for a reviewed PR. Until baselines are committed the spec skips itself. Procedure in `docs/testing.md` § Visual regression.
+
+## [0.546.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 13:35 UTC · commit [1b09933](https://github.com/21072026/Internship/commit/1b0993349f2b2359279d16461511c1c8cd0162c8)_
+
+**Alt text for message images (EN 301 549 11.8.2 / Section 508 504.3, #2864):** `MessageAttachment.altText` (nullable `VarChar(500)`, `TEXT_LIMITS.imageAltText`) — the composer shows a "Describe this image" field under every attached image (`PendingAttachmentList` `onAltChange`), `POST /api/messages` pairs one `altText` field per `file` (over 500 → 400 `too_long`), and the thread renders it as the image's `alt` and button name (filename as fallback). Erased with the attachment rows. Announcement/newsletter images follow in #3388; VPAT 11.8.2, 504.2, 504.3 updated.
+
+## [0.545.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 13:31 UTC · commit [f02fd38](https://github.com/21072026/Internship/commit/f02fd38e2f205fba7500d4ab1b9b4fe4bd458977)_
+
+**Cohort matching pass (#1794, story #1791):** `POST /api/admin/match-rounds/[id]/run` scores every waiting mentee of the tenant (active MENTEEs without an ACTIVE relation, optionally narrowed by `menteeIds`) against every mentor in the pool with the ONE engine (`scoreMatch()`, the org's rule set, each mentee's skill graph — the same score a suggestion list shows) and writes exactly one `MatchProposal` per mentee in one transaction. Assignment is pure in `src/lib/matching/assign.ts`: not-accepting mentors excluded before scoring, a global greedy walk by score with the deterministic tie-break `(score, mentorId, menteeId)`, headroom `mentorCapacity − active` reserved per proposal inside the pass, default minimum score 1. Unplaced mentees get a reason (`no_eligible_mentor` naming the blocking rule, `all_at_capacity`, `below_threshold`, `no_mentors_in_scope`); every proposal carries the next 3 alternatives with score, breakdown and headroom left. The pass is a plain async function over injected loaders (`cohortPass.ts`, one query per side whatever the intake size, unit-tested) with caps of 500 mentees × 1000 mentors (413 before scoring); stats (proposed, unmatched by reason, mentors used / at capacity, duration) are stamped on the round with its rule-set id and version. Only a DRAFT round runs (409 otherwise); a re-run replaces the proposals. Creates no relation.
+
+## [0.544.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 13:29 UTC · commit [606ee6b](https://github.com/21072026/Internship/commit/606ee6bbd3693a262568343771ba3a9e39b6945a)_
+
+**Mentorship request expiry and cancellation (#1775):** `MentorshipRequest` gains `expiresAt` (set to created + 14 days on every create path: the mentee form, re-match, the public apply link), `nudgeSentAt`, `cancelledById` and `cancelReason`, and `MentorshipRequestStatus` gains `CANCELLED` and `EXPIRED` (additive). The rule is pure in `src/lib/requestExpiryRule.ts` (unit-tested): ONE nudge on day 7 to the named mentor (or the org's admins for an unnamed or re-match request), expiry on day 14, a pre-column request reading as createdAt + 14 days. `src/lib/requestExpiry.ts` is the only writer — guarded `updateMany`s, so a rerun or an overlapping decision changes nothing — run by the new queue job `requests.expirySweep` at 09:10 (and `/api/cron?job=mentorship-requests`). A PENDING request past its expiry no longer satisfies the `already_pending` guard, so the mentee is free at once. `decideMentorshipRequest()` gains `action: 'cancel'` (ADMIN route only, a reason required, guarded on PENDING); the mentee is notified with the reason. The admin queue gets a cancel-with-reason form and an "expires in N days" badge; the mentee's panel shows the countdown and the expired/cancelled outcome. New in-app notifications `mentorship_request.nudge|expired|cancelled` (EN/TR/DE + MARKETING overlay).
+
+## [0.543.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 13:27 UTC · commit [4edbbc2](https://github.com/21072026/Internship/commit/4edbbc2b3b8c8f1e4ff00da4d6b5476f525e2719)_
+
+**Company webhooks on `/company/integrations` (#2006, 4/n):** the company's API keys page gains a Webhooks section over `/api/company/integrations/webhooks` — a receiver URL, a checkbox per event the route offers (`COMPANY_WEBHOOK_EVENTS`, read from its answer, so the form never asks for one the route refuses), the signing secret shown once, a paused badge for a hook auto-disabled after failures, and delete. EN/TR/DE strings.
+
+## [0.542.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 13:26 UTC · commit [62e8904](https://github.com/21072026/Internship/commit/62e8904c7c179fe06716ac12abca46d22f856de9)_
+
+**Meeting reminder lead times per programme and per meeting (#1636):** new setting `meetingReminderLeadsMinutes` (programme → org → global, e.g. `1440,60`; empty = the old defaults: 60 minutes for a meeting, 1440 + 60 for a series) and `Meeting.reminderLeadMinutes` (0 = none). One pure rule in `src/lib/meetingReminderLeads.ts` (`dueLead()` reproduces the old `leadFor()` exactly for the defaults). One-off reminders claim each lead in `Meeting.remindedLeads` with a guarded update; `MeetingSeriesReminder` gains a nullable `leadMinutes` beside the now-nullable `lead` enum (dual-written, both unique keys kept) instead of an in-place re-type. Setting on `/admin/settings`, a Reminder select on the meeting form, `reminderLeadMinutes` on `POST/PATCH /api/meetings`. `docs/meeting-reminder-leads.md`.
+
+## [0.541.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 13:20 UTC · commit [08f72af](https://github.com/21072026/Internship/commit/08f72af06441c3d317455e9696836ca0ad85c210)_
+
+**Self-served company webhooks (#2006, 3/n):** a COMPANY owner registers webhooks for its own hiring events at `/api/company/integrations/webhooks` (`Webhook.companyId`, additive; at most 10 per company). Events are limited to `COMPANY_WEBHOOK_EVENTS` (application stage changes, interview requests and panel outcomes, offers, a filled requisition, the company's interest flags) — anything else is `403 event_above_ceiling`. Delivery is filtered at fan-out: `companyReceiverCheck()` resolves the event's subject record and delivers only when it belongs to the hook's company, fail-closed, so an admin widening the hook's event list still sends it nothing else; replays apply the same filter. SSRF guard, plan gate, one-time secret and warning-level audit as the admin form; the admin webhook list shows each hook's company; demo blocklist entry.
+
+## [0.540.2-beta] - 2026-10-30
+
+_Shipped 2026-10-30 13:19 UTC · commit [5292ba3](https://github.com/21072026/Internship/commit/5292ba3134da66eee00129265f529380f3fd563a)_
+
+**Redundant entry (WCAG 3.3.7, #2864):** `POST /api/invite/opened` returns the invitation's address for a live invitation of this world, and the register form pre-fills it (still editable; a dead, unknown or other-world token answers `{ ok: true }` as before). The offer wizard carries a chosen requisition's title into an empty Position. VPAT 3.3.7 now reads `Supports` after an audit of registration, onboarding, the offer wizard and account settings.
+
+## [0.540.1-beta] - 2026-10-30
+
+_Shipped 2026-10-30 13:17 UTC · commit [3f42cba](https://github.com/21072026/Internship/commit/3f42cba3bfedba05123f8649d8c46ba714c70e55)_
+
+**Account erasure reaches the matching notes (#3378):** anonymising a person now nulls `MatchProposal.note` and `MatchDecision.note` on every proposal/decision where they are the mentee or the mentor; the rows, states and scores stay. `check:erasure-coverage` marks both `ERASED` (it was red on main since #3344), and `e2e/erasure-free-text.spec.ts` asserts it.
+
+## [0.540.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 13:14 UTC · commit [598232e](https://github.com/21072026/Internship/commit/598232e4c30c15b4fcfe0dfcc4877f405148e4f8)_
+
+**Affiliate public page content (#3359):** `AffiliateProgramSettings.landing` (already in the schema, unused until now) is written by `saveLanding()` in `src/lib/affiliateProgramSettings.ts` through `PUT /api/admin/affiliate/settings/landing` (`affiliate.write`, MARKETING only) and edited in a new "Public programme page" card on `/admin/affiliates/settings`: copy per locale (EN/TR/DE; headline, buttons, intro, table heading, up to 6 steps, contact block, closing CTA with up to 6 points), contact phone and e-mail and the product's https sign-up URL. The rule is pure in `src/lib/affiliateLandingRule.ts` (plain text, length limits, field-by-field locale fallback, key-order-independent comparison; `scripts/test/affiliate-landing-rule.test.mjs`); an unchanged save writes nothing, a change is audited as `affiliate.landing.update` with the locales and which contact fields are set, never the texts. No organisation's wording lives in the code. The public page that reads it is #3360.
+
+## [0.539.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 13:13 UTC · commit [22a4474](https://github.com/21072026/Internship/commit/22a4474f514baeaeb84ba03baf915eb6ab964786)_
+
+**Generated Meet and Teams rooms (#2009):** a new org conferencing policy, `GENERATE_PROVIDER`. A timed meeting whose organizer has a connected calendar gets a real room on that calendar: Google Meet (`conferenceData.createRequest`) or Microsoft Teams (`isOnlineMeeting` + `teamsForBusiness`), through the new `CalendarSyncProvider.createConference`. The room becomes the meeting's single link. The request waits for Google at most 4 s (`GENERATE_TIMEOUT_MS`). On a timeout or error the meeting falls back to the saved personal room, then the built-in room, and the reason is recorded on the connection. The generated event is adopted as the calendar mirror, so no second event is created. The policy applies to `POST /api/meetings`, interview scheduling and meeting-request acceptance. Zoom is deferred by decision (`docs/conferencing.md`).
+
+## [0.538.0-beta] - 2026-10-30
+
+_Shipped 2026-10-30 13:07 UTC · commit [6136473](https://github.com/21072026/Internship/commit/61364737811e8468b853ab3a2e215b7d5cf2cf54)_
+
+- **Partner portal shows a commission's kind and plan version** (#3348). `/affiliate/commissions` gets a "Type" column (first-payment band / percent / from the previous system) with the plan version next to it (`v1`; none for an imported row, whose plan version is 0). `partnerCommissions()` now returns `planVersion`. Read-only, same partner scope as before.
+
+## [0.537.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 12:58 UTC · commit [388d392](https://github.com/21072026/Internship/commit/388d39210f086cd322bf924784ad09ff510fb59a)_
+
+**The data-processing pack (#2029).** `docs/legal/dpa-template.md` (Art. 28 template; Annex II → security overview, Annex III → the subprocessor register, never duplicated), `docs/legal/dpa-annex-sccs.md` (transfer basis per non-EEA subprocessor), `docs/legal/ropa.md` (Art. 30 record; every retention figure cites its constant or retention key), `docs/legal/dpia-starter.md` (AI CV reading and the requisition fit ranking flagged as high-risk, #2016) and `docs/trust/data-lifecycle.md` (retention, personal export, account erasure, org export/archive/hard delete). `/trust` gains a "Data processing documents" section (EN/TR/DE headings); `e2e/trust-page.spec.ts` checks every link names a file in the tree. `docs/legal/README.md`: a new subprocessor or processing purpose updates the register and the ROPA in the same PR.
+
+## [0.536.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 12:31 UTC · commit [6318932](https://github.com/21072026/Internship/commit/63189326333596a1bb59d1b2a81b8fe9c2265e18)_
+
+**Channel matrix and quiet hours on /account, blackout days in admin settings (#1714, slice 2/2):** new `NotificationChannelMatrix` (category × In app / E-mail / Push grid, quiet-hours row with the account's zone) reading and writing `/api/account/notification-channels` optimistically; a box a category never uses is disabled, and push is offered only for categories that raise notifications. `/admin/settings` gains `notificationBlackoutDates` (calendar dates only, validated in `PUT /api/admin/settings`) and `notificationBlackoutWeekends`. EN/TR/DE strings; `e2e/notif-prefs.spec.ts` covers the round trip, the profile PUT keeping both keys and the endpoint's refusals.
+
+## [0.535.3-beta] - 2026-10-29
+
+_Shipped 2026-10-29 11:23 UTC · commit [e955913](https://github.com/21072026/Internship/commit/e955913ab5d7b1136d96af891ad9e37fb52e1c1a)_
+
+**Bulk matching rounds, staging area (#1793, story #1791):** new `MatchRound` (`DRAFT | REVIEW | PUBLISHED | DISCARDED`, optional cohort, rule-set id/version, `stats`) and `MatchProposal` (one per mentee per round — `@@unique([roundId, menteeId])` — `mentorId` nullable so an unmatched mentee keeps a row with `unmatchedReason`; score, breakdown, alternatives, state `DRAFT | LOCKED | DISCARDED | PUBLISHED`), both with `orgId` and in TENANT_MODELS. Lifecycle rules pure in `src/lib/matching/round.ts`: PUBLISHED and DISCARDED are terminal, only the publish path publishes. `GET/POST /api/admin/match-rounds` and `GET/PATCH/DELETE /api/admin/match-rounds/[id]` (`program.read` / `relation.write`, `mentorship` capability, tenant-scoped, guarded `updateMany` per transition): a published round answers 409 to every write; discarding deletes the proposals and creates nothing. No relation is created anywhere in this step.
+
+## [0.535.2-beta] - 2026-10-29
+
+_Shipped 2026-10-29 11:20 UTC · commit [05d1338](https://github.com/21072026/Internship/commit/05d1338ec961029d02a23ef754827a3173886189)_
+
+**The last hand-rolled admin checks move onto the permission layer (#1571, story #1565):** `/api/cron` asks `org.settings.write` (a sweep writes rows and sends mail), `/api/dev/db-tally` `analytics.read` (still 404 unless `DB_QUERY_TALLY=1`), and `/api/health`'s admin detail branch `can(actor, 'analytics.read')`. `scripts/authz-baseline.json` has no `pending` entry left: every remaining comparison to `'ADMIN'` under `src/app/api` is an `allowed` data-shape site with its reason (the invited role's admin-seat quota in `invite`/`register`, the agenda operator billing class, the outreach queue pick, the weekly-report read-only refusal). A signed-in non-admin calling `/api/cron` gets 403 instead of 401.
+
+## [0.535.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 11:16 UTC · commit [ac05351](https://github.com/21072026/Internship/commit/ac05351902917fa7309853a3f381e3c63e8dd57d)_
+
+**Shared meeting & misc routes on the permission layer (#1571, story #1565):** the caller-role comparisons in `/api/meetings`, `/api/meeting-series`, `/api/meeting-requests/[id]`, `/api/calendar-events`, `/api/availability`, `/api/evaluations`, `/api/documents`, `/api/document-reviews`, `/api/messages/[id]`, `/api/questions/[id]`, `/api/search`, `/api/tags`, `/api/support/attachments/[id]`, `/api/avatar`, `/api/users`, `/api/org/{usage,billing,plan-change}`, `/api/ai/{bulk-draft,artifacts/[id]}`, `/api/board/wip-limits`, `/api/contributor-terms`, `/api/events` and `/api/invite` now ask `requirePermission()` / `requireRoleOrPermission()` / `can()` instead of `role === 'ADMIN'` — an ADMIN is judged by tier (ORG_ADMIN keeps everything; an OBSERVER keeps reads), the other roles pass exactly as before. `/api/account`'s last-admin guard reads the deleted row's own role. The operator-AI audience marker in `/api/agendas/personalize` stays on the role (a billing class, listed as `allowed`). A signed-in caller of a role these routes never admitted gets 403 instead of 401.
+
+## [0.535.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 11:13 UTC · commit [d5d5bb7](https://github.com/21072026/Internship/commit/d5d5bb703df5506c6906ce39eda2a5066718b782)_
+
+**Plan limits bind where admins, companies and programmes appear (#1752).** New `enforceQuota(orgId, 'ADMIN_SEATS' | 'COMPANIES' | 'PROGRAMS')` (`src/lib/quota.ts`, rule in `src/lib/quotaRule.ts`) reads the subscription plan's band from `src/lib/plans.ts` and a live count; it fails open for no org, the default organization (the installation's own tenant), an org without `mentorship` (MARKETING) and a null limit. Wired at `POST /api/invite` and the super admin's invite-admin (ADMIN role only; an open ADMIN invitation holds a seat), ADMIN invitation acceptance in `POST /api/register`, `POST /api/companies`, enquiry conversion and `POST /api/cohorts` — each answers `403 plan_limit_reached` with a `metric`, which the upgrade prompt now words per metric. **Free core:** inviting a MENTOR or MENTEE is never checked or counted — and the bulk invite's old `maxUsers` seat check, which counted and skipped mentees, is removed. A unit-test guard fails when a `PlanLimits` key has no enforcement site or argued exemption. `Company.quota` is unchanged (it is the outreach quota since #1840).
+
+## [0.534.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 11:13 UTC · commit [617e3df](https://github.com/21072026/Internship/commit/617e3df6b12ab5ab2ca3eb93ca7a17a6123119c5)_
+
+**`/company/integrations` (#2006, 2/n):** the company area gets an "API keys" page over `/api/company/integrations/api-keys` — create a key (name + expiry, at most a year; the only access offered is the company ceiling, `hiring:read`), copy it from the one-time panel, see each key's status, expiry and last use, and revoke it. An ADMIN opening the page is pointed to the organisation's Integrations screen; a plan without API access says so. EN/TR/DE strings (`companyIntegrations`), nav entry, and the integrations feature card mentions self-served company keys.
+
+## [0.533.2-beta] - 2026-10-29
+
+_Shipped 2026-10-29 11:12 UTC · commit [7c31174](https://github.com/21072026/Internship/commit/7c31174cde8c39ceae4cd98b53a9cf15182a3968)_
+
+**Shared hiring & company routes on the permission layer (#1571, story #1565):** the offer, company, candidate, requisition, interview-panel, interview-request, mentor-application, sales-lead, source, mentor, mentor-directory, portal job-board and onboarding routes no longer compare the caller's role to `'ADMIN'`. Pure admin gates use `requirePermission()` (`company.read`/`company.write`, `user.read`/`user.write`, `org.settings.read`/`org.settings.write` for the mentor screening policy, `audit.export` for the company export); routes that also serve mentors, mentees or companies use `requireRoleOrPermission()` and read `admin` from it; and "admins see the whole org" branches inside an already-guarded handler ask `can()` once per request. The private `requireAdmin()` of `/api/mentor-applications/[id]` is gone. The outreach list's decider-queue choice is recorded in the baseline's `allowed` (data shape, not access). Every existing ADMIN is an ORG_ADMIN and keeps everything; a signed-in caller of a role a route never admitted now gets 403 instead of 401.
+
+## [0.533.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 11:09 UTC · commit [1d9804c](https://github.com/21072026/Internship/commit/1d9804c6419c4803443a23dfa70626517393a69a)_
+
+**Shared mentorship routes on the permission layer (#1571, story #1565):** the pairing, stage-history, cohort, interaction, relation-note, relation-health, re-engagement, to-do, project-task, project, note-convert and journey routes no longer compare the caller's role to `'ADMIN'`. Pure admin gates use `requirePermission()` (`/api/cohorts*` → `program.read` / `program.write`, `/api/status-changes*` → `pipeline.transition`, `POST /api/mentorship` and `/transfer` → `relation.write`); admin-or-mentor gates use `requireRoleOrPermission(['MENTOR'], …)` (lifecycle, skills, AI draft / next step, interaction summary, relation notes, relation health → `analytics.read`, re-engagement → `user.read` / `user.write`, the shared to-do pool → `content.read`); and the "admins see the whole org" branches ask `can()` (`program.read` for reads, `relation.write` / `program.write` for writes). The weekly-report PATCH refusal of admins stays as an `allowed` baseline entry — it narrows access. A signed-in caller of a role these routes never admitted gets 403 instead of 401.
+
+## [0.533.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 11:07 UTC · commit [99b4524](https://github.com/21072026/Internship/commit/99b4524bde35e41c9f380e984b1a97e4d7a4594f)_
+
+**Pairing audit record (#1789):** new `MatchDecision` (tenant model, `orgId` + TENANT_MODELS) with `MatchDecisionSource` (`ADMIN_DIRECT | REQUEST_APPROVAL | MENTOR_ACCEPT | BULK_ROUND | MENTEE_PREFERENCE`). `recordMatchDecision()` (`src/lib/matching/decision.ts`) is the one writer, called after the commit from `POST /api/mentorship` and `decideMentorshipRequest()` (admin approval and the mentor's own accept); it never throws and logs `match_decision.write_failed`. It scores the pair with the live rule set through the same scorer and skill graph as the suggestion list (`scoreSuggestionPair`, `src/lib/matching/skillContext.ts`) and stores a frozen copy — editing or archiving the rule set never rewrites it. `overrodeSuggestion`/`suggestedRank` come from the MatchFeedback rows of the suggestion batch the client echoes (`rankingOutcome()` in `decisionRule.ts`), never from a client flag. The admin's note (assign + approve controls) is stored on the decision only. `GET /api/admin/match-decisions?relationId=|menteeId=` (`audit.read`, `mentorship` capability, tenant-scoped, paginated) feeds the new `MatchDecisionPanel` on the candidate detail view.
+
+## [0.532.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 11:05 UTC · commit [caeaabf](https://github.com/21072026/Internship/commit/caeaabff002df1e4439c951488e9ec2852ab4e07)_
+
+**Microsoft 365 / Outlook calendar (#1991, #1989):** a second calendar provider behind a `CalendarSyncProvider` interface (`src/lib/calendar/provider.ts`, Google + Microsoft implementations). `pushMeeting` / `removeMeeting` now loop over every enabled provider a person has connected, so a meeting reaches Google and Outlook from one push with one create-or-patch / dead-pointer / record-the-error policy. Delegated Graph OAuth (`offline_access User.Read Calendars.ReadWrite`), tokens sealed under a new `microsoft-calendar` secretBox purpose with the same 60 s early refresh; routes `/api/integrations/microsoft/{connect,callback,connection}`; Graph events carry a LOCAL wall clock + zone name (`src/lib/calendar/microsoftEvent.ts`, unit-tested across DST). `MICROSOFT_CALENDAR_ENABLED` defaults off; env names in `.env.example` and `docs/microsoft-calendar.md`. Account erasure disconnects Microsoft too. Pinned by `e2e/microsoft-calendar.spec.ts` against a local Graph stub and `e2e/microsoft-calendar-event.unit.spec.ts`.
+
+## [0.531.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 11:02 UTC · commit [3d30e7e](https://github.com/21072026/Internship/commit/3d30e7e13ec8e405280852f56b876e0d28c093fe)_
+
+**Business-day stage SLAs (#1638):** new settings `slaDayMode` (`calendar` default — unchanged behaviour — or `business`), `slaWorkingDays`, `slaTimeZone`, `slaHolidayCalendarId` on the programme → org → global chain, and `HolidayCalendar`/`Holiday` models (pasted `YYYY-MM-DD, label` lists, no external API). One pure `addBusinessDays()` in `prisma/business-days.mjs` (typed by `src/lib/businessDays.ts`) is used by every stage move and the admin's SLA-save deadline fill; it keeps the local wall-clock time across DST and never double-counts a weekend holiday. Admin card under the SLA editor with a live preview; the overdue mail says when a date was counted in business days. `docs/business-day-slas.md`.
+
+## [0.530.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 11:01 UTC · commit [0b5e8ac](https://github.com/21072026/Internship/commit/0b5e8acbae598f07c096e52c9a57b15b4849dc7b)_
+
+**Self-served company API keys (#2006, 1/n):** a COMPANY owner mints, lists and revokes API keys for their own data at `/api/company/integrations/api-keys`. The key is bound to the company (`ApiKey.companyId`, additive), always expires, and never holds more than `COMPANY_KEY_SCOPE_CEILING` (`hiring:read`) — a request above it is `403 scope_above_ceiling`, not a narrowed grant. `withApiKey()` gains a fail-closed `{ companyScoped: true }` opt-in: a company key is admitted only on routes that narrow every read to its company (`companyOnly(key)`: requisitions, offers, interview requests, `/me`), and answers `403 company_key_not_allowed` everywhere else, exports included. The admin key list shows each key's company; mint and revoke are audited at warning level; the route is in the demo blocklist.
+
+## [0.529.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:55 UTC · commit [07aa668](https://github.com/21072026/Internship/commit/07aa668fe263048963da2f1a23ce35cb19c23b39)_
+
+**Channel matrix, quiet hours and blackout days in the notification router (#1714, slice 1/2):** `User.notificationPrefs` gains two sparse keys — `channels` (category × `inApp`/`email`/`push` overrides) and `quietHours` (`{ start, end, tz? }`) — read by the pure `src/lib/notificationChannelPrefs.ts`. The router records a channel switched off as SKIPPED `channel_off`, adds push only when the person turned it on, and HOLDS e-mail/push/chat raised inside the quiet window or on an org blackout day (`notificationBlackoutDates`, `notificationBlackoutWeekends`) as a keyed `notification.deferred` job to the next open minute; the job re-reads the preferences before delivering. `account_security` ignores all three. New `GET/PUT /api/account/notification-channels` (merging, refused under impersonation); `PUT /api/profile` now carries the two keys over instead of wiping them. Docs: `docs/notification-channels.md`. UI follows in slice 2.
+
+## [0.528.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:55 UTC · commit [dd9581e](https://github.com/21072026/Internship/commit/dd9581e8786f58f6c1fe622174442495aedc3e8d)_
+
+**Teams "Find people" (#3327):** with `TEAMS_GRAPH_DIRECTORY_ENABLED=1`, the Teams client's `listMembers()` reads the workspace tenant's directory through Microsoft Graph — a client-credentials token at `<TEAMS_LOGIN_BASE>/<tenant>/oauth2/v2.0/token`, then `GET <GRAPH_API_BASE>/v1.0/users` paged (≤ 10 pages, `@odata.nextLink` only on the Graph host); enabled users with a tenant-managed `mail` become proposals through the same #1937 rule (verified, active account of the same org; no user created). Without the flag Teams stays `not_supported`. `ChatPlatformClient.listMembers()` now also takes the workspace `externalId`; the e2e stub (`botframework-mock.mjs`) serves the token and paged users.
+
+## [0.527.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:47 UTC · commit [e013c74](https://github.com/21072026/Internship/commit/e013c743efb9463eaa9b44b33b17219dd184453d)_
+
+**`requireRoleOrPermission()` for mixed-role routes (#1571, story #1565):** `src/lib/authz.ts` gains the guard for routes that serve admins *and* other roles — an ADMIN is judged by the permission rule (an OBSERVER asking for a write is refused and audited), a listed role passes on its role, anyone else gets 403 `permission_denied`. `check:route-auth` and `openapi-generate` recognise it (the OpenAPI class lists ADMIN plus the named roles). First users: the six `/api/admin/outbox` routes (`mail.read` / `mail.write` + MENTOR) and `/api/admin/duplicates/check` (`user.read` + MENTOR). The SSO role-mapping route's `role === 'ADMIN'` was a body field, not the caller, and now reads `parsed.data.role`. A signed-in caller of a role these routes never admitted gets 403 instead of 401.
+
+## [0.527.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:46 UTC · commit [1461d77](https://github.com/21072026/Internship/commit/1461d77f9e2cd7de8d5df7ac182415a061e5049e)_
+
+**Teams app removal is noticed (#3322):** `POST /api/integrations/chat/teams/messages` is the Teams bot's messaging endpoint. Every activity must carry a Bot Framework RS256 JWT verified in `src/lib/chat/botFrameworkAuth.ts` with `node:crypto` (keys from the OpenID metadata at `TEAMS_OPENID_METADATA_URL`, cached 1h, refetched on an unknown `kid`, fail-closed; `iss`, `aud` = `TEAMS_APP_ID`, `nbf`/`exp` ±5 min, `serviceUrl` must match the activity). A verified `installationUpdate`/`remove` switches the tenant's workspace off and clears its tokens (`CHAT_PLATFORM_UNINSTALL`); anything else unauthenticated is 401. e2e: `e2e/support/botframework-mock.mjs` (port 4607) publishes the JWKS and signs the spec's tokens.
+
+## [0.526.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:42 UTC · commit [82eb592](https://github.com/21072026/Internship/commit/82eb592f914e951c84eaba67480fd50fe7b40c5a)_
+
+**Scored suggestions everywhere (#1787):** `POST /api/admin/mentor-suggest` now ranks with `scoreMatch()` and the org's rule set (`resolveRuleSet`, #1781) through the pure `suggestMentors()` (`src/lib/matching/suggest.ts`). Every suggestion carries `score` (0-100) and `match` (`breakdown`, `blockedBy`); the response names `ruleSetId`/`ruleSetVersion`/`ruleSetName`, lists ruled-out mentors in `blocked` (+ `blockedTotal`) instead of dropping them, and records `rules-v3:<set>@<version>` on the MatchFeedback rows. An optional `requestId` (the mentee's own request, else 404) feeds `preferredField`/`preferredLanguages` into the score and returns `preferredMentorId`. `acceptingMentees=false` blocks under any rule set. The `skills` dimension reads canonical skill ids with adjacency when the caller passes `ctx.skillGraph` (the #1821 rule, shared — no second matcher); without it, free text as before. The AI re-rank is unchanged (anonymous labels, metered, `aiUsed:false` fallback) and never rewrites a score. UI: `AssignMentorInline` shows the compact `MatchScoreBreakdown`; the request queue gets an on-demand Suggest per request that keeps the preferred mentor as the default pick.
+
+## [0.525.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:41 UTC · commit [7bd659a](https://github.com/21072026/Internship/commit/7bd659ad4ed01ebcb3640e3319530cfc2be8ed64)_
+
+**Admin routes behind the permission layer — programmes & companies (#1571, story #1565):** `/api/admin/programs/[id]/journey/**`, `matching/{rule-sets,simulate}`, `mentor-suggest` (+ feedback), `mentorship-requests` (PUT → `relation.write`), `companies/[id]/{channels,contact-permission,entitlements}`, `company-contacts/forget`, `company-inquiries` (+ convert) and `offers/benchmark` authorize through `requirePermission()` (`program.read/write`, `relation.write`, `company.read/write`). Four private `requireAdmin()` helpers are gone; the `mentorship`/`companies` capability checks after the gate stay. A signed-in non-admin gets 403 instead of 401.
+
+## [0.525.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:38 UTC · commit [abcd729](https://github.com/21072026/Internship/commit/abcd729594afd937f27f4b2f880a9fbf5113d14d)_
+
+**Sandbox key on /developers (#1992):** `POST /api/developers/sandbox-key` mints a read-only key (every `*:read` scope, never a write, 24 h, 1000 requests a day) bound to the default org — but only where `sandboxEnabled()` holds: `DEMO_MODE=true` AND a database named `*_demo` (`src/lib/api/sandboxKeyRule.ts`, unit-tested); elsewhere 404, so a key can never be minted against a real tenant. Rate-limited to 3 an hour per address and 200 live keys; the demo seed grants `INTEGRATIONS_API` so the key's reads are not `feature_locked`. Off the demo, the portal links to the demo's developer page.
+
+## [0.524.2-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:37 UTC · commit [a24ef71](https://github.com/21072026/Internship/commit/a24ef71af5c9620d726da56390eac59681172450)_
+
+**Certificates with Turkish names no longer fail (#3319):** pdf-lib's standard fonts are WinAnsi and threw on `ş ğ ı İ` ("WinAnsi cannot encode ı"), so generating a certificate or reference letter for a Turkish name answered 500. Every string `generateCertificatePdf()` draws now goes through `pdfSafeText()` (new `src/lib/pdfText.ts`, shared with the offer letter): WinAnsi characters are kept, accented letters fold to their base letter, `ı/ł/đ/ħ` are mapped by hand, anything else becomes `?`. PDF only — on-screen text is unchanged. Pinned by `e2e/certificate-pdf-turkish.unit.spec.ts` (@smoke).
+
+## [0.524.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:37 UTC · commit [54265b0](https://github.com/21072026/Internship/commit/54265b0663892f9f5edabd8cba41c4aec5fe591b)_
+
+**Admin routes behind the permission layer — organizations & platform (#1571, story #1565):** `/api/admin/organizations` (GET/POST/PATCH), `organizations/[id]/{conferencing,brand-mark,starter-pack,sample-data,invite-admin,pipeline-stages,sso-role-mappings,sso/metadata,sso/test}`, `organizations/slug-availability`, `billing/entitlements`, `plan-requests` (+ `[id]`) and `openapi` authorize through `requirePermission()` (`org.settings.read/write`, `org.branding.write`, `org.invite`, `org.integrations.read`). The super-admin / own-org checks that follow the gate are unchanged, so cross-tenant and platform-only answers stay what they were. The private `requireAdmin()` of `openapi` and the two `requireAdminOrg()` helpers are gone (the latter became `orgSettingsGate()` over `requirePermission()`). A signed-in non-admin gets 403 instead of 401.
+
+## [0.524.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:36 UTC · commit [9ea4239](https://github.com/21072026/Internship/commit/9ea4239f474e09318cc6574165438e875094875e)_
+
+**Chat identity linking (#1937):** `src/lib/chat/identity.ts` proposes a `ChatIdentity` for each Slack member whose directory address (new `ChatPlatformClient.listMembers()`, `users.list`) matches a verified, active account of the workspace's own org — no row for an unmatched or unverified address, never a new user — and the person confirms it on their account page ("Chat apps" card, `GET/POST/DELETE /api/integrations/chat/identity`: own identity only, an org ADMIN may remove any of the org's; others 403). "Find people" on the console calls `POST /api/admin/integrations/chat/[id]/propose`. Only a confirmed identity is delivered to (`resolveTarget()` now opens/caches the DM for the adapter); disconnecting stops chat and e-mail still goes. New nullable `ChatIdentity.displayName`; account erasure deletes the person's chat identities. Teams proposals answer `not_supported` until Graph permissions exist.
+
+## [0.523.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:34 UTC · commit [dc2446d](https://github.com/21072026/Internship/commit/dc2446d37273e4899fe2cbfc78bbd7247689a82d)_
+
+**Push for the events that matter, through the router (#1715):** `push` is a fourth channel of `notifyEvent()` (`src/lib/notifications/adapters/push.ts`): the tray line is the bell's own sentence in the recipient's language (`renderNotification()`), the link the router's deep link, delivered through `sendPushToUser()` (web push when VAPID is set, native push always). It is listed, with the reasoning in `catalog.ts`, on meeting starting / moved / cancelled, offer sent and answered, the person's own stage change, the support reply, interview scheduled / cancelled and the act-now security notices; never on digests, reports, newsletter issues or any `batched` event (pinned by `notification-catalog.test.mjs`). The bell's category switch silences it too. No device is a SKIPPED `no_device` ledger row, not a silent no-op. The offer-sent notice is the first call site routed with push; new-message push is unchanged.
+
+## [0.522.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:34 UTC · commit [1997dc4](https://github.com/21072026/Internship/commit/1997dc4bdca25781b48f565b8647b68dafeae992)_
+
+**Admin routes behind the permission layer — integrations & settings (#1571, story #1565):** `/api/admin/integrations/**` (chat, Google status, health, JaaS usage, Klaviyo), `webhooks/**` (incl. `rotate-secret`, `test`, deliveries and replays), `audit-drains/**` (incl. `rotate-secret`, `test`), `api-keys` and `roster-feeds/**` authorize through `requirePermission()` (`org.integrations.read` for reads, `org.integrations.write` for every write, secret rotation, test send, sync and replay); `settings` (GET/PUT) and `settings/history`, `ai/status`, `ai/usage`, `ai/policy`, `migrate` and `marketing-accounts` use `org.settings.read` / `org.settings.write`, and the budget-spending `ai/draft`, `ai/translate` and `ai/company-enrich` need `org.settings.write` — instead of comparing the role to `'ADMIN'`. The private `requireAdmin()` helpers of `api-keys`, `webhooks`, `audit-drains` and `roster-feeds` are gone; the super-admin checks on deployment-global settings are unchanged. Behaviour-neutral for existing admins; a signed-in non-admin now gets 403 instead of 401.
+
+## [0.522.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:32 UTC · commit [fb968ce](https://github.com/21072026/Internship/commit/fb968ce58e7478e5a6ae69e70b61ae2360b134fd)_
+
+**`mentorship.lifecycle_changed` is raised (#1998, 7/n):** registered with #1770 but never raised, it now leaves from every writer of a pairing's lifecycle state, after each one's commit, through `raiseLifecycleChanged()` (`src/lib/lifecycleEvents.ts`): the lifecycle endpoint (pause, resume, end with a reason code, reopen), a mentor handover (`ENDED_REASSIGNED`, with the transfer's reason code), a re-match approval (`ENDED_REMATCHED`) and a win-back (`ENDED_CHURNED`, raised only when `winBack()` owned its transaction — the ingest dry run, the one joined caller, never commits). The note never goes on the bus; the machine importer's initial states raise nothing.
+
+## [0.521.3-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:29 UTC · commit [db3f322](https://github.com/21072026/Internship/commit/db3f322c80547c2b0e34b35f3939a9fa52042f64)_
+
+**Admin routes behind the permission layer — templates & authored content (#1571, story #1565):** `/api/admin/` `agenda-templates`, `agreements` (+ `acceptances`), `announcements/**`, `attributes` (+ `import`), `document-requirements/**`, `documents/missing`, `evaluation-templates`, `forms/**`, `goal-templates`, `message-templates`, `newsletters/**`, `post-campaigns/**`, `report-subscriptions/**`, `saved-views/**`, `skills/**`, `survey-campaigns/**`, `surveys/**` and `testimonials` authorize through `requirePermission()` (`content.read` for GET, `content.write` for everything else) instead of comparing the role to `'ADMIN'`. The private `requireAdmin()` / `adminSession()` helpers are gone; the postal-campaign `gate()` keeps its `companies` capability check. Behaviour-neutral for existing admins; a signed-in non-admin now gets 403 instead of 401.
+
+## [0.521.2-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:27 UTC · commit [02b8bf7](https://github.com/21072026/Internship/commit/02b8bf738795db27517ae4c684fbdfd3048fcd40)_
+
+**Provider-neutral calendar tables, expand phase (#1989):** new `CalendarConnection` (`@@unique([userId, provider])`, enum `CalendarProviderKind { GOOGLE MICROSOFT }`) and `CalendarEventLink` (`externalEventId`, same `(meeting|series) × connection` keys). Every Google read and write moved to them; `GoogleCalendarConnection` / `GoogleCalendarEventLink` stay in the schema untouched as the rollback (Disconnect also deletes the person's old row). `prisma/backfill-calendar-connections.mjs` (registry `0035`, once, insert-only, prints old/new counts) copies them at deploy with the sealed tokens verbatim. Additive only — `check:schema-push` green. The contract (drop the old models) is a separate PR after production counts match. No user-visible change.
+
+## [0.521.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:26 UTC · commit [9458c41](https://github.com/21072026/Internship/commit/9458c4138496b96a4d2e1f4beb34818216914a85)_
+
+**Admin routes behind the permission layer — people (#1571, story #1565):** `/api/admin/users/[id]/*` (reset-2fa, reset-password, erase, lockout, sign-out-all, sso-exempt), `impersonate`, `invite/bulk`, `invitations` (+ `bulk`), `candidates/bulk`, `duplicates` (+ `merge`), `orphan-applicants`, `source-users`, `company-users`, `sources`, `import` (+ `marketing-accounts`), `mentors/limits/import` and `export/[dataset]` authorize through `requirePermission()` (`user.*`, `org.invite`, `company.*`, `audit.export`) instead of comparing the role to `'ADMIN'`. Behaviour-neutral for existing admins (ORG_ADMIN holds every tenant permission); an OBSERVER now keeps reads only, a PROGRAM_ADMIN is refused until these routes narrow to grants, and a signed-in non-admin gets **403** instead of 401. Every refusal writes an `authz.capability_denied` row.
+
+## [0.521.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:24 UTC · commit [0e5f402](https://github.com/21072026/Internship/commit/0e5f4026f6f12e9515dc79f7530a6d568f2743be)_
+
+**Slack / Teams app install (#1935):** `GET /api/integrations/chat/<slack|teams>/connect` (`org.integrations.write` on the route; `?chat=unavailable` without credentials or `CHAT_APPS_ENABLED=1`) redirects to Slack's `oauth/v2/authorize` (bot scopes `chat:write`, `im:write`, `users:read`, `users:read.email`, `commands`) or Entra ID admin consent, with a state signed over platform + org + user + 10 minutes (`src/lib/chat/oauthState.ts`). The callback exchanges the Slack code server-side (`oauth.v2.access`) into `recordChatInstall()` (sealed tokens, `CHAT_INSTALL` audit; another org's team → `?chat=conflict`); Teams consent records the tenant with no workspace token. `POST /api/integrations/chat/slack/uninstall` takes Slack's signed `app_uninstalled` / `tokens_revoked` (HMAC over the raw body, ±5 min; `url_verification` answered), switching the workspace off and clearing its tokens (`CHAT_PLATFORM_UNINSTALL`). Rotating Slack tokens are refreshed before each send (`src/lib/chat/tokenRefresh.ts`). The console offers "Add to Slack / Teams" and shows the callback outcome. e2e: `e2e/support/slack-mock.mjs` + `e2e/chat-install.spec.ts`.
+
+## [0.520.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:22 UTC · commit [f7d8152](https://github.com/21072026/Internship/commit/f7d815202feec1a51dfe4a2d4f86752395ae0e21)_
+
+**Admin routes behind the permission layer — mail, support & safeguarding (#1571, story #1565):** `/api/admin/email-log`, `email-health`, `email-suppressions` (+ release), `email-test`, `mail-queue` (+ retry/cancel), `broadcast-quota`, `crm-bcc`, `support` (+ `reports/**`) and `safeguarding/**` authorize through `requirePermission()` (`mail.read/write`, `support.read/write`, `safeguarding.read/write`; the CRM BCC address is a secret, so even its GET needs `mail.write`). The mail-queue operator scope and the super-admin checks after the gate are unchanged. Five private `requireAdmin()` helpers are gone. A signed-in non-admin gets 403 instead of 401. The outbox routes admit MENTOR too and stay in the baseline.
+
+## [0.520.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:20 UTC · commit [5e0a6c8](https://github.com/21072026/Internship/commit/5e0a6c8796e7c084a3ebb07f0f74b191c59aa891)_
+
+**Public developer portal (#1992):** `/developers` renders the public API without a session, straight from the handler of `GET /api/v1/openapi.json` (never the admin document): authentication, limits, conventions, every path with its scope, the error types with their status, the webhook events with their payload schemas and a Node.js signature check (`WEBHOOK_VERIFY_NODE`, executed against a real `deliverToWebhook()` delivery by `scripts/test/webhook-recipe.test.mjs`). The lifecycle policy is data in `src/lib/api/v1Lifecycle.ts` (6-month deprecation window, `Deprecation`/`Sunset` headers, `API_DEPRECATIONS`), published in `docs/api-lifecycle.md`, on the page and as `x-lifecycle` in the spec, whose `info.version` now comes from `src/lib/version.ts`. New `integrations` entry in the feature catalogue; `/developers` is listed in the sitemap.
+
+## [0.519.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:16 UTC · commit [0d844a4](https://github.com/21072026/Internship/commit/0d844a4b01c9463d97b4386223a62d3a8b12ae3f)_
+
+**Account merge keeps canonical skills and levels (#1822 follow-up):** `mergeUsers` now moves the duplicate's `UserSkill` rows onto the primary inside the merge transaction (`moveUserSkills()` in `src/lib/skillLevels.ts`). A skill only the duplicate holds is re-pointed; one both hold is folded by `foldUserSkillRow()` — a mentor-confirmed level beats a self-rating, a rating beats none, and the duplicate's level history moves along — the same fold the curator's skill merge (`mergeSkill`) now shares. Previously the rows cascaded away with the duplicate and only the JSON survived until the next deploy's backfill.
+
+## [0.519.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:15 UTC · commit [b7297a5](https://github.com/21072026/Internship/commit/b7297a57746d672a434b9daaf43c254fdcb8dc12)_
+
+**Affiliate plan save no longer waits for every partner (#3170):** `savePlan()` commits the plan with a QUEUED `AffiliateProgramSettings.planResync` state (new nullable JSON column) and enqueues `affiliate.planResync` (keyed `<org>:<version>`, 5 attempts). The handler (`src/lib/affiliatePlanResync.ts`, rules pure in `affiliatePlanResyncRule.ts`, unit-tested) re-evaluates partners in id-ordered batches of 100 through the one writer, checkpoints a cursor after each batch, retries busy partners on the next attempt (backoff), ends INCOMPLETE on the last, and stops when a newer plan version took over (every state write is guarded on `planVersion`). The PUT now answers `{ changed, planVersion, resync }` instead of `partnersResynced`/`resyncFailed`/`drift`; the settings screen polls the state and shows progress and the outcome. `e2e/affiliate-plan-resync.spec.ts` covers the 60-partner request path, the resume, the retry and the supersede.
+
+## [0.518.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:14 UTC · commit [2150eef](https://github.com/21072026/Internship/commit/2150eeff569f685768a8169db83ac2035d2b6c0d)_
+
+**Tenant hard delete, switched off by default (#1584, story #1580):** two-stage permanent deletion of an archived organization — `POST`/`DELETE /api/admin/organizations/[id]/deletion { confirmSlug }` (request / withdraw) and `DELETE /api/admin/organizations/[id] { confirmSlug, password }` (execute), super admin only (`platform.org.write`). Every door answers `403 hard_delete_disabled` unless the deployment sets `TENANT_HARD_DELETE_ENABLED=1` (nothing in the repo sets it). Execution needs the archive, `TENANT_HARD_DELETE_WAIT_HOURS` (default 72, floor 24) since the request, a full export taken after the request and the operator's own password; never the default org or the operator's own. New nullable `Organization.deletionRequestedAt`/`deletionRequestedById`; unarchiving withdraws a request. The deletion is planned from the schema (`src/lib/orgDeletionRule.ts`: orgId models + FK-reached children + `SOFT_LINKS` grants, optional links nulled except `orgId`, children-first topological order, unit-tested on the real schema) and run in one transaction (`src/lib/orgDeletionExec.ts`, e2e-run on a synthetic tenant); `org.deleted` is written beforehand to the operator's org. UI on the lifecycle card only when switched on (EN/TR/DE).
+
+## [0.517.2-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:12 UTC · commit [a1404f9](https://github.com/21072026/Internship/commit/a1404f9fb391c87d1e000a2e9e531cd896f6f9b6)_
+
+**Admin routes behind the permission layer — analytics & reporting (#1571, story #1565):** `/api/admin/analytics/**`, `insights`, `reports/[key]`, `weekly-reports` (+ `remind`), `relation-health`, `relation-integrity`, `health`, `operations`, `sla/**`, `stage-sla`, `hiring/queues`, `program-costs`, `2fa-coverage` and `activity` authorize through `requirePermission()` (`analytics.read` for reads; AI narrative/insight generation, stage-SLA and programme costs need `org.settings.write`; SLA acknowledge/snooze and weekly-report reminders `program.write`; outcomes `content.write`) instead of comparing the role to `'ADMIN'`. The private `adminSession()` helper of `program-costs` is gone. Behaviour-neutral for existing admins; a signed-in non-admin now gets 403 instead of 401. Also pins the two `offers` routes #3299 landed without a baseline entry, so `check:authz` is green on main again.
+
+## [0.517.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:06 UTC · commit [f85363d](https://github.com/21072026/Internship/commit/f85363dd4cbee9d878e28bd5fbf54f04a7f66d2c)_
+
+**Notification router: channel adapters (#1711, slice 1):** one `ChannelAdapter` port (`src/lib/notifications/adapters/types.ts`) with in-app, e-mail and chat adapters registered in `adapters/index.ts`, and the ledger writes moved to `src/lib/notifications/ledger.ts`. The router decides (preferences, then the ledger claim) and the adapter delivers, so a new channel (push, #1715) needs an adapter and one registry line, not a router edit. The e-mail adapter enqueues through the queue's `enqueue()` instead of a raw `prisma.job.create`; its consumer stays `emailJob.ts` (#1719). No behaviour change.
+
+## [0.517.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 10:02 UTC · commit [951e2a5](https://github.com/21072026/Internship/commit/951e2a53c2a288d6516d0df0d2c1c36ca313bee3)_
+
+**Offer letter (#1857):** `OfferTemplate` (tenant model) per org × locale with built-in EN/TR/DE letters (`src/lib/offerLetterTemplates.ts`); allowlisted merge tags rendered by the pure `src/lib/offerLetter.ts` (unknown tags stay literal, nothing evaluated). Sending an offer freezes `Offer.letterSnapshot` in the candidate's language; `GET /api/offers/[id]/letter` serves a branded A4 PDF (or `?format=json`) to ADMIN and the offer's own MENTEE only (`canSeeCompensation`, COMPANY 403). Accepting records `acceptedIp`/`acceptedUserAgent` — a click-to-accept record, explicitly not a qualified e-signature. Template editor on `/admin/settings` (`GET/PUT/DELETE /api/admin/offer-templates`), letter preview in the offer wizard, read/download on the portal offer card and the admin offer panel. Erasure clears the snapshot and the acceptance record. Docs: `docs/offer-letter.md`.
+
+## [0.516.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 02:16 UTC · commit [5ebf9f1](https://github.com/21072026/Internship/commit/5ebf9f1ece4edeab15fd7acec5f324b7e3e16b98)_
+
+**Skills-gap report on /admin/analytics (#1823):** new `SkillsGapPanel` (premium tier, `mentorship` capability, same gate as the cohort card): coverage line, the most under-supplied skills and the skills held but asked for by no hiring position, each with open seats / positions / people / gap / avg. level / confirmed, a supply-vs-demand bar, a cohort filter and an empty state that names the cause. Export through the one admin export door: `GET /api/admin/export/skills-gap` (REPORT_EXPORT; calls the report route in-process with `all=1`, so its ADMIN / capability / ADVANCED_ANALYTICS gates answer for the file) → `skillsGapSheet()` in `src/lib/reports/workbooks.ts`. Feature-catalogue entry `skillsGap`. Topic environments now also run `backfill-skill-levels.mjs` after the taxonomy backfill; the demo set's OPEN requisitions and mentee skills already give the report content there.
+
+## [0.515.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 02:14 UTC · commit [b9d8fb4](https://github.com/21072026/Internship/commit/b9d8fb4b11bb2d7c186433baa81dd584f508f773)_
+
+**Notification e-mail templates: editor and sender (#1719):** `/admin/notification-templates` (linked from settings) edits each mailing event's subject and body per locale (and per programme), with the event's merge tags, a live preview in a sandboxed iframe, "send me a test" (caller's own address only — a `to` in the body is refused) and reset. `GET/PUT/DELETE /api/admin/notification-templates` (+ `/preview`, `/test`) are behind `org.settings.write`, tenant-scoped, audited, and refuse a template the resolver would not use. `renderNotificationEmail()` is the ONE renderer for the preview, the test and the new `notification.email` job — the consumer the router's e-mail channel had been enqueuing for without a reader; it claims the `NotificationDelivery` row QUEUED → SENT before sending, skips batched events and day-old jobs, and picks the category per e-mail group from `EVENT_MAIL_CATEGORY`. `resolveTemplate()` takes a `draft`.
+
+## [0.514.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 02:11 UTC · commit [7849689](https://github.com/21072026/Internship/commit/784968916a7ba1c7c0ee9c6270ea190bcecf581b)_
+
+**AutomationRun retention (#1703 follow-up):** settled stage-automation runs are pruned after 90 days by the `automationRun` entry of the retention registry — the same window as the `DomainEvent` a run points at, no setting. PENDING and RUNNING runs are never touched.
+
+## [0.514.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 02:10 UTC · commit [2322215](https://github.com/21072026/Internship/commit/232221547cb90f6fac11f1ecd2200e27fe8e1387)_
+
+**Tenant offboarding export (#1584, story #1580):** `GET /api/admin/organizations/[id]/export` streams the whole tenant as one JSON document (`interncrm.tenant-export/1`: `_meta`, `organization`, `collections`, `_summary`). The walk is schema-driven (Prisma DMMF): every model with the org's `orgId`, then every model reached by a single-column FK from exported rows, paged by id and written as read. Credentials are omitted and listed in `_meta` by a fail-closed policy (`src/lib/orgExportPolicy.ts`, unit-tested against the real schema: a new secret-looking column nobody decided fails). Allowed for the world's super admin (`platform.org.read`) or the org's own ORG_ADMIN (new permission `org.export`); another tenant's admin 403 with a denial row; every export writes `org.exported`. Download button on `/admin/organizations`. `e2e/tenant-export.spec.ts` (@smoke: completeness, no cross-tenant id, no credential, the 403s).
+
+## [0.513.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 02:08 UTC · commit [1f19477](https://github.com/21072026/Internship/commit/1f19477af1ca4365dc402e8e0ee55b53294eacf1)_
+
+**Mentor Offers (#1809):** a mentor with headroom can offer to mentor an unmatched mentee who opted in (`User.openToOffers`, default off — not opted in = not listed, not offerable, never mailed). New `MentorOffer` tenant model (`PENDING|ACCEPTED|DECLINED|EXPIRED|WITHDRAWN`, 14-day `expiresAt`, one `remindedAt`). The rule is pure in `src/lib/mentorOfferRule.ts` (availability via `getMentorAvailability`, no re-offer while pending or after a decline, quota 3 pending / 5 per rolling 7 days, not configurable); `src/lib/mentorOffers.ts` is the one writer. Accepting claims the offer and approves a request naming the mentor through `decideMentorshipRequest()` — same plan gate, one-active-mentor guard and notices as any pairing; on refusal the request is removed and the offer reopened. Daily `mentorOffers.sweep` (09:10) expires offers and sends the one reminder (claimed on `remindedAt: null`). Mail goes through `sendEmail()` under the new `mentor-offer` category (mentorship_lifecycle group) after `emailAllowed` + `emailGroupAllowedForCategory`. Routes: `/api/mentor/offers` (GET/POST), `/api/mentor/offers/[id]` (DELETE = withdraw), `/api/mentee/offers` (GET), `/api/mentee/offers/[id]` (POST accept/decline). UI: `/mentor/offers` (new nav entry) and the opt-in + offers panel on `/portal`. The offer message is erased with either party.
+
+## [0.512.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 02:05 UTC · commit [78083ba](https://github.com/21072026/Internship/commit/78083ba9daa18739ba85c7efa85b3e5bf42b0def)_
+
+**Interview requests and company interest on the event bus (#1998, 6/n):** four new public catalogue events — `interview_request.created` (the company asks, `POST /api/interview-requests`), `interview_request.approved` / `interview_request.declined` (the programme decides, with the decline `reasonCode`, never the note) and `company_interest.changed` (`{ interestId, companyId, menteeId, requisitionId, from, to }`, raised only on a real status change — a note-only save raises nothing, and the note never goes on the bus).
+
+## [0.511.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 02:05 UTC · commit [c4abcbb](https://github.com/21072026/Internship/commit/c4abcbbe95a2c07a3dbf270017f64cd0859b4408)_
+
+**OIDC SSO configuration fields (#1926):** `Organization` gains `ssoClientId`, `ssoClientSecretEnc` (sealed with `secretBox`, purpose `sso-oidc-client-secret`), `ssoDiscoveryUrl`, `ssoScopes`, `ssoJwksCache` and `ssoJwksFetchedAt` — additive, optional columns. Completeness is now per provider: SAML is unchanged (issuer + entry point + certificate); OIDC needs issuer + client ID + client secret + an https discovery URL, and the enable refusal names the missing fields. `PATCH /api/admin/organizations` takes a write-only `ssoClientSecret` (super admin only, sealed before the write) and reads answer `ssoClientSecretSet`; the sealed column is in `ORG_CREDENTIAL_FIELDS` and the audit diff fingerprints it. OIDC sign-in itself stays refused until #1929.
+
+## [0.510.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 02:04 UTC · commit [ec856bb](https://github.com/21072026/Internship/commit/ec856bb14ee370ec62b767825431552b875f2ded)_
+
+**Affiliate overview tab (#3173):** `/admin/affiliates` replaces the #3112 placeholder with the programme's real state — partners per state, referred customers, commission totals per status, payouts and the latest one — read through `GET /api/admin/affiliate/overview` (`affiliate.read`, OBSERVER included) from `src/lib/affiliateOverview.ts`: six aggregate queries whatever the programme's size, the commission totals being the Commissions tab's own groupBy and the latest payout the Payouts tab's first row. Shortcuts open the pending commissions (`/admin/affiliates/commissions?status=…`, which the Commissions tab now reads) and the payouts tab; an unfinished setup (plan, contract, first partner) shows its steps. `e2e/affiliate-overview.spec.ts` compares the totals with the two tabs' APIs, counts the queries at 1 and 25 partners and walks the screen.
+
+## [0.509.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 02:04 UTC · commit [e118b68](https://github.com/21072026/Internship/commit/e118b68f0b19b940f5f04d4f60639c7e3cc4a442)_
+
+**Chat delivery ledger with retry (#1960):** "Recent deliveries" under each Slack/Teams workspace on `/admin/integrations` reads `GET /api/admin/integrations/chat/deliveries?workspaceId=…` (ADMIN, own org, last 50 attempts: event key, recipient name, outcome, reason — never the card body or a token). `POST /api/admin/integrations/chat/deliveries/[id]/retry` (`org.integrations.write`) re-sends a FAILED attempt through the notification router (`retryChatDelivery()`, its own ledger row keyed on the failed attempt) with the card rebuilt from the person's in-app notification, and appends a new `ChatDelivery` row; the failed row is never changed (`409` for a second retry, a non-failed row, a gone identity or a gone source notification). The e2e server now runs with `CHAT_APPS_ENABLED=1` beside the stub client.
+
+## [0.508.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 02:02 UTC · commit [020f2a0](https://github.com/21072026/Internship/commit/020f2a0667f97a22aa6bddb49cabb0970a08e3f4)_
+
+**Language of parts (WCAG 3.1.2, #2864):** the language switcher's buttons carry `lang` and their own-language name ("de Deutsch") for screen readers, plus `aria-pressed`; every per-language EN/TR/DE field (goal, agenda and message templates, attributes, agreements, affiliate contract, terminology, evaluation framework, project goal templates, document requirements, screening questions, journey titles, skill labels) declares its `lang`. User-written content stays unmarked by design — #3283. VPAT 3.1.2 remark updated; it stays `Partially Supports` and now points at #3283.
+
+## [0.508.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 02:02 UTC · commit [42d07e8](https://github.com/21072026/Internship/commit/42d07e8506256c40741c71891a20dc40a90a410e)_
+
+**Public status page (#1604):** `/status` shows the current state of the web app + database, e-mail delivery and background jobs, a 90-day availability figure with daily bars, and an incident feed (`src/lib/statusIncidents.ts`, edited by PR). History comes from a new deployment-wide `StatusSample` table written every 5 minutes by the `status.sample` job (`src/lib/statusSample.ts`; no catch-up, no retry — a missing slot is downtime). Rules are pure in `src/lib/statusRule.ts`; the page never shows a version, sha, host or error and never calls `/api/health`. The uptime commitment appears only when `STATUS_SLA_TARGET` is set (default: none); definitions, exclusions and per-severity targets in `docs/sla.md`. Linked from the public footer and `/trust`.
+
+## [0.507.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:57 UTC · commit [5acb8b8](https://github.com/21072026/Internship/commit/5acb8b881c30d0042312e4ead9bbc9ff62c5ab3c)_
+
+**Fit-ranking disclosure (#2042, slice 3):** the privacy notice (`privacy.aiBody`, EN/TR/DE) now tells candidates that a company sees applicants ordered by a rule-based fit score (skills, target position, location — never age, gender, nationality, photo or name) with a written reason, that the company's AI pack may have the top reasons written by AI from those anonymous facts only, and that the ranking never rejects anyone. `/ai` lists the `requisition_fit` task (who it is for, what is sent, what is withheld — including the score and the programme stage — and why no consent is asked); `e2e/ai-transparency.spec.ts` counts eight tasks. New feature-catalogue entry `requisitionFit` (companies, `placements`).
+
+## [0.506.2-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:57 UTC · commit [ae2641d](https://github.com/21072026/Internship/commit/ae2641d6b55857c9904443af3f4a6a22bcb036a7)_
+
+**Strict CSP, report-only (#1552, step 1):** the CSP now lives in `src/lib/cspPolicy.cjs` (the enforced header is byte-identical, pinned by a unit test). `src/middleware.ts` adds a per-request nonce policy as `Content-Security-Policy-Report-Only` on page requests — `script-src 'self' 'nonce-…' 'strict-dynamic'`, no `'unsafe-inline'`, `'unsafe-eval'` only outside production — which Next.js stamps onto its own scripts; the theme snippet in the root layout carries the nonce. Browsers report what it would block to the new `POST /api/csp-report` (rate-limited, 64 KB cap, logs sanitised `csp.violation` lines only, nothing stored). The template print popup no longer prints from an inline script. `CSP_REPORT_ONLY=0` turns the header off. Design: `docs/csp.md`.
+
+## [0.506.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:57 UTC · commit [08210f8](https://github.com/21072026/Internship/commit/08210f82d705b4c016c5fd553c3ea2e64ca4d621)_
+
+**Free core: the project cap never shows a mentee a plan (#3270).** `POST /api/projects` at the plan's project cap now answers a MENTEE `409 { code: 'project_capacity' }` with no plan, limit or usage, `ProjectForm` renders the neutral `projects.capacityReached` (EN/TR/DE), and the org's admins get `plan_limit.project_held` (in-app, at most one a day each). ADMIN and MENTOR callers keep `403 project_limit_reached`. The once-a-day admin fan-out is shared with `/api/apply` in `src/lib/planGateNotify.ts`.
+
+## [0.506.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:55 UTC · commit [0874114](https://github.com/21072026/Internship/commit/08741141512311471d6da00956807b090cd21e3b)_
+
+**Offer lifecycle on the event bus (#1998, 5/n):** `offer.accepted`, `offer.declined` and `requisition.filled` (registered since #1854) are now raised, and three new public events complete the lifecycle: `offer.sent`, `offer.withdrawn`, `offer.expired`. Both writers go through `raiseOfferEvent()` (`src/lib/offerEvents.ts`): the actions of `PATCH /api/offers/[id]` and the expiry sweep (`expireOffers()`, raised as `system`). Payloads are `{ offerId, applicationId, requisitionId }` — never the position, compensation or decline reason. `requisition.filled` fires once, from the acceptance that took the last seat.
+
+## [0.505.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:55 UTC · commit [a5f1381](https://github.com/21072026/Internship/commit/a5f1381dfd6224317e2316cbbda65ff66cdb0b42)_
+
+**Tenant rename + archive (#1582, story #1580):** `POST /api/admin/organizations/[id]/rename` (name + slug, `slug_taken` 409, the `default` org's slug fixed, an SSO tenant's slug locked unless `force: true`, audited `FORCED`) and `POST`/`DELETE …/[id]/archive`, both `requirePermission('platform.org.write')`. New nullable `Organization.archivedAt`/`archivedById` (+ index). An archived tenant: every sign-in door (password, SSO, remember-me, magic link, impersonation) refuses with its ordinary generic message, live sessions end in the jwt callback's existing per-request lookup, and `prepareEmail()` skips all its mail (`SKIPPED` / `Tenant archived`; account mails now pass the recipient `orgId`). Rule pure in `src/lib/orgLifecycleRule.ts` (unit-tested), one writer `src/lib/orgLifecycle.ts` (ActivityLog + org-stamped AuditLog + `org.config.changed`). Super-admin card on `/admin/organizations` (new `orgLifecycle` i18n namespace). `docs/tenant-lifecycle.md`; `e2e/tenant-lifecycle.spec.ts` (@smoke).
+
+## [0.504.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:54 UTC · commit [c027909](https://github.com/21072026/Internship/commit/c0279094846d8c801fbcdd2076d39454356a204f)_
+
+**`/admin/nudges` — the nudge builder (#1686):** list (on/off, trigger, sends in 30 days, last scan), an editor (event or daily-scan trigger, the segment as allowlisted condition rows, delay, channel, per-person limits, EN/TR/DE subject and body with missing languages flagged), a dry run (`POST /api/admin/nudges/[id]/preview` — the same `evaluateNudgeRule()` call with a writer that does not write: count, a sample of up to 25 names and the drop reasons, no job, no `NudgeSend`, no mail), an audited on/off switch (`nudge.enabled` / `nudge.disabled` ActivityLog rows) and the send history. Every `/api/admin/nudges` route checks `org.settings.write` and the `mentorship` capability itself; stage-change triggers are refused (`stage_trigger`). New shared `ConditionRow` component for rule builders; writes are on the demo blocklist (the dry run is not). Nav entry, feature-catalogue card.
+
+## [0.503.2-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:51 UTC · commit [0d8c795](https://github.com/21072026/Internship/commit/0d8c79511d7ac108ad6272727210754a51345dd1)_
+
+**Affiliate import file pickers (#3175):** the three bare `<input type="file">` on `/admin/affiliates/migration` are now the shared `FileField` (`src/components/ui/FileField.tsx`): the real input stays focusable but visually hidden, an outline-button label says "Choose file" in the app's language (`affiliateMigration.chooseFile` / `noFileChosen`, EN/TR/DE), the chosen file's name (or "No file chosen") is the input's description, and the focus ring is drawn on the button. A file refused as non-UTF-8 reads as none. `e2e/affiliate-migration.spec.ts` asserts the labels and the file name.
+
+## [0.503.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:51 UTC · commit [be21ebd](https://github.com/21072026/Internship/commit/be21ebd8ed5522c80339def72681d460c3d7d56c)_
+
+**Published API contracts are tested (#1611):** `/api/v1/openapi.json` now publishes the JSON Schema of every public webhook event's `data` under `x-webhooks.payloads` (`name@version`, generated from the domain-event catalogue by `src/lib/events/payloadSchema.ts`) and documents the full delivery envelope and headers. `e2e/api-v1-response-contract.spec.ts` (`@smoke`) validates every GET operation's live response against its published 200 schema in both directions (no missing required field, no undocumented field); `scripts/test/webhook-contract.test.mjs` pins every payload to a committed fixture and asserts the `X-Signature` HMAC of the delivered body. A breaking change is a new version — `docs/public-api.md` § Published contracts.
+
+## [0.503.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:50 UTC · commit [9d8d358](https://github.com/21072026/Internship/commit/9d8d3581fe88e8ceb8d4e2ad17dd3f258cc861eb)_
+
+**Erasure: a clock for the two records it keeps (#2098).** `ContactPermission` gains `subjectErasedAt` and `AffiliatePartner` gains `accountErasedAt` (nullable, appliable); both erasure paths stamp them (`stampContactProofsErased()` in the table's one writer, `affiliatePayoutStampOp()`), and a new basis written for a company clears the stamp. Two retention entries end them: `contactPermissionProof` deletes the UWG § 7 proof 3 years after the end of the erasure's calendar year (§§ 195, 199 BGB), `affiliatePayoutDetails` clears the IBAN 10 years after the end of the year the relationship ended — the latest of erasure, termination and last payout (§ 257 HGB, § 147 AO). Pure rule in `src/lib/erasureRetentionRule.ts` (`scripts/test/erasure-retention.test.mjs`), end to end in `e2e/erasure-retained-records.spec.ts`. Also: `RequisitionFit` rows are deleted on anonymise (the coverage guard was red on `RequisitionFit.reason`). The privacy notice (version `2026-10-29`) now says what deleting an account reaches and that a name quoted in other users' own notes is reviewed on request.
+
+## [0.502.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:50 UTC · commit [d1555d3](https://github.com/21072026/Internship/commit/d1555d327fb561948394412b3d3c83ed1f45fcb0)_
+
+**Retire CompanyNeed, expand step (#1875):** open positions have ONE source — `Requisition`. The company form no longer edits a free-text needs list (it links to `/admin/requisitions?companyId=…`, which now pre-filters from the URL; hidden in a vertical without `placements`), `POST/PUT /api/companies` drop `needs` (the PUT's delete-and-recreate of every `CompanyNeed` is gone), company payloads carry `requisitions` (OPEN only, `src/lib/openPositions.ts`) instead of `needs`, and the premium match-alert job is `checkRequisitionMatches()`, reading Requisition only. The deploy backfill (0012) now adopts a converted twin whose source need was recreated by an old edit instead of minting a duplicate requisition (`findAdoptableTwin`, unit-tested). The table and the `Company.needs` relation stay — the drop is the separate, approval-gated contract step.
+
+## [0.501.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:49 UTC · commit [04b2c2f](https://github.com/21072026/Internship/commit/04b2c2f92fa934d4de191de89064a04fd2348605)_
+
+**Terminology reaches mail, programmes and the plan gate (#1631):** the role-naming mails (rematch notices, weekly-report reminder, dormant check-in, meeting and series reminders, offer mails, the overdue-to-do digest) read their copy through `emailDictionary(locale, orgId)` for the recipient's org, so a renamed noun and the vertical overlay reach the inbox; `npm run check:mail-dictionary` (CI) pins the remaining bare `getDictionary()` calls in mailing files as a ratchet. `PUT /api/admin/terminology` refuses a FREE org with `403 { code: 'plan_required' }` (clearing stays allowed) and an empty document now DELETES the layer's row (`revertSetting()` in `src/lib/settingsWrite.ts`), so a programme's reset lets the org's words flow down again. The Terminology card gains a programme picker (with an "inherits the organization" note), a per-language reset, a live preview sentence (`TERM_PREVIEW_SAMPLE`) and the plan notice.
+
+## [0.500.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:48 UTC · commit [20bc003](https://github.com/21072026/Internship/commit/20bc0035e7cbc4fa7b4c073f5f8c15d459e7ee8e)_
+
+**Group sessions, mail (#1856, 4/4):** a waitlist promotion and a cancelled session are now also mailed through `sendEmail()` (`sendGroupEventEmail()`, category `meeting-invite`, EN/TR/DE `notifications.groupEventEmail`), on the recipient's clock and in their language, with a link to the session for a promotion. A publish stays in-app only.
+
+## [0.499.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:48 UTC · commit [492b3f8](https://github.com/21072026/Internship/commit/492b3f8708a834d317a17280843040f6bb896724)_
+
+**Self-serve signup flow and first-run panel (#1751):** a public `/signup` page (EN/TR/DE, INTERNSHIP only) posts to `POST /api/public/signup/org` and ends in a "check your email" state — never a session. It states the Community terms from the price list (active pairs, admin seats, no card) and that mentors and mentees are free forever. With `SELF_SERVE_SIGNUP` off it renders an honest "opening soon" state with the enquiry form as the way in, and the client falls back to it on a 503 `not_enabled`. While the flag is on, the public header gets a "Start free" link and the pricing page's Community column opens `/signup`. A tenant with no mentorship relation sees a three-step first-run panel on `/admin` (invite mentors, invite mentees, first pairing) instead of empty lists; it renders links only and disappears after the first pairing. `/admin/invite?role=MENTOR` preselects the role.
+
+## [0.498.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:47 UTC · commit [25ae422](https://github.com/21072026/Internship/commit/25ae4222de1a3eec7dcf09b21d0390549c2580a3)_
+
+**Dark-mode guard (#1614, part 1):** new `npm run check:dark-mode` (CI) flags a `className` that paints a light background the `globals.css` retint layer does not cover, with no `dark:` background on the same element; the covered list is read from `globals.css` itself and the findings are a shrink-only ratchet (`scripts/dark-mode-baseline.json`), started at zero. Fixing the tree's findings retinted `bg-violet-50` (the AI-draft panels), `bg-white/90` and `hover:bg-white` (message reaction chips and edit/delete pills, which were light-on-light), `hover:bg-gray-200`, `hover:bg-indigo-50` and `bg-gray-200` (onboarding step circles) — the last at gray-700, the colour every element pairing it with its own `dark:` background already chose — plus an explicit dark track on the enter-to-send toggle.
+
+## [0.498.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:46 UTC · commit [8447dfa](https://github.com/21072026/Internship/commit/8447dfa2fef4ca1ad8cebaa844b0c88d94d97c6d)_
+
+**Public ROI calculator (#1755):** `/roi-calculator` (internship product only; `requireVerticalCapability('mentorship')`, sitemap `needs: 'mentorship'`) builds a business case from the visitor's own numbers with no account and no e-mail, computed in the browser through the one model, `computeRoi()` in `src/lib/roi.ts`. New in that module: an optional `timeSaved` value input (priced coordinator hours; absent from the internal report, whose figures and steps are unchanged) and `prospectRoiInput()`, the adapter that maps the calculator's fields onto `RoiInput` (hires = floor(interns × conversion gain), the visitor's cost per hire as the recruiter fee avoided). The cost side is the published annual price of the plan that fits, `smallestProgramPlanFor()` in `src/lib/plans.ts`. Fields without evidence (hours, hourly cost, conversion) start empty; the formula and every step are printed. New `roiCalculator` i18n block (EN/TR/DE, LEAK_EXEMPT) and `roi.steps.timeSavedValue`.
+
+## [0.497.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:46 UTC · commit [071a0f1](https://github.com/21072026/Internship/commit/071a0f1297d1a623d7924c3ecd0ecab795666a7b)_
+
+**Written fit reasons on the company applicant board (#2042, slice 2):** every applicant on `/company/requisitions/[id]` carries a sentence explaining the fit (`fitReason`, `RULE` from `ruleFitReason()` in `src/lib/matching/fitReason.ts`, always available) — never the score, weights or breakdown, which stay the operator's. `POST /api/company/requisitions/[id]/fit-reasons` (owning COMPANY or org ADMIN; another company's requisition is 404) ranks every visible applicant deterministically first, then asks the new operator AI task `requisition_fit` (billed to the AI pack via `runAiGated`, rate-limited, artefact-cached on the anonymous payload) for one sentence per top-5 label; `buildFitReasonPayload()` builds that payload from the breakdown alone, so no id, name, e-mail, photo, protected characteristic, score or programme stage can reach the provider (unit-tested). An AI sentence is stored on `RequisitionFit` (`reasonSource = AI`) and shown with a ✨ marker only while the numbers it was written for still hold; `recordRequisitionFits()` now clears a stored sentence when the numbers change. Without the pack, a provider or quota the board keeps its rule-based sentences and the button says why.
+
+## [0.496.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:46 UTC · commit [837e025](https://github.com/21072026/Internship/commit/837e025295bb2082b626df07e2e6adcf4dc3d727)_
+
+**Chat apps install console, kill switch and real uninstall (#1958):** a "Slack and Microsoft Teams" card on `/admin/integrations` reads `GET /api/admin/integrations/chat/status` (platform configured, `CHAT_APPS_ENABLED`, every workspace of the caller's org — installer, granted scopes, enabled, confirmed identities, last error/delivery; never a token). `PATCH /api/admin/integrations/chat/[id] { enabled }` is the per-workspace kill switch (`ChatWorkspace.enabled`); `DELETE` revokes on the platform (Slack `auth.revoke`), then deletes the workspace, its sealed tokens and its identities, recording a refused revoke instead of keeping the token. Writes need `org.integrations.write`; another org's id is 404. `src/lib/chat/workspaces.ts` is the one writer and writes `CHAT_INSTALL` / `CHAT_ENABLE` / `CHAT_DISABLE` / `CHAT_UNINSTALL` AuditLog rows with the org. `ChatDelivery.workspaceId` is now nullable (SetNull) so history outlives an uninstall, pruned after 90 days by the new `chatDelivery` retention entry. The e2e server uses `CHAT_APPS_STUB_CLIENT=1`.
+
+## [0.495.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:46 UTC · commit [8febb94](https://github.com/21072026/Internship/commit/8febb94d4a4633f9cdd9370da7bf9caa75be2373)_
+
+**Core Web Vitals (#1593):** a sampled `<WebVitalsReporter>` (Next's `useReportWebVitals`) beacons LCP/CLS/INP/FCP/TTFB with a route template only (`src/lib/webVitalsRule.ts`) to the anonymous, rate-limited `POST /api/telemetry/vitals`, which writes one `web_vital` log line; off unless the build sets `NEXT_PUBLIC_WEB_VITALS_SAMPLE_RATE`. A CI budget, `e2e/web-vitals-budget.spec.ts` (`@smoke`), holds `/` and `/portal` to the first-load JavaScript, CLS and LCP ceilings in `e2e/web-vitals-budget.json`.
+
+## [0.494.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:45 UTC · commit [78d2bd3](https://github.com/21072026/Internship/commit/78d2bd333c3ee3a8aa77e1a785aaa7f47268db20)_
+
+**Operations console for every operator (#1607):** the `/admin/operations` link is now `operatorOnly` — shown to a super admin and to the default organization's ADMIN, the same rule the page and its API already applied (`resolveQueueScope()`); `navAudienceAllows()` in `src/lib/navLinks.ts` judges `superAdminOnly` and `operatorOnly` for the sidebar, the command palette and the app menu. The Errors card now says whether the error tracker (#1600) is configured and links to its origin (`trackerOrigin()` in `errorTrackingRule.ts` — never the DSN's key or project).
+
+## [0.494.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:45 UTC · commit [82a30d3](https://github.com/21072026/Internship/commit/82a30d32e2b74423b1629549865f469087321cf6)_
+
+**Mentor application screening (#1807):** additive nullable columns on `MentorApplication` — `screeningChecklist` (Json, `{ item: { done, by, at } }` over `SCREENING_ITEMS`), `interviewAt`, `interviewNotes`, `referenceName`, `referenceContact`, `referenceOutcome`, `screenedById`. `PATCH /api/mentor-applications/[id]/screening` records it (ADMIN only, each tick server-stamped with who/when, `logActivity` names the item never the text). The org setting `mentorScreeningRequired` (edited via `/api/mentor-applications/screening-policy`) lists items that must be done before approval; the approve handler re-reads the checklist inside its transaction and answers `409 screening_incomplete` with `missing`. Empty policy (default) = approval unchanged. The rule is pure in `src/lib/mentorScreeningRule.ts`. Queue rows show screening progress and "ready to decide". Interview notes and reference details are erased with the application (`accountErasure`, `sanitize-db`). Nothing reaches the applicant.
+
+## [0.493.4-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:44 UTC · commit [bdb2593](https://github.com/21072026/Internship/commit/bdb2593a345a126df7442e4f53f1f1b806123a55)_
+
+**Affiliate referral address (#3176):** the refusal under the referral base URL clears as soon as the field changes, so the `?ref=CODE` example comes back while the address is being fixed; on blur the field checks itself with the server's own pure rule (`parseReferralUrl`). The server validation is unchanged. Pinned by an untagged UI test in `e2e/affiliate-admin-settings.spec.ts`.
+
+## [0.493.3-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:43 UTC · commit [6ed5233](https://github.com/21072026/Internship/commit/6ed523389550a97e8daa2696c0e55d2d594b1f37)_
+
+- **`/api/*` refuses an oversized JSON body before parsing it** (#3210). App Router handlers call `request.json()` unbounded and nothing in front of the app set a limit, which is the door GHSA-mrhx-c7xc-m3w5 (zod 3 memory exhaustion on oversized constrained collections) walks through. The edge middleware now answers `413 payload_too_large` to a JSON/text write whose declared `Content-Length` exceeds 1 MiB (32 MiB under `/api/admin/`, whose importers take a whole CSV as a JSON string); multipart uploads keep their per-route limits. The rule is pure in `src/lib/bodyLimitRule.ts` (`JSON_BODY_MAX_BYTES` / `JSON_BODY_MAX_BYTES_ADMIN` tune it) and pinned by `e2e/body-limit.unit.spec.ts` (`@smoke`). A chunked body declares no length, so the complete fix is the proxy's: `infra/README.md` § Request body limit is the Caddy `request_body` runbook. The zod 3 → 4 migration itself stays #3210.
+
+## [0.493.2-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:41 UTC · commit [48dcc6e](https://github.com/21072026/Internship/commit/48dcc6e7c88006e648fc38104b638ebaa052162a)_
+
+**Focus is never hidden under the mobile top bar (WCAG 2.4.11, #2864):** `html` now carries a `scroll-padding` of the sticky shell bar + impersonation banner (top, below `lg`) and of the floating report button + fixed bottom bars (bottom), so a control focus scrolls into view lands clear of them. `e2e/focus-not-obscured.spec.ts` walks `/portal/profile` backwards with Shift+Tab at phone width and hit-tests every focused control (it failed before the fix: an input landed at y=0 under the bar). VPAT 2.4.11 now reads `Supports`.
+
+## [0.493.1-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:39 UTC · commit [1911f11](https://github.com/21072026/Internship/commit/1911f119e35ec0415c6d39b72e7ceb5eed6ee244)_
+
+**Demo seed covers the newer surfaces (#2061):** `npm run seed:demo` now also fills group sessions (a past briefing with attendance, a full office hour with a waitlist, an open session), two stage automation rules with a run log, two nudge rules with send history, three closed months of billing usage rollups and hiring applications (the demo shortlist through the CompanyInterest → Application bridge plus two self-applications), and — on the MARKETING demo tenant only — the affiliate programme (plan, two partners, payments, commissions in every status and one payout). Every automation and nudge rule is seeded disabled, so seeding never sends mail. `scripts/demo-fidelity.json` pins all of it, and the four #1419 entries that were seeded but unenforced (`WeeklyReport`, `MentorQuestion`, `DocumentRequirement`, `Document`) now have their floor raised to what the seed produces. New module: `prisma/seed-demo-features.mjs`.
+
+## [0.493.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:38 UTC · commit [5834441](https://github.com/21072026/Internship/commit/5834441e6ab8df06fd80adf3cdbedf582397405b)_
+
+**Group sessions on the calendar and in the programme journey (#1856, 3/4):** `/api/calendar-events` adds `type: 'group'` entries (hosted sessions and confirmed places; every live session for an admin) linking to the session page, with a purple chip and legend in `CalendarView`. A `GROUP_SESSION` journey step can name one of its programme's upcoming sessions (`payload.eventId`, validated by `stepColumns()` → `invalid_event`); delivering it publishes a draft session once and links the invitation to it for the audience the session is for.
+
+## [0.492.0-beta] - 2026-10-29
+
+_Shipped 2026-10-29 01:36 UTC · commit [71618e6](https://github.com/21072026/Internship/commit/71618e6e75a3fe8d514259ac194765579ba3450c)_
+
+**Stage automation builder (#1704, 2/2):** `/admin/automations` — rules list (enable/disable, reorder, delete), an editor built from the action allowlist (trigger, the tenant's own stages, delay, the shared `ConditionRow` field → operator → value component, an ordered step list with a typed control and a help line per action), a dry-run panel against real stage history and a run log with per-step results and error text. A rule can only be switched on after a dry run since its last change. AdminNav entry `automations` (capability `pipeline`), native-app icon, EN/TR/DE copy with MARKETING overlays, `stageAutomation` feature-catalogue entry. `e2e/automation-builder.spec.ts` covers create → dry run → enable → stage move → run log.
+
+## [0.491.2-beta] - 2026-10-28
+
+_Shipped 2026-10-28 05:44 UTC · commit [aa410e7](https://github.com/21072026/Internship/commit/aa410e771d870daf177edf0fd4a631fb1296bf86)_
+
+**Notification bell accessible name:** `NotificationBell`'s `aria-label` now carries the unread badge text ("Notifications 3", "Notifications 9+"), so the visible label is part of the accessible name (WCAG 2.5.3, axe `label-content-name-mismatch`). Cleared the `a11y-scan.spec.ts` regression on `/portal` and `/messages`.
+
+## [0.491.1-beta] - 2026-10-28
+
+_Shipped 2026-10-28 00:10 UTC · commit [057f2da](https://github.com/21072026/Internship/commit/057f2da8f855142e4d4283795f2659761a038185)_
+
+**Tenant isolation engine fix (#1568):** the `orgContext` AsyncLocalStorage is now one per process (`globalThis`), like the Prisma client — with a per-module-instance store, a route could bind its org where the once-per-process middleware never looked, and `GET /api/interview-panels` listed every tenant's panels with `MT_ENFORCE_ISOLATION` on. **Tenant leak gate (#1568):** `e2e/isolation/leak-matrix.spec.ts` signs in as tenant B's admin, mentor and company user and calls 21 authenticated read surfaces (candidates, mentorship, companies, cohorts, analytics, activity, email log, webhooks, API keys, settings, evaluation templates, document requirements, invitations, interview panels, requisitions, users, tags) against a server with `MT_ENFORCE_ISOLATION=true`, asserting the body carries none of tenant A's per-run markers — with a negative control (tenant A's same call must find every one of its own) and cross-tenant `PUT /api/mentorship/[id]`, `GET /api/mentorship/[id]` and `DELETE /api/status-changes/[id]` answering 404 with the row re-read unchanged. `e2e/isolation/uncovered-models.spec.ts` measures the middleware gap for the seven `orgId`-less child models (reachable only through their scoped parent). New `Playwright tenant isolation gate` job in `e2e.yml` runs the whole `isolation` project on every PR (no path filter; not yet a required check).
+
+## [0.491.0-beta] - 2026-10-28
+
+_Shipped 2026-10-28 00:06 UTC · commit [ba28663](https://github.com/21072026/Internship/commit/ba286635683249e12d4858ef0454e078ac5cc292)_
+
+**Requisition fit score (#2042, slice 1):** `scoreFit()` in `src/lib/matching/requisitionFit.ts` — deterministic, provider-free, the same `{ score, breakdown[] }` shape as `scoreMatch()` — weighs required skills (50), nice-to-have skills (15, `RequisitionSkill.required = false`), programme progress (15, the candidate's active stage along the org's on-path stages), target position (10) and location (10, remote = any city); a dimension with nothing to compare is not applicable and its weight is spread. `requisitionMatchRule.ts` (#1401) still decides WHO matches and now orders by the fit score; a low score never removes anybody. New tenant model `RequisitionFit` (one row per requisition × candidate: score, breakdown, `ruleSetVersion` `requisition-fit/1`, reason slot) written only by `recordRequisitionFits()` when a ranking is shown — the admin matches list and the match-alert mail. The daily alert picks each candidate's best-fitting role, nudges only from a fit of 40 and prints "Fit for <role>: N/100 (rule-based, a person decides)". `/admin/requisitions/[id]` renders the score and per-rule breakdown with `MatchScoreBreakdown`. The fit inputs are job-related only; a unit test pins that extra fields (gender, birth date, nationality, name, photo) cannot change a score.
+
+## [0.490.0-beta] - 2026-10-28
+
+_Shipped 2026-10-28 00:06 UTC · commit [f797e17](https://github.com/21072026/Internship/commit/f797e17539bcb59d5e9c6fd27c01cab12cb97d76)_
+
+**Upgrade prompt rendered from the 403 body (#1745):** one component, `src/components/UpgradePrompt.tsx` (`data-testid="upgrade-prompt"`), and one parser, `src/lib/upgradePrompt.ts` (`parseGateBody`/`parseGateError` read the `code`, never the English `error`; `upgradeOffer` names the plan that lifts the gate with its published price from `src/lib/plans.ts`). Wired to the admin mentorship assignment, the inline assign, the mentorship-request approval, the mentor's add-mentee form, the talent-pool lock (its 403 now carries `code: 'feature_locked', feature: 'TALENT_POOL_SEARCH'`), the premium-analytics locked panel and the report-subscriptions lock. Admins can file the upgrade request (`POST /api/org/plan-change`) from the prompt. **FREE CORE:** `POST /api/apply` at the plan cap now answers `409 { code: 'program_full' }` with no plan, price or limit, the apply page shows a translated capacity message, and the org's admins get a `plan_limit.application_held` notification (at most one a day each). New `upgrade` i18n block (EN/TR/DE) with MARKETING overlay entries.
+
+## [0.489.0-beta] - 2026-10-28
+
+_Shipped 2026-10-28 00:06 UTC · commit [a80ee9f](https://github.com/21072026/Internship/commit/a80ee9f3ae85217e4a56c7f604adb3f63591d619)_
+
+**Nudge rules engine (#1684):** new `NudgeRule` / `NudgeSend` models (tenant-registered) and the evaluator in `src/lib/nudges/`. A rule fires on an allowlisted non-stage domain event (`nudge` subscriber; the relation's mentor and mentee are the candidates, `delayMinutes` sets the send's `runAt`) or on the daily `nudge.evaluate` scan (09:20 UTC). Segments are allowlisted `{field, op, value}` conditions translated to Prisma only in `segment.ts`; stage-change triggers are refused at write time (that is `AutomationRule`, #1703). Hard limits in code: no nudge to a dormant first contact (no third dormancy mail) and none to a mentee at an outcome/terminal stage. Per-person caps (`maxPerUserPer30Days`, `cooldownDays`) count every nudge in the org; dedupe is the `NudgeSend` row, claimed before the send. Mail goes through `sendEmail()` under the new `nudge` category (`task_reminders` group, held by outbound approval for leads); in-app through `notifyIfAllowed()`. Also adds the missing `webhook.deliver` to `JOB_NAMES`. Docs: `docs/nudges.md`.
+
+## [0.488.1-beta] - 2026-10-28
+
+_Shipped 2026-10-28 00:06 UTC · commit [9fac122](https://github.com/21072026/Internship/commit/9fac122e1d9eaabfcee9d043e1b3d6c5ef9c968a)_
+
+- **`/.well-known/security.txt` names the deployment's own contact** (#2031). The file is now built per request (`src/app/.well-known/security.txt/route.ts`, pure builder `src/lib/securityTxt.ts`) instead of served from `public/`: the GitHub advisory form stays the first, preferred `Contact:`, and a second `Contact: mailto:` follows the deployment's env — `SECURITY_CONTACT_EMAIL` when a dedicated mailbox exists, else the `/imprint` operator address (`OPERATOR_EMAIL`, per world), else no line. A self-hosted AGPL instance therefore never advertises this project's mailbox for its own data, and an address that could forge a field (a newline, a space) is never printed. `e2e/security-txt.unit.spec.ts` (`@smoke`, browserless) pins the precedence and the escaping.
+
+## [0.488.0-beta] - 2026-10-28
+
+_Shipped 2026-10-28 00:03 UTC · commit [d501500](https://github.com/21072026/Internship/commit/d501500d84dfa2f98cc9a88edeea0f3c7ba2cca1)_
+
+**`chat` is a notification-router channel (#1939):** `src/lib/notifications/adapters/chat.ts` delivers a card (the bell's sentence + the link into the recipient's own product) to a person's confirmed `ChatIdentity`, through the new `ChatPlatformClient` port (`src/lib/chat/client/` — Slack Web API, Teams Bot Framework connector with a Microsoft-host allowlist on `serviceUrl`). The router adds `chat` per recipient only for confirmed identities and only with `CHAT_APPS_ENABLED=1`; a caller pinning `channels` gets exactly those. A disabled workspace records `SKIPPED` (`workspace_disabled`), a platform refusal `FAILED` with its code (also `ChatWorkspace.lastError`), and neither touches the e-mail or in-app delivery. Never gated on a plan (guard test).
+
+## [0.487.1-beta] - 2026-10-28
+
+_Shipped 2026-10-28 00:03 UTC · commit [fd3cb93](https://github.com/21072026/Internship/commit/fd3cb932ac17e8b396adf417a8944b56eed3b262)_
+
+**Skills-gap report, API (#1823):** `GET /api/admin/analytics/skills-gap[?cohortId=]` — supply (the org's active mentees' canonical skills, avg level, confirmed count) against demand (required skills of HIRING requisitions: `OPEN` with `filled < openings`, weighted by remaining seats), with `underSupplied`, `unused` and `coverage` (requisitions whose whole required set one person holds). ADMIN only, `requireCapability('mentorship')`, gated on `ADVANCED_ANALYTICS` through `entitled()`; tenant-scoped, another tenant's cohort is a 404. Every definition is pure in `src/lib/skillsGapRule.ts` (unit-tested); e2e in `e2e/skills-gap.spec.ts`. The admin panel and export follow.
+
+## [0.487.0-beta] - 2026-10-28
+
+_Shipped 2026-10-28 00:02 UTC · commit [c616246](https://github.com/21072026/Internship/commit/c6162467569f9a844471c17dcf2c668d30e88271)_
+
+**Settings change history, inheritance badges and revert (#1623):** `writeSetting()` / `revertSetting()` (`src/lib/settingsWrite.ts`) are the only settings writers — a no-op writes nothing; a real change writes the row and one `SettingChange` (new tenant model) in one transaction, with values from #1699's `redactedDiff()` under the per-key `redact` flag in `SETTING_SCHEMA` (`supportEmail`), and emits `setting.changed`. `setSetting()` is gone. New `GET /api/admin/settings/history` (caller's org only) and `DELETE /api/admin/settings?key=` (revert to inherited, `org.settings.write`). The settings form shows per key whether the value is set here or inherited, its history, and a revert control, and saves only the fields that changed; the activity feed gets one redacted `settings.update` entry per changed key.
+
+## [0.486.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:57 UTC · commit [8ed9e0d](https://github.com/21072026/Internship/commit/8ed9e0d3ca20d13a6bb8245a1f0ef23425ec129c)_
+
+**Group sessions, screens (#1856, 2/4):** `/admin/events`, `/mentor/events` and `/portal/events` (one `GroupEventsBoard`, each gated by `gatePage` on `mentorship`, sidebar + native-app menu key `groupEvents`). Hosts create (time zone, seats, audience, programme for admins, place or video link), publish, cancel, open the participant list and record attendance in #2014's vocabulary; participants register, join the waitlist, leave and read back their own attendance. The join link appears only for confirmed registrants, and a link on the public Jitsi server carries the five-minute embedded-call warning. Feature catalogue entry `groupSessions` (+ MARKETING overlay).
+
+## [0.485.1-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:56 UTC · commit [0af9e57](https://github.com/21072026/Internship/commit/0af9e571a1ecdb4be7c4922545a95fafec62a34a)_
+
+**Chat apps data model (#1934):** three additive, tenant-anchored models for the Slack / Teams adapters — `ChatWorkspace` (installed workspace, sealed bot/refresh tokens, granted scope, the per-workspace `enabled` kill switch, `lastError`/`lastDeliveryAt`), `ChatIdentity` (CRM user ↔ chat member, `@@unique([workspaceId, externalUserId])`, `verifiedAt`) and `ChatDelivery` (append-only ledger, never the card body), all in `TENANT_MODELS`. `src/lib/chat/tokens.ts` seals tokens through secretBox under dedicated purposes (`chat-bot-token`, `chat-refresh-token`).
+
+## [0.485.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:53 UTC · commit [0126467](https://github.com/21072026/Internship/commit/0126467b28b63eb538a220d54a983752e49bb145)_
+
+**Skill progression strip (#1822):** `/portal/goals` shows the mentee's rated skills with the level they started at and the level now, most-grown first, with the confirmation mark. Server-rendered from `skillProgressOf()` (`src/lib/skillLevels.ts`) over `UserSkillLevelChange`; the start rule is pure in `skillProgression()` (`src/lib/skillLevelRule.ts`, unit-tested). Free core, renders nothing until a skill is rated. e2e: `skill-rating.spec.ts` asserts the strip after a mentor's correction.
+
+## [0.484.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:53 UTC · commit [99a7fb4](https://github.com/21072026/Internship/commit/99a7fb4a683d7b97ed47b00d85ec980e4b5868aa)_
+
+**`mentorship.transferred` on the event bus (#1998, 4/n):** a new public catalogue event raised by `transferMentorship()` after its commit — `{ relationId, previousRelationId, menteeId, fromMentorId, toMentorId, mode, reasonCode }`, where `mode` is `corrected` (fixed in place, `previousRelationId` null) or `transferred` (the old pairing closed as `ENDED_REASSIGNED`, `relationId` is the successor). The reason travels as its code only; the admin's note stays in the activity log.
+
+## [0.483.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:52 UTC · commit [3f17748](https://github.com/21072026/Internship/commit/3f177488d82a094750f8aee13869d6266e0d3bb0)_
+
+**Result counts are announced on every searchable list (WCAG 4.1.3, #2864):** the 29 screens and components with a search box (admin lists, the sidebar menu filter, notifications, jobs, the company overview, message search, canned replies, …) now speak "N results shown" / "No results" through `useFilterAnnouncement` + the new `resultCountMessage()` when a filter changes them. A VPAT `check:` fails if a new `type="search"` box ships without the hook. VPAT 4.1.3 now reads `Supports`.
+
+## [0.482.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:49 UTC · commit [e53fea9](https://github.com/21072026/Internship/commit/e53fea9fcec6382647906105dc5e2e22cf6e986b)_
+
+**Stage automation admin API (#1704, 1/2):** `/api/admin/automations` (list with the org's own stages and picker options, create — always disabled), `/[id]` (PATCH re-validates the merged rule; switching on needs a dry run since the last logic change, else `409 simulate_first`; DELETE), `/reorder`, `/runs` (the run log) and `/[id]/simulate` — a dry run against the org's last N real `StatusChange` rows through `simulateRule()` (`src/lib/automation/simulate.ts`), which imports only the rule vocabulary and so cannot execute an action. Every route: `org.settings.write` in the handler, org-scoped (another org's rule is 404), on the demo write blocklist.
+
+## [0.481.1-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:47 UTC · commit [f5df2fd](https://github.com/21072026/Internship/commit/f5df2fd348f6b2786aa492caa80fe52cad586b20)_
+
+**Own bill links to the published definition (#1735):** the active-pair definition on both billing tabs now links to `/pricing#how-we-count` (`METERING_DEFINITION_HREF` in `src/lib/meteringRules.ts`), the section that publishes how pairs are counted, so a customer can check the number against the published sentence in one click; `e2e/org-billing.spec.ts` asserts the link and that the section states the same rule.
+
+## [0.481.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:45 UTC · commit [4adac88](https://github.com/21072026/Internship/commit/4adac8847fa016274bb5d6d5fc97c87720856567)_
+
+**Webhook delivery log, retries and replay (#1695):** webhook delivery is now one queued `webhook.deliver` job per (event × subscription) instead of a fire-and-forget `Promise.all` — a slow receiver no longer delays another partner's delivery. Every attempt writes a `WebhookDelivery` row (status `PENDING|SUCCESS|FAILED|DEAD`, response code, truncated body, error, duration); a 5xx/408/429/timeout retries with the queue's backoff up to 8 attempts, any other answer is `DEAD` at once, and redirects are no longer followed (they walked around the SSRF re-check). Every attempt carries a stable `X-Delivery-Id`; body, `X-Signature` and `X-Event` are unchanged. A hook with 20 consecutive failures or 72h without a success is auto-disabled once (`Webhook.disabledAt`/`disabledReason`), its org's admins get one `ops-alert` mail, and the relay skips it until an admin switches it back on. New ADMIN-only, org-scoped routes: `GET /api/admin/webhooks/deliveries`, `POST /api/admin/webhooks/deliveries/[id]/replay`, `POST /api/admin/webhooks/replay-events`. `dispatchWebhook` is removed. Semantics documented in `docs/api-explorer.md`.
+
+## [0.480.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:45 UTC · commit [82716dc](https://github.com/21072026/Internship/commit/82716dc0895515980d5e3f95607f00b6c7c17c99)_
+
+**SLA compliance and escalation honour overrides (#3204):** `computeSlaCompliance()` takes either one map or a per-relation resolver; `slaCompliance()` judges each relation against its own resolved service level (`slaDaysByStage` over every scope, memoised per cohort/mentor pair) and reports a rate for an org whose only SLAs are overrides. The escalation rung resolves per relation, field by field (`resolveSlaEscalations()` in `stageSlaRule.ts` + its ESM twin): an override without a rung of its own inherits the next scope's. `checkStageDeadlineReminders()`, the deadline fill and `resolveStageEscalations(scope)` read it; override rows may now carry `escalateAfterDays` (API + editor, placeholder shows the inherited rung). With no override rows both readers answer exactly as before (unit-tested).
+
+## [0.479.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:44 UTC · commit [331cc46](https://github.com/21072026/Internship/commit/331cc467b1e95d25b74f5ba1a78f156515faa67a)_
+
+**Admin availability (#2005, 3/3):** `/admin/availability` (nav `availability`, `mentorship` capability, `gatePage`) — a mentor picker over the org's active mentors plus the shared `AvailabilityEditor` (extracted from `/mentor/availability`, which now mounts it too). With `mentorId` the editor reads `/api/availability?mentorId=` and `/api/availability/exceptions?mentorId=`, posts `mentorId` on slot/away creation, and `BookingRulesCard` reads/writes the mentor's rules — no new API; every endpoint already admitted an ADMIN for a mentor of their own org and 404s another org's. Shows the mentor's zone and a "this mentor never set a time zone" variant. New `adminAvailability` i18n namespace (EN/TR/DE, `LEAK_EXEMPT` with its reason). Pinned by `e2e/admin-availability.spec.ts` (cross-org boundary @smoke).
+
+## [0.478.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:44 UTC · commit [361713d](https://github.com/21072026/Internship/commit/361713dc95ccee2d3cb129733d8d722adef5e722)_
+
+**Error tracker (#1600):** uncaught server errors (`onRequestError` in `src/instrumentation.ts`), every failed job attempt and DEAD_LETTER (the worker's new `onError` hook) and browser errors (error boundaries, `window.onerror`, unhandled rejections → `POST /api/telemetry/errors`) become grouped events in any Sentry-protocol tracker (Sentry, GlitchTip, Bugsink). No SDK: `src/lib/errorTrackingRule.ts` builds an allowlisted event — first message line, masked stack frames, `TAG_KEYS` only — with the masking of `feedbackContext.ts`, and `src/lib/errorTracking.ts` is the one `fetch` sender. Tagged with release (`GIT_SHA`), version, environment, route, role, `orgId` and `requestId`; no e-mail, name, body or token, pinned by `e2e/error-tracking.unit.spec.ts`. Off unless `ERROR_TRACKING_DSN` is set (`NEXT_PUBLIC_ERROR_TRACKING=1` for the browser); docs in `docs/observability.md`.
+
+## [0.477.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:44 UTC · commit [c27ab48](https://github.com/21072026/Internship/commit/c27ab48c8e54967378c89b4649f5b07c08776f75)_
+
+**`application.stage_changed` on the event bus (#1998, 3/n):** a new public catalogue event `{ applicationId, requisitionId, from, to }` raised for every move of `Application.stage`. `moveApplicationStage()` (the one writer) notes the move; `stageTransaction()` (`src/lib/applicationStageEvents.ts`) replaces `prisma.$transaction` at all eight callers and raises the noted events only after the commit, so a rolled-back move (a lost panel-outcome seal, a bulk conflict) announces nothing. A move noted outside `stageTransaction()` throws outside production. No note and no disposition code on the bus.
+
+## [0.476.1-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:43 UTC · commit [48d2edb](https://github.com/21072026/Internship/commit/48d2edb08915c7aa2bc8a61e8bf12d184286cf40)_
+
+**The browser gets only the dictionary namespaces a page uses (#3217, #2987):** the root layout used to ship the whole client dictionary (~430 KB of JSON per locale, 265 namespaces) on every page. It now ships the 19 shell namespaces, and every top-level directory of `src/app` mounts `<I18nScope scope="…">` (`src/i18n/scope.tsx`) in its layout to add the ones its own client components reach. The sets are computed by `scripts/i18n-scopes.mjs` (an over-inclusive scan of the client module graph) into `src/i18n/scopes.generated.ts` — gitignored, written on install (postinstall), `npm run dev` and `npm run build`; `npm run check:i18n-scopes` (CI) fails on an unmounted scope. A namespace that is somehow missing renders empty and logs `[i18n] namespace … was not shipped` instead of crashing. Dev-mode sizes: `/features` 965 → 528 KB (gzip 279 → 145 KB), `/auth/signin` 552 → 139 KB (gzip 166 → 40 KB).
+
+## [0.476.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:43 UTC · commit [5f6e239](https://github.com/21072026/Internship/commit/5f6e2395b792f8d7e46e5f253734161efac37fc6)_
+
+**Self-serve tenant signup API (#1749):** `POST /api/public/signup/org` creates an INTERNSHIP organization on the Community plan (`FREE`), its first ADMIN, that admin's privacy consent and the org's `Subscription` in ONE transaction, through `provisionOrganization()` (new `firstAdminAccount` step, so the account rolls back with the org; starter pack included). Off unless `SELF_SERVE_SIGNUP=true` (503 `not_enabled`, checked in the handler) — it stays off in production until tenant isolation is enforced. 5 attempts per IP per hour; never a session or an id in the response; the admin is created inactive and unverified and admits itself through the ordinary verification link; an address already in the product answers a generic 409 `signup_unavailable`; a taken slug gets a random suffix; a MARKETING host is refused (invitation-only); the operator address (`ALERT_EMAIL_TO`) gets one line per new org. `getOrCreateSubscription()` accepts a transaction client.
+
+## [0.475.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:42 UTC · commit [e9a9936](https://github.com/21072026/Internship/commit/e9a99362e8329e83f784e5cf71db259edd4b95b0)_
+
+**Mentor confirmation of skill levels (#1822):** `GET /api/mentorship/[id]/skills` lists the mentee's canonical skills with level and confirmation state; `POST /api/mentorship/[id]/skills/[skillId]/confirm` (`{ level }`) lets the mentor of an ACTIVE relation, or an admin of its org, confirm or correct a level. Authorized from the relation server-side (another mentor or an ended pair: 403), `requireCapability('mentorship')`, never entitlement-gated. One guarded update (409 `level_conflict` when the level changed meanwhile) plus a `MENTOR` history row only when the value moves (`confirmLevelPlan()` in `src/lib/skillLevelRule.ts`; DB half in `src/lib/skillLevels.ts`). New `MenteeSkillLevels` panel on the mentor's mentee page; a confirmed level is marked on the company candidate detail (`verifiedLevels`) and on the mentee's own profile (`GET /api/profile` → `verifiedLevels`). e2e: `skill-rating.spec.ts` covers the self-assessment history, the 403s and the confirmation.
+
+## [0.474.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:41 UTC · commit [ae6e072](https://github.com/21072026/Internship/commit/ae6e072158a3241bfca0cdc10e88d50ca77d4759)_
+
+- **The assurance layer behind the trust claims** (#2031). New `public/.well-known/security.txt` (RFC 9116: `Contact`, a renewable `Expires` under a year, `Preferred-Languages`, `Policy`, `Acknowledgments`), and four published documents: `docs/trust/vulnerability-disclosure.md` (scope, safe harbour, response targets, and "there is no bug bounty" said out loud), `docs/trust/pentest.md` (the cadence commitment, the internal audit method, the areas proven correct, the areas never examined, and the findings under #1522 — the open one (#1552, CSP `unsafe-inline`/`unsafe-eval`) and the three fixed since September, each with its date — no external test has been commissioned and the page says so first), `docs/trust/questionnaire-answers.md` (a CAIQ/SIG-lite answer library where every row carries an evidence path in this repo and every "no" is written as a no) and `docs/trust/soc2-decision.md` (SOC 2 Type II costed at roughly €40–80k in year one, with the prerequisites we do not meet — host separation, #1515, #1591 — and the trigger condition; explicitly not an implementation plan). `src/lib/trustAssurance.ts` + `src/components/trust/AssuranceSection.tsx` hold the EN/TR/DE "Assurance" block, now mounted on /trust. `e2e/security-txt.spec.ts` asserts the file is served, that its `Expires` is neither past nor more than a year out, and that every document it and the Assurance list point at exists.
+
+## [0.473.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:40 UTC · commit [f72b362](https://github.com/21072026/Internship/commit/f72b362f1d0ed43c60e6c859a198fe6b17fc816e)_
+
+**Stage automation engine (#1703):** new `AutomationRule` / `AutomationRun` models (both in `TENANT_MODELS`) and the `automation` domain-event subscriber on `pipeline.stage_change`. A rule (entry/exit of one stage, AND-ed allowlisted conditions, an ordered list of allowlisted actions, optional delay) is validated at write time by `parseRuleInput()` (`src/lib/automation/rule.ts`): actions are `notifyRole`, `sendTemplateEmail` (catalogued EN/TR/DE templates through `sendEmail()`), `setStageDeadline`, `assignGoalFromTemplate`, `requireDocument`, `addTag` — none takes a URL, an address or free text, none moves a stage. Evaluation runs on the queue (a bulk advance never waits on it), records exactly one run per (rule, event), delays go through the new `automation.run` job, a failing action leaves a PARTIAL/FAILED run and never touches the stage move. Rules default to disabled; the admin builder is #1704. `docs/automation-rules.md`.
+
+## [0.472.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:39 UTC · commit [0d0a62f](https://github.com/21072026/Internship/commit/0d0a62f09b7a2b3b7f670f5d6693a9ee9f857947)_
+
+**Usage tab on /admin/billing (#1763):** `GET /api/org/usage` (own org only, from the session; reads `UsageRollup` only) returns active pairs, admin seats, companies, programmes, AI calls, broadcast recipients and video rooms/participants against the plan's limits with four periods of history; `src/lib/usageSummary.ts` (pure) decides ok / approaching (≥80%) / over, and a `null` limit reads unlimited, never 0 or over. The nightly rollup gains four COMPUTED metrics — `COMPANIES`, `PROGRAMS`, `AI_CALLS` (the quota's own count) and `BROADCAST_RECIPIENTS` (`broadcastRecipientsInRange()`, the quota's per-category rules) — so no request scans a domain table. The tab prints the active-pair definition and what is never metered, and an over-limit row offers the plan change.
+
+## [0.471.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:39 UTC · commit [6d3ea70](https://github.com/21072026/Internship/commit/6d3ea700dc2526558f1f0d2e78d269c403d69b20)_
+
+**Group sessions and office hours, model + API (#1856, 1/4):** new `ProgramEvent` (tenant model) and `EventRegistration` (child, no token — the session is the credential). `POST/GET /api/events`, `GET/PATCH /api/events/[id]`, `POST /api/events/[id]/cancel`, `POST/DELETE /api/events/[id]/register`, `PATCH /api/events/[id]/attendance`. Capacity is enforced by a guarded `updateMany` on `seatsTaken < capacity` under the event's row lock; past the cap a registration is WAITLISTED, a freed seat (or a raised cap) promotes the oldest waitlisted person in the same transaction. Attendance reuses #2014's `AttendanceState`. Join links go through `resolveMeetingLink()` and reach only the host, admins and confirmed registrants. In-app notices `event.published` / `event.promoted` / `event.cancelled` / `event.updated`. The single writer is `src/lib/groupEvents.ts`; the rules are pure in `src/lib/groupEventRule.ts`.
+
+## [0.470.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:35 UTC · commit [968721f](https://github.com/21072026/Internship/commit/968721fce4e00551ca16c3ebfce4d5ceb1039892)_
+
+**Session timeout warning (WCAG 2.2.1, #2864):** five minutes before an idle session ends, `SessionTimeoutWarning` (mounted in `app/providers.tsx`, signed-in only) opens an alert dialog with "Stay signed in", which calls next-auth's `update()` and re-issues the 12 h cookie. Timing lives in the pure `src/lib/sessionTimeoutRule.ts` (unit-tested); `e2e/session-timeout.spec.ts` drives it with a fast-forwarded browser clock. VPAT 2.2.1 now reads `Supports`.
+
+## [0.469.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:34 UTC · commit [c57de3a](https://github.com/21072026/Internship/commit/c57de3a6097c7701e095b0d73a48bb46e32cdd00)_
+
+- **Supply-chain evidence: SBOM, licence inventory and a written vulnerability SLA** (#2059). A CycloneDX 1.6 SBOM of the production tree is generated on the runner in `build-image.yml` (`npm run gen:sbom`, `@cyclonedx/cyclonedx-npm` pinned via `npx` — no new devDependency), stamped with the derived version and the exact commit through the existing `RELEASE_STAMPS` plumbing, uploaded as a build artifact, and served unauthenticated at `/sbom.cdx.json` by the same image it describes. `npm run check:licenses` reads `package-lock.json` — no install, no network, no new dependency — and generates `docs/legal/third-party-licenses.md`, failing CI on a licence that blocks **either** distribution under AGPL-3.0-or-later **or** the commercial grant sold on top of it (a GPL-3.0/AGPL-3.0 dependency passes the first and kills the second) and on any SPDX id nobody has classified; hand-resolved packages need an `ALLOWLIST` entry with a prose reason, which is rendered into the inventory. Drift is keyed on licence facts rather than versions, so a patch bump does not redden a Dependabot PR. `docs/trust/vulnerability-management.md` states the per-severity remediation targets, the no-upstream-fix path, the owner and the scanning cadence — and the `npm audit` gate now implements exactly that ladder (`scripts/check-audit.mjs`) instead of blocking on `critical` alone: `high` blocks when a non-major fix exists, and when only a major fix exists unless the reason is written in `docs/security-exceptions.md`, whose open-findings table the gate now parses. Both gates fail closed on an unreachable advisory feed or a missing document, and both policy engines — every row of the ladder and the two-question licence table — are asserted offline by `npm run test:supply-chain` in CI, because a gate that has quietly stopped blocking still exits 0. At landing the gate reads 0 blockers against the current tree: `xlsx` (high, no fix published) and the new `zod` 3.x advisory GHSA-mrhx-c7xc-m3w5 (high, only a 3 → 4 major fixes it) are carried as written exceptions, the latter with a 2026-12-26 deadline (#3210). `/trust` links the SBOM, the licence inventory and the policy.
+
+## [0.468.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:34 UTC · commit [415c340](https://github.com/21072026/Internship/commit/415c34077998d35e3c132d01d689958010d0a3ec)_
+
+**Meeting lifecycle on the event bus (#1998, 2/n):** `meeting.cancelled` and `meeting.rescheduled` — registered since #1980 but never raised — now leave through `emit()`. `meeting.cancelled` is raised by `cancelMeetingRows()` itself, so the meeting PATCH and the interview-request cancel both carry it (one event per call: the addressed row plus `count`); a DELETE of a meeting that was still scheduled raises it too. `meeting.rescheduled` fires once per row whose time moved (not for a title or link edit). The cancel reason never goes on the bus.
+
+## [0.467.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:31 UTC · commit [b4cee97](https://github.com/21072026/Internship/commit/b4cee9740c55319353bb787d5530cb1fa99c66f9)_
+
+**Stage SLAs fill deadlines on save (#3203):** saving a service level (org scope or a cohort/mentor override) now gives that org's ACTIVE relations already sitting in the stage a deadline at once, through the same `fillOrgStageDeadlines()` the deploy backfill uses (extracted to `prisma/stage-deadline-fill.mjs`): dated from the stage entry, only an empty deadline is ever filled, idempotent, and a past-due one is stamped (`deadlineReminderSentAt` + a breach snoozed for `escalateAfterDays`) so no reminder or escalation mail goes out for it. `PUT /api/admin/stage-sla` answers `deadlinesSet`; a failed fill never fails the save.
+
+## [0.466.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:31 UTC · commit [31f22fd](https://github.com/21072026/Internship/commit/31f22fd36d009a6f5ec8aa823dc1ff20dd7837c6)_
+
+**Interview lifecycle on the event bus (#1998, 1/n):** `interview_request.scheduled`, `interview_request.cancelled` and `interview_panel.outcome` — registered in the public catalogue since #1854 but never raised — now leave through `emit()` from the schedule, cancel and outcome routes. `interview_panel.completed` is also raised when an admin closes a panel early (the close is now a guarded `updateMany`, so two racing closes raise one event, and a panel everybody had already scored is not announced twice). Payloads stay ids and states: no title, guest address, cancel reason, score or disposition code.
+
+## [0.465.1-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:27 UTC · commit [d76cb31](https://github.com/21072026/Internship/commit/d76cb31624cabcf025a41da9f1f630663a464e87)_
+
+**VPAT manual test protocol (#2864):** `docs/a11y-manual-protocol.md` defines the screen-reader / keyboard / zoom pass (NVDA + Firefox, VoiceOver + Safari) over the scanned page states, criterion by criterion, with a results log a person fills in. Every `Partially Supports` row that waits on manual verification now cites it as evidence; `npm run vpat:evidence` regenerated.
+
+## [0.465.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:25 UTC · commit [863f313](https://github.com/21072026/Internship/commit/863f313df3e73c214c441230d56fe7772237a195)_
+
+**Operations console (#1607):** `/admin/operations` + `GET /api/admin/operations` show every queue schedule (`schedules.ts`) with its last `JobRun` (outcome, duration, trigger, sanitized error), last success, next slot and **alarms** computed by the pure `src/lib/jobs/operationsRule.ts` — `never_enqueued` (no `ScheduleState` row), `scheduler_behind`, `worker_behind` (only where the caller sees every run) and `last_run_failed`; plus failed-run counts for 1h/24h, the dead-letter count, the `JobLease` holders (world scope) and a state roll-up over `GET /api/admin/integrations/health` linking to `/admin/integrations`. Scope is the mail queue's operator rule (`resolveQueueScope()`, now with `queueScopeWhere()` exported): a super admin sees their world, the default organization's ADMIN its own runs only, everyone else gets 403 from the route. "Run now" goes through the existing `/api/cron?job=…&enqueue=1` (`manualKeyForJob()` is the inverse of `manualJobFor()`); platform jobs are offered to a super admin only.
+
+## [0.464.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:25 UTC · commit [76cb73e](https://github.com/21072026/Internship/commit/76cb73e19bdd99deec5bfbb7e1d22dc57a160fa9)_
+
+**Mentor board parity (#2076):** the admin board's behaviours are shared pieces under `src/components/board/` — `useBoardFilters()` (search + hide-empty state), `BoardPhaseGroups` (collapsible phases from `groupResolvedStages`, `stacked` for the admin board, `row` for the owner's board), `BoardColumnHeader` (label + count + WIP warning, the limit taken as a prop), `OverdueBadge` and `useBoardWipLimits()`. The mentor board (and `/sales/board`) now groups its stages into the same collapsible phases and shows the amber WIP chip from the org's limits (#1439). New read-only `GET /api/board/wip-limits` (ADMIN + MENTOR) serves the resolved limits from the same resolvers as `/api/admin/stage-sla`, which stays the admin-only editor.
+
+## [0.463.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:24 UTC · commit [5992454](https://github.com/21072026/Internship/commit/5992454f6809afc62d3c4b32e3901bca2094a907)_
+
+**Mentor limits CSV import (#1808):** `POST /api/admin/mentors/limits/import` and a panel on `/admin/mentors` — `email` + `mentorCapacity`, `selfMatchLimit`, `acceptingMentees` (User) and `minNoticeMinutes`, `maxPerMonth` (upserted onto the mentor's `MentorBookingPolicy`, #2003's names and units). Runs on the one import engine (`runImport` + the shared parser, `src/lib/mentorLimitsImport.ts` / `mentorLimitsImportStore.ts`): dry run first with a per-row report (`UPDATE` + changed fields / `UNCHANGED` / `SKIP not_found|not_a_mentor|duplicate_row|below_weekly` / `ERROR` per column), writes only on `apply: true`, one transaction per chunk. Unknown addresses are reported, never created; empty cell = keep, `-` = clear. ADMIN only, free core.
+
+## [0.462.1-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:24 UTC · commit [bff5c26](https://github.com/21072026/Internship/commit/bff5c26a240487c50f2c5f755681576de001b6a4)_
+
+**Legacy skill levels on the canonical rows (#1822):** new deploy backfill `0034-skill-levels` (`prisma/backfill-skill-levels.mjs`, after `0030-skill-taxonomy`) copies `User.skillLevels` onto `UserSkill.level` with one `UserSkillLevelChange` per fill. Insert-only per row (`planLegacyLevels()` in `prisma/skill-taxonomy-lib.mjs`): only a row with no level and no history is filled, so a re-run is a no-op and a level set or cleared since is never overwritten. The JSON column is not touched.
+
+## [0.462.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:23 UTC · commit [6a4c3f9](https://github.com/21072026/Internship/commit/6a4c3f9a8bcfe949b1d3563b8857a444847b384a)_
+
+**Hiring card on the candidate page (#1398):** `/admin/candidates/[id]` shows every application (role, company, stage, disposition, who added it), every company interest (INTERESTED / SHORTLISTED / PASS, with the company's note) and every interview request (status, proposed or scheduled time, who decided), linking to the requisition detail and the interview-request queue. Read from the new `GET /api/candidates/[id]/hiring`, scoped on the server through `visibleApplicationsWhere()`, `interviewRequestActorWhere()` and an org/company/active-mentee rule for interests; MENTEE is refused (a PASS never reaches the candidate) and a candidate the caller cannot see is a 404. Loading, empty and failed are separate states; the card hides in a vertical without placements.
+
+## [0.461.1-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:23 UTC · commit [1867028](https://github.com/21072026/Internship/commit/1867028783a5f0a314102fb057cc02eecdb0040b)_
+
+**Scheduled full suite back to green (#3059):** `/admin/meetings` rows wrap their actions (copy link, RSVP, reschedule, cancel) instead of spilling ~130px past a phone's card in German; `/notifications` leaves room under its last row for the floating feedback button; `applyResponseFloor()` no longer hides a shown bucket to protect hidden buckets that hold no responses at all (the outcome-destination report hid a cohort that met the floor next to an empty unassigned bucket); the `/for-companies`, `/apply-as-mentor` and `/stories` share cards are route handlers instead of the `opengraph-image.tsx` file convention, which Next injected into the page's metadata (404 included) on hosts whose product does not serve the page. Spec side: `signInAndSettle()` and two hand-rolled portal sign-ins wait out the streamed Suspense copy, `accent-color` tears the page down before clearing cookies, `retention-registry.unit` restores the real retention entries it cleared, and the mobile layout audit covers `/admin/matching`, `/admin/roster-feeds` and `/admin/audit`.
+
+## [0.461.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:22 UTC · commit [cc13622](https://github.com/21072026/Internship/commit/cc13622e3bf18f93c1ec26b924888495042a073b)_
+
+**Terminology card on /admin/settings (#1629):** `TerminologyCard` edits the org's `terminology` setting per language — one row per catalogued noun, four forms each, a half-filled row refused in the browser, "back to the defaults" clears the layer — and refreshes the page so the new words take over. Rows are labelled from `TERM_DEFAULTS`, never the dictionary. Shown and accepted (`PUT /api/admin/terminology` → `requireCapability('mentorship')`) only where the vertical has `mentorship`. Feature catalogue entry `terminology`.
+
+## [0.460.1-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:19 UTC · commit [4aa5743](https://github.com/21072026/Internship/commit/4aa5743253b1237277a5cbb63868925bcb0e300c)_
+
+**Webhook producers raise domain events (#1697):** the ten former direct `dispatchWebhook` call sites (`application.created`, `pipeline.stage_change` after the `from === to` guard, `mentorship.created`, both `interaction.logged`, `evaluation.added`, all three `meeting.scheduled`, `interview_panel.completed`) now call `emit()` with the same payload and org, plus the actor. Each event gets a `DomainEvent` row and the webhook is POSTed by the job worker instead of inside the request — same `event`, byte-identical `data` (pinned in `e2e/domain-event-emit.unit.spec.ts`). `npm run check:events` drops its ten-site burndown list: only the webhook subscriber and the admin test ping may reach the dispatcher, and a hand-written `activityLog`/`auditLog` create may not use a catalogue event name.
+
+## [0.460.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:15 UTC · commit [8e192cb](https://github.com/21072026/Internship/commit/8e192cbdc0a6917d53199a096b98555140378b13)_
+
+**Calendar export + print (#2005, 2/3):** `CalendarView` gets a "Download .ics" button that builds the file in the browser from the events on screen through the existing `buildFeedIcs()` (no second builder, no export route); UIDs match the subscription feed's (bare meeting id, `series-…`, `deadline-…`) so an imported copy and a subscribed one do not double, deadlines keep the feed's 30-minute marker and logged interactions stay out. `/api/calendar-events` now returns `durationMinutes` on meeting and series events (additive). A `@media print` block in `globals.css` prints the calendar on white with outlined events; the toolbar, view switcher, legend and the subscription card carry `.no-print`. Pinned by `e2e/calendar-export.spec.ts`.
+
+## [0.459.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:14 UTC · commit [46371e3](https://github.com/21072026/Internship/commit/46371e3a9c4b7cd9e7d095c6fab3fbac7f815a9f)_
+
+**Self-match limit (#1808):** new nullable `User.selfMatchLimit` — how many mentees may pick a mentor themselves, apart from `mentorCapacity`. `getMentorAvailability()` takes an optional `selfMatchLimit` / `selfSelectedCount` / `context` (`'admin'` default, `'self_select'`) and returns the new `self_match_full` status only under `self_select` while capacity has room; every caller passing no context answers exactly as before (pinned by `e2e/mentor-load-controls.unit.spec.ts`). Seats are counted once in `src/lib/selfMatchSeats.ts` (pending preferred-mentor requests + approved ones whose mentee is still ACTIVE with that mentor). Binding on the two self-select paths — the preferred mentor in `POST /api/mentorship-requests` (`409 mentor_self_match_full`) and the public apply link (`mentor_full`) — and on the directory for mentee viewers; admin assignment is never subject to it. The matching engine's `capacityHeadroom` dimension gains a `selfSelect` config switch. Mentors set it under Account → Expertise & capacity; free core, never a plan limit.
+
+## [0.458.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:13 UTC · commit [ccb5a47](https://github.com/21072026/Internship/commit/ccb5a472781b985ee5218deccf30b0eb7915ba21)_
+
+**Stage SLA editor: cohort and mentor overrides (#1640):** `GET/PUT /api/admin/stage-sla` take an optional `cohortId`/`mentorId`; both are verified server-side against the admin's org (cohort of the org, MENTOR of the org) and an id that is not the org's answers 404. An override scope carries the service level only — escalation and WIP limits stay org-wide. The GET returns per stage the scope's own `days`, the `effective` value and what it would `inherit` (`inheritedSla()` in `src/lib/stageSlaRule.ts`), plus the org's cohorts and mentors for the selector. `StageSlaEditor` gains the cohort/mentor selector and shows "this cohort: 5 days · inherited from organisation: 7 days" (EN/TR/DE, MARKETING overlay says rep). e2e: `e2e/stage-sla-overrides.spec.ts`.
+
+## [0.457.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:12 UTC · commit [42bfdfa](https://github.com/21072026/Internship/commit/42bfdfac21e525662e94c4f5803b7a374b3fc9dd)_
+
+**Per-tenant terminology (#1629):** a closed catalogue of nouns (`mentor`, `mentee`, `program`, `cohort`, `mentorship`, each `one`/`many`/`oneCap`/`manyCap` per locale) in `src/lib/terminology.ts`, stored as ONE `terminology` setting per layer (programme → org → global, `resolveSetting` chain) and written through `GET`/`PUT /api/admin/terminology` (`org.settings.write`; unknown locales/tokens and incomplete tokens are dropped, never stored). It feeds the overlay mechanism rather than adding a second layer: the stored forms are swapped as whole words into the vertical-overlaid dictionary at the existing choke points (`getServerDictionary()`, the root layout's client payload, `emailDictionary()`), memoised per (base, locale, terminology). Nothing stored returns the same dictionary object, byte-identical. INTERNSHIP only; interpolation tokens, paths, hosts, Turkish suffixed forms and German compounds are never touched.
+
+## [0.456.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:07 UTC · commit [da206c4](https://github.com/21072026/Internship/commit/da206c44267a6926445585079c35fe831701edfd)_
+
+**Configuration changes are audited with a redacted before/after diff (#1699):** `redactedDiff()` (`src/lib/events/diff.ts`) is the one diff helper — an explicit per-field policy (`record` / `redact` / `ignore`), unlisted fields redacted, secret-shaped field names redacted whatever the spec says, and an 8-hex SHA-256 fingerprint so a real certificate change differs from a re-save. The organization PATCH raises `org.config.changed`, the webhook routes `webhook.registered` / `webhook.updated` / `webhook.deleted`, the API-key routes `apikey.created` / `apikey.revoked`; the new `config-audit` subscriber writes one `AuditLog` row per event (tenant-stamped, so it reaches the audit drain). The existing `ActivityLog` entries are unchanged.
+
+## [0.455.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:03 UTC · commit [e7f70c2](https://github.com/21072026/Internship/commit/e7f70c28ce3b073bb6346b9be4754bc4cff0445c)_
+
+**COMPANY calendar (#2005, 1/3):** `/company/calendar` mounts the shared `CalendarView` on the company shell. `GET /api/calendar-events` now gives a COMPANY session the meetings scheduled from its own interview requests (filter = the COMPANY branch of `interviewRequestActorWhere()`, inside the caller's tenant) and nothing else — no mentor↔mentee meeting, deadline, logged interaction or project call; a company login without a company assignment gets an empty list. Every role outside ADMIN/MENTOR/MENTEE/COMPANY (SOURCE, AFFILIATE, …) is now refused with 401 instead of falling into the mentee branch. Pinned by `e2e/company-calendar.spec.ts` (@smoke).
+
+## [0.454.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:02 UTC · commit [cffe9a7](https://github.com/21072026/Internship/commit/cffe9a79335b41d61976ef384fe0266aec3e5ded)_
+
+**Requisition detail for admins: matching candidates + shortlist (#1401):** `/admin/requisitions/[id]` lists who is on the role (the applicant board's rows) and who fits it. `GET /api/requisitions/[id]/matches` (`user.read`) ranks the org's consenting talent pool with the one match rule in `src/lib/requisitionMatchRule.ts` — canonical required skills through `requisitionSkillMatch()` (adjacency-aware), title vs. target position when the role has no skills — and names the skills that matched; the premium match-alert cron now reads the same module (`CONSENTING_POOL_WHERE`, `titleMatchesTarget`). `POST /api/requisitions/[id]/shortlist` (`company.write`) creates the Application at SHORTLISTED with `source: 'ADMIN'` or moves an earlier one through `moveApplicationStage()`, refuses a candidate without talent-pool consent (409 `no_consent`) and logs `application.shortlist.add`; removal is the ordinary stage move to REJECTED with a reason.
+
+## [0.453.1-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:01 UTC · commit [d52087c](https://github.com/21072026/Internship/commit/d52087c7efecc57b546f26cba1f5be91aff72327)_
+
+**Erasure reaches the free text added since #2106 (#2098):** `anonymizeUser()`/`hardDeleteUser()` now also scrub `SurveyAnswer.text` (a hard delete used to leave it behind — `respondentId` is SetNull), `MeetingFeedback.note`, `Application.coverNote`/`dispositionNote`, `ApplicationEvent.note`, `CandidateOutreach.firstMessage`, `MatchFeedback.reasonNote`, `Placement.note`, `SessionAgendaItem.text`, `MentorshipRequest.rematchNote` and `InterviewRequest.cancelReason`; forget the person's **mentor application** (keyed by address only, scoped to their own tenant — another world's application under the same address stays); and on anonymise delete their own message templates and `SignInDevice` rows, blank the remember-me rows' user-agent/IP and **revoke their Google Calendar grant** (both paths). New CI guard `npm run check:erasure-coverage`: every `@db.Text` column needs an erasure decision — erased, or kept with its reason. `sanitize-db` covers the same columns.
+
+## [0.453.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 23:00 UTC · commit [b6740c6](https://github.com/21072026/Internship/commit/b6740c68ef8c8f81fc79e1aac11594d58d299075)_
+
+**VPAT 2.1.4 and 3.2.6 close (#2864):** the shortcut sheet gets a "Single-key shortcuts" switch that turns the `?` binding off (per browser, `shortcuts.singleKey` in localStorage, read through `readSingleKeyShortcutsEnabled()` in `src/lib/shortcuts.ts`); the sheet stays reachable from the command palette. 3.2.6 is evidenced by `e2e/consistent-help.spec.ts`, which asserts the "Report a problem" button keeps one position across the admin, mentor and mentee shells. Both rows now read `Supports`; `npm run vpat:evidence` regenerated.
+
+## [0.452.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 22:58 UTC · commit [b56ac3d](https://github.com/21072026/Internship/commit/b56ac3d02b2cb2c3dc92c7010d73f16e5d6a99b2)_
+
+**Stage SLAs: per-cohort / per-mentor overrides and a deadline backfill (#1640):** `StageSla` gains nullable `cohortId`/`mentorId` plus a `scope` key (`org` · `c:<id>` · `m:<id>` · `m:<id>|c:<id>`, written only by `slaScopeKey()`; MySQL compares NULLs as distinct, so the unique is `(orgId, stageKey, scope)`, not the nullable ids). Resolution is pure in `src/lib/stageSlaRule.ts` — mentor+cohort → mentor → cohort → org — and a stage move now applies the relation's own scope; with no override rows it resolves exactly as before. Escalation rungs and WIP limits stay org-level. New deploy backfill `0033-stage-deadlines` (once, `--apply`, dry-run by default) gives ACTIVE relations already sitting in a stage a deadline dated from the stage ENTRY; a past-due one gets `deadlineReminderSentAt` stamped and, where the stage has an escalation rung, a breach snoozed for `escalateAfterDays` — so the 09:00 sweep adopts it silently instead of mailing every mentor and admin.
+
+## [0.451.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 22:57 UTC · commit [310b128](https://github.com/21072026/Internship/commit/310b12862863dafcfde9effe33d48fbc600e56fb)_
+
+**Audit trail CSV export and retention (#1585):** `GET /api/admin/audit/export` behind the new-in-use `audit.export` permission (ORG_ADMIN; an OBSERVER keeps `audit.read` but gets 403) streams every row matching the viewer's filters — the filter builder is now shared in `src/lib/auditQuery.ts` — capped at 10 000 rows (`X-Export-Truncated` / `X-Export-Total`), formula cells neutralised, the export itself logged as `audit.exported`. An "Export CSV" button on `/admin/audit`. `pruneAuditLog()` joins #1678's retention registry as the `auditLog` entry: `auditLogRetentionDays` (global, default 730, raised to a 365-day floor), and a row a tenant's audit drain has not shipped yet is never pruned. No route deletes a single audit row.
+
+## [0.450.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 22:57 UTC · commit [376e1b3](https://github.com/21072026/Internship/commit/376e1b36f2d6fd63dcc2b9a37bd77261f3fe7c5e)_
+
+**`free_quota_exceeded` attention reason (#2846):** an account the account-event feed reports on the `free` plan (new optional envelope field `plan`, stored as `Company.productPlan` + `productPlanAt`, written forward in time only) that did more `CompanyUsage.transactions` this calendar month (UTC, `periodRange(currentPeriod())`) than the per-org setting `freePlanTransactionQuota` (default 10) gets the reason on its open funnel records in the owner's attention queue and on `/sales`. Rule pure in `src/lib/usageRule.ts`, query in `src/lib/usageSignals.ts`. A signal only: nothing is gated, moved or billed, and no mentee surface shows it.
+
+## [0.449.1-beta] - 2026-10-27
+
+_Shipped 2026-10-27 22:51 UTC · commit [853a777](https://github.com/21072026/Internship/commit/853a77781848bb453e73fe1ab649a830248c1aba)_
+
+**Skill proficiency on the canonical row, part 1 (#1822):** `UserSkill` gains `level` (1–5), `levelSource` (SELF | MENTOR | EVALUATION), `verifiedById`/`verifiedAt` and `levelUpdatedAt` (all nullable, additive under `db push`), and a new `UserSkillLevelChange` history table (one row per actual change, none for an unchanged value). `PATCH /api/profile` mirrors the self-assessment onto the rows through `syncUserSkillLevels()` (keyed by typed skill or skill id, guarded update so two tabs write one history row); `User.skillLevels` keeps being written. A self-assessed change clears any confirmation. A curator's skill merge keeps the person's rating (`mergedLevel()`: confirmed beats self-rated, rated beats unrated) and moves the history; account erasure now deletes the person's `UserSkill` rows. Rules are pure in `src/lib/skillLevelRule.ts`. Mentor confirmation and the progression UI follow.
+
+## [0.449.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 22:49 UTC · commit [38c0753](https://github.com/21072026/Internship/commit/38c07536fc1584a695f9adc37afaba298c371b06)_
+
+**`emit()` and the subscriber registry (#1693):** `src/lib/events/emit.ts` validates a domain event against the catalogue (throws outside production, log-and-drop in production), writes one `DomainEvent` row and enqueues one `event.deliver` job per interested subscriber (payload `{ eventId, subscriber }`, idempotency key `<eventId>:<subscriber>`, new job trigger `'event'`). The worker resolves the subscriber by name, re-parses the payload through its catalogue entry and runs it. First subscriber: `webhook`, which forwards to `dispatchWebhook` with the producer's exact arguments. No producer uses it yet (#1697 moves them). docs/domain-events.md § emit().
+
+## [0.448.1-beta] - 2026-10-27
+
+_Shipped 2026-10-27 22:46 UTC · commit [205b2dc](https://github.com/21072026/Internship/commit/205b2dc22f41bb0102dc6a2fdab99763e96606bd)_
+
+**Sign-out on a dev host with a port lands back on that port (#3174):** `resolveRedirectTarget()`, `requestOrigin()` and `servedOrigin()` (`src/lib/servedHosts.ts`) now keep the configured origin's own port on every served host, so signing out at `http://marketing.localhost:3000` returns to `http://marketing.localhost:3000/auth/signin` instead of the port-less, unreachable `http://marketing.localhost/auth/signin`. Any other port is still dropped (or refused, for `servedOrigin`), the exact-hostname allowlist is unchanged, and a deployment whose configured origin has no port (prod, preview, topic envs) behaves exactly as before.
+
+## [0.448.0-beta] - 2026-10-23
+
+_Shipped 2026-10-23 00:03 UTC · commit [eb29cd7](https://github.com/21072026/Internship/commit/eb29cd7925b4beca4d651c0fd7c28fc10c9b8ab9)_
+
+**Bug reports: preview the recording, or make one by hand (#3131 follow-up):** the feedback panel can now PLAY the recording before it is sent — the rolling window is frozen and packed once (`freezeRollingWindow()` + `packReplay()`) and Send attaches that same blob, with duration and compressed size shown. "Start a new recording" closes the panel and shows a red "Recording m:ss · Stop" pill; it starts on a fresh full snapshot (`record.takeFullSnapshot(true)`) and keeps every event until Stop or 20 minutes (`ManualRecording`, `FEEDBACK_MANUAL_MAX_MS`, stops itself at the limit), with a `beforeunload` prompt while it runs; Stop reopens the panel with the description kept, a fresh screenshot and the recording attached (preview / discard). A recording over the 8 MB upload limit is refused in the panel before sending. The player is split into `ReplayView` (loaded only when a preview opens, via `next/dynamic`) and the admin `ReplayPlayer` wrapper.
+
+## [0.447.1-beta] - 2026-10-22
+
+_Shipped 2026-10-22 23:43 UTC · commit [41c2eb8](https://github.com/21072026/Internship/commit/41c2eb8d3074d75c2cc01e24b1b75c81bf03a259)_
+
+**Bug-report replay player readable in dark mode, with size and download (#3131):** rrweb-player paints its controller white but inherits the text colour, so in dark mode the speed buttons, "skip inactive" and the time labels were white on white — the player's host now pins a dark text colour inline (a utility class would be flipped by the dark-mode overrides). Under the player: duration, event count and compressed size, and a "Download recording (.json.gz)" link with a note that it is an rrweb recording, not a video file.
+
+## [0.447.0-beta] - 2026-10-27
+
+_Shipped 2026-10-27 22:38 UTC · commit [5bcb3dd](https://github.com/21072026/Internship/commit/5bcb3dd1ab0b71d08da5dd93e0c5706e47f86564)_
+
+**Bug reports, phase 3: notifications, GitHub issues, retention (#3132):** a new in-app report is announced to the org's admins after the response (`after()`) — by e-mail through `sendEmail()` (new category `support-report`, group `inbound_requests`) and/or a Slack incoming webhook (`SUPPORT_REPORT_NOTIFY` = `email` default | `slack` | `both` | `off`, `SUPPORT_REPORT_SLACK_WEBHOOK_URL` must be a `hooks.slack.com` URL and passes the SSRF guard; Slack without one falls back to e-mail). The admin detail gets **Create GitHub issue** (`SUPPORT_GITHUB_REPO` + server secret `SUPPORT_GITHUB_TOKEN`): a draft that is public-safe by construction (`buildIssueDraft()` — page path, build, browser, counts, failed-request ids, a relative admin link; never the description, reporter, e-mail, console text, host, screenshot or replay), shown in full and editable with a public-repo warning; one issue per report via a conditional `pending:` claim, released on a GitHub failure; only `https://github.com/<repo>/issues/<n>` is stored in `githubIssueUrl`. Status changes can tell the reporter (category `support-report-update`, group `direct_messages`, held like a message under outbound approval) only when they allowed contact (`409 contact_not_allowed` otherwise). New retention entry `supportReport`, 90 days (global setting `supportReportRetentionDays`), files cascade. Pure rules in `src/lib/supportReportIntegrationRule.ts`; e2e against a local GitHub stand-in (`e2e/support/github-mock.mjs`).
+
+## [0.446.1-beta] - 2026-10-24
+
+_Shipped 2026-10-24 10:20 UTC · commit [200f5d6](https://github.com/21072026/Internship/commit/200f5d6665bbad81b89e2b6947c97889df00e106)_
+
+**Affiliate module, release (#3119):** the affiliate programme gets its feature-catalogue card (`src/lib/features.ts`, tagged `capability: 'affiliate'`, so only the marketing product lists it), and two `@smoke` specs close the story's acceptance: `affiliate-end-to-end.spec.ts` drives partner → customer → payment → commission → payout through the real APIs and checks the partner sees only its own rows (another partner's payout 404), and `affiliate-internship-host.spec.ts` sweeps every affiliate API and page — read from the file system, so new routes are covered automatically — and asserts none answers on the internship product, with a marketing control. Final whole-module review fixes: a migrated partner's `ended_on` without TERMINATED is refused (never dropped) and a payout dated before its payments is refused; a terminated partner gets no NEW customer after the termination takes effect (`partner_terminated`) and a payout is never dated before what it pays accrued (`payout_before_accrual`); the commissions screen confirms every move with its count and sum (a rejection says it is final) and loads the drift list on request, now three queries for the whole programme; the partner list reads masked IBANs without a query per partner; the portal shows a customer's first payment day; `affiliate-authz-matrix.spec.ts` (@smoke) pins cross-organisation writes and PROGRAM_ADMIN refusals.
+
+## [0.446.0-beta] - 2026-10-23
+
+_Shipped 2026-10-23 23:34 UTC · commit [2fd1880](https://github.com/21072026/Internship/commit/2fd18802ca60de220708405669f2963edb23ff69)_
+
+**Affiliate module, migration from a previous system (#3118):** `/admin/affiliates/migration` imports partners, commissions and payouts from three CSV files through the shared import engine (`runAffiliateMigration()` on `runImport`; rules pure in `src/lib/affiliateMigrationRule.ts`). Dry run by default; the real run is one transaction, only into a programme without partners or payments, and only when every partner's paid and unpaid totals match the source to the cent — re-checked against what was written before commit. Commissions are taken as recorded: new `AffiliateCommissionKind.IMPORTED` and `AffiliatePaymentSource.IMPORT`, which the commission sync skips (no recompute, no drift) while imported customers still count for the customer order. `POST /api/admin/affiliate/migration` (`affiliate.write`).
+
+## [0.445.0-beta] - 2026-10-23
+
+_Shipped 2026-10-23 22:35 UTC · commit [e92aeb0](https://github.com/21072026/Internship/commit/e92aeb0adc05f393a72f5a60a9802cd41fd128da)_
+
+**Affiliate module, partner portal and invitations (#3117):** the admin invites a partner to its contact e-mail from the partner screen (`POST /api/admin/affiliate/partners/[id]/invite`, `affiliate.write`; a new invitation withdraws the open one). The invitation carries the new `InvitationToken.partnerId`; `/api/register` accepts an AFFILIATE token only when it names a partner and an address, and creates the account and the partner link in one transaction with a guarded write (`linkPartnerAccount()`), so a partner is never linked twice. No password or hash is imported. The portal (`/affiliate`, server-rendered from the session) first shows the contract until the current version is accepted (`requirePortalPartner()`), then the referral link, totals, own customers, commissions and payouts (`src/lib/affiliatePartnerView.ts`, narrowed by `affiliateRowScope()`; another partner's payout is 404, a payment's own reference never reaches the partner) and the bank-details form (masked). The referral link is built on the new `AffiliateProgramSettings.referralUrl` (https base URL, admin setting, audited; `src/lib/affiliateReferralRule.ts`).
+
+## [0.444.0-beta] - 2026-10-23
+
+_Shipped 2026-10-23 01:23 UTC · commit [1619314](https://github.com/21072026/Internship/commit/1619314c1176b811ff8f762fe973bfa087a31cb1)_
+
+**Klaviyo leads are unassigned until a rep takes them:** the connector creates the account and the lead person, but no funnel record (`leadOnly` in `createMarketingAccountsBatch`). A new pool on `/sales` (`GET /api/sales/pool`, `POST /api/sales/pool/[id]/claim`, `src/lib/leadClaim.ts`) lets any rep take a lead onto their own book at the first stage; the claim locks the lead's row, so concurrent takers get one record plus a 409. The admin candidate page and list show a marketing lead's real address instead of its `import.local` stand-in, with no activation panel and no password reset (`leadRecord`/`contactEmail` on `GET /api/users/[id]`, `src/lib/leadEmail.ts`). Phones that are not a person's are dropped: the card's ignored numbers (`ExternalConnection.ignoredPhones`) and any number at least 3 different people carry (`phoneKey`/`nonPersonalPhoneKeys`). New **Delete what Klaviyo brought in and read it again** action on the card (`/api/admin/integrations/klaviyo/reset`): it runs the operator rollback for the org's `klaviyo` source, which now also exports `buildPlan`/`wipeAccount` and counts unassigned stand-ins as the account's own. Accounts with a person's work are kept, the admin confirms the exact count, and the profile cursor is reset. New-lead bells go to every admin and rep of the org.
+
+## [0.443.0-beta] - 2026-10-22
+
+_Shipped 2026-10-22 23:28 UTC · commit [9b465fd](https://github.com/21072026/Internship/commit/9b465fdeb53c462f0df39abeb814db7b075e396b)_
+
+**Customer-mail lock for the marketing product:** while it is in its test phase, no lead, customer or contact of a MARKETING organization receives any mail, system mail included. Only the org's own staff (ADMIN/MENTOR) still get theirs. The lock is on by default with no in-app switch; only `MARKETING_CUSTOMER_MAIL_ENABLED=1` on the server opens it. It is checked at all three doors: `sendEmail()` before the approval hold, `sendPrepared()` for approved drafts, and the queue drain for already-queued mail. It fails closed, and every blocked mail is recorded SKIPPED with its reason. Rule in `src/lib/customerMailLockRule.ts`, lookups in `src/lib/customerMailLock.ts`; documented in `docs/mail-queue.md` § The customer-mail lock.
+
+## [0.442.1-beta] - 2026-10-22
+
+_Shipped 2026-10-22 23:26 UTC · commit [b357061](https://github.com/21072026/Internship/commit/b357061dde1ac008cb28711cc0ad544a0b6c302b)_
+
+**Delivery log: one world's mail per super admin, by the row's tenant:** `GET /api/admin/email-log` attributed rows by recipient address, so a mailbox holding an account in both worlds showed its internship reminders in the marketing operator's log too. It now filters on `EmailLog.orgId` (the recipient's tenant, stamped by every writer) against the world's organizations (`worldOrgWhere()` in `src/lib/userWorld.ts`); a row without `orgId` falls back to the address only when that address has an account in this world alone, so an ambiguous legacy row shows in neither log rather than the wrong one. `e2e/email-log-super-admin.spec.ts` pins the two-world mailbox.
+
+## [0.442.0-beta] - 2026-10-22
+
+_Shipped 2026-10-22 23:18 UTC · commit [a77fbfd](https://github.com/21072026/Internship/commit/a77fbfd80b8e7966cb762d4c5cf8aca23a0f8db9)_
+
+**The support line sends push notifications (#3154):** until now only messages pushed (`sendNewMessagePush`); the support channel wrote bell rows only, so a support message never reached a phone with the app closed. `POST /api/support` now also pushes to the active ADMINs of the requester's org (the bell's `orgWhere(ticketOrgId)` list, link `/admin/support`), and an admin's reply in `POST /api/admin/support` pushes to the requester (`notificationLink(role, 'support', {})`). The writer is never pushed about their own message, and `support.closed` deliberately writes the bell row only. Both go through the new `sendSupportPush()` (`src/lib/messagePush.ts`, sharing the body of the message push) → `sendPushToUser(…, 'messages', …)` — the catalogue's category for every support event, so the /account "Messages" switch silences tray and bell alike. The title is the bell's own template (no new i18n key); the tag is `support:<ticketId>`. Which events push, to whom, and the one-line preview cut are pure in `src/lib/supportPushRule.ts`, unit-tested in `scripts/test/support-push.test.mjs` (coverage floor 95). The mobile app needs no change: neither path is native, so a tap opens the web view. `docs/mobile-push.md` § The shape and § Known gaps updated.
+
+## [0.441.0-beta] - 2026-10-22
+
+_Shipped 2026-10-22 23:02 UTC · commit [d8067ef](https://github.com/21072026/Internship/commit/d8067ef8ea43ee9bcfb9aa28e208f74206a03689)_
+
+**Bug reports, phase 2: session replay (#3131):** an rrweb recording of the last ~90 s (`FEEDBACK_REPLAY_SECONDS`, 30–300) can be attached to an in-app bug report. Recorded only in the browser's memory (`src/lib/feedbackRecorder.ts`, rrweb `2.1.7`) into a rolling buffer that starts on a full snapshot (`ReplayBuffer`, checkout every window/3), with `maskAllInputs`, `.rr-block` / `[data-private]` / the feedback panel blocked, no canvas/inlined images; started on sign-in, forgotten on sign-out. A ticked-by-default checkbox in the form; on Send the buffer is gzipped in the browser and posted as a `replay` part, which `POST /api/support/reports` accepts only while `FEEDBACK_REPLAY_ENABLED` is on (unset = on in preview builds, off in production), only as gzip ≤ 8 MB that decodes within an 80 MB ceiling to rrweb events with a full snapshot (`checkReplayEvents()`), and stores as `SupportReportFile` kind `REPLAY` (new enum value, additive). Admin detail plays it with `rrweb-player`, with console errors, failed requests and the send moment marked on the timeline. Pure rules in `src/lib/feedbackReplayRule.ts` (unit-tested); `e2e/feedback-replay.spec.ts` pins that no request carries the recording before Send and that a typed value never reaches it.
+
+## [0.440.0-beta] - 2026-10-22
+
+_Shipped 2026-10-22 22:46 UTC · commit [7b75f8b](https://github.com/21072026/Internship/commit/7b75f8bec42797217a9f37cf51c755648abf4e65)_
+
+**Klaviyo connector beyond profiles:** lists, segments and their members, metrics, allow-listed events (13-month retention, daily catch-up for late-delivered events), campaigns with their messages, campaign statistics (reporting API) and flows now sync alongside the profiles. Each resource has its own cursor, status and backoff in the new `ExternalSyncState` (a key missing one scope fails that resource alone); rows are upserted by provider id, a full pass prunes what the provider deleted. New tenant models `ExternalSyncState`, `ExternalAudience`, `ExternalAudienceMember`, `ExternalMetric`, `ExternalEvent`, `ExternalCampaign`, `ExternalCampaignMessage`, `ExternalCampaignStat`, `ExternalFlow` (all in `TENANT_MODELS`, cascading with the connection). The API revision moves from `2026-07-15` to `2026-10-15` and may be pinned with `KLAVIYO_REVISION` (GA only); the client retries up to 4 times (Retry-After, jittered exponential backoff), paces each endpoint family under its steady limit, and its only POST is the read-only `/api/campaign-values-reports` query. An erasure also removes the person's events and memberships. Optional server key `KLAVIYO_PRIVATE_API_KEY` + `KLAVIYO_ORG_ID` (fingerprint stored, never the key). Rules in `src/lib/klaviyoResourceRule.ts`, writer `src/lib/klaviyoResources.ts`; `docs/integrations/klaviyo.md` § Beyond profiles.
+
+## [0.439.3-beta] - 2026-10-22
+
+_Shipped 2026-10-22 22:20 UTC · commit [95833ba](https://github.com/21072026/Internship/commit/95833baae0b16d542054211b7089222efe068842)_
+
+**Skill vocabulary is an internship module (#3150):** `/admin/skills` and every `/api/admin/skills/*` handler are now gated on the `mentorship` capability — its only consumers are mentor suggestion and candidate ↔ requisition matching. A MARKETING tenant no longer sees the sidebar entry, the URL answers 404 and the APIs refuse; INTERNSHIP is unchanged.
+
+## [0.439.2-beta] - 2026-10-22
+
+_Shipped 2026-10-22 22:19 UTC · commit [855bbc0](https://github.com/21072026/Internship/commit/855bbc0066442fe7b90ee8116812697a6feadde2)_
+
+**One list of pre-push steps for every schema push:** the expand/backfill steps that let `prisma db push` succeed against existing tables were hand-copied into `infra/deploy-prod.sh`, `infra/server/topic-deploy.sh` and `infra/server/demo-refresh.sh`, and the copies had drifted (the demo first lacked the Setting re-key expand and died on `Setting_orgId_key_key`, then lacked the pre-push Json repair). They are now one ordered registry, `prisma/pre-push/registry.mjs`, run by `prisma/run-pre-push.mjs` on all three paths, and `scripts/test/pre-push-registry.test.mjs` fails on a direct line or an unregistered `prisma/push-*-expand.mjs`. The demo refresh also checks that its image carries the runner before it wipes anything (#3144).
+
+## [0.439.1-beta] - 2026-10-22
+
+_Shipped 2026-10-22 22:03 UTC · commit [d49345b](https://github.com/21072026/Internship/commit/d49345bc3bc304e9cc7b1f14a498fd0f2842d4c4)_
+
+**Lease store passed explicitly (#3145):** the marketing account import, the Klaviyo sync and the migration runner now hand `prismaLeaseStore()` to `acquireLease`/`releaseLease` instead of relying on `lease.ts`'s lazy `import('./leaseStore')`. Under the Playwright spec runner that dynamic import failed, the lease read as held and an applied import was refused with `import_running` (`e2e/deal-value.spec.ts`). Runtime behaviour is unchanged.
+
+## [0.439.0-beta] - 2026-10-22
+
+_Shipped 2026-10-22 21:44 UTC · commit [6c0e973](https://github.com/21072026/Internship/commit/6c0e973e33b30f9c466df7100a9ddd9bde4a3f92)_
+
+**In-app bug & feedback reports, phase 1 (#3130, epic #3129):** a floating feedback button on every signed-in screen (`FeedbackWidget`, mounted in `providers.tsx`) takes a DOM screenshot of the visible viewport on open (`modern-screenshot`; the panel is excluded and password / one-time-code / card / `data-private` / `.rr-block` fields are painted over in the copy), and sends type, optional 1–5 rating, description, attachments (drag & drop + paste) and a required contact choice to `POST /api/support/reports`. A browser-side collector (`src/lib/feedbackCollector.ts`) keeps the last 20 `console.error` / `window.onerror` / `unhandledrejection` entries and the last 20 failed `fetch` calls (method, masked URL, status, duration, `x-request-id`) in memory only — nothing leaves the tab before Send. Masking is ONE pure module, `src/lib/feedbackContext.ts` (query values, fragments, credentials, token path segments, bearer tokens, JWTs, `password=`-style pairs, e-mail addresses), run again on the server; version / env / user agent are stamped server-side. New tenant model `SupportReport` (in `TENANT_MODELS`, nullable `context` Json) + `SupportReportFile` (blobs, reached through the report); erasure deletes a person's reports, merge re-points them. Admin inbox `/admin/support/reports` (tab next to the conversation queue): filters by type, status, date range and reporter, sort; detail shows the screenshot in the lightbox, environment, console/network tabs and the triage status (`NEW → TRIAGED → IN_PROGRESS → RESOLVED | WONT_FIX`). ADMIN-only, org-scoped (another org's id is 404). Docs: `docs/feedback-reports.md`.
+
+## [0.438.5-beta] - 2026-10-22
+
+_Shipped 2026-10-22 21:10 UTC · commit [7359f79](https://github.com/21072026/Internship/commit/7359f7903a846a8fa0d158f4ab14c5c59184454b)_
+
+**Public demo refresh runs the pre-push expand phases:** `infra/server/demo-refresh.sh` (preview deploy's demo job and the scheduled demo reset) pushed the schema without the expand phases prod and topic envs run first, so a demo database left on an older schema died on `Cannot drop index 'Setting_orgId_key_key': needed in a foreign key constraint` (#1619). It now runs the same five expand/backfill steps before its `db push`.
+
+## [0.438.4-beta] - 2026-10-22
+
+_Shipped 2026-10-22 20:23 UTC · commit [1cbf785](https://github.com/21072026/Internship/commit/1cbf7851e7bd67ace4ef2636545b8e5b53fa9892)_
+
+**Erasure reaches a stand-in lead's account contact (#3136):** erasing a MARKETING lead created on a generated `@import.local` stand-in (import, account events, pull connector) now also clears the real name, address, phone and position on the account it is linked to. `companyContactOps()` reads the lead's linked accounts (`User.companyId`, its relations', a live connector link's) and `leadIsAccountContact()` (`src/lib/companyContactErasure.ts`, unit-tested) decides per account — the stored address is the lead's own or the one its stand-in was derived from, else the stored name; an account whose contact is someone else is never touched. The real address goes through the shared `contactScrubOps()` and into the connector tombstone. Pinned by `e2e/erasure-stand-in-lead.spec.ts` (@smoke).
+
+## [0.438.3-beta] - 2026-10-22
+
+_Shipped 2026-10-22 19:56 UTC · commit [36a02a6](https://github.com/21072026/Internship/commit/36a02a64250ec0abd29855c12020f41968256f24)_
+
+**MARKETING: close the last internship surfaces, drop dead landing copy:** `/mentors` (the mentor directory; its nav link is now tagged `mentorship` and the segment layout calls `gatePage`) and `/source` (the referral-partner portal, `sourcing`) answer 404 for a vertical without the module, and `GET /api/mentors` / `/api/source/mentees` refuse with `capability_unavailable`. `/stories` is `mentorship`-only (`requireVerticalCapability`). The metadata of `/for-companies`, `/apply-as-mentor` and `/stories` — which Next emits on the page's 404 too — is empty off their vertical, and their share cards and `/release-notes`' render the generic brand card instead of internship copy (`requestVerticalHas` / `requestIsDefaultVertical` in `src/lib/verticalPage.ts`). 128 `landing.*` keys that no code has read since the landing was slimmed are removed from all three locales and the MARKETING overlay.
+
+## [0.438.2-beta] - 2026-10-22
+
+_Shipped 2026-10-22 19:50 UTC · commit [a90aad9](https://github.com/21072026/Internship/commit/a90aad9352bd2af90121a091483e97344300ea31)_
+
+**Security: Next.js 15.5.28.** 15.5.27 is affected by GHSA-2464-fhr4-w9xw (critical — unauthenticated remote code execution in the Image Optimization API when SVG files are used) and GHSA-p3m5-59mp-jv5r (high — denial of service in the App Router via Server Actions). `next` and `eslint-config-next` move to 15.5.28; nothing else in the lockfile changes.
+
+## [0.438.1-beta] - 2026-10-22
+
+_Shipped 2026-10-22 19:47 UTC · commit [1730285](https://github.com/21072026/Internship/commit/17302855dff3232fd4f88e3203ac07d13493c8aa)_
+
+**Public demo reset no longer fails on foreign keys:** `prisma/reset-demo.mjs` switched `FOREIGN_KEY_CHECKS` off on one pooled connection and could run the `TRUNCATE`s on another (the scheduled reset of 2026-10-22 failed with MySQL 1701 on `SupportAttachment`). It now runs on a single connection (`connection_limit=1`) and re-issues the switch before every `TRUNCATE`, so a reconnect mid-run cannot bring the checks back.
+
+## [0.438.0-beta] - 2026-10-22
+
+_Shipped 2026-10-22 19:27 UTC · commit [ef64ab6](https://github.com/21072026/Internship/commit/ef64ab65562b93a53a763164c9d9fb274fced59c)_
+
+**Affiliate module, step 1 (#3106):** generic design in `docs/affiliate-module.md` (per-organisation commission plan as data, nothing tenant-specific in the repo). New capability `affiliate`, carried by MARKETING only and listed in `MARKETING_ONLY_CAPABILITIES` (`src/lib/verticals.ts`) so the "INTERNSHIP carries everything" guards skip it on purpose; an admin sidebar entry `/admin/affiliates` (EN/TR/DE, mobile menu icon) and a gated placeholder page — 404 on the internship host.
+
+## [0.437.0-beta] - 2026-10-22
+
+_Shipped 2026-10-22 16:44 UTC · commit [1a5e865](https://github.com/21072026/Internship/commit/1a5e8659f4ba0e95f48edc5b76c09573574dac3d)_
+
+**A paused pair leaves every nudge, queue and the active-pair count (#1772):** one shared `activeRelationWhere()` in `src/lib/relationLifecycle.ts` (live and not paused) now feeds the interaction reminder, the stage-deadline and next-action reminders, the weekly-report chase, the dormant sweep and check-in and the mentor attention queue; the weekly missing-document chase skips a mentee whose live pairings are all paused. The plan gate's capacity count and the meter already read `billableRelationWhere()` (#1768), so a paused pair frees its plan seat. Pausing freezes the stage clock — the remaining days go to the new `stageDeadlineRemainingDays`, `stageDeadline` is cleared — and resuming re-derives the deadline from the same days and clears the dormancy episode (`stageClockPatch()`, through the lifecycle endpoint only). Messaging, meetings, goals, weekly reports, the portal and the board keep reading `status = ACTIVE` and are untouched.
+
+## [0.436.0-beta] - 2026-10-22
+
+_Shipped 2026-10-22 16:23 UTC · commit [ec105d5](https://github.com/21072026/Internship/commit/ec105d560840c9bc266164804badf5ce66cd0c5c)_
+
+**Pause, resume and end a pairing with a reason (#1770):** `POST /api/mentorship/[id]/lifecycle` is the one writer of a relation's lifecycle state — who may make which move and which reason an end needs is `checkLifecycleMove()` in `src/lib/relationLifecycle.ts` (ADMIN any legal move incl. reopen; the pair's own mentor pause/resume/end; mentee 403; another mentor's pairing 404). `status` is derived with `statusForLifecycle()`, never read from the body, and every move writes one `RelationLifecycleEvent` in the same guarded transaction (concurrent move → 409). A new terminal state `ENDED_EARLY` records an end that is not a success; the reason (`LIFECYCLE_END_REASON_CODES`) decides between it and `COMPLETED`, and certificates now refuse every end that is not a completion (`endedWithoutCompleting`). `PUT /api/mentorship/[id]` refuses `status` with `use_lifecycle_endpoint`; the reopen's one-active-mentor 409 moved with it. Both participants get an in-app notice (`relation.lifecycle_*`, never the reason); `mentorship.lifecycle_changed` is registered in the webhook catalogue (not yet dispatched, per `check:events`). `/admin/mentorship` replaces "Mark complete" with Pause / Resume / End… / Reopen, and `/mentor/mentees/[id]` gets the same controls plus the state history.
+
+## [0.435.0-beta] - 2026-10-22
+
+_Shipped 2026-10-22 16:15 UTC · commit [543f0cf](https://github.com/21072026/Internship/commit/543f0cf85405f90080a876a7a61bacf7342a7575)_
+
+**Stage editor: add and remove stages, with an in-use guard (#1635):** the pipeline stage editor (`/admin/organizations/[id]/pipeline`) can add a stage — its key derived once from the label by `stageKeyFromLabel()` (uppercase `[A-Z0-9_]`, deduplicated), read-only after the first save — and remove one. `GET …/pipeline-stages` returns `usage` (relations per stage key, any status, via `stageUsage()`); the editor disables removal of a stage in use, and the PUT re-checks through `removedStagesInUse()` and answers `409 { code: 'stage_in_use', inUse }`. Reset to defaults now confirms through `ConfirmDialog`, counting the records a reset would leave on a key the built-in set lacks. The `?programId=` half waits on #1624.
+
+## [0.434.0-beta] - 2026-10-22
+
+_Shipped 2026-10-22 16:12 UTC · commit [85f6f3a](https://github.com/21072026/Internship/commit/85f6f3aae33b8fbfcd5a9ab0686617e5932634ec)_
+
+**Roster feeds console and schedule (#1967):** `/admin/roster-feeds` lists each feed with its schedule (UTC, shown in the viewer's zone), next run, last run and on/off/paused state. Admins can create and edit feeds with a column mapper fed by a pasted or uploaded sample header, start a dry run or a real run, browse the run history and a run detail (per-row outcomes filterable by action, paged, CSV export with formula-injection guard), approve a run the deactivation ceiling stopped (ceiling only, same file hash only, audited as `roster.run_approved`), and dismiss the banner for a failed or stopped run. Runs take a claim on the feed (one conditional UPDATE on `RosterFeed.claimedUntil`), so the waker, a click and a second replica never run one feed twice. One queued job, `roster.sweep`, runs due feeds every 5 minutes on #1676's scheduler (`sweepDueRosterFeeds`). Three failed runs in a row pause a feed with `pausedReason` and send an alert. New routes `/api/admin/roster-feeds/[id]/run`, `/runs`, `/runs/[runId]` (+ `/approve`, `/acknowledge`) are ADMIN-only and tenant-scoped, and another org's ids get a 404. The e2e HR-export stub is `e2e/support/roster-source.mjs` (`ROSTER_FEED_ALLOW_INSECURE_STUB=1`, test-only).
+
+## [0.433.1-beta] - 2026-10-22
+
+_Shipped 2026-10-22 16:06 UTC · commit [3191662](https://github.com/21072026/Internship/commit/31916626fd4f07230879345b447279ec431f8301)_
+
+**Settings fit a phone again (e2e-full red on `main`):** the stage-SLA rows gained a third number input (#1722) that squeezed the stage name to 50px at 360px — below `sm` the name now takes its own line and the inputs wrap under it (`w-20`, right-aligned under their column headings, since "Eskalieren nach" did not fit `w-16`); and the mail tabs gained a third tab (#1692) that pushed the super admin's mail card 35px past the screen — the tab strip now wraps. `e2e/mobile-layout-coverage.spec.ts` now also audits `/admin/agreements`, `/admin/billing` and `/admin/sla`, which were added to the sidebar without an entry.
+
+## [0.433.0-beta] - 2026-10-22
+
+_Shipped 2026-10-22 15:18 UTC · commit [b6b7501](https://github.com/21072026/Internship/commit/b6b75017fdf15fbd6712e5f010b47dea405d4d6f)_
+
+**Every scheduled job runs on the queue (#1677):** the last 19 node-cron timers are gone — `initCronJobs()`, `initNewsletterCron()` and the eight other `init…Cron()` functions are deleted and nothing in `src/` calls `cron.schedule()` (a unit test fails if something does). Each job is a registered handler in `src/jobs/` (`reminders`, `meetings`, `digests`, `housekeeping`, `platform`; 28 names in `JobPayloadMap`), declared with its cadence and reason in `src/lib/jobs/schedules.ts`, enqueued by the leased scheduler with missed-slot catch-up and run by the worker with retries, a timeout and a `JobRun`. The 09:00 batch is split: `dormancy.sweep`, `reminders.stageDeadline`, `reminders.retentionReconsent` and `matching.needMatchAlerts` are independent (one failing no longer skips the rest), and the sweep enqueues `dormancy.checkIn` and `reminders.mentorInteraction` only on success, keyed on its own job id — the ordering rule is now a chain. `GET /api/cron?job=…&enqueue=1` queues the named job with `trigger: 'manual'` and answers 202 with its id (same #1575 authorization, applied first; own-org jobs carry the caller's org); without `enqueue=1` the route answers exactly as before. A job enqueued with an `orgId` now runs inside `runWithOrg(orgId)`. `emailService.ts` loses its scheduler (6177 → 5985 lines); the job bodies stay where their domain lives.
+
+## [0.432.0-beta] - 2026-10-22
+
+_Shipped 2026-10-22 15:13 UTC · commit [82166dc](https://github.com/21072026/Internship/commit/82166dc7eb95d030be4b12ef3437882a9c698979)_
+
+**Mentor-gated, quota'd company → candidate message channel (#1840):** new tenant model `CandidateOutreach` (`@@unique([companyId, menteeId])`, `@@index([orgId, status])`, in `TENANT_MODELS`). `POST /api/company/outreach` (COMPANY) refuses unless the candidate is shortlisted by the company (an `Application` at `SHORTLISTED`+ or a `SHORTLISTED` `CompanyInterest`, else 404), has an active `TALENT_POOL_VISIBILITY` consent, has no pending/open/90-day-revoked request, and the company is under its monthly quota (`403 { code: 'quota_exceeded', limit, used }`; `Company.quota` overrides the new `outreachMonthlyQuota` setting, default 20; counted at request time). The first message is stored, not delivered. `PATCH /api/company/outreach/[id]`: the active mentor or an admin approves/declines with a guarded `updateMany` — approval opens/reuses the DIRECT conversation, posts the message and names the company to the candidate; a decline reveals nothing; the candidate revokes, which removes the company user from the thread and `canMessage()` (now also true for an approved outreach) refuses further posts. Visibility is one rule, `outreachActorWhere()`. Pure rules in `src/lib/outreachRule.ts` (unit-tested); in-app `outreach.*` notifications only; `docs/candidate-outreach.md`. UI: request card on the company's candidate page, a role-aware panel on `/messages`.
+
+## [0.431.0-beta] - 2026-10-22
+
+_Shipped 2026-10-22 14:47 UTC · commit [98af2d9](https://github.com/21072026/Internship/commit/98af2d9c9276f227bbb9a22096c1d6a6f691b9f8)_
+
+**Affiliate module, admin screens (#3116):** `/admin/affiliates` gets tabs for Partners, Payments, Commissions, Payouts and Settings, behind new permissions `affiliate.read` (ORG_ADMIN and OBSERVER; PROGRAM_ADMIN has no access — affiliate data is not cohort/company scoped) and `affiliate.write` (ORG_ADMIN; reads only while impersonating). Settings: the commission plan (`savePlan()`, EUR only for now via `AFFILIATE_CURRENCIES`; a real change bumps `planVersion`, stamps `planEffectiveAt` and re-evaluates every partner, existing commissions stay frozen) and the EN/TR/DE contract. Partners: create (referral code unique per org, case-insensitive), suspend / reactivate / terminate (final) with a calendar-day effective date under the partner lock (`changePartnerState()`), audited full-IBAN reveal. Payments: manual entry through `recordAffiliatePayment()` (amounts typed as `19,99`, calendar-day dates). Commissions: approve / reject / un-approve under the lock (`transitionCommissions()`, PAID never moves) and a read-only drift list. Payouts: `createPayout()` marks one partner's selected APPROVED commissions PAID together or not at all. Every money write is audited.
+
+## [0.430.0-beta] - 2026-10-22
+
+_Shipped 2026-10-22 11:06 UTC · commit [9ff0a22](https://github.com/21072026/Internship/commit/9ff0a22d878fc1c81ce03fcff1d7233c4d29d91c)_
+
+**Affiliate module, partner role and security (#3115):** new `Role.AFFILIATE` with its own shell at `/affiliate` (marketing vertical only, the same server-side 2FA gate as every role shell, its own menu for web and the native app — never the mentee portal) and a row in the 2FA coverage report. The partner contract is versioned per organisation (`src/lib/affiliateContract.ts`: a save bumps the version only on a real text change, compared locale by locale) and every partner API sits behind `affiliatePartnerGate()` (AFFILIATE only, own partner record, current contract accepted → otherwise 403/404/409). Payout details (IBAN, ISO 13616 check) are sealed per partner, masked to the last four characters, refused while impersonating or while an un-enrolled partner is held by the 2FA policy, audited, and announced with the new `payoutDetailsChanged` security notice. Payment, resync and contract writes leave `affiliate.*` AuditLog rows. SSO role sync never touches an AFFILIATE. The marketing demo tenant gets a demo partner.
+
 ## [0.429.1-beta] - 2026-10-22
 
 _Shipped 2026-10-22 07:26 UTC · commit [313e927](https://github.com/21072026/Internship/commit/313e927bb76797a0bdfff3693bdec770365a0db4)_

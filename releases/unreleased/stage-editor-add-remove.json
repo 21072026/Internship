@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Stage editor: add and remove stages, with an in-use guard (#1635):** the pipeline stage editor (`/admin/organizations/[id]/pipeline`) can add a stage — its key derived once from the label by `stageKeyFromLabel()` (uppercase `[A-Z0-9_]`, deduplicated), read-only after the first save — and remove one. `GET …/pipeline-stages` returns `usage` (relations per stage key, any status, via `stageUsage()`); the editor disables removal of a stage in use, and the PUT re-checks through `removedStagesInUse()` and answers `409 { code: 'stage_in_use', inUse }`. Reset to defaults now confirms through `ConfirmDialog`, counting the records a reset would leave on a key the built-in set lacks. The `?programId=` half waits on #1624.",
-  "notes": {
-    "en": ["You can now add and remove pipeline stages in the stage editor. A stage that still has candidates on it cannot be removed."],
-    "tr": ["Aşama düzenleyicisinde artık pipeline aşaması ekleyip kaldırabilirsiniz. Üzerinde hâlâ aday bulunan bir aşama kaldırılamaz."],
-    "de": ["Im Phasen-Editor lassen sich jetzt Pipeline-Phasen hinzufügen und entfernen. Eine Phase, in der noch Kandidat:innen stehen, kann nicht entfernt werden."]
-  }
-}

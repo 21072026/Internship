@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Language switcher on the partner pages (#3465):** `/partner` and `/partner/apply` carry the shared `LanguageSwitcher`, and the header links no longer break onto two lines on a phone. The marketing demo seed now fills the TR and DE steps, contact text and call-to-action of the programme page, which used to fall back to English.",
-  "notes": {
-    "en": ["Visitors can switch the language of the partner programme page and its application form."],
-    "tr": ["Ziyaretçiler partner programı sayfasının ve başvuru formunun dilini değiştirebilir."],
-    "de": ["Besucher können die Sprache der Partnerprogramm-Seite und des Bewerbungsformulars wechseln."]
-  }
-}

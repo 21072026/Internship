@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Customer payments through the account-event feed (#3355):** a new `payment_received` event type with a `payment` block (`id`, `amount_minor`, `currency`, optional `received_at`; required on that type, validated at the door) goes to the one affiliate payment writer, `recordAffiliatePayment({ source: 'API' })`. That means the same checks, partner lock, commission reconciliation and `affiliate.payment.record` audit as a manual entry. Answers: `applied`; `no_partner` (a new outcome — no partner brought the customer in, or another org's customer); `duplicate` (repeated payment id); `conflict` with the writer's code (currency, suspended/terminated partner, no plan) or a released `busy`; `recorded` in an org without the affiliate programme. The writer now takes an optional transaction, so the feed's batch dry run judges a payment and rolls it back. Pure mapping in `paymentRefusal()` (`src/lib/accountEventRule.ts`). Refunds are #3475. Pinned by `scripts/test/account-event-rule.test.mjs` and `e2e/affiliate-payment-events.spec.ts` (@smoke).",
-  "notes": {
-    "en": ["Customer payments can now arrive automatically from your billing system; partner commissions are calculated exactly as for a payment entered by hand."],
-    "tr": ["Müşteri ödemeleri artık faturalama sisteminizden otomatik gelebiliyor; partner komisyonları elle girilen ödemeyle birebir aynı şekilde hesaplanıyor."],
-    "de": ["Kundenzahlungen können jetzt automatisch aus Ihrem Abrechnungssystem kommen; Partnerprovisionen werden genau wie bei einer manuell erfassten Zahlung berechnet."]
-  }
-}

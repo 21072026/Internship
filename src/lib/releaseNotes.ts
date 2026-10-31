@@ -65,6 +65,3390 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.619.0-beta',
+    date: '2026-10-31',
+    time: '07:47',
+    commit: '25aa69c',
+    highlights: {
+      en: [
+        "Mentors can add what was discussed in a meeting straight from the Slack or Microsoft Teams card that follows it.",
+      ],
+      tr: [
+        "Mentorlar bir toplantıda görüşülenleri, toplantıdan sonra gelen Slack veya Microsoft Teams kartından doğrudan ekleyebilir.",
+      ],
+      de: [
+        "Mentoren können direkt auf der Slack- oder Microsoft-Teams-Karte nach einem Meeting ergänzen, was besprochen wurde.",
+      ],
+    },
+  },
+  {
+    version: '0.618.0-beta',
+    date: '2026-10-31',
+    time: '07:30',
+    commit: 'c5e519a',
+    highlights: {
+      en: [
+        "Companies can now invite their team: owners, recruiters, hiring managers and interviewers each get exactly the access their role needs — interviewers only see the candidates they are meeting.",
+      ],
+      tr: [
+        "Şirketler artık ekiplerini davet edebiliyor: sahipler, işe alım uzmanları, işe alım yöneticileri ve mülakatçılar rollerinin gerektirdiği kadar erişim alıyor — mülakatçılar yalnızca görüşecekleri adayları görüyor.",
+      ],
+      de: [
+        "Unternehmen können jetzt ihr Team einladen: Inhaber:innen, Recruiter:innen, Hiring Manager:innen und Interviewer:innen erhalten genau den Zugriff, den ihre Rolle braucht – Interviewer:innen sehen nur die Kandidat:innen, die sie treffen.",
+      ],
+    },
+  },
+  {
+    version: '0.617.0-beta',
+    date: '2026-10-31',
+    time: '07:01',
+    commit: '163c689',
+    highlights: {
+      en: [
+        "Program admins can now open the analytics overview — every figure counts their own programmes only.",
+      ],
+      tr: [
+        "Program yöneticileri artık analitik özetini açabiliyor — her rakam yalnızca kendi programlarını sayıyor.",
+      ],
+      de: [
+        "Programm-Admins können jetzt die Analytics-Übersicht öffnen – jede Zahl zählt nur ihre eigenen Programme.",
+      ],
+    },
+  },
+  {
+    version: '0.616.0-beta',
+    date: '2026-10-31',
+    time: '06:59',
+    commit: '4b37fa3',
+    highlights: {
+      en: [
+        "Picking a mentee is now a search: type a name instead of scrolling through everyone, and the mentorship screens open faster in large programmes.",
+      ],
+      tr: [
+        "Mentee seçmek artık bir arama: herkesi kaydırmak yerine bir isim yazın. Büyük programlarda mentorluk ekranları da daha hızlı açılıyor.",
+      ],
+      de: [
+        "Mentees wählen Sie jetzt per Suche aus: Namen eintippen statt durch alle zu scrollen. In großen Programmen öffnen sich die Mentoring-Seiten schneller.",
+      ],
+    },
+  },
+  {
+    version: '0.615.0-beta',
+    date: '2026-10-31',
+    time: '06:58',
+    commit: '3e1249e',
+    highlights: {
+      en: [
+        "Survey check-ins can now be answered with a few button clicks right in Slack or Microsoft Teams.",
+      ],
+      tr: [
+        "Anket check-in'leri artık Slack veya Microsoft Teams içinde birkaç düğme tıklamasıyla yanıtlanabilir.",
+      ],
+      de: [
+        "Umfrage-Check-ins lassen sich jetzt mit wenigen Klicks direkt in Slack oder Microsoft Teams beantworten.",
+      ],
+    },
+  },
+  {
+    version: '0.614.1-beta',
+    date: '2026-10-31',
+    time: '06:52',
+    commit: '5ac6275',
+    highlights: {
+      en: [
+        "Time to hire now counts from the day someone entered the hiring pipeline, not from the day the mentoring began.",
+      ],
+      tr: [
+        "İşe alım süresi artık mentorluğun başladığı günden değil, kişinin işe alım hattına girdiği günden sayılıyor.",
+      ],
+      de: [
+        "Die Zeit bis zur Einstellung zählt jetzt ab dem Eintritt in die Einstellungspipeline, nicht ab Beginn des Mentorings.",
+      ],
+    },
+  },
+  {
+    version: '0.614.0-beta',
+    date: '2026-10-31',
+    time: '06:49',
+    commit: '5761916',
+    highlights: {
+      en: [
+        "Matching rules can now weigh your organisation's own attributes — for example the same site, a different business unit, or a mentor at a higher level.",
+      ],
+      tr: [
+        "Eşleştirme kuralları artık kurumunuzun kendi niteliklerini tartabilir — örneğin aynı lokasyon, farklı iş birimi ya da daha üst seviyede bir mentor.",
+      ],
+      de: [
+        "Matching-Regeln können jetzt die eigenen Merkmale Ihrer Organisation gewichten – etwa denselben Standort, einen anderen Geschäftsbereich oder einen Mentor auf höherer Ebene.",
+      ],
+    },
+  },
+  {
+    version: '0.613.0-beta',
+    date: '2026-10-31',
+    time: '06:49',
+    commit: '0ada266',
+    highlights: {
+      en: [
+        "Verified employers can now publish a public employer page with their story, website and open roles — linked from each job posting.",
+      ],
+      tr: [
+        "Doğrulanmış işverenler artık hikâyelerini, web sitelerini ve açık pozisyonlarını içeren herkese açık bir işveren sayfası yayımlayabiliyor — her iş ilanından bağlantı veriliyor.",
+      ],
+      de: [
+        "Verifizierte Arbeitgeber können jetzt eine öffentliche Arbeitgeberseite mit ihrer Geschichte, Website und offenen Stellen veröffentlichen – verlinkt aus jeder Stellenanzeige.",
+      ],
+    },
+  },
+  {
+    version: '0.612.0-beta',
+    date: '2026-10-31',
+    time: '06:44',
+    commit: 'bdc0627',
+    highlights: {
+      en: [
+        "Writing to many mentees: the recipient list can be searched, and \"Select all\" picks everyone who matches the search.",
+      ],
+      tr: [
+        "Çok sayıda mentee'ye yazarken alıcı listesinde arama yapabilirsiniz; \"Tümünü seç\" aramaya uyan herkesi seçer.",
+      ],
+      de: [
+        "Beim Schreiben an viele Mentees ist die Empfängerliste durchsuchbar, und „Alle auswählen“ wählt alle, die zur Suche passen.",
+      ],
+    },
+  },
+  {
+    version: '0.611.0-beta',
+    date: '2026-10-31',
+    time: '06:27',
+    commit: 'ba0d7ec',
+    highlights: {
+      en: [
+        "The public partner page can show figure cards — active partners and referred customers counted live, plus a satisfaction figure you enter — each one live, typed or hidden.",
+      ],
+      tr: [
+        "Herkese açık partner sayfası artık rakam kartları gösterebiliyor: canlı sayılan aktif partner ve yönlendirilen müşteri sayısı ile sizin girdiğiniz memnuniyet oranı; her kart canlı, elle ya da gizli.",
+      ],
+      de: [
+        "Die öffentliche Partnerseite kann jetzt Zahlenkarten zeigen – live gezählte aktive Partner und vermittelte Kunden sowie eine von Ihnen eingetragene Zufriedenheit; jede Karte live, eingetragen oder ausgeblendet.",
+      ],
+    },
+  },
+  {
+    version: '0.610.0-beta',
+    date: '2026-10-31',
+    time: '06:19',
+    commit: '665347f',
+    highlights: {
+      en: [
+        "Admins can set entry conditions per pipeline stage — on every plan — and a blocked move now explains exactly what is missing, with a link to fix it.",
+      ],
+      tr: [
+        "Yöneticiler her pipeline aşaması için giriş koşulları belirleyebilir — her planda — ve engellenen bir taşıma artık neyin eksik olduğunu, düzeltme bağlantısıyla birlikte açıkça söylüyor.",
+      ],
+      de: [
+        "Admins können pro Pipeline-Phase Eingangsbedingungen festlegen – in jedem Plan –, und ein blockierter Schritt erklärt jetzt genau, was fehlt, mit einem Link zum Beheben.",
+      ],
+    },
+  },
+  {
+    version: '0.609.0-beta',
+    date: '2026-10-31',
+    time: '06:11',
+    commit: '0bb5096',
+    highlights: {
+      en: [
+        "Answer right in Slack or Teams: say yes or no to a meeting invite, and approve or decline an interview request with one tap on the card.",
+      ],
+      tr: [
+        "Doğrudan Slack ya da Teams'ten yanıt ver: toplantı davetine evet ya da hayır de, mülakat talebini karttaki tek dokunuşla onayla ya da reddet.",
+      ],
+      de: [
+        "Direkt in Slack oder Teams antworten: Meeting-Einladungen zu- oder absagen und Interviewanfragen mit einem Tippen auf der Karte freigeben oder ablehnen.",
+      ],
+    },
+  },
+  {
+    version: '0.608.1-beta',
+    date: '2026-10-31',
+    time: '06:01',
+    commit: '54b89c4',
+    highlights: {
+      en: [
+        "Program admins no longer receive notifications and digests about people outside their own programmes.",
+      ],
+      tr: [
+        "Program yöneticileri artık kendi programları dışındaki kişilerle ilgili bildirim ve özet almıyor.",
+      ],
+      de: [
+        "Programm-Admins erhalten keine Benachrichtigungen und Zusammenfassungen mehr über Personen außerhalb ihrer eigenen Programme.",
+      ],
+    },
+  },
+  {
+    version: '0.608.0-beta',
+    date: '2026-10-31',
+    time: '06:00',
+    commit: '7522835',
+    highlights: {
+      en: [
+        "Employers can now sign up on their own from the For companies page. New accounts are verified before candidates see them — by the programme team, or instantly with a DNS record on the company domain — and a getting-started card guides them through their profile and first role.",
+      ],
+      tr: [
+        "İşverenler artık Şirketler için sayfasından kendileri kaydolabiliyor. Yeni hesaplar adaylara görünmeden önce doğrulanıyor — program ekibi tarafından ya da şirket alan adına eklenen bir DNS kaydıyla anında — ve bir başlangıç kartı profil ve ilk pozisyon adımlarında yol gösteriyor.",
+      ],
+      de: [
+        "Arbeitgeber können sich jetzt selbst über die Seite „Für Unternehmen“ registrieren. Neue Konten werden verifiziert, bevor Kandidat:innen sie sehen – durch das Programmteam oder sofort per DNS-Eintrag auf der Firmendomain –, und eine Startkarte führt durch Profil und erste Stelle.",
+      ],
+    },
+  },
+  {
+    version: '0.607.0-beta',
+    date: '2026-10-31',
+    time: '05:58',
+    commit: '251c783',
+    highlights: {
+      en: [
+        "The admin board opens faster in large programmes: each column loads its first cards, and \"Show more\" brings the rest.",
+      ],
+      tr: [
+        "Yönetici panosu büyük programlarda daha hızlı açılıyor: her sütun önce ilk kartlarını yüklüyor, \"Daha fazla göster\" geri kalanını getiriyor.",
+      ],
+      de: [
+        "Das Admin-Board öffnet sich in großen Programmen schneller: Jede Spalte lädt zuerst ihre ersten Karten, „Mehr anzeigen“ holt den Rest.",
+      ],
+    },
+  },
+  {
+    version: '0.606.2-beta',
+    date: '2026-10-31',
+    time: '05:49',
+    commit: '6225fc8',
+    highlights: {
+      en: [
+        "Forecasts, ROI, mentor impact and partner outcomes now count only placements made through your programme.",
+      ],
+      tr: [
+        "Tahminler, ROI, mentor etkisi ve partner sonuçları artık yalnızca programınız aracılığıyla yapılan yerleştirmeleri sayıyor.",
+      ],
+      de: [
+        "Prognose, ROI, Mentoren-Wirkung und Partnerergebnisse zählen jetzt nur Vermittlungen über Ihr Programm.",
+      ],
+    },
+  },
+  {
+    version: '0.606.0-beta',
+    date: '2026-10-31',
+    time: '05:38',
+    commit: '2234be8',
+    highlights: {
+      en: [
+        "Customer payments can now arrive automatically from your billing system; partner commissions are calculated exactly as for a payment entered by hand.",
+      ],
+      tr: [
+        "Müşteri ödemeleri artık faturalama sisteminizden otomatik gelebiliyor; partner komisyonları elle girilen ödemeyle birebir aynı şekilde hesaplanıyor.",
+      ],
+      de: [
+        "Kundenzahlungen können jetzt automatisch aus Ihrem Abrechnungssystem kommen; Partnerprovisionen werden genau wie bei einer manuell erfassten Zahlung berechnet.",
+      ],
+    },
+  },
+  {
+    version: '0.605.0-beta',
+    date: '2026-10-31',
+    time: '05:30',
+    commit: 'ea4131f',
+    highlights: {
+      en: [
+        "Goals now have steps: each step is a to-do on your list, and ticking it moves the goal's progress. Mentors can hand out starter goals from the shared pool, in each reader's language.",
+      ],
+      tr: [
+        "Hedeflerin artık adımları var: her adım listendeki bir yapılacak iş, işaretlediğinde hedefin ilerlemesi güncellenir. Mentorlar ortak havuzdan, her okuyucunun dilinde başlangıç hedefleri verebilir.",
+      ],
+      de: [
+        "Ziele haben jetzt Schritte: Jeder Schritt ist eine Aufgabe auf deiner Liste, und das Abhaken bewegt den Fortschritt des Ziels. Mentoren können Startziele aus dem gemeinsamen Pool vergeben – in der Sprache der Lesenden.",
+      ],
+    },
+  },
+  {
+    version: '0.604.0-beta',
+    date: '2026-10-31',
+    time: '05:17',
+    commit: 'c41048c',
+    highlights: {
+      en: [
+        "A program admin now sees and edits only the pairings of the cohorts they were given — nothing else in the organisation.",
+      ],
+      tr: [
+        "Program yöneticisi artık yalnızca kendisine verilen dönemlerin eşleşmelerini görüp düzenleyebiliyor — kurumun geri kalanını değil.",
+      ],
+      de: [
+        "Programm-Admins sehen und bearbeiten jetzt nur noch die Tandems der ihnen zugewiesenen Kohorten – nichts sonst in der Organisation.",
+      ],
+    },
+  },
+  {
+    version: '0.602.0-beta',
+    date: '2026-10-31',
+    time: '05:13',
+    commit: '0a5366d',
+    highlights: {
+      en: [
+        "Admins can now verify, reject or suspend employer accounts — a company that is not verified stays hidden from candidates and cannot publish roles. Company users can update their own profile (description, logo, industry, size, address, contact e-mail).",
+      ],
+      tr: [
+        "Yöneticiler artık işveren hesaplarını doğrulayabiliyor, reddedebiliyor veya askıya alabiliyor — doğrulanmamış bir şirket adaylara görünmez ve ilan yayımlayamaz. Şirket kullanıcıları kendi profillerini (açıklama, logo, sektör, büyüklük, adres, iletişim e-postası) güncelleyebiliyor.",
+      ],
+      de: [
+        "Admins können Arbeitgeberkonten jetzt verifizieren, ablehnen oder sperren – ein nicht verifiziertes Unternehmen bleibt für Kandidat:innen unsichtbar und kann keine Stellen veröffentlichen. Unternehmensnutzer:innen können ihr eigenes Profil (Beschreibung, Logo, Branche, Größe, Adresse, Kontakt-E-Mail) selbst pflegen.",
+      ],
+    },
+  },
+  {
+    version: '0.601.2-beta',
+    date: '2026-10-31',
+    time: '05:04',
+    commit: '18eb5a4',
+    highlights: {
+      en: [
+        "The Excel export and the “what changed” summary on the analytics page now follow the selected programme too.",
+      ],
+      tr: [
+        "Analitik sayfasındaki Excel dışa aktarımı ve “ne değişti” özeti artık seçili programı da izliyor.",
+      ],
+      de: [
+        "Der Excel-Export und die „Was hat sich geändert“-Zusammenfassung auf der Analyseseite folgen jetzt ebenfalls dem gewählten Programm.",
+      ],
+    },
+  },
+  {
+    version: '0.601.1-beta',
+    date: '2026-10-31',
+    time: '05:04',
+    commit: 'a9c921a',
+    highlights: {
+      en: [
+        "Visitors can switch the language of the partner programme page and its application form.",
+      ],
+      tr: [
+        "Ziyaretçiler partner programı sayfasının ve başvuru formunun dilini değiştirebilir.",
+      ],
+      de: [
+        "Besucher können die Sprache der Partnerprogramm-Seite und des Bewerbungsformulars wechseln.",
+      ],
+    },
+  },
+  {
+    version: '0.601.0-beta',
+    date: '2026-10-31',
+    time: '05:02',
+    commit: 'e33abdd',
+    highlights: {
+      en: [
+        "Partner links can now point at your partner programme page: visitors who arrive with a referral code are sent straight to your sign-up page with that code.",
+      ],
+      tr: [
+        "Partner linkleri artık partner programı sayfanızı gösterebilir: referans koduyla gelen ziyaretçiler aynı kodla doğrudan kayıt sayfanıza yönlendirilir.",
+      ],
+      de: [
+        "Partnerlinks können jetzt auf Ihre Partnerprogrammseite zeigen: Besucher mit einem Empfehlungscode werden mit diesem Code direkt zu Ihrer Registrierungsseite weitergeleitet.",
+      ],
+    },
+  },
+  {
+    version: '0.600.0-beta',
+    date: '2026-10-31',
+    time: '05:02',
+    commit: '60bd089',
+    highlights: {
+      en: [
+        "Partner applications have their own tab: approve one with a referral code and the partner is created and invited at once, or decline it with a reason the applicant receives by e-mail.",
+      ],
+      tr: [
+        "Partner başvurularının artık kendi sekmesi var: bir başvuruyu referans koduyla onayladığınızda partner hemen oluşturulup davet edilir, ya da başvurana e-postayla gidecek bir gerekçeyle reddedebilirsiniz.",
+      ],
+      de: [
+        "Partnerbewerbungen haben jetzt einen eigenen Reiter: Mit einem Empfehlungscode angenommen, wird der Partner sofort angelegt und eingeladen – oder Sie lehnen mit einem Grund ab, den die bewerbende Person per E-Mail erhält.",
+      ],
+    },
+  },
+  {
+    version: '0.599.0-beta',
+    date: '2026-10-31',
+    time: '05:00',
+    commit: 'cc28ccd',
+    highlights: {
+      en: [
+        "Buttons in Slack and Teams now act as you — only after you have confirmed your chat link. First one: “my next meetings”, answered right in the chat.",
+      ],
+      tr: [
+        "Slack ve Teams'teki düğmeler artık senin adına çalışıyor — yalnızca sohbet bağlantını onayladıktan sonra. İlki: “sıradaki toplantılarım”, cevabı doğrudan sohbette.",
+      ],
+      de: [
+        "Schaltflächen in Slack und Teams handeln jetzt in deinem Namen – erst nachdem du deine Chat-Verknüpfung bestätigt hast. Die erste: „meine nächsten Meetings“, direkt im Chat beantwortet.",
+      ],
+    },
+  },
+  {
+    version: '0.598.0-beta',
+    date: '2026-10-31',
+    time: '05:00',
+    commit: 'cc28ccd',
+    highlights: {
+      en: [
+        "Book a session right from Slack or Teams: pick one of three times that suit you both, and your mentor confirms it with one tap on the card.",
+      ],
+      tr: [
+        "Randevuyu doğrudan Slack ya da Teams'ten al: ikinize de uyan üç saatten birini seç, mentorun karttaki tek dokunuşla onaylasın.",
+      ],
+      de: [
+        "Termine direkt in Slack oder Teams buchen: Wähle eine von drei Zeiten, die euch beiden passen – deine Mentorin bzw. dein Mentor bestätigt mit einem Tippen auf der Karte.",
+      ],
+    },
+  },
+  {
+    version: '0.597.0-beta',
+    date: '2026-10-31',
+    time: '03:43',
+    commit: '1b35bcd',
+    highlights: {
+      en: [
+        "New admins and mentors get a short, keyboard-friendly tour of their workspace — once, remembered across devices — and “?” buttons explain screens where you use them.",
+      ],
+      tr: [
+        "Yeni yöneticiler ve mentorlar çalışma alanlarını kısa, klavyeyle de kullanılabilen bir turla tanıyor — yalnızca bir kez, cihazlar arasında hatırlanarak — ve “?” düğmeleri ekranları kullanıldıkları yerde açıklıyor.",
+      ],
+      de: [
+        "Neue Admins und Mentor:innen bekommen eine kurze, tastaturfreundliche Tour durch ihren Arbeitsbereich – nur einmal, geräteübergreifend gemerkt – und „?“-Buttons erklären Bildschirme dort, wo du sie nutzt.",
+      ],
+    },
+  },
+  {
+    version: '0.596.0-beta',
+    date: '2026-10-31',
+    time: '03:19',
+    commit: '0c0a22e',
+    highlights: {
+      en: [
+        "You now get a notification as soon as your certificate is ready to download.",
+      ],
+      tr: [
+        "Katılım belgen indirilebilir hale gelir gelmez artık bildirim alıyorsun.",
+      ],
+      de: [
+        "Du wirst jetzt benachrichtigt, sobald dein Zertifikat zum Download bereitsteht.",
+      ],
+    },
+  },
+  {
+    version: '0.595.1-beta',
+    date: '2026-10-30',
+    time: '23:22',
+    commit: 'dc294ad',
+    highlights: {
+      en: [
+        "Sending a bug report with a screenshot works again.",
+      ],
+      tr: [
+        "Ekran görüntülü hata bildirimi göndermek yeniden çalışıyor.",
+      ],
+      de: [
+        "Fehlerberichte mit Screenshot lassen sich wieder senden.",
+      ],
+    },
+  },
+  {
+    version: '0.595.0-beta',
+    date: '2026-10-30',
+    time: '22:45',
+    commit: 'aa4f4f1',
+    highlights: {
+      en: [
+        "Admins can now form mentoring groups — one mentor with several mentees — and add or remove members later.",
+      ],
+      tr: [
+        "Yöneticiler artık mentorluk grupları kurabilir — bir mentor ve birden çok mentee — ve sonradan üye ekleyip çıkarabilir.",
+      ],
+      de: [
+        "Admins können jetzt Mentoring-Gruppen bilden – ein Mentor mit mehreren Mentees – und später Mitglieder hinzufügen oder entfernen.",
+      ],
+    },
+  },
+  {
+    version: '0.594.1-beta',
+    date: '2026-10-30',
+    time: '22:42',
+    commit: 'a674077',
+    highlights: {
+      en: [
+        "Placement rates now leave out coaching pairs and hires the person found on their own.",
+      ],
+      tr: [
+        "Yerleştirme oranları artık koçluk eşleşmelerini ve kişinin kendi bulduğu işleri saymıyor.",
+      ],
+      de: [
+        "Vermittlungsquoten lassen jetzt Coaching-Paare und selbst gefundene Stellen außen vor.",
+      ],
+    },
+  },
+  {
+    version: '0.594.0-beta',
+    date: '2026-10-30',
+    time: '22:39',
+    commit: 'd0dd7fa',
+    highlights: {
+      en: [
+        "You can now sign in with Google, Microsoft or LinkedIn — and connect or disconnect those accounts from your account settings.",
+      ],
+      tr: [
+        "Artık Google, Microsoft veya LinkedIn ile giriş yapabilir, bu hesapları hesap ayarlarından bağlayıp bağlantısını kesebilirsin.",
+      ],
+      de: [
+        "Du kannst dich jetzt mit Google, Microsoft oder LinkedIn anmelden – und diese Konten in deinen Kontoeinstellungen verbinden oder trennen.",
+      ],
+    },
+  },
+  {
+    version: '0.593.0-beta',
+    date: '2026-10-30',
+    time: '22:31',
+    commit: '63d3f71',
+    highlights: {
+      en: [
+        "Your own domain can now open on a welcome page in your words, with Sign in and Apply buttons, instead of our landing page.",
+      ],
+      tr: [
+        "Kendi alan adınız artık bizim tanıtım sayfamız yerine, kendi sözlerinizle yazılmış bir karşılama sayfasıyla açılabilir; Giriş yap ve Başvur düğmeleriyle.",
+      ],
+      de: [
+        "Deine eigene Domain kann jetzt mit einer Willkommensseite in deinen Worten öffnen, mit den Buttons Anmelden und Bewerben, statt mit unserer Landingpage.",
+      ],
+    },
+  },
+  {
+    version: '0.592.1-beta',
+    date: '2026-10-30',
+    time: '22:26',
+    commit: 'c2cd127',
+    highlights: {
+      en: [
+        "A paused or early-ended pairing now says so wherever pairings are listed — with the reason on hover — and the pairings list can be filtered to paused or ended ones.",
+      ],
+      tr: [
+        "Duraklatılmış ya da erken biten bir eşleşme artık eşleşmelerin listelendiği her yerde bunu gösteriyor — gerekçesi fareyle üzerine gelince — ve eşleşme listesi duraklatılmış ya da sona ermiş olanlara göre süzülebiliyor.",
+      ],
+      de: [
+        "Eine pausierte oder vorzeitig beendete Paarung zeigt das jetzt überall, wo Paarungen aufgelistet sind — mit dem Grund beim Darüberfahren —, und die Paarungsliste lässt sich nach pausierten oder beendeten filtern.",
+      ],
+    },
+  },
+  {
+    version: '0.592.0-beta',
+    date: '2026-10-30',
+    time: '22:18',
+    commit: '345d8c1',
+    highlights: {
+      en: [
+        "Mentors and mentees can now send each other a written thank-you — signed, private to the pair, no points.",
+      ],
+      tr: [
+        "Mentör ve mentee artık birbirlerine yazılı bir teşekkür gönderebilir — imzalı, yalnızca ikisine özel, puan yok.",
+      ],
+      de: [
+        "Mentoren und Mentees können sich jetzt gegenseitig ein schriftliches Dankeschön schicken — unterschrieben, nur für die beiden, ohne Punkte.",
+      ],
+    },
+  },
+  {
+    version: '0.591.1-beta',
+    date: '2026-10-30',
+    time: '22:17',
+    commit: '1b635b8',
+    highlights: {
+      en: [
+        "Match explanations now show your own questions by name, and a rule whose question was switched off can be cleared in one click.",
+      ],
+      tr: [
+        "Eşleşme açıklamaları artık kendi sorularınızı adıyla gösteriyor; sorusu kapatılan bir kural tek tıkla temizlenebiliyor.",
+      ],
+      de: [
+        "Match-Erklärungen zeigen Ihre eigenen Fragen jetzt beim Namen, und eine Regel, deren Frage abgeschaltet wurde, lässt sich mit einem Klick entfernen.",
+      ],
+    },
+  },
+  {
+    version: '0.590.0-beta',
+    date: '2026-10-30',
+    time: '22:15',
+    commit: '652dfa6',
+    highlights: {
+      en: [
+        "Organizations can now decide whether admins may sign in as their users: allowed, read-only (look but change nothing), or off.",
+      ],
+      tr: [
+        "Kurumlar artık yöneticilerin kendi kullanıcıları olarak giriş yapıp yapamayacağına karar verebiliyor: izinli, salt okunur (bak ama değiştirme) veya kapalı.",
+      ],
+      de: [
+        "Organisationen können jetzt festlegen, ob Admins sich als ihre Nutzer*innen anmelden dürfen: erlaubt, nur lesend (ansehen, nichts ändern) oder aus.",
+      ],
+    },
+  },
+  {
+    version: '0.589.0-beta',
+    date: '2026-10-30',
+    time: '22:09',
+    commit: 'abe9b3f',
+    highlights: {
+      en: [
+        "A Zapier app is ready: connect the CRM to thousands of tools with triggers for applications, stage changes, accepted offers, meetings and interview requests, and actions to create candidates, log interactions and move stages.",
+      ],
+      tr: [
+        "Zapier uygulaması hazır: başvurular, aşama değişiklikleri, kabul edilen teklifler, toplantılar ve mülakat talepleri için tetikleyiciler; aday oluşturma, etkileşim kaydetme ve aşama değiştirme eylemleriyle CRM'i binlerce araca bağlayın.",
+      ],
+      de: [
+        "Eine Zapier-App ist bereit: Verbinden Sie das CRM mit Tausenden Tools – mit Triggern für Bewerbungen, Phasenwechsel, angenommene Angebote, Meetings und Interviewanfragen sowie Aktionen zum Anlegen von Kandidat:innen, Erfassen von Interaktionen und Wechseln der Phase.",
+      ],
+    },
+  },
+  {
+    version: '0.588.0-beta',
+    date: '2026-10-30',
+    time: '22:05',
+    commit: '5eaced1',
+    highlights: {
+      en: [
+        "New Admin › Placements ledger: every hire is recorded automatically with its company, role, mentor, source and whether it came through you — ready to filter, export and mark as invoiced.",
+      ],
+      tr: [
+        "Yeni Yönetim › Yerleştirmeler defteri: her işe alım şirketi, pozisyonu, mentörü, kaynağı ve sizin aracılığınızla olup olmadığıyla birlikte otomatik kaydedilir — filtrelenebilir, dışa aktarılabilir ve faturalandı olarak işaretlenebilir.",
+      ],
+      de: [
+        "Neues Register unter Admin › Vermittlungen: Jede Einstellung wird automatisch mit Unternehmen, Stelle, Mentor:in, Quelle und Zurechnung erfasst – filterbar, exportierbar und als abgerechnet markierbar.",
+      ],
+    },
+  },
+  {
+    version: '0.587.0-beta',
+    date: '2026-10-30',
+    time: '19:05',
+    commit: '8f7d38d',
+    highlights: {
+      en: [
+        "Linked Slack or Teams? Meeting invites and reminders now arrive there with a Join button — and when a meeting moves or is cancelled, the earlier message updates itself instead of leaving a stale one behind.",
+      ],
+      tr: [
+        "Slack ya da Teams bağladıysan toplantı davetleri ve hatırlatmaları artık oraya “Katıl” düğmesiyle geliyor — toplantı kayar ya da iptal edilirse eski mesaj kendini güncelliyor, geride bayat bir mesaj kalmıyor.",
+      ],
+      de: [
+        "Slack oder Teams verknüpft? Meeting-Einladungen und Erinnerungen kommen jetzt dort mit einem Teilnehmen-Button an – und wird ein Meeting verschoben oder abgesagt, aktualisiert sich die frühere Nachricht selbst, statt veraltet stehen zu bleiben.",
+      ],
+    },
+  },
+  {
+    version: '0.586.0-beta',
+    date: '2026-10-30',
+    time: '18:36',
+    commit: '6f1f686',
+    highlights: {
+      en: [
+        "Your programme's own questions now also appear on the public application forms, and the answers follow the applicant into their account.",
+      ],
+      tr: [
+        "Programınızın kendi soruları artık herkese açık başvuru formlarında da çıkıyor; cevaplar başvuranla birlikte hesabına taşınıyor.",
+      ],
+      de: [
+        "Die eigenen Fragen Ihres Programms erscheinen jetzt auch in den öffentlichen Bewerbungsformularen, und die Antworten gehen mit ins Konto der Bewerbenden über.",
+      ],
+    },
+  },
+  {
+    version: '0.585.0-beta',
+    date: '2026-10-30',
+    time: '18:32',
+    commit: 'f7d86bc',
+    highlights: {
+      en: [
+        "Admins can now see and set each admin's tier — org admin, programme admin or observer — and grant programme admins their cohorts and companies, with a guard that always keeps one org admin.",
+      ],
+      tr: [
+        "Yöneticiler artık her yöneticinin kademesini — kurum yöneticisi, program yöneticisi veya gözlemci — görüp ayarlayabiliyor ve program yöneticilerine kohort ile şirket atayabiliyor; her zaman bir kurum yöneticisinin kalmasını sağlayan bir koruma var.",
+      ],
+      de: [
+        "Admins können jetzt die Stufe jedes Admins – Org-Admin, Programm-Admin oder Beobachter – sehen und festlegen und Programm-Admins Kohorten und Unternehmen zuweisen; ein Schutz sorgt dafür, dass immer ein Org-Admin bleibt.",
+      ],
+    },
+  },
+  {
+    version: '0.584.0-beta',
+    date: '2026-10-30',
+    time: '18:30',
+    commit: '22d095a',
+    highlights: {
+      en: [
+        "People who want to become partners can now apply through a form on your partner programme page; you are notified and they get a confirmation e-mail.",
+      ],
+      tr: [
+        "Partner olmak isteyenler artık partner programı sayfanızdaki formla başvurabiliyor; size bildirim gelir, başvurana da onay e-postası gider.",
+      ],
+      de: [
+        "Interessierte können sich jetzt über ein Formular auf Ihrer Partnerprogrammseite als Partner bewerben; Sie werden benachrichtigt, und die Bewerber erhalten eine Bestätigung per E-Mail.",
+      ],
+    },
+  },
+  {
+    version: '0.582.0-beta',
+    date: '2026-10-30',
+    time: '18:23',
+    commit: '8fe9259',
+    highlights: {
+      en: [
+        "Analytics can now be filtered by programme — pick one in the new Programme selector and the funnel, KPI cards and trends show only that programme. The choice stays in the link, so a filtered view can be shared.",
+      ],
+      tr: [
+        "Analitik artık programa göre süzülebiliyor — yeni Program seçicisinden birini seçince huni, KPI kartları ve eğilimler yalnızca o programı gösteriyor. Seçim bağlantıda kalıyor, süzülmüş görünüm paylaşılabiliyor.",
+      ],
+      de: [
+        "Analysen lassen sich jetzt nach Programm filtern – im neuen Programm-Auswahlfeld eines wählen, und Trichter, KPI-Karten und Trends zeigen nur dieses Programm. Die Auswahl steht im Link, gefilterte Ansichten lassen sich teilen.",
+      ],
+    },
+  },
+  {
+    version: '0.581.0-beta',
+    date: '2026-10-30',
+    time: '18:17',
+    commit: '906967b',
+    highlights: {
+      en: [
+        "Your programme's own questions now also appear during onboarding and when you ask for a mentor; admins see the answers on each person's page.",
+      ],
+      tr: [
+        "Programınızın kendi soruları artık başlangıç adımlarında ve mentor talebinde de çıkıyor; yöneticiler cevapları her kişinin sayfasında görüyor.",
+      ],
+      de: [
+        "Die eigenen Fragen Ihres Programms erscheinen jetzt auch beim Onboarding und bei der Mentoring-Anfrage; Admins sehen die Antworten auf der Seite jeder Person.",
+      ],
+    },
+  },
+  {
+    version: '0.580.0-beta',
+    date: '2026-10-30',
+    time: '18:16',
+    commit: '000dca9',
+    highlights: {
+      en: [
+        "Put people on the bench between intakes: they keep their account and can still sign in, but are not matched or reminded — and bring them back, or re-invite the whole bench, in one click.",
+      ],
+      tr: [
+        "Dönemler arasında kişileri beklemeye alın: hesaplarını korurlar ve giriş yapabilirler, ama eşleştirilmez ve hatırlatma almazlar — tek tıkla geri alın ya da beklemedekilerin hepsini yeniden davet edin.",
+      ],
+      de: [
+        "Personen zwischen zwei Durchgängen pausieren: Sie behalten ihr Konto und können sich weiter anmelden, werden aber weder zugeordnet noch erinnert — mit einem Klick zurückholen oder alle Pausierten erneut einladen.",
+      ],
+    },
+  },
+  {
+    version: '0.579.0-beta',
+    date: '2026-10-30',
+    time: '18:10',
+    commit: 'cf726ab',
+    highlights: {
+      en: [
+        "Mentors can now set a stage deadline for their mentee — a missed one shows as overdue.",
+      ],
+      tr: [
+        "Mentörler artık mentee'leri için aşama son tarihi belirleyebilir — geçen tarih gecikmiş olarak görünür.",
+      ],
+      de: [
+        "Mentoren können jetzt eine Stufenfrist für ihre Mentees setzen — eine verpasste Frist wird als überfällig angezeigt.",
+      ],
+    },
+  },
+  {
+    version: '0.578.0-beta',
+    date: '2026-10-30',
+    time: '18:09',
+    commit: '193c430',
+    highlights: {
+      en: [
+        "Webhooks can now follow a requisition's status: opened, put on hold, filled or cancelled.",
+      ],
+      tr: [
+        "Webhook'lar artık bir iş talebinin durumunu takip edebiliyor: açıldı, bekletmeye alındı, doldu ya da iptal edildi.",
+      ],
+      de: [
+        "Webhooks können jetzt den Status einer Stellenanforderung verfolgen: eröffnet, pausiert, besetzt oder storniert.",
+      ],
+    },
+  },
+  {
+    version: '0.577.0-beta',
+    date: '2026-10-30',
+    time: '17:56',
+    commit: '4eb1893',
+    highlights: {
+      en: [
+        "Admins can now reword the invitation, password-reset and email-verification mails in the template editor.",
+      ],
+      tr: [
+        "Yöneticiler artık davet, parola sıfırlama ve e-posta doğrulama maillerinin metnini şablon düzenleyicide değiştirebilir.",
+      ],
+      de: [
+        "Admins können jetzt die Einladungs-, Passwort-Reset- und E-Mail-Bestätigungsmails im Vorlagen-Editor umformulieren.",
+      ],
+    },
+  },
+  {
+    version: '0.576.0-beta',
+    date: '2026-10-30',
+    time: '17:52',
+    commit: '0e067b2',
+    highlights: {
+      en: [
+        "Images you send to support can now be described too, so screen-reader users know what they show.",
+      ],
+      tr: [
+        "Destek ekibine gönderdiğiniz resimleri de artık tanımlayabilirsiniz; ekran okuyucu kullananlar resimde ne olduğunu öğrenir.",
+      ],
+      de: [
+        "Auch Bilder, die Sie an den Support senden, lassen sich jetzt beschreiben – so wissen Screenreader-Nutzer, was sie zeigen.",
+      ],
+    },
+  },
+  {
+    version: '0.575.0-beta',
+    date: '2026-10-30',
+    time: '17:46',
+    commit: 'e266b92',
+    highlights: {
+      en: [
+        "Referring institutions now get an Outcomes page: how many of the candidates they referred are in progress or placed, where they stand, how long placement took, month by month — with an Excel export of their own referrals.",
+      ],
+      tr: [
+        "Aday yönlendiren kurumlar artık bir Sonuçlar sayfasına sahip: yönlendirdikleri adaylardan kaçı süreçte, kaçı yerleşti, nerede duruyorlar ve yerleşme ne kadar sürdü — aylara göre, kendi yönlendirmelerinin Excel dışa aktarımıyla.",
+      ],
+      de: [
+        "Vermittelnde Einrichtungen haben jetzt eine Ergebnisseite: wie viele der von ihnen vermittelten Kandidat:innen in Bearbeitung oder platziert sind, wo sie stehen und wie lange die Platzierung dauerte – Monat für Monat, mit Excel-Export der eigenen Vermittlungen.",
+      ],
+    },
+  },
+  {
+    version: '0.574.0-beta',
+    date: '2026-10-30',
+    time: '17:44',
+    commit: '4b331e9',
+    highlights: {
+      en: [
+        "Your profile page now shows the short summary and themes matching uses to find you a fitting mentor or mentee — and you can have it made again.",
+      ],
+      tr: [
+        "Profil sayfan artık eşleştirmenin sana uygun mentor ya da mentee bulmak için kullandığı kısa özeti ve temaları gösteriyor; istersen yeniden oluşturabilirsin.",
+      ],
+      de: [
+        "Deine Profilseite zeigt jetzt die kurze Zusammenfassung und die Themen, mit denen das Matching passende Mentoren oder Mentees findet — und du kannst sie neu erstellen lassen.",
+      ],
+    },
+  },
+  {
+    version: '0.573.0-beta',
+    date: '2026-10-30',
+    time: '17:44',
+    commit: 'f3d3dea',
+    highlights: {
+      en: [
+        "Matching rules can now weigh your own questions — for example \"target industry\" — just like skills or language.",
+      ],
+      tr: [
+        "Eşleştirme kuralları artık kendi sorularınıza da — örneğin \"hedef sektör\" — beceri ya da dil gibi ağırlık verebiliyor.",
+      ],
+      de: [
+        "Matching-Regeln können jetzt Ihre eigenen Fragen gewichten – etwa „Zielbranche“ – genau wie Fähigkeiten oder Sprache.",
+      ],
+    },
+  },
+  {
+    version: '0.572.0-beta',
+    date: '2026-10-30',
+    time: '17:40',
+    commit: 'c11edf8',
+    highlights: {
+      en: [
+        "When a pairing ends you can write down the agreed next steps, and both sides can read them later.",
+        "New report: how pairings ended — by reason, with what both sides said in a short close-loop survey. Only a completed pairing counts as a success.",
+      ],
+      tr: [
+        "Bir eşleşme biterken üzerinde anlaşılan sonraki adımları yazabilirsiniz; iki taraf da bunları sonradan okuyabilir.",
+        "Yeni rapor: eşleşmeler nasıl bitti — gerekçesine göre ve iki tarafın kısa kapanış anketinde söyledikleriyle. Yalnızca tamamlanan eşleşme başarı sayılır.",
+      ],
+      de: [
+        "Beim Beenden einer Paarung könnt ihr die vereinbarten nächsten Schritte festhalten, und beide Seiten können sie später lesen.",
+        "Neuer Bericht: wie Paarungen endeten — nach Grund und mit dem, was beide Seiten in einer kurzen Abschlussumfrage gesagt haben. Nur eine abgeschlossene Paarung zählt als Erfolg.",
+      ],
+    },
+  },
+  {
+    version: '0.571.1-beta',
+    date: '2026-10-30',
+    time: '17:36',
+    commit: 'f6b3d6b',
+    highlights: {
+      en: [
+        "Admins can now see on the Integrations screen which company or referring organisation a self-created API key or webhook belongs to.",
+      ],
+      tr: [
+        "Yöneticiler artık Entegrasyonlar ekranında, kendi oluşturulmuş bir API anahtarının veya webhook'un hangi şirkete ya da yönlendiren kuruma ait olduğunu görebiliyor.",
+      ],
+      de: [
+        "Admins sehen jetzt unter Integrationen, zu welchem Unternehmen oder welcher vermittelnden Organisation ein selbst erstellter API-Schlüssel oder Webhook gehört.",
+      ],
+    },
+  },
+  {
+    version: '0.571.0-beta',
+    date: '2026-10-30',
+    time: '17:32',
+    commit: 'f773798',
+    highlights: {
+      en: [
+        "A programme's own words now appear on its pages and for its mentors and mentees.",
+      ],
+      tr: [
+        "Bir programın kendi kelimeleri artık o programın sayfalarında ve programdaki kişilerde görünür.",
+      ],
+      de: [
+        "Die eigenen Begriffe eines Programms erscheinen jetzt auf seinen Seiten und bei seinen Teilnehmenden.",
+      ],
+    },
+  },
+  {
+    version: '0.570.0-beta',
+    date: '2026-10-30',
+    time: '17:28',
+    commit: 'ad34dc5',
+    highlights: {
+      en: [
+        "On your organisation's own domain, the sign-in page now offers your single sign-on directly — no organisation code to type.",
+      ],
+      tr: [
+        "Kurumunuzun kendi alan adında giriş sayfası artık doğrudan tek oturum açmayı sunuyor — organizasyon kodu yazmanıza gerek yok.",
+      ],
+      de: [
+        "Auf der eigenen Domain Ihrer Organisation bietet die Anmeldeseite jetzt direkt Ihr Single Sign-on an – ohne Organisationscode.",
+      ],
+    },
+  },
+  {
+    version: '0.568.0-beta',
+    date: '2026-10-30',
+    time: '17:21',
+    commit: '0206396',
+    highlights: {
+      en: [
+        "Mentors can now correct an interaction log — date, type, subject and notes — instead of deleting and retyping it.",
+      ],
+      tr: [
+        "Mentorlar artık bir etkileşim kaydını silip yeniden yazmak yerine düzeltebilir — tarih, tür, konu ve notlar.",
+      ],
+      de: [
+        "Mentorinnen und Mentoren können einen Interaktionseintrag jetzt korrigieren – Datum, Art, Betreff und Notizen –, statt ihn zu löschen und neu zu schreiben.",
+      ],
+    },
+  },
+  {
+    version: '0.567.0-beta',
+    date: '2026-10-30',
+    time: '17:16',
+    commit: '549b834',
+    highlights: {
+      en: [
+        "Referring organisations can now register their own webhooks to hear when something happens to a candidate they referred.",
+      ],
+      tr: [
+        "Yönlendiren kurumlar artık kendi webhook'larını kurup yönlendirdikleri bir adayla ilgili gelişmelerden anında haberdar olabiliyor.",
+      ],
+      de: [
+        "Vermittelnde Organisationen können jetzt eigene Webhooks einrichten und erfahren sofort, wenn sich bei einer vermittelten Person etwas tut.",
+      ],
+    },
+  },
+  {
+    version: '0.566.0-beta',
+    date: '2026-10-30',
+    time: '17:14',
+    commit: 'c8a0456',
+    highlights: {
+      en: [
+        "You can now answer a project group-chat message straight from your e-mail — the reply appears in the group conversation.",
+      ],
+      tr: [
+        "Proje grup sohbeti mesajlarını artık doğrudan e-postanızdan yanıtlayabilirsiniz — yanıt grup sohbetinde görünür.",
+      ],
+      de: [
+        "Nachrichten aus einem Projekt-Gruppenchat lassen sich jetzt direkt per E-Mail beantworten – die Antwort erscheint im Gruppenchat.",
+      ],
+    },
+  },
+  {
+    version: '0.565.0-beta',
+    date: '2026-10-30',
+    time: '17:10',
+    commit: 'ef1951b',
+    highlights: {
+      en: [
+        "Customers who sign up through a partner's referral link are now attached to that partner automatically, so their payments earn the partner a commission without any manual linking.",
+      ],
+      tr: [
+        "Bir partnerin referans bağlantısıyla kayıt olan müşteriler artık otomatik olarak o partnere bağlanıyor; ödemelerinin komisyonu elle eşleştirme gerekmeden partnere yazılıyor.",
+      ],
+      de: [
+        "Kunden, die sich über den Empfehlungslink eines Partners registrieren, werden jetzt automatisch diesem Partner zugeordnet – ihre Zahlungen lösen ohne manuelle Zuordnung eine Provision aus.",
+      ],
+    },
+  },
+  {
+    version: '0.564.0-beta',
+    date: '2026-10-30',
+    time: '17:05',
+    commit: '9e29603',
+    highlights: {
+      en: [
+        "Referring organisations can now create their own API keys under API keys, to read the candidates they referred — and only those.",
+      ],
+      tr: [
+        "Yönlendiren kurumlar artık API anahtarları ekranından kendi anahtarlarını oluşturup yalnızca kendi yönlendirdikleri adayları okuyabiliyor.",
+      ],
+      de: [
+        "Vermittelnde Organisationen können jetzt unter API-Schlüssel eigene Schlüssel erstellen, um die von ihnen vermittelten Kandidat:innen zu lesen – und nur diese.",
+      ],
+    },
+  },
+  {
+    version: '0.563.0-beta',
+    date: '2026-10-30',
+    time: '17:01',
+    commit: 'bc33c6d',
+    highlights: {
+      en: [
+        "Programmes can now have eligibility rules: decide by department, location or your own attributes who may be enrolled, see how many current participants a rule admits before saving, and have the rules enforced everywhere — assignment, applications, single sign-on and matching.",
+      ],
+      tr: [
+        "Programlara artık uygunluk kuralları eklenebiliyor: departman, konum veya size özel alanlara göre kimin kaydedilebileceğine karar verin, kaydetmeden önce bir kuralın mevcut katılımcılardan kaçını kabul ettiğini görün; kurallar atama, başvuru, tek oturum açma ve eşleştirmede her yerde uygulanır.",
+      ],
+      de: [
+        "Programme können jetzt Zulassungsregeln haben: Legen Sie nach Abteilung, Standort oder eigenen Attributen fest, wer aufgenommen werden darf, sehen Sie vor dem Speichern, wie viele aktuelle Teilnehmende eine Regel zulässt – durchgesetzt bei Zuordnung, Bewerbung, Single Sign-on und Matching.",
+      ],
+    },
+  },
+  {
+    version: '0.561.0-beta',
+    date: '2026-10-30',
+    time: '17:00',
+    commit: '726767d',
+    highlights: {
+      en: [
+        "Questions your programme adds now appear on your profile — answer them in your language and edit them any time.",
+      ],
+      tr: [
+        "Programınızın eklediği sorular artık profilinizde — kendi dilinizde cevaplayın, istediğiniz zaman düzenleyin.",
+      ],
+      de: [
+        "Fragen, die Ihr Programm hinzufügt, erscheinen jetzt in Ihrem Profil – beantworten Sie sie in Ihrer Sprache und ändern Sie sie jederzeit.",
+      ],
+    },
+  },
+  {
+    version: '0.560.0-beta',
+    date: '2026-10-30',
+    time: '16:52',
+    commit: 'db89720',
+    highlights: {
+      en: [
+        "Two weeks before a pairing's agreed end date, both sides get one reminder to plan the wrap-up — and the mentor can extend it with one click, right from the e-mail.",
+        "Your attention list now flags pairs that meet less often than they agreed.",
+      ],
+      tr: [
+        "Bir eşleşmenin anlaşılan bitiş tarihinden iki hafta önce iki taraf da kapanışı planlamak için tek bir hatırlatma alıyor — mentor da e-postadan tek tıkla uzatabiliyor.",
+        "Dikkat listeniz artık anlaşılandan seyrek görüşen eşleşmeleri gösteriyor.",
+      ],
+      de: [
+        "Zwei Wochen vor dem vereinbarten Ende einer Paarung bekommen beide Seiten eine Erinnerung, den Abschluss zu planen — und der Mentor kann sie mit einem Klick direkt aus der E-Mail verlängern.",
+        "Deine Aufmerksamkeitsliste zeigt jetzt Paarungen, die sich seltener treffen als vereinbart.",
+      ],
+    },
+  },
+  {
+    version: '0.559.0-beta',
+    date: '2026-10-30',
+    time: '14:53',
+    commit: '8250a64',
+    highlights: {
+      en: [
+        "Partner programmes now have a public page on the marketing site: your texts, a commission table that always matches your plan, and buttons to apply, sign in, call or write to you.",
+      ],
+      tr: [
+        "Partner programlarının artık marketing sitesinde herkese açık bir sayfası var: sizin metinleriniz, her zaman planınızla uyumlu bir komisyon tablosu ve başvuru, giriş, arama ve e-posta butonları.",
+      ],
+      de: [
+        "Partnerprogramme haben jetzt eine öffentliche Seite auf der Marketing-Website: Ihre Texte, eine Provisionstabelle, die immer zu Ihrem Plan passt, und Schaltflächen zum Bewerben, Anmelden, Anrufen oder Schreiben.",
+      ],
+    },
+  },
+  {
+    version: '0.558.0-beta',
+    date: '2026-10-30',
+    time: '14:53',
+    commit: 'a191a4d',
+    highlights: {
+      en: [
+        "Your partner account now shows your commission terms: the bands, the percent phase, the due days and the plan version, so you can check your own commissions.",
+      ],
+      tr: [
+        "Partner hesabında artık komisyon koşulların görünüyor: kademeler, yüzde aşaması, vade günü ve plan sürümü; komisyonlarını kendin doğrulayabilirsin.",
+      ],
+      de: [
+        "Ihr Partnerkonto zeigt jetzt Ihre Provisionsbedingungen: Staffeln, Prozentphase, Fälligkeitstage und Planversion – so können Sie Ihre Provisionen selbst prüfen.",
+      ],
+    },
+  },
+  {
+    version: '0.557.1-beta',
+    date: '2026-10-30',
+    time: '14:53',
+    commit: 'cd47c0f',
+    highlights: {
+      en: [
+        "Turkish partner account: payouts made to you are now named \"Hak ediş ödemeleri\" and no longer share a name with customer payments.",
+      ],
+      tr: [
+        "Partner hesabında sana yapılan ödemeler artık \"Hak ediş ödemeleri\" adıyla geçiyor; müşteri ödemeleriyle karışmıyor.",
+      ],
+      de: [
+        "Türkisches Partnerkonto: Auszahlungen an Sie heißen jetzt \"Hak ediş ödemeleri\" und teilen sich keinen Namen mehr mit Kundenzahlungen.",
+      ],
+    },
+  },
+  {
+    version: '0.557.0-beta',
+    date: '2026-10-30',
+    time: '14:53',
+    commit: 'e77c53e',
+    highlights: {
+      en: [
+        "Admins can now write their own registration, onboarding and profile questions in English, Turkish and German, preview them exactly as participants will see them, and publish new versions without losing earlier answers.",
+      ],
+      tr: [
+        "Yöneticiler artık kayıt, başlangıç ve profil sorularını İngilizce, Türkçe ve Almanca olarak kendileri yazabiliyor, katılımcıların göreceği şekliyle önizleyebiliyor ve önceki cevapları kaybetmeden yeni sürümler yayınlayabiliyor.",
+      ],
+      de: [
+        "Admins können jetzt eigene Fragen für Registrierung, Onboarding und Profil auf Englisch, Türkisch und Deutsch schreiben, sie genau so in der Vorschau sehen wie die Teilnehmenden und neue Versionen veröffentlichen, ohne frühere Antworten zu verlieren.",
+      ],
+    },
+  },
+  {
+    version: '0.556.0-beta',
+    date: '2026-10-30',
+    time: '14:49',
+    commit: '07249fb',
+    highlights: {
+      en: [
+        "Images in announcements and newsletters can now be described, so screen-reader users hear what they show.",
+      ],
+      tr: [
+        "Duyuru ve bültenlerdeki resimler artık tanımlanabiliyor; ekran okuyucu kullananlar resimde ne olduğunu duyuyor.",
+      ],
+      de: [
+        "Bilder in Ankündigungen und Newslettern lassen sich jetzt beschreiben – Screenreader lesen vor, was sie zeigen.",
+      ],
+    },
+  },
+  {
+    version: '0.555.0-beta',
+    date: '2026-10-30',
+    time: '14:46',
+    commit: 'cb40d1f',
+    highlights: {
+      en: [
+        "Single sign-on now keeps profiles up to date: department, title, location, your own attributes and the profile photo are refreshed from your identity provider at every sign-in.",
+      ],
+      tr: [
+        "Tek oturum açma artık profilleri güncel tutuyor: departman, unvan, konum, size özel alanlar ve profil fotoğrafı her girişte kimlik sağlayıcınızdan yenileniyor.",
+      ],
+      de: [
+        "Single Sign-on hält Profile jetzt aktuell: Abteilung, Position, Standort, Ihre eigenen Attribute und das Profilfoto werden bei jeder Anmeldung aus Ihrem Identitätsanbieter aktualisiert.",
+      ],
+    },
+  },
+  {
+    version: '0.554.0-beta',
+    date: '2026-10-30',
+    time: '14:39',
+    commit: 'cfa743a',
+    highlights: {
+      en: [
+        "Matching rounds have a review board: see every proposed pair with its reasons, swap or lock pairs, find out why someone has no mentor, and publish the locked pairs in one confirmed step.",
+      ],
+      tr: [
+        "Eşleştirme turlarının artık bir inceleme panosu var: önerilen her eşleşmeyi gerekçeleriyle görün, eşleşmeleri değiştirin veya kilitleyin, birinin neden mentoru olmadığını öğrenin ve kilitli eşleşmeleri tek onaylı adımda yayınlayın.",
+      ],
+      de: [
+        "Matching-Runden haben jetzt ein Prüfboard: jedes vorgeschlagene Paar mit Begründung sehen, Paare tauschen oder sperren, herausfinden, warum jemand keinen Mentor hat, und die gesperrten Paare in einem bestätigten Schritt veröffentlichen.",
+      ],
+    },
+  },
+  {
+    version: '0.552.0-beta',
+    date: '2026-10-30',
+    time: '14:24',
+    commit: '3f555b8',
+    highlights: {
+      en: [
+        "A pairing can now carry an agreed end date and meeting rhythm — set when it is created (or from your programme's defaults) and shown to the mentee on their portal.",
+      ],
+      tr: [
+        "Bir eşleştirme artık üzerinde anlaşılan bir bitiş tarihi ve görüşme ritmi taşıyabiliyor — oluşturulurken (ya da programın varsayılanlarından) belirleniyor ve mentee'ye kendi portalında gösteriliyor.",
+      ],
+      de: [
+        "Eine Paarung kann jetzt ein vereinbartes Enddatum und einen Treffrhythmus haben – beim Anlegen festgelegt (oder aus den Standards des Programms) und dem Mentee in seinem Portal angezeigt.",
+      ],
+    },
+  },
+  {
+    version: '0.551.0-beta',
+    date: '2026-10-30',
+    time: '14:15',
+    commit: 'b161bed',
+    highlights: {
+      en: [
+        "Enterprise SSO over SAML can now sign its sign-in requests, accept encrypted assertions and refuse responses it never asked for — and a certificate change at the identity provider no longer interrupts sign-in.",
+      ],
+      tr: [
+        "SAML ile kurumsal SSO artık giriş isteklerini imzalayabiliyor, şifreli assertion kabul ediyor ve istemediği yanıtları reddediyor — kimlik sağlayıcıdaki sertifika değişimi de artık girişi kesmiyor.",
+      ],
+      de: [
+        "Enterprise-SSO per SAML kann Anmeldeanfragen jetzt signieren, verschlüsselte Assertions annehmen und Antworten ablehnen, die es nie angefordert hat — und ein Zertifikatswechsel beim Identity Provider unterbricht die Anmeldung nicht mehr.",
+      ],
+    },
+  },
+  {
+    version: '0.549.1-beta',
+    date: '2026-10-30',
+    time: '14:01',
+    commit: 'f5ad141',
+    highlights: {
+      en: [
+        "The webhook event list on the integrations screen is now grouped by topic.",
+      ],
+      tr: [
+        "Entegrasyonlar ekranındaki webhook olay listesi artık konuya göre gruplanıyor.",
+      ],
+      de: [
+        "Die Webhook-Ereignisliste auf der Integrationsseite ist jetzt nach Themen gruppiert.",
+      ],
+    },
+  },
+  {
+    version: '0.549.0-beta',
+    date: '2026-10-30',
+    time: '14:01',
+    commit: 'd868b25',
+    highlights: {
+      en: [
+        "Send an announcement to just the people it is for — by role, programme, stage, company or tag — now or at a time you choose, and see how many have read it.",
+      ],
+      tr: [
+        "Duyuruyu yalnızca ilgili kişilere gönderin — role, programa, aşamaya, şirkete ya da etikete göre — hemen ya da seçtiğiniz bir zamanda; kaç kişinin okuduğunu görün.",
+      ],
+      de: [
+        "Senden Sie eine Ankündigung nur an die Richtigen — nach Rolle, Programm, Phase, Unternehmen oder Tag —, sofort oder zu einem gewählten Zeitpunkt, und sehen Sie, wie viele sie gelesen haben.",
+      ],
+    },
+  },
+  {
+    version: '0.548.1-beta',
+    date: '2026-10-30',
+    time: '13:58',
+    commit: '3a6b88d',
+    highlights: {
+      en: [
+        "A new organisation's \"Get started\" list no longer shows steps as done before you have done them.",
+      ],
+      tr: [
+        "Yeni bir kuruluşun \"Başlarken\" listesi, adımları siz yapmadan tamamlanmış göstermiyor.",
+      ],
+      de: [
+        "Die „Erste Schritte“-Liste einer neuen Organisation zeigt Schritte nicht mehr als erledigt, bevor Sie sie erledigt haben.",
+      ],
+    },
+  },
+  {
+    version: '0.548.0-beta',
+    date: '2026-10-30',
+    time: '13:50',
+    commit: '9655154',
+    highlights: {
+      en: [
+        "Webhooks now fire when a weekly report is handed in, a document is added, a shared goal is completed and attendance is recorded.",
+      ],
+      tr: [
+        "Webhook'lar artık haftalık rapor teslim edildiğinde, bir doküman eklendiğinde, paylaşılan bir hedef tamamlandığında ve katılım kaydedildiğinde tetikleniyor.",
+      ],
+      de: [
+        "Webhooks werden jetzt ausgelöst, wenn ein Wochenbericht abgegeben, ein Dokument hinzugefügt, ein gemeinsames Ziel erreicht und die Anwesenheit erfasst wird.",
+      ],
+    },
+  },
+  {
+    version: '0.547.0-beta',
+    date: '2026-10-30',
+    time: '13:47',
+    commit: 'dabbe4c',
+    highlights: {
+      en: [
+        "Organisations can now sign in with OpenID Connect (Microsoft Entra ID, Google Workspace, Okta) as well as SAML.",
+      ],
+      tr: [
+        "Kurumlar artık SAML'in yanı sıra OpenID Connect ile (Microsoft Entra ID, Google Workspace, Okta) de giriş yapabiliyor.",
+      ],
+      de: [
+        "Organisationen können sich jetzt neben SAML auch per OpenID Connect anmelden (Microsoft Entra ID, Google Workspace, Okta).",
+      ],
+    },
+  },
+  {
+    version: '0.546.0-beta',
+    date: '2026-10-30',
+    time: '13:35',
+    commit: '1b09933',
+    highlights: {
+      en: [
+        "When you attach an image to a message you can now describe it, so people using a screen reader know what it shows.",
+      ],
+      tr: [
+        "Bir mesaja resim eklediğinizde artık onu tanımlayabilirsiniz; ekran okuyucu kullananlar resimde ne olduğunu öğrenir.",
+      ],
+      de: [
+        "Wenn Sie einer Nachricht ein Bild anhängen, können Sie es jetzt beschreiben – so erfahren Menschen mit Screenreader, was es zeigt.",
+      ],
+    },
+  },
+  {
+    version: '0.545.0-beta',
+    date: '2026-10-30',
+    time: '13:31',
+    commit: 'f02fd38',
+    highlights: {
+      en: [
+        "Admins can run a matching round over everyone waiting for a mentor in one go: one proposal per person, mentor capacity respected within the round, and a reason for everyone who could not be placed.",
+      ],
+      tr: [
+        "Yöneticiler mentor bekleyen herkes için tek seferde bir eşleştirme turu çalıştırabilir: kişi başına bir öneri, tur içinde mentor kapasitesine uyulur ve yerleştirilemeyen herkes için bir gerekçe gösterilir.",
+      ],
+      de: [
+        "Admins können eine Matching-Runde für alle, die auf einen Mentor warten, in einem Durchgang ausführen: ein Vorschlag pro Person, die Mentorenkapazität wird innerhalb der Runde eingehalten, und für alle, die nicht vermittelt werden konnten, wird ein Grund angegeben.",
+      ],
+    },
+  },
+  {
+    version: '0.544.0-beta',
+    date: '2026-10-30',
+    time: '13:29',
+    commit: '606ee6b',
+    highlights: {
+      en: [
+        "A mentorship request nobody answers now gets one reminder after a week and closes after 14 days, so the mentee can ask someone else; administrators can also withdraw a request with a reason the mentee sees.",
+      ],
+      tr: [
+        "Yanıtlanmayan bir mentorluk talebi artık bir hafta sonra bir kez hatırlatılıyor ve 14 gün sonra kapanıyor, böylece mentee başka birine başvurabiliyor; yöneticiler de bir talebi mentee'nin göreceği bir gerekçeyle geri çekebiliyor.",
+      ],
+      de: [
+        "Eine unbeantwortete Mentoring-Anfrage wird jetzt nach einer Woche einmal in Erinnerung gerufen und nach 14 Tagen geschlossen, damit der Mentee jemand anderen fragen kann; Administratoren können eine Anfrage außerdem mit einem Grund zurückziehen, den der Mentee sieht.",
+      ],
+    },
+  },
+  {
+    version: '0.543.0-beta',
+    date: '2026-10-30',
+    time: '13:27',
+    commit: '4edbbc2',
+    highlights: {
+      en: [
+        "Companies can now add and remove their own webhooks on the API keys page.",
+      ],
+      tr: [
+        "Şirketler artık kendi webhook'larını API anahtarları sayfasında ekleyip kaldırabiliyor.",
+      ],
+      de: [
+        "Unternehmen können ihre eigenen Webhooks jetzt auf der Seite „API-Schlüssel“ hinzufügen und entfernen.",
+      ],
+    },
+  },
+  {
+    version: '0.542.0-beta',
+    date: '2026-10-30',
+    time: '13:26',
+    commit: '62e8904',
+    highlights: {
+      en: [
+        "Choose when meeting reminders go out — for example a day and an hour before — for the whole programme, or per meeting, including no reminder at all.",
+      ],
+      tr: [
+        "Toplantı hatırlatmalarının ne zaman gideceğini seçin — örneğin bir gün ve bir saat önce — tüm program için ya da toplantı bazında; hiç hatırlatma olmaması da dahil.",
+      ],
+      de: [
+        "Legt fest, wann Besprechungserinnerungen verschickt werden – etwa einen Tag und eine Stunde vorher –, für das ganze Programm oder pro Besprechung, auch ganz ohne Erinnerung.",
+      ],
+    },
+  },
+  {
+    version: '0.541.0-beta',
+    date: '2026-10-30',
+    time: '13:20',
+    commit: '08f72af',
+    highlights: {
+      en: [
+        "Companies can register their own webhooks for offers, interview requests and application updates — they only ever receive events about their own records.",
+      ],
+      tr: [
+        "Şirketler teklifler, mülakat talepleri ve başvuru güncellemeleri için kendi webhook'larını kaydedebiliyor — yalnızca kendi kayıtlarıyla ilgili olayları alırlar.",
+      ],
+      de: [
+        "Unternehmen können eigene Webhooks für Angebote, Interviewanfragen und Bewerbungsupdates registrieren — sie erhalten nur Ereignisse zu ihren eigenen Datensätzen.",
+      ],
+    },
+  },
+  {
+    version: '0.540.2-beta',
+    date: '2026-10-30',
+    time: '13:19',
+    commit: '5292ba3',
+    highlights: {
+      en: [
+        "Signing up from an invitation no longer asks for your email address again, and offers take the position from the chosen requisition.",
+      ],
+      tr: [
+        "Davetle kayıt olurken e-posta adresiniz tekrar sorulmuyor; teklifler pozisyonu seçilen iş talebinden alıyor.",
+      ],
+      de: [
+        "Bei der Registrierung über eine Einladung wird die E-Mail-Adresse nicht mehr erneut abgefragt, und Angebote übernehmen die Position aus der gewählten Stellenanforderung.",
+      ],
+    },
+  },
+  {
+    version: '0.540.0-beta',
+    date: '2026-10-30',
+    time: '13:14',
+    commit: '598232e',
+    highlights: {
+      en: [
+        "Affiliate settings have a new “Public programme page” section: write the page’s texts in English, Turkish and German and add the contact phone, e-mail and sign-up link.",
+      ],
+      tr: [
+        "Affiliate ayarlarında yeni bir “Herkese açık program sayfası” bölümü var: sayfanın metinlerini İngilizce, Türkçe ve Almanca yazıp iletişim telefonunu, e-postasını ve kayıt linkini ekleyebilirsiniz.",
+      ],
+      de: [
+        "Die Affiliate-Einstellungen haben einen neuen Bereich „Öffentliche Programmseite“: Texte auf Englisch, Türkisch und Deutsch pflegen und Telefon, E-Mail und Registrierungslink hinterlegen.",
+      ],
+    },
+  },
+  {
+    version: '0.539.0-beta',
+    date: '2026-10-30',
+    time: '13:13',
+    commit: '22a4474',
+    highlights: {
+      en: [
+        "Organizations can now have a real Google Meet or Microsoft Teams room created automatically for each scheduled meeting, on the organizer's own connected calendar.",
+      ],
+      tr: [
+        "Kurumlar artık planlanan her toplantı için, düzenleyenin kendi bağlı takviminde otomatik olarak gerçek bir Google Meet veya Microsoft Teams odası oluşturabilir.",
+      ],
+      de: [
+        "Organisationen können jetzt für jedes geplante Meeting automatisch einen echten Google-Meet- oder Microsoft-Teams-Raum im verbundenen Kalender der organisierenden Person erstellen lassen.",
+      ],
+    },
+  },
+  {
+    version: '0.538.0-beta',
+    date: '2026-10-30',
+    time: '13:07',
+    commit: '6136473',
+    highlights: {
+      en: [
+        "In your partner account, each commission now shows its type and the plan version it was calculated under, so you can check why it has that amount.",
+      ],
+      tr: [
+        "Partner hesabında her komisyon artık türünü ve hesaplandığı plan sürümünü gösteriyor; tutarın neden o olduğunu kendin kontrol edebilirsin.",
+      ],
+      de: [
+        "In Ihrem Partnerkonto zeigt jede Provision jetzt ihre Art und die Planversion, nach der sie berechnet wurde – so können Sie die Höhe selbst nachvollziehen.",
+      ],
+    },
+  },
+  {
+    version: '0.537.0-beta',
+    date: '2026-10-29',
+    time: '12:58',
+    commit: '388d392',
+    highlights: {
+      en: [
+        "The trust page now offers a data processing agreement template, the record of processing activities, a DPIA starter and a plain description of how long data is kept and how it is exported and deleted.",
+      ],
+      tr: [
+        "Güven sayfası artık bir veri işleme sözleşmesi şablonu, işleme faaliyetleri kaydı, bir etki değerlendirmesi başlangıcı ve verinin ne kadar saklandığını, nasıl dışa aktarılıp silindiğini anlatan bir açıklama sunuyor.",
+      ],
+      de: [
+        "Die Trust-Seite bietet jetzt eine Vorlage für den Auftragsverarbeitungsvertrag, das Verzeichnis von Verarbeitungstätigkeiten, eine Ausgangsbasis für die Datenschutz-Folgenabschätzung und eine klare Beschreibung, wie lange Daten aufbewahrt und wie sie exportiert und gelöscht werden.",
+      ],
+    },
+  },
+  {
+    version: '0.536.0-beta',
+    date: '2026-10-29',
+    time: '12:31',
+    commit: '6318932',
+    highlights: {
+      en: [
+        "Choose per kind of notification whether it shows in the app, arrives by e-mail or as a push on your phone — and set quiet hours: e-mails and pushes raised then wait until they end. Admins can also set days the programme is closed.",
+      ],
+      tr: [
+        "Her bildirim türü için uygulamada mı görüneceğini, e-postayla mı yoksa telefonunuza push olarak mı geleceğini seçin — ve sessiz saatler belirleyin: o aralıkta oluşan e-posta ve push'lar aralık bitene kadar bekler. Yöneticiler programın kapalı olduğu günleri de tanımlayabilir.",
+      ],
+      de: [
+        "Legen Sie je Benachrichtigungsart fest, ob sie in der App, per E-Mail oder als Push auf Ihr Telefon kommt — und richten Sie Ruhezeiten ein: E-Mails und Pushes aus dieser Zeit warten, bis sie endet. Admins können zudem Tage festlegen, an denen das Programm geschlossen ist.",
+      ],
+    },
+  },
+  {
+    version: '0.535.0-beta',
+    date: '2026-10-29',
+    time: '11:13',
+    commit: 'd5d5bb7',
+    highlights: {
+      en: [
+        "Plan limits for admin seats, companies and programmes now apply when you add one more — with an upgrade prompt that says which limit you reached. Inviting mentors and mentees is never limited.",
+      ],
+      tr: [
+        "Yönetici koltuğu, şirket ve program için paket sınırları artık bir tane daha eklerken uygulanıyor — hangi sınıra ulaştığınızı söyleyen bir yükseltme kutusuyla. Mentor ve mentee davet etmek hiçbir zaman sınırlanmaz.",
+      ],
+      de: [
+        "Planlimits für Admin-Plätze, Unternehmen und Programme greifen jetzt, wenn Sie ein weiteres hinzufügen — mit einem Upgrade-Hinweis, welches Limit erreicht ist. Mentor:innen und Mentees einzuladen ist nie begrenzt.",
+      ],
+    },
+  },
+  {
+    version: '0.534.0-beta',
+    date: '2026-10-29',
+    time: '11:13',
+    commit: '617e3df',
+    highlights: {
+      en: [
+        "Companies have a new \"API keys\" page: create a time-limited key for their requisitions, offers and interview requests, copy it once, and revoke it any time.",
+      ],
+      tr: [
+        "Şirketlerin yeni bir \"API anahtarları\" sayfası var: iş talepleri, teklifler ve mülakat talepleri için süreli bir anahtar oluşturun, bir kez kopyalayın ve istediğiniz zaman iptal edin.",
+      ],
+      de: [
+        "Unternehmen haben eine neue Seite „API-Schlüssel“: befristete Schlüssel für Stellen, Angebote und Interviewanfragen erstellen, einmal kopieren und jederzeit widerrufen.",
+      ],
+    },
+  },
+  {
+    version: '0.533.0-beta',
+    date: '2026-10-29',
+    time: '11:07',
+    commit: '99b4524',
+    highlights: {
+      en: [
+        "Every pairing now keeps an audit record: the score and rules at the moment of the decision, who decided, whether they deviated from the suggested ranking, and their note.",
+      ],
+      tr: [
+        "Her eşleştirme artık bir denetim kaydı tutuyor: karar anındaki skor ve kurallar, kararı kimin verdiği, önerilen sıralamadan sapılıp sapılmadığı ve karar notu.",
+      ],
+      de: [
+        "Jede Paarung hat jetzt einen Prüfdatensatz: Score und Regeln zum Zeitpunkt der Entscheidung, wer entschieden hat, ob vom vorgeschlagenen Ranking abgewichen wurde, und die Notiz dazu.",
+      ],
+    },
+  },
+  {
+    version: '0.532.0-beta',
+    date: '2026-10-29',
+    time: '11:05',
+    commit: 'caeaabf',
+    highlights: {
+      en: [
+        "Connect your Microsoft 365 / Outlook calendar on your account page — meetings appear there, move when they move and disappear when they are cancelled. Available once your organisation's operator switches it on.",
+      ],
+      tr: [
+        "Hesap sayfandan Microsoft 365 / Outlook takvimini bağla — toplantılar orada görünür, taşınınca taşınır, iptal edilince kaybolur. Kurulumu yöneten kişi açtığında kullanılabilir.",
+      ],
+      de: [
+        "Verbinde deinen Microsoft-365-/Outlook-Kalender auf deiner Kontoseite — Meetings erscheinen dort, wandern mit, wenn sie sich verschieben, und verschwinden, wenn sie abgesagt werden. Verfügbar, sobald der Betreiber es einschaltet.",
+      ],
+    },
+  },
+  {
+    version: '0.531.0-beta',
+    date: '2026-10-29',
+    time: '11:02',
+    commit: '3d30e7e',
+    highlights: {
+      en: [
+        "Stage deadlines can now count business days: choose your working days and a holiday calendar, and a 3-day deadline started on Thursday is due on Tuesday, not Sunday.",
+      ],
+      tr: [
+        "Aşama son tarihleri artık iş günü sayabilir: çalışma günlerinizi ve bir tatil takvimi seçin; perşembe başlayan 3 günlük bir süre pazar değil salı günü dolar.",
+      ],
+      de: [
+        "Phasenfristen können jetzt in Arbeitstagen zählen: Arbeitstage und einen Feiertagskalender wählen – eine am Donnerstag begonnene 3-Tage-Frist ist am Dienstag fällig, nicht am Sonntag.",
+      ],
+    },
+  },
+  {
+    version: '0.530.0-beta',
+    date: '2026-10-29',
+    time: '11:01',
+    commit: '0b5e8ac',
+    highlights: {
+      en: [
+        "Companies can now create their own API keys for their requisitions, offers and interview requests — no admin needed, always time-limited, and never reaching beyond the company's own records.",
+      ],
+      tr: [
+        "Şirketler artık iş talepleri, teklifleri ve mülakat talepleri için kendi API anahtarlarını oluşturabiliyor — admin gerekmeden, her zaman süreli ve asla şirketin kendi kayıtlarının dışına çıkmadan.",
+      ],
+      de: [
+        "Unternehmen können jetzt eigene API-Schlüssel für ihre Stellen, Angebote und Interviewanfragen erstellen — ohne Admin, immer befristet und nie über die eigenen Datensätze hinaus.",
+      ],
+    },
+  },
+  {
+    version: '0.528.0-beta',
+    date: '2026-10-29',
+    time: '10:55',
+    commit: 'dd9581e',
+    highlights: {
+      en: [
+        "Organisations using Microsoft Teams can now find their people automatically too: each person still confirms their own link.",
+      ],
+      tr: [
+        "Microsoft Teams kullanan organizasyonlar da artık kişilerini otomatik bulabiliyor; her kişi kendi bağlantısını yine kendisi onaylıyor.",
+      ],
+      de: [
+        "Organisationen mit Microsoft Teams können ihre Personen jetzt ebenfalls automatisch finden: Jede Person bestätigt ihre Verknüpfung weiterhin selbst.",
+      ],
+    },
+  },
+  {
+    version: '0.527.0-beta',
+    date: '2026-10-29',
+    time: '10:46',
+    commit: '1461d77',
+    highlights: {
+      en: [
+        "When an organisation removes the Microsoft Teams app, it is now switched off here automatically too.",
+      ],
+      tr: [
+        "Bir organizasyon Microsoft Teams uygulamasını kaldırdığında, uygulama artık burada da otomatik olarak kapatılıyor.",
+      ],
+      de: [
+        "Wenn eine Organisation die Microsoft-Teams-App entfernt, wird sie jetzt auch hier automatisch abgeschaltet.",
+      ],
+    },
+  },
+  {
+    version: '0.526.0-beta',
+    date: '2026-10-29',
+    time: '10:42',
+    commit: '82eb592',
+    highlights: {
+      en: [
+        "Mentor suggestions now show a transparent score with the rules behind it — on candidate cards and in the mentorship request queue, where a request's preferred field counts too.",
+      ],
+      tr: [
+        "Mentor önerileri artık arkasındaki kurallarla birlikte şeffaf bir skor gösteriyor — aday kartlarında ve mentorluk istek kuyruğunda; kuyrukta isteğin tercih edilen alanı da hesaba katılıyor.",
+      ],
+      de: [
+        "Mentor:innen-Vorschläge zeigen jetzt einen nachvollziehbaren Score mit den Regeln dahinter — auf Kandidatenkarten und in der Warteschlange der Mentoring-Anfragen, wo auch das gewünschte Fachgebiet einer Anfrage zählt.",
+      ],
+    },
+  },
+  {
+    version: '0.525.0-beta',
+    date: '2026-10-29',
+    time: '10:38',
+    commit: 'abcd729',
+    highlights: {
+      en: [
+        "The developer page now hands out a read-only sandbox key on the public demo, so you can try the API against synthetic data without an account.",
+      ],
+      tr: [
+        "Geliştirici sayfası artık herkese açık demoda salt okunur bir sandbox anahtarı veriyor; API’yi hesap açmadan sentetik veriyle deneyebilirsiniz.",
+      ],
+      de: [
+        "Die Entwicklerseite gibt auf der öffentlichen Demo jetzt einen schreibgeschützten Sandbox-Schlüssel aus, damit Sie die API ohne Konto mit synthetischen Daten testen können.",
+      ],
+    },
+  },
+  {
+    version: '0.524.2-beta',
+    date: '2026-10-29',
+    time: '10:37',
+    commit: 'a24ef71',
+    highlights: {
+      en: [
+        "Certificates and reference letters can now be generated for names with Turkish letters.",
+      ],
+      tr: [
+        "Türkçe karakter içeren isimler için sertifika ve referans mektubu artık sorunsuz oluşturuluyor.",
+      ],
+      de: [
+        "Zertifikate und Referenzschreiben lassen sich jetzt auch für Namen mit türkischen Buchstaben erstellen.",
+      ],
+    },
+  },
+  {
+    version: '0.524.0-beta',
+    date: '2026-10-29',
+    time: '10:36',
+    commit: '9ea4239',
+    highlights: {
+      en: [
+        "If your organisation uses Slack, you can confirm your Slack account on your account page to get notifications there too — and disconnect it at any time.",
+      ],
+      tr: [
+        "Organizasyonunuz Slack kullanıyorsa, bildirimleri orada da almak için hesap sayfanızdan Slack hesabınızı onaylayabilir ve dilediğiniz zaman bağlantıyı kaldırabilirsiniz.",
+      ],
+      de: [
+        "Wenn Ihre Organisation Slack nutzt, können Sie Ihr Slack-Konto auf Ihrer Kontoseite bestätigen, um Benachrichtigungen auch dort zu erhalten — und es jederzeit trennen.",
+      ],
+    },
+  },
+  {
+    version: '0.523.0-beta',
+    date: '2026-10-29',
+    time: '10:34',
+    commit: 'dc2446d',
+    highlights: {
+      en: [
+        "Your phone now tells you when an offer arrives — and the groundwork is laid for meeting, stage and support pushes.",
+      ],
+      tr: [
+        "Bir teklif geldiğinde artık telefonun da haber veriyor — toplantı, aşama ve destek bildirimleri için de altyapı hazır.",
+      ],
+      de: [
+        "Dein Handy meldet sich jetzt, wenn ein Angebot eintrifft — die Grundlage für Push zu Terminen, Phasen und Support-Antworten ist gelegt.",
+      ],
+    },
+  },
+  {
+    version: '0.522.0-beta',
+    date: '2026-10-29',
+    time: '10:32',
+    commit: 'fb968ce',
+    highlights: {
+      en: [
+        "Webhooks now fire when a pairing is paused, resumed, ended, reopened, handed to another mentor, re-matched or won back.",
+      ],
+      tr: [
+        "Webhook'lar artık bir eşleşme duraklatıldığında, sürdürüldüğünde, sonlandırıldığında, yeniden açıldığında, başka bir mentöre devredildiğinde, yeniden eşleştirildiğinde veya geri kazanıldığında tetikleniyor.",
+      ],
+      de: [
+        "Webhooks werden jetzt ausgelöst, wenn eine Begleitung pausiert, fortgesetzt, beendet, wieder geöffnet, an einen anderen Mentor übergeben, neu zugeordnet oder zurückgewonnen wird.",
+      ],
+    },
+  },
+  {
+    version: '0.521.0-beta',
+    date: '2026-10-29',
+    time: '10:24',
+    commit: '0e5f402',
+    highlights: {
+      en: [
+        "Admins can now add the Slack or Microsoft Teams app to their organisation from the integrations page, and an app removed on Slack's side is switched off here automatically.",
+      ],
+      tr: [
+        "Yöneticiler artık Slack veya Microsoft Teams uygulamasını entegrasyonlar sayfasından organizasyonlarına ekleyebiliyor; Slack tarafında kaldırılan uygulama burada otomatik olarak kapatılıyor.",
+      ],
+      de: [
+        "Admins können die Slack- oder Microsoft-Teams-App jetzt über die Integrationsseite zu ihrer Organisation hinzufügen, und eine auf Slack-Seite entfernte App wird hier automatisch abgeschaltet.",
+      ],
+    },
+  },
+  {
+    version: '0.520.0-beta',
+    date: '2026-10-29',
+    time: '10:20',
+    commit: '5e0a6c8',
+    highlights: {
+      en: [
+        "New developer page: the public API and signed webhooks are documented for everyone, with every endpoint, error type and event, a signature check you can copy, and a written deprecation policy.",
+      ],
+      tr: [
+        "Yeni geliştirici sayfası: herkese açık API ve imzalı webhook’lar artık herkes için belgelenmiş — her uç nokta, hata türü ve olay, kopyalanabilir bir imza doğrulaması ve yazılı bir kullanımdan kaldırma politikasıyla.",
+      ],
+      de: [
+        "Neue Entwicklerseite: Die öffentliche API und die signierten Webhooks sind jetzt für alle dokumentiert — mit jedem Endpunkt, Fehlertyp und Ereignis, einer kopierbaren Signaturprüfung und einer schriftlichen Deprecation-Regel.",
+      ],
+    },
+  },
+  {
+    version: '0.519.0-beta',
+    date: '2026-10-29',
+    time: '10:15',
+    commit: 'b7297a5',
+    highlights: {
+      en: [
+        "Affiliate programme: saving the commission plan is instant even for large programmes — partners are re-evaluated in the background, and the settings show the progress.",
+      ],
+      tr: [
+        "Affiliate programı: komisyon planını kaydetmek büyük programlarda da anında biter — partnerler arka planda yeniden değerlendiriliyor, ilerleme ayarlarda görünüyor.",
+      ],
+      de: [
+        "Partnerprogramm: Das Speichern des Provisionsplans ist auch bei großen Programmen sofort erledigt – die Partner werden im Hintergrund neu bewertet, der Fortschritt steht in den Einstellungen.",
+      ],
+    },
+  },
+  {
+    version: '0.518.0-beta',
+    date: '2026-10-29',
+    time: '10:14',
+    commit: '2150eef',
+    highlights: {
+      en: [
+        "Operators can prepare the permanent deletion of an archived organization in two confirmed steps with a waiting period; the feature stays switched off until a deployment explicitly enables it.",
+      ],
+      tr: [
+        "Operatörler, arşivlenmiş bir organizasyonun kalıcı silinmesini bekleme süreli iki onaylı adımda hazırlayabiliyor; özellik bir kurulum açıkça etkinleştirene kadar kapalı kalıyor.",
+      ],
+      de: [
+        "Betreiber können die endgültige Löschung einer archivierten Organisation in zwei bestätigten Schritten mit Wartezeit vorbereiten; die Funktion bleibt ausgeschaltet, bis eine Installation sie ausdrücklich aktiviert.",
+      ],
+    },
+  },
+  {
+    version: '0.517.0-beta',
+    date: '2026-10-29',
+    time: '10:02',
+    commit: '951e2a5',
+    highlights: {
+      en: [
+        "Offers now come with an offer letter from your own template: candidates read it on their offer card, download it as a PDF and accept it with a recorded click.",
+      ],
+      tr: [
+        "Teklifler artık kendi şablonunuzdan üretilen bir teklif mektubuyla geliyor: aday mektubu teklif kartında okuyor, PDF olarak indiriyor ve kayıtlı bir tıklamayla kabul ediyor.",
+      ],
+      de: [
+        "Angebote kommen jetzt mit einem Angebotsschreiben aus eurer eigenen Vorlage: Kandidat:innen lesen es auf ihrer Angebotskarte, laden es als PDF herunter und nehmen es mit einem protokollierten Klick an.",
+      ],
+    },
+  },
+  {
+    version: '0.516.0-beta',
+    date: '2026-10-29',
+    time: '02:16',
+    commit: '5ebf9f1',
+    highlights: {
+      en: [
+        "New skills-gap report in analytics: see which skills your open, hiring positions need that your talent pool lacks — per cohort, exportable.",
+      ],
+      tr: [
+        "Analitikte yeni beceri açığı raporu: açık, işe alım yapan pozisyonlarının istediği ama yetenek havuzunda eksik olan becerileri gör — döneme göre, dışa aktarılabilir.",
+      ],
+      de: [
+        "Neuer Skill-Lücken-Bericht in der Analyse: Sieh, welche Skills deine offenen Stellen brauchen, die deinem Talent-Pool fehlen — je Kohorte, exportierbar.",
+      ],
+    },
+  },
+  {
+    version: '0.515.0-beta',
+    date: '2026-10-29',
+    time: '02:14',
+    commit: 'b9d8fb4',
+    highlights: {
+      en: [
+        "Edit the notification e-mails in your own words, per language — with a live preview, a test to yourself and a one-click reset.",
+      ],
+      tr: [
+        "Bildirim e-postalarını her dil için kendi kelimelerinizle düzenleyin — canlı önizleme, kendinize test ve tek tıkla sıfırlama ile.",
+      ],
+      de: [
+        "Bearbeiten Sie die Benachrichtigungs-E-Mails in Ihren eigenen Worten, je Sprache — mit Live-Vorschau, Test an sich selbst und Zurücksetzen per Klick.",
+      ],
+    },
+  },
+  {
+    version: '0.514.0-beta',
+    date: '2026-10-29',
+    time: '02:10',
+    commit: '2322215',
+    highlights: {
+      en: [
+        "Organization admins and operators can download a complete export of an organization's data as one JSON file — passwords, keys and other credentials are left out.",
+      ],
+      tr: [
+        "Organizasyon yöneticileri ve operatörler artık bir organizasyonun tüm verisini tek bir JSON dosyası olarak indirebiliyor — parolalar, anahtarlar ve diğer kimlik bilgileri dahil edilmiyor.",
+      ],
+      de: [
+        "Organisations-Admins und Betreiber können jetzt einen vollständigen Export der Daten einer Organisation als eine JSON-Datei herunterladen — Passwörter, Schlüssel und andere Zugangsdaten sind ausgenommen.",
+      ],
+    },
+  },
+  {
+    version: '0.513.0-beta',
+    date: '2026-10-29',
+    time: '02:08',
+    commit: '1f19477',
+    highlights: {
+      en: [
+        "Mentors with free capacity can now offer to mentor someone — but only mentees who switched on “mentors may offer to mentor me” can receive an offer.",
+      ],
+      tr: [
+        "Boş kapasitesi olan mentorlar artık birine mentorluk teklif edebilir — ama yalnızca “mentorlar bana mentorluk teklif edebilir” seçeneğini açan mentee'ler teklif alabilir.",
+      ],
+      de: [
+        "Mentorinnen und Mentoren mit freier Kapazität können jetzt jemandem ein Mentoring anbieten – aber nur Mentees, die „Mentoren dürfen mir ein Mentoring anbieten“ eingeschaltet haben.",
+      ],
+    },
+  },
+  {
+    version: '0.512.0-beta',
+    date: '2026-10-29',
+    time: '02:05',
+    commit: '78083ba',
+    highlights: {
+      en: [
+        "Webhooks now fire when a company requests an interview, when the request is approved or declined, and when a company flags, shortlists or passes on a candidate.",
+      ],
+      tr: [
+        "Webhook'lar artık bir şirket mülakat talep ettiğinde, talep onaylandığında veya reddedildiğinde ve bir şirket bir adayı işaretlediğinde, kısa listeye aldığında veya elediğinde tetikleniyor.",
+      ],
+      de: [
+        "Webhooks werden jetzt ausgelöst, wenn ein Unternehmen ein Interview anfragt, die Anfrage genehmigt oder abgelehnt wird und wenn ein Unternehmen einen Kandidaten markiert, auf die Shortlist setzt oder absagt.",
+      ],
+    },
+  },
+  {
+    version: '0.510.0-beta',
+    date: '2026-10-29',
+    time: '02:04',
+    commit: 'ec856bb',
+    highlights: {
+      en: [
+        "Affiliate programme: the Overview tab now shows your partners, customers, commission totals and the latest payout, with shortcuts to the commissions waiting for you — and the setup steps while the programme is new.",
+      ],
+      tr: [
+        "Affiliate programı: Genel bakış sekmesi artık partnerleri, müşterileri, komisyon toplamlarını ve son payout'u gösteriyor; onay bekleyen komisyonlara kısayol var, yeni bir programda ise kurulum adımları görünüyor.",
+      ],
+      de: [
+        "Partnerprogramm: Die Übersicht zeigt jetzt Partner, Kunden, Provisionssummen und die letzte Auszahlung, mit Abkürzungen zu den offenen Provisionen – und die Einrichtungsschritte, solange das Programm neu ist.",
+      ],
+    },
+  },
+  {
+    version: '0.509.0-beta',
+    date: '2026-10-29',
+    time: '02:04',
+    commit: 'e118b68',
+    highlights: {
+      en: [
+        "When someone says a Slack or Teams message never arrived, admins can now see each recent delivery with its outcome and reason, and resend a failed one.",
+      ],
+      tr: [
+        "Biri Slack veya Teams mesajının gelmediğini söylediğinde yöneticiler artık her son teslimatı sonucu ve sebebiyle görebiliyor ve başarısız olanı yeniden gönderebiliyor.",
+      ],
+      de: [
+        "Wenn jemand sagt, eine Slack- oder Teams-Nachricht sei nie angekommen, sehen Admins jetzt jede letzte Zustellung mit Ergebnis und Grund und können eine fehlgeschlagene erneut senden.",
+      ],
+    },
+  },
+  {
+    version: '0.508.0-beta',
+    date: '2026-10-29',
+    time: '02:02',
+    commit: '42d07e8',
+    highlights: {
+      en: [
+        "New public status page: see whether the platform is up, how it did over the last 90 days and any incidents — linked from the footer.",
+      ],
+      tr: [
+        "Yeni herkese açık durum sayfası: platformun şu an çalışıp çalışmadığını, son 90 gündeki erişilebilirliğini ve olayları görün — alt bilgiden bağlantılı.",
+      ],
+      de: [
+        "Neue öffentliche Statusseite: ob die Plattform erreichbar ist, wie sie in den letzten 90 Tagen lief und welche Vorfälle es gab — im Footer verlinkt.",
+      ],
+    },
+  },
+  {
+    version: '0.507.0-beta',
+    date: '2026-10-29',
+    time: '01:57',
+    commit: '5acb8b8',
+    highlights: {
+      en: [
+        "The privacy notice and the AI page now explain how applicants are ranked for companies, what an AI may see, and that a person makes every decision.",
+      ],
+      tr: [
+        "Gizlilik bildirimi ve yapay zekâ sayfası artık başvuranların şirketler için nasıl sıralandığını, yapay zekânın neyi görebileceğini ve her kararı bir insanın verdiğini açıklıyor.",
+      ],
+      de: [
+        "Die Datenschutzerklärung und die KI-Seite erklären jetzt, wie Bewerbungen für Unternehmen sortiert werden, was eine KI sehen darf und dass jede Entscheidung ein Mensch trifft.",
+      ],
+    },
+  },
+  {
+    version: '0.506.1-beta',
+    date: '2026-10-29',
+    time: '01:57',
+    commit: '08210f8',
+    highlights: {
+      en: [
+        "Participants who reach the project limit now see a plain \"no new projects right now\" message, and your admins are told why.",
+      ],
+      tr: [
+        "Proje sınırına ulaşan katılımcılar artık sade bir \"şu anda yeni proje oluşturulamıyor\" mesajı görüyor; nedeni yöneticilerinize bildiriliyor.",
+      ],
+      de: [
+        "Teilnehmende, die das Projektlimit erreichen, sehen jetzt einen schlichten Hinweis „derzeit keine neuen Projekte“, und Ihre Admins erfahren den Grund.",
+      ],
+    },
+  },
+  {
+    version: '0.506.0-beta',
+    date: '2026-10-29',
+    time: '01:55',
+    commit: '0874114',
+    highlights: {
+      en: [
+        "Webhooks now follow every offer: sent, withdrawn, accepted, declined or expired — and when an accepted offer fills a requisition.",
+      ],
+      tr: [
+        "Webhook'lar artık her teklifi izliyor: gönderildi, geri çekildi, kabul edildi, reddedildi veya süresi doldu — ve kabul edilen bir teklif bir iş talebini doldurduğunda.",
+      ],
+      de: [
+        "Webhooks begleiten jetzt jedes Angebot: gesendet, zurückgezogen, angenommen, abgelehnt oder abgelaufen — und wenn ein angenommenes Angebot eine Stelle besetzt.",
+      ],
+    },
+  },
+  {
+    version: '0.505.0-beta',
+    date: '2026-10-29',
+    time: '01:55',
+    commit: 'a5f1381',
+    highlights: {
+      en: [
+        "Operators can now rename an organization, change its address slug, and archive it: an archived organization's people can no longer sign in or receive mail, and everything comes back when it is unarchived.",
+      ],
+      tr: [
+        "Operatörler artık bir organizasyonun adını ve slug’ını değiştirebiliyor ve onu arşivleyebiliyor: arşivli bir organizasyonun kişileri giriş yapamaz ve e-posta almaz; arşivden çıkarıldığında her şey geri gelir.",
+      ],
+      de: [
+        "Betreiber können eine Organisation jetzt umbenennen, ihren Slug ändern und sie archivieren: Personen einer archivierten Organisation können sich nicht mehr anmelden und erhalten keine E-Mails; nach Aufhebung der Archivierung ist alles wieder da.",
+      ],
+    },
+  },
+  {
+    version: '0.504.0-beta',
+    date: '2026-10-29',
+    time: '01:54',
+    commit: 'c027909',
+    highlights: {
+      en: [
+        "Write your own reminders under Nudges: pick who gets them and when, preview exactly who a rule would reach before switching it on, and see what it sent.",
+      ],
+      tr: [
+        "Hatırlatmalar bölümünde kendi hatırlatmalarınızı yazın: kime ve ne zaman gideceğini seçin, bir kuralı açmadan önce tam olarak kime ulaşacağını önizleyin ve neler gönderdiğini görün.",
+      ],
+      de: [
+        "Schreiben Sie unter „Erinnerungen“ Ihre eigenen Erinnerungen: wählen Sie, wer sie wann bekommt, sehen Sie vor dem Einschalten genau, wen eine Regel erreicht, und was sie gesendet hat.",
+      ],
+    },
+  },
+  {
+    version: '0.503.2-beta',
+    date: '2026-10-29',
+    time: '01:51',
+    commit: '0d8c795',
+    highlights: {
+      en: [
+        "Affiliate import: the file pickers now speak the app's language and match light and dark mode.",
+      ],
+      tr: [
+        "Affiliate içe aktarma: dosya seçiciler artık uygulamanın dilinde ve açık/koyu temaya uyumlu.",
+      ],
+      de: [
+        "Affiliate-Import: Die Dateiauswahl spricht jetzt die Sprache der App und passt zum hellen und dunklen Design.",
+      ],
+    },
+  },
+  {
+    version: '0.503.0-beta',
+    date: '2026-10-29',
+    time: '01:50',
+    commit: '9d8d358',
+    highlights: {
+      en: [
+        "The privacy notice now says exactly what deleting your account removes. After an account is deleted, the few records kept by law are themselves removed once their legal period is over.",
+      ],
+      tr: [
+        "Gizlilik metni artık hesabınızı sildiğinizde neyin silindiğini açıkça söylüyor. Hesap silindikten sonra yasa gereği tutulan birkaç kayıt da yasal süreleri dolunca kendiliğinden siliniyor.",
+      ],
+      de: [
+        "Die Datenschutzerklärung sagt jetzt genau, was beim Löschen Ihres Kontos entfernt wird. Die wenigen nach dem Löschen gesetzlich aufbewahrten Datensätze werden nach Ablauf ihrer Frist ebenfalls automatisch entfernt.",
+      ],
+    },
+  },
+  {
+    version: '0.502.0-beta',
+    date: '2026-10-29',
+    time: '01:50',
+    commit: 'd1555d3',
+    highlights: {
+      en: [
+        "A company's open positions now come only from its requisitions — the company form links straight to them instead of keeping a separate list.",
+      ],
+      tr: [
+        "Bir firmanın açık pozisyonları artık yalnızca iş taleplerinden geliyor — firma formu ayrı bir liste tutmak yerine doğrudan onlara bağlanıyor.",
+      ],
+      de: [
+        "Die offenen Stellen eines Unternehmens kommen jetzt nur noch aus seinen Stellenanforderungen – das Unternehmensformular verlinkt direkt dorthin, statt eine eigene Liste zu führen.",
+      ],
+    },
+  },
+  {
+    version: '0.501.0-beta',
+    date: '2026-10-29',
+    time: '01:49',
+    commit: '04b2c2f',
+    highlights: {
+      en: [
+        "Your own words now reach e-mails too, can differ per programme, and you can preview them before saving.",
+      ],
+      tr: [
+        "Kendi kelimeleriniz artık e-postalarda da görünür, programa göre farklılaşabilir ve kaydetmeden önce önizlenebilir.",
+      ],
+      de: [
+        "Ihre eigenen Begriffe erscheinen jetzt auch in E-Mails, können je Programm abweichen und lassen sich vor dem Speichern in der Vorschau prüfen.",
+      ],
+    },
+  },
+  {
+    version: '0.500.0-beta',
+    date: '2026-10-29',
+    time: '01:48',
+    commit: '20bc003',
+    highlights: {
+      en: [
+        "When a place opens up in a full group session, the first person on the waitlist now also gets an e-mail — and everyone registered is e-mailed if the session is cancelled.",
+      ],
+      tr: [
+        "Dolu bir grup oturumunda yer açılınca yedek listedeki ilk kişiye artık e-posta da gidiyor; oturum iptal edilirse kayıtlı herkese e-posta gönderiliyor.",
+      ],
+      de: [
+        "Wird in einer vollen Gruppensitzung ein Platz frei, bekommt die erste Person auf der Warteliste jetzt auch eine E-Mail — und alle Angemeldeten werden per E-Mail informiert, wenn die Sitzung abgesagt wird.",
+      ],
+    },
+  },
+  {
+    version: '0.499.0-beta',
+    date: '2026-10-29',
+    time: '01:48',
+    commit: '492b3f8',
+    highlights: {
+      en: [
+        "A brand-new organization now opens on a three-step guide to its first mentor–mentee pair instead of empty lists.",
+      ],
+      tr: [
+        "Yeni açılan bir organizasyon artık boş listeler yerine ilk mentor–mentee eşleşmesine giden üç adımlık bir rehberle açılıyor.",
+      ],
+      de: [
+        "Eine neue Organisation öffnet jetzt mit einer Drei-Schritte-Anleitung zum ersten Mentor–Mentee-Paar statt mit leeren Listen.",
+      ],
+    },
+  },
+  {
+    version: '0.498.1-beta',
+    date: '2026-10-29',
+    time: '01:47',
+    commit: '25ae422',
+    highlights: {
+      en: [
+        "Dark mode: message reactions, the AI draft panels and the onboarding steps no longer show as pale boxes with unreadable text.",
+      ],
+      tr: [
+        "Karanlık mod: mesaj tepkileri, yapay zekâ taslak panelleri ve kayıt adımları artık okunamayan yazılı açık renkli kutular olarak görünmüyor.",
+      ],
+      de: [
+        "Dunkelmodus: Nachrichtenreaktionen, die KI-Entwurfsfelder und die Onboarding-Schritte erscheinen nicht mehr als helle Kästen mit unlesbarem Text.",
+      ],
+    },
+  },
+  {
+    version: '0.498.0-beta',
+    date: '2026-10-29',
+    time: '01:46',
+    commit: '8447dfa',
+    highlights: {
+      en: [
+        "New public ROI calculator: build your business case with your own numbers, see every step of the arithmetic and our published price beside the result — no sign-up.",
+      ],
+      tr: [
+        "Yeni herkese açık yatırım getirisi hesaplayıcı: kendi rakamlarınızla iş gerekçenizi kurun, hesabın her adımını ve yayımlanmış fiyatımızı sonucun yanında görün — kayıt gerekmez.",
+      ],
+      de: [
+        "Neuer öffentlicher ROI-Rechner: Bauen Sie Ihren Business Case mit Ihren eigenen Zahlen, sehen Sie jeden Rechenschritt und unseren veröffentlichten Preis neben dem Ergebnis — ohne Anmeldung.",
+      ],
+    },
+  },
+  {
+    version: '0.497.0-beta',
+    date: '2026-10-29',
+    time: '01:46',
+    commit: '071a0f1',
+    highlights: {
+      en: [
+        "Companies now see a short written reason beside each applicant explaining how they fit the role — and, with the AI package, can have the top applicants' reasons written by AI. A person makes every decision.",
+      ],
+      tr: [
+        "Şirketler artık her başvuranın yanında role nasıl uyduğunu açıklayan kısa bir gerekçe görüyor; AI paketiyle en üstteki adayların gerekçelerini yapay zekâya yazdırabiliyor. Her kararı bir insan veriyor.",
+      ],
+      de: [
+        "Unternehmen sehen jetzt neben jeder Bewerbung eine kurze Begründung, wie sie zur Stelle passt — mit dem KI-Paket lassen sich die Begründungen der besten Bewerbungen von KI schreiben. Jede Entscheidung trifft ein Mensch.",
+      ],
+    },
+  },
+  {
+    version: '0.496.0-beta',
+    date: '2026-10-29',
+    time: '01:46',
+    commit: '837e025',
+    highlights: {
+      en: [
+        "Admins can see which Slack or Teams workspace is connected, who installed it and what it may do, switch it off without uninstalling, and uninstall it so its access is revoked and nothing is left behind.",
+      ],
+      tr: [
+        "Yöneticiler hangi Slack veya Teams çalışma alanının bağlı olduğunu, kimin kurduğunu ve neye izni olduğunu görebilir; kaldırmadan kapatabilir ve kaldırdığında erişim iptal edilir, geride hiçbir şey kalmaz.",
+      ],
+      de: [
+        "Admins sehen, welcher Slack- oder Teams-Workspace verbunden ist, wer ihn installiert hat und was er darf, können ihn abschalten, ohne ihn zu deinstallieren, und ihn so deinstallieren, dass der Zugriff widerrufen wird und nichts zurückbleibt.",
+      ],
+    },
+  },
+  {
+    version: '0.494.1-beta',
+    date: '2026-10-29',
+    time: '01:45',
+    commit: '78d2bd3',
+    highlights: {
+      en: [
+        "The operations console now appears in the menu for the default organization's admins too, and links to the error tracker when one is set up.",
+      ],
+      tr: [
+        "Operasyon konsolu artık varsayılan kurumun yöneticilerinin menüsünde de görünüyor ve kuruluysa hata izleyiciye bağlantı veriyor.",
+      ],
+      de: [
+        "Die Betriebskonsole erscheint jetzt auch im Menü der Admins der Standardorganisation und verlinkt den Fehler-Tracker, wenn einer eingerichtet ist.",
+      ],
+    },
+  },
+  {
+    version: '0.494.0-beta',
+    date: '2026-10-29',
+    time: '01:45',
+    commit: '82a30d3',
+    highlights: {
+      en: [
+        "Admins can record a screening for each mentor application — references, interview, checklist — and require chosen checks before approval.",
+      ],
+      tr: [
+        "Yöneticiler artık her mentor başvurusu için ön eleme kaydı tutabilir — referans, görüşme, kontrol listesi — ve onaydan önce seçtikleri kontrolleri zorunlu kılabilir.",
+      ],
+      de: [
+        "Admins können zu jeder Mentoren-Bewerbung eine Prüfung festhalten – Referenzen, Gespräch, Checkliste – und ausgewählte Prüfpunkte vor der Freigabe verlangen.",
+      ],
+    },
+  },
+  {
+    version: '0.493.4-beta',
+    date: '2026-10-29',
+    time: '01:44',
+    commit: 'bdb2593',
+    highlights: {
+      en: [
+        "Affiliate settings: the referral address error disappears as you fix the address, and the example link shows again.",
+      ],
+      tr: [
+        "Affiliate ayarları: referans adresi hatası adresi düzeltirken kayboluyor ve örnek link yeniden görünüyor.",
+      ],
+      de: [
+        "Affiliate-Einstellungen: Der Fehler zur Empfehlungsadresse verschwindet beim Korrigieren, und der Beispiellink erscheint wieder.",
+      ],
+    },
+  },
+  {
+    version: '0.493.0-beta',
+    date: '2026-10-29',
+    time: '01:38',
+    commit: '5834441',
+    highlights: {
+      en: [
+        "Group sessions now appear on your calendar, and a programme journey step can announce a group session and invite the participants to register.",
+      ],
+      tr: [
+        "Grup oturumları artık takviminde görünüyor; bir program adımı da grup oturumunu duyurup katılımcıları kayda davet edebiliyor.",
+      ],
+      de: [
+        "Gruppensitzungen erscheinen jetzt im Kalender, und ein Programmschritt kann eine Gruppensitzung ankündigen und zur Anmeldung einladen.",
+      ],
+    },
+  },
+  {
+    version: '0.492.0-beta',
+    date: '2026-10-29',
+    time: '01:36',
+    commit: '71618e6',
+    highlights: {
+      en: [
+        "Stage automation: when a candidate enters or leaves a stage, notify people, send a ready-made e-mail, set a deadline, hand out a goal, ask for a document or add a tag — dry-run each rule against your real history before switching it on, and see every run in the log.",
+      ],
+      tr: [
+        "Aşama otomasyonu: bir aday bir aşamaya girdiğinde ya da çıktığında kişileri bilgilendir, hazır bir e-posta gönder, son tarih koy, hedef ver, belge iste ya da etiket ekle — her kuralı açmadan önce gerçek geçmişinize karşı kuru çalıştırın ve her çalıştırmayı kayıtta görün.",
+      ],
+      de: [
+        "Phasen-Automatisierung: Betritt oder verlässt eine Person eine Phase, Beteiligte benachrichtigen, eine fertige E-Mail senden, eine Frist setzen, ein Ziel vergeben, ein Dokument anfordern oder ein Tag setzen — jede Regel vor dem Einschalten im Probelauf gegen die echte Historie prüfen und jede Ausführung im Protokoll sehen.",
+      ],
+    },
+  },
+  {
+    version: '0.491.2-beta',
+    date: '2026-10-28',
+    time: '05:44',
+    commit: 'aa410e7',
+    highlights: {
+      en: [
+        "Screen readers now announce the number of unread notifications on the notification bell.",
+      ],
+      tr: [
+        "Ekran okuyucular artık bildirim zilindeki okunmamış bildirim sayısını da okuyor.",
+      ],
+      de: [
+        "Screenreader sagen an der Benachrichtigungsglocke jetzt auch die Anzahl ungelesener Benachrichtigungen an.",
+      ],
+    },
+  },
+  {
+    version: '0.491.0-beta',
+    date: '2026-10-28',
+    time: '00:06',
+    commit: 'ba28663',
+    highlights: {
+      en: [
+        "Matching candidates for a requisition are now ranked by a fit score with a rule-by-rule explanation, and match alerts say how well the candidate fits which role.",
+      ],
+      tr: [
+        "Bir iş talebine uyan adaylar artık kural kural açıklanan bir uygunluk puanına göre sıralanıyor; eşleşme uyarıları adayın hangi role ne kadar uyduğunu söylüyor.",
+      ],
+      de: [
+        "Passende Kandidaten für eine Stellenanforderung werden jetzt nach einem Eignungswert mit Regel-für-Regel-Erklärung sortiert, und Match-Hinweise nennen, wie gut jemand zu welcher Stelle passt.",
+      ],
+    },
+  },
+  {
+    version: '0.490.0-beta',
+    date: '2026-10-28',
+    time: '00:06',
+    commit: 'f797e17',
+    highlights: {
+      en: [
+        "When your plan's limit or a locked feature stops you, you now see what is blocked, which plan unlocks it and its price — and can request the upgrade in one click. Applicants are only ever told the programme is full.",
+      ],
+      tr: [
+        "Paketinizin sınırına veya kilitli bir özelliğe takıldığınızda artık neyin engellendiğini, hangi paketin açtığını ve fiyatını görüyor, yükseltmeyi tek tıkla talep edebiliyorsunuz. Başvuranlara yalnızca programın dolu olduğu söyleniyor.",
+      ],
+      de: [
+        "Wenn das Limit Ihres Plans oder eine gesperrte Funktion Sie stoppt, sehen Sie jetzt, was blockiert ist, welcher Plan es freischaltet und was er kostet — und können das Upgrade mit einem Klick anfragen. Bewerbenden wird nur mitgeteilt, dass das Programm voll ist.",
+      ],
+    },
+  },
+  {
+    version: '0.487.0-beta',
+    date: '2026-10-28',
+    time: '00:02',
+    commit: 'c616246',
+    highlights: {
+      en: [
+        "Settings now show whether each value is set for your organization or inherited, with a history of who changed it and when — and a one-click way back to the inherited value.",
+      ],
+      tr: [
+        "Ayarlar artık her değerin kurumunuz için mi ayarlandığını yoksa miras mı alındığını, kimin ne zaman değiştirdiğini gösteriyor — ve tek tıkla mirasa dönmeyi sağlıyor.",
+      ],
+      de: [
+        "Einstellungen zeigen jetzt, ob ein Wert für Ihre Organisation festgelegt oder geerbt ist, wer ihn wann geändert hat — und setzen ihn mit einem Klick auf den geerbten Wert zurück.",
+      ],
+    },
+  },
+  {
+    version: '0.486.0-beta',
+    date: '2026-10-27',
+    time: '23:57',
+    commit: '8ed9e0d',
+    highlights: {
+      en: [
+        "Group sessions and office hours: publish a session with a seat limit, let people register or join the waitlist, and record who attended.",
+      ],
+      tr: [
+        "Grup oturumları ve ofis saatleri: kontenjanlı bir oturum yayımla, katılımcılar kaydolsun ya da yedek listeye girsin, kimin katıldığını kaydet.",
+      ],
+      de: [
+        "Gruppensitzungen und Sprechstunden: eine Sitzung mit Platzlimit veröffentlichen, Anmeldung oder Warteliste ermöglichen und die Teilnahme erfassen.",
+      ],
+    },
+  },
+  {
+    version: '0.485.0-beta',
+    date: '2026-10-27',
+    time: '23:53',
+    commit: '0126467',
+    highlights: {
+      en: [
+        "See how your skills grew: your goals page now shows, per skill, the level you started at and where you are now.",
+      ],
+      tr: [
+        "Becerilerinin nasıl geliştiğini gör: hedefler sayfan artık her beceri için başladığın seviyeyi ve şu anki seviyeni gösteriyor.",
+      ],
+      de: [
+        "Sieh, wie deine Skills gewachsen sind: Deine Zielseite zeigt jetzt pro Skill, wo du angefangen hast und wo du jetzt stehst.",
+      ],
+    },
+  },
+  {
+    version: '0.484.0-beta',
+    date: '2026-10-27',
+    time: '23:53',
+    commit: '99a7fb4',
+    highlights: {
+      en: [
+        "Webhooks now fire when a mentee's mentor is changed.",
+      ],
+      tr: [
+        "Webhook'lar artık bir mentee'nin mentörü değiştirildiğinde tetikleniyor.",
+      ],
+      de: [
+        "Webhooks werden jetzt ausgelöst, wenn der Mentor eines Mentees gewechselt wird.",
+      ],
+    },
+  },
+  {
+    version: '0.483.0-beta',
+    date: '2026-10-27',
+    time: '23:52',
+    commit: '3f17748',
+    highlights: {
+      en: [
+        "Screen readers now hear how many results a search or filter leaves on every list.",
+      ],
+      tr: [
+        "Ekran okuyucular artık her listede bir arama ya da filtrenin kaç sonuç bıraktığını duyuyor.",
+      ],
+      de: [
+        "Screenreader hören jetzt in jeder Liste, wie viele Ergebnisse eine Suche oder ein Filter übrig lässt.",
+      ],
+    },
+  },
+  {
+    version: '0.481.1-beta',
+    date: '2026-10-27',
+    time: '23:47',
+    commit: 'f5df2fd',
+    highlights: {
+      en: [
+        "On the billing page, \"How pricing works\" now takes you straight to the section that explains how active pairs are counted.",
+      ],
+      tr: [
+        "Faturalandırma sayfasındaki \"Fiyatlandırma nasıl işler\" bağlantısı artık doğrudan aktif çiftlerin nasıl sayıldığını anlatan bölüme götürüyor.",
+      ],
+      de: [
+        "Auf der Abrechnungsseite führt „So funktioniert die Preisgestaltung“ jetzt direkt zu dem Abschnitt, der erklärt, wie aktive Paare gezählt werden.",
+      ],
+    },
+  },
+  {
+    version: '0.481.0-beta',
+    date: '2026-10-27',
+    time: '23:45',
+    commit: '4adac88',
+    highlights: {
+      en: [
+        "See every webhook delivery attempt on the Integrations page, replay a failed one or the last events, and get one e-mail if a dead endpoint is switched off.",
+      ],
+      tr: [
+        "Entegrasyonlar sayfasında her webhook teslimat denemesini görün, başarısız olanı veya son olayları tekrar gönderin; ölü bir uç nokta kapatılırsa tek bir e-posta alın.",
+      ],
+      de: [
+        "Sehen Sie jeden Webhook-Zustellversuch auf der Seite „Integrationen“, senden Sie einen fehlgeschlagenen oder die letzten Ereignisse erneut und erhalten Sie eine E-Mail, wenn ein toter Endpunkt abgeschaltet wird.",
+      ],
+    },
+  },
+  {
+    version: '0.480.0-beta',
+    date: '2026-10-27',
+    time: '23:45',
+    commit: '82716dc',
+    highlights: {
+      en: [
+        "The SLA compliance rate and the escalation to administrators now follow per-cohort and per-mentor service levels, and an override can set its own escalation.",
+      ],
+      tr: [
+        "SLA uyum oranı ve yöneticilere üst kademe bildirimi artık dönem ve mentör bazındaki süre hedeflerini izliyor; bir istisna kendi üst kademe süresini de belirleyebiliyor.",
+      ],
+      de: [
+        "Die SLA-Einhaltungsquote und die Eskalation an Administratoren folgen jetzt den Servicelevels je Kohorte und Mentor:in, und eine Ausnahme kann ihre eigene Eskalation festlegen.",
+      ],
+    },
+  },
+  {
+    version: '0.479.0-beta',
+    date: '2026-10-27',
+    time: '23:44',
+    commit: '331cc46',
+    highlights: {
+      en: [
+        "Admins can now see and fix any mentor's availability, away days and booking rules from Admin › Availability — without signing in as them.",
+      ],
+      tr: [
+        "Yöneticiler artık herhangi bir mentorun müsaitliğini, izin günlerini ve randevu kurallarını Yönetim › Müsaitlik ekranından — onun hesabına girmeden — görüp düzeltebiliyor.",
+      ],
+      de: [
+        "Admins können jetzt die Verfügbarkeit, Abwesenheiten und Buchungsregeln jedes Mentors unter Admin › Verfügbarkeit sehen und korrigieren – ohne sich als dieser anzumelden.",
+      ],
+    },
+  },
+  {
+    version: '0.477.0-beta',
+    date: '2026-10-27',
+    time: '23:44',
+    commit: 'c27ab48',
+    highlights: {
+      en: [
+        "Webhooks can now subscribe to application stage changes — shortlisted, interview, offer, hired, rejected or withdrawn.",
+      ],
+      tr: [
+        "Webhook'lar artık başvuru aşaması değişikliklerine abone olabiliyor — kısa liste, mülakat, teklif, işe alındı, reddedildi veya geri çekildi.",
+      ],
+      de: [
+        "Webhooks können jetzt Statuswechsel von Bewerbungen abonnieren — Shortlist, Interview, Angebot, eingestellt, abgelehnt oder zurückgezogen.",
+      ],
+    },
+  },
+  {
+    version: '0.476.1-beta',
+    date: '2026-10-27',
+    time: '23:43',
+    commit: '48d2edb',
+    highlights: {
+      en: [
+        "Pages load faster: each page now downloads only the translations it uses.",
+      ],
+      tr: [
+        "Sayfalar daha hızlı açılıyor: her sayfa artık yalnızca kullandığı çevirileri indiriyor.",
+      ],
+      de: [
+        "Seiten laden schneller: Jede Seite lädt jetzt nur die Übersetzungen, die sie braucht.",
+      ],
+    },
+  },
+  {
+    version: '0.475.0-beta',
+    date: '2026-10-27',
+    time: '23:42',
+    commit: 'e9a9936',
+    highlights: {
+      en: [
+        "Mentors can now confirm — or correct — a mentee's self-assessed skill level. Confirmed levels are marked on the mentee's profile and for companies.",
+      ],
+      tr: [
+        "Mentorlar artık mentee'nin kendi verdiği beceri seviyesini onaylayabiliyor ya da düzeltebiliyor. Onaylanan seviyeler mentee'nin profilinde ve şirketler için işaretleniyor.",
+      ],
+      de: [
+        "Mentor:innen können jetzt das selbst eingeschätzte Skill-Level ihrer Mentees bestätigen oder korrigieren. Bestätigte Level werden im Profil und für Unternehmen markiert.",
+      ],
+    },
+  },
+  {
+    version: '0.474.0-beta',
+    date: '2026-10-27',
+    time: '23:41',
+    commit: 'ae6e072',
+    highlights: {
+      en: [
+        "Security researchers now have a published address and policy: /.well-known/security.txt plus a vulnerability disclosure policy with scope, safe harbour and response targets.",
+        "Our security testing is public — including what has never been tested and the findings still open. No external penetration test has been commissioned yet, and the page says so.",
+      ],
+      tr: [
+        "Güvenlik araştırmacıları için artık yayımlanmış bir adres ve politika var: /.well-known/security.txt ve kapsamı, güvenli limanı ve yanıt sürelerini yazan bir zafiyet bildirim politikası.",
+        "Güvenlik testlerimiz herkese açık — hiç test edilmemiş alanlar ve hâlâ açık olan bulgular dahil. Henüz dış bir sızma testi yapılmadı ve sayfa bunu açıkça söylüyor.",
+      ],
+      de: [
+        "Sicherheitsforschende haben jetzt eine veröffentlichte Adresse und Richtlinie: /.well-known/security.txt sowie eine Richtlinie zur Offenlegung von Schwachstellen mit Geltungsbereich, Safe Harbour und Reaktionszeiten.",
+        "Unsere Sicherheitstests sind öffentlich — einschließlich der nie geprüften Bereiche und der noch offenen Feststellungen. Ein externer Penetrationstest wurde bisher nicht beauftragt, und die Seite sagt das.",
+      ],
+    },
+  },
+  {
+    version: '0.472.0-beta',
+    date: '2026-10-27',
+    time: '23:39',
+    commit: '0d0a62f',
+    highlights: {
+      en: [
+        "A new Usage tab under Billing shows everything your plan measures — active pairs, admin seats, companies, programmes, AI calls, broadcast recipients and video — against its limit, with the last four months.",
+      ],
+      tr: [
+        "Faturalandırma altındaki yeni Kullanım sekmesi, planınızın ölçtüğü her şeyi — aktif çiftler, admin koltukları, şirketler, programlar, AI çağrıları, toplu gönderim alıcıları ve video — limitiyle ve son dört ayla birlikte gösterir.",
+      ],
+      de: [
+        "Der neue Tab „Verbrauch“ unter Abrechnung zeigt alles, was Ihr Plan misst — aktive Paare, Admin-Plätze, Unternehmen, Programme, KI-Aufrufe, Empfänger von Rundsendungen und Video — mit Limit und den letzten vier Monaten.",
+      ],
+    },
+  },
+  {
+    version: '0.470.0-beta',
+    date: '2026-10-27',
+    time: '23:35',
+    commit: '968721f',
+    highlights: {
+      en: [
+        "Before you are signed out for inactivity, the app now warns you and lets you stay signed in with one click.",
+      ],
+      tr: [
+        "Hareketsizlik nedeniyle oturumunuz kapanmadan önce uygulama artık sizi uyarıyor ve tek tıkla oturumu açık tutmanıza izin veriyor.",
+      ],
+      de: [
+        "Bevor Sie wegen Inaktivität abgemeldet werden, warnt die App Sie jetzt und Sie bleiben mit einem Klick angemeldet.",
+      ],
+    },
+  },
+  {
+    version: '0.469.0-beta',
+    date: '2026-10-27',
+    time: '23:34',
+    commit: 'c57de3a',
+    highlights: {
+      en: [
+        "The software bill of materials for every release is now published at /sbom.cdx.json, alongside a third-party licence inventory and a written vulnerability remediation policy — no account needed to read any of them.",
+      ],
+      tr: [
+        "Her sürümün yazılım bileşen listesi (SBOM) artık /sbom.cdx.json adresinde yayınlanıyor; yanında üçüncü taraf lisans envanteri ve yazılı zafiyet giderme politikası da var — hiçbiri için hesap gerekmiyor.",
+      ],
+      de: [
+        "Die Software-Stückliste (SBOM) jeder Version wird jetzt unter /sbom.cdx.json veröffentlicht — zusammen mit einem Verzeichnis der Drittanbieter-Lizenzen und einer schriftlichen Richtlinie zur Behebung von Sicherheitslücken, alle ohne Konto einsehbar.",
+      ],
+    },
+  },
+  {
+    version: '0.468.0-beta',
+    date: '2026-10-27',
+    time: '23:34',
+    commit: '415c340',
+    highlights: {
+      en: [
+        "Webhooks now fire when a meeting is moved to another time or called off.",
+      ],
+      tr: [
+        "Webhook'lar artık bir toplantı başka bir saate taşındığında veya iptal edildiğinde tetikleniyor.",
+      ],
+      de: [
+        "Webhooks werden jetzt ausgelöst, wenn ein Termin verschoben oder abgesagt wird.",
+      ],
+    },
+  },
+  {
+    version: '0.467.0-beta',
+    date: '2026-10-27',
+    time: '23:31',
+    commit: 'b4cee97',
+    highlights: {
+      en: [
+        "Setting a stage service level now applies right away to candidates who are already waiting in that stage — no reminder burst, and they show up in the aging report immediately.",
+      ],
+      tr: [
+        "Bir aşama süre hedefi kaydedildiğinde artık o aşamada zaten bekleyen adaylara hemen uygulanıyor — toplu hatırlatma olmadan, bekleme raporunda anında görünüyorlar.",
+      ],
+      de: [
+        "Ein gespeichertes Phasen-Servicelevel gilt jetzt sofort auch für Kandidaten, die bereits in der Phase warten — ohne Erinnerungswelle, und sie erscheinen gleich im Wartezeit-Bericht.",
+      ],
+    },
+  },
+  {
+    version: '0.466.0-beta',
+    date: '2026-10-27',
+    time: '23:31',
+    commit: '31f22fd',
+    highlights: {
+      en: [
+        "Webhooks now fire when an interview is scheduled or cancelled, when a panel is closed early and when a panel's decision is recorded.",
+      ],
+      tr: [
+        "Webhook'lar artık bir mülakat planlandığında veya iptal edildiğinde, bir panel erken kapatıldığında ve panel kararı kaydedildiğinde tetikleniyor.",
+      ],
+      de: [
+        "Webhooks werden jetzt ausgelöst, wenn ein Interview geplant oder abgesagt, ein Panel vorzeitig geschlossen oder eine Panel-Entscheidung erfasst wird.",
+      ],
+    },
+  },
+  {
+    version: '0.465.0-beta',
+    date: '2026-10-27',
+    time: '23:25',
+    commit: '863f313',
+    highlights: {
+      en: [
+        "New operations console for the platform operator: every scheduled job with its last run, next run and an alarm when it fell behind or failed, failure counts for the last day, and an integration health summary — with a \"Run now\" button.",
+      ],
+      tr: [
+        "Platform operatörü için yeni operasyon konsolu: her zamanlanmış işin son ve sonraki çalışması, geride kaldığında veya başarısız olduğunda alarm, son bir günün hata sayıları ve entegrasyon sağlığı özeti — \"Şimdi çalıştır\" düğmesiyle.",
+      ],
+      de: [
+        "Neue Betriebskonsole für den Plattformbetreiber: jeder geplante Job mit letztem und nächstem Lauf, ein Alarm bei Rückstand oder Fehler, die Fehlerzahlen des letzten Tages und eine Übersicht zur Integrationsgesundheit — mit „Jetzt ausführen“-Schaltfläche.",
+      ],
+    },
+  },
+  {
+    version: '0.464.0-beta',
+    date: '2026-10-27',
+    time: '23:25',
+    commit: '76cb73e',
+    highlights: {
+      en: [
+        "Your pipeline board now groups stages into collapsible phases, and a stage over its work-in-progress limit is highlighted — just like the admin board.",
+      ],
+      tr: [
+        "Pipeline panon artık aşamaları daraltılabilir fazlar hâlinde grupluyor ve iş limitini aşan bir aşama vurgulanıyor — tıpkı admin panosundaki gibi.",
+      ],
+      de: [
+        "Dein Pipeline-Board fasst die Phasen jetzt in einklappbare Abschnitte zusammen, und eine Phase über ihrem Arbeitslimit wird hervorgehoben — genau wie im Admin-Board.",
+      ],
+    },
+  },
+  {
+    version: '0.463.0-beta',
+    date: '2026-10-27',
+    time: '23:24',
+    commit: '5992454',
+    highlights: {
+      en: [
+        "Admins can import every mentor's capacity, self-match limit and booking limits from a spreadsheet — with a preview of each row before anything is saved.",
+      ],
+      tr: [
+        "Yöneticiler artık tüm mentorların kapasitesini, kendi seçim limitini ve görüşme limitlerini bir tablodan içe aktarabilir — kaydedilmeden önce her satırın önizlemesiyle.",
+      ],
+      de: [
+        "Admins können Kapazität, Selbstwahl-Limit und Termin-Limits aller Mentorinnen und Mentoren aus einer Tabelle importieren – mit einer Vorschau jeder Zeile, bevor etwas gespeichert wird.",
+      ],
+    },
+  },
+  {
+    version: '0.462.0-beta',
+    date: '2026-10-27',
+    time: '23:23',
+    commit: '6a4c3f9',
+    highlights: {
+      en: [
+        "The candidate page now has a Hiring card: which companies want this person, for which role, and where each application and interview request stands.",
+      ],
+      tr: [
+        "Aday sayfasında artık bir İşe alım kartı var: hangi şirket bu kişiyi hangi pozisyon için istiyor, her başvuru ve mülakat talebi hangi aşamada.",
+      ],
+      de: [
+        "Die Kandidatenseite hat jetzt eine Recruiting-Karte: welche Unternehmen diese Person für welche Stelle wollen und wo jede Bewerbung und Interviewanfrage steht.",
+      ],
+    },
+  },
+  {
+    version: '0.461.1-beta',
+    date: '2026-10-27',
+    time: '23:23',
+    commit: '1867028',
+    highlights: {
+      en: [
+        "On a phone, the meeting list's buttons no longer run off the screen, and the last notification is no longer hidden behind the feedback button.",
+      ],
+      tr: [
+        "Telefonda toplantı listesindeki düğmeler artık ekrandan taşmıyor ve son bildirim geri bildirim düğmesinin arkasında kalmıyor.",
+      ],
+      de: [
+        "Auf dem Smartphone laufen die Schaltflächen der Terminliste nicht mehr aus dem Bildschirm, und die letzte Benachrichtigung liegt nicht mehr unter der Feedback-Schaltfläche.",
+      ],
+    },
+  },
+  {
+    version: '0.461.0-beta',
+    date: '2026-10-27',
+    time: '23:22',
+    commit: 'cc13622',
+    highlights: {
+      en: [
+        "Use your own words: rename mentors, mentees, programmes, cohorts and mentorships per language in Settings — menus, screens and e-mails follow.",
+      ],
+      tr: [
+        "Kendi kelimelerinizi kullanın: Ayarlar'da mentor, mentee, program, kohort ve mentorluk adlarını her dil için değiştirin — menüler, ekranlar ve e-postalar da değişir.",
+      ],
+      de: [
+        "Eigene Begriffe: Benennen Sie Mentoren, Mentees, Programme, Kohorten und Mentorings in den Einstellungen je Sprache um — Menüs, Seiten und E-Mails übernehmen es.",
+      ],
+    },
+  },
+  {
+    version: '0.460.0-beta',
+    date: '2026-10-27',
+    time: '23:15',
+    commit: '8e192cb',
+    highlights: {
+      en: [
+        "Download the calendar range on screen as a .ics file for Google Calendar or Outlook, or print it as a clean sheet.",
+      ],
+      tr: [
+        "Takvimde ekrandaki aralığı Google Takvim veya Outlook için .ics dosyası olarak indirin ya da sade bir sayfa olarak yazdırın.",
+      ],
+      de: [
+        "Laden Sie den angezeigten Kalenderzeitraum als .ics-Datei für Google Kalender oder Outlook herunter oder drucken Sie ihn als aufgeräumtes Blatt.",
+      ],
+    },
+  },
+  {
+    version: '0.459.0-beta',
+    date: '2026-10-27',
+    time: '23:14',
+    commit: '46371e3',
+    highlights: {
+      en: [
+        "Mentors can now cap how many mentees may pick them themselves, separately from their total capacity — the programme can still assign them up to that capacity.",
+      ],
+      tr: [
+        "Mentorlar artık toplam kapasitelerinden ayrı olarak kendilerini kaç menteenin kendisinin seçebileceğini sınırlayabilir — program onları yine kapasiteye kadar atayabilir.",
+      ],
+      de: [
+        "Mentorinnen und Mentoren können jetzt begrenzen, wie viele Mentees sie selbst wählen dürfen – getrennt von ihrer Gesamtkapazität; das Programm kann sie weiterhin bis zur Kapazität zuweisen.",
+      ],
+    },
+  },
+  {
+    version: '0.458.0-beta',
+    date: '2026-10-27',
+    time: '23:13',
+    commit: 'ccb5a47',
+    highlights: {
+      en: [
+        "Stage service levels can now differ per cohort and per mentor: pick a cohort or mentor in the settings card to override the organisation's number and see which value applies.",
+      ],
+      tr: [
+        "Aşama süre hedefleri artık dönem ve mentör bazında farklılaşabiliyor: ayarlar kartında bir dönem ya da mentör seçerek kurumun sayısını geçersiz kıl ve hangi değerin geçerli olduğunu gör.",
+      ],
+      de: [
+        "Phasen-Servicelevels können jetzt je Kohorte und je Mentor:in abweichen: Wählen Sie in der Einstellungskarte eine Kohorte oder Mentor:in, um die Zahl der Organisation zu überschreiben, und sehen Sie, welcher Wert gilt.",
+      ],
+    },
+  },
+  {
+    version: '0.456.0-beta',
+    date: '2026-10-27',
+    time: '23:07',
+    commit: 'da206c4',
+    highlights: {
+      en: [
+        "Changes to your organization's SSO, branding, webhooks and API keys are now recorded in the audit trail with the previous and the new value — certificates and secrets only ever as \"changed\".",
+      ],
+      tr: [
+        "Kurumunuzun SSO, marka, webhook ve API anahtarı ayarlarındaki değişiklikler artık denetim kaydına eski ve yeni değeriyle yazılıyor — sertifika ve sırlar yalnızca \"değişti\" olarak.",
+      ],
+      de: [
+        "Änderungen an SSO, Branding, Webhooks und API-Schlüsseln Ihrer Organisation werden jetzt mit altem und neuem Wert im Audit-Protokoll festgehalten — Zertifikate und Geheimnisse nur als „geändert“.",
+      ],
+    },
+  },
+  {
+    version: '0.455.0-beta',
+    date: '2026-10-27',
+    time: '23:03',
+    commit: 'e7f70c2',
+    highlights: {
+      en: [
+        "Companies get a calendar: a company login now sees its own scheduled interviews, and nothing else, under Calendar.",
+      ],
+      tr: [
+        "Şirketlere takvim: şirket hesabı artık Takvim altında kendi planlanmış mülakatlarını — yalnızca onları — görüyor.",
+      ],
+      de: [
+        "Kalender für Firmen: Ein Firmenkonto sieht unter „Kalender“ jetzt seine eigenen geplanten Vorstellungsgespräche – und nur diese.",
+      ],
+    },
+  },
+  {
+    version: '0.454.0-beta',
+    date: '2026-10-27',
+    time: '23:02',
+    commit: 'cffe9a7',
+    highlights: {
+      en: [
+        "Open a requisition to see which candidates fit it and why, and add them to the shortlist yourself.",
+      ],
+      tr: [
+        "Bir iş talebini açın: hangi adayların uyduğunu ve nedenini görün, onları kısa listeye kendiniz ekleyin.",
+      ],
+      de: [
+        "Öffnen Sie eine Stellenanforderung, um zu sehen, welche Kandidat:innen passen und warum, und setzen Sie sie selbst auf die Shortlist.",
+      ],
+    },
+  },
+  {
+    version: '0.453.1-beta',
+    date: '2026-10-27',
+    time: '23:01',
+    commit: 'd52087c',
+    highlights: {
+      en: [
+        "Deleting or anonymising an account now also removes survey answers, application notes, meeting feedback, a mentor application and a connected Google Calendar.",
+      ],
+      tr: [
+        "Bir hesabı silmek veya anonimleştirmek artık anket cevaplarını, başvuru notlarını, toplantı geri bildirimlerini, mentör başvurusunu ve bağlı Google Takvim'i de kaldırıyor.",
+      ],
+      de: [
+        "Das Löschen oder Anonymisieren eines Kontos entfernt jetzt auch Umfrageantworten, Bewerbungsnotizen, Meeting-Feedback, eine Mentoren-Bewerbung und einen verbundenen Google-Kalender.",
+      ],
+    },
+  },
+  {
+    version: '0.453.0-beta',
+    date: '2026-10-27',
+    time: '23:00',
+    commit: 'b6740c6',
+    highlights: {
+      en: [
+        "You can now turn off the single-key \"?\" shortcut from the keyboard shortcut list — handy with speech input.",
+      ],
+      tr: [
+        "Tek tuşlu \"?\" kısayolunu artık klavye kısayolları listesinden kapatabilirsiniz — sesle yazarken işe yarar.",
+      ],
+      de: [
+        "Das Einzeltasten-Kürzel „?“ lässt sich jetzt in der Liste der Tastenkürzel ausschalten — praktisch bei Spracheingabe.",
+      ],
+    },
+  },
+  {
+    version: '0.452.0-beta',
+    date: '2026-10-27',
+    time: '22:58',
+    commit: 'b56ac3d',
+    highlights: {
+      en: [
+        "Stage service levels now also apply to candidates who were already waiting in a stage when the rule was set, so the aging report shows them right away — without a burst of reminder emails.",
+      ],
+      tr: [
+        "Aşama süre hedefleri artık kural tanımlandığında zaten o aşamada bekleyen adaylara da uygulanıyor; bekleme raporu onları hemen gösteriyor — toplu hatırlatma e-postası olmadan.",
+      ],
+      de: [
+        "Stufen-Servicelevels gelten jetzt auch für Kandidaten, die beim Festlegen der Regel bereits in der Stufe warteten — der Wartezeit-Bericht zeigt sie sofort, ohne eine Welle von Erinnerungs-E-Mails.",
+      ],
+    },
+  },
+  {
+    version: '0.451.0-beta',
+    date: '2026-10-27',
+    time: '22:57',
+    commit: '310b128',
+    highlights: {
+      en: [
+        "Export the audit trail as CSV — every row matching your filters, not just the page on screen. Audit entries are now kept for two years by default.",
+      ],
+      tr: [
+        "Denetim kaydını CSV olarak dışa aktarın — yalnızca ekrandaki sayfayı değil, filtrenize uyan tüm satırları. Denetim kayıtları artık varsayılan olarak iki yıl saklanıyor.",
+      ],
+      de: [
+        "Exportieren Sie das Prüfprotokoll als CSV — alle Zeilen, die zu Ihren Filtern passen, nicht nur die angezeigte Seite. Prüfprotokolleinträge werden jetzt standardmäßig zwei Jahre aufbewahrt.",
+      ],
+    },
+  },
+  {
+    version: '0.450.0-beta',
+    date: '2026-10-27',
+    time: '22:57',
+    commit: '376e1b3',
+    highlights: {
+      en: [
+        "Upsell signal: an account on the free plan that goes past its monthly usage quota now shows up in its owner's attention queue.",
+      ],
+      tr: [
+        "Upsell sinyali: ücretsiz plandaki bir hesap aylık kullanım kotasını aştığında artık sorumlusunun dikkat listesinde görünüyor.",
+      ],
+      de: [
+        "Upsell-Signal: Ein Konto im kostenlosen Plan, das sein monatliches Nutzungskontingent überschreitet, erscheint jetzt in der Aufmerksamkeitsliste der zuständigen Person.",
+      ],
+    },
+  },
+  {
+    version: '0.448.0-beta',
+    date: '2026-10-23',
+    time: '00:03',
+    commit: 'eb29cd7',
+    highlights: {
+      en: [
+        "Before sending a bug report you can now watch the recording that will be attached — or start a recording yourself, show us what goes wrong for up to 20 minutes, and stop it when you are done.",
+      ],
+      tr: [
+        "Hata bildirimi göndermeden önce eklenecek kaydı izleyebilirsin — ya da kaydı kendin başlatıp sorunu 20 dakikaya kadar gösterebilir, bitince durdurabilirsin.",
+      ],
+      de: [
+        "Bevor du eine Fehlermeldung sendest, kannst du dir die angehängte Aufzeichnung ansehen — oder selbst eine Aufnahme starten, bis zu 20 Minuten zeigen, was schiefgeht, und sie dann beenden.",
+      ],
+    },
+  },
+  {
+    version: '0.447.1-beta',
+    date: '2026-10-22',
+    time: '23:43',
+    commit: '41c2eb8',
+    highlights: {
+      en: [
+        "The bug-report recording player now shows all its controls in dark mode, plus the recording's length and size and a download link.",
+      ],
+      tr: [
+        "Hata bildirimi kayıt oynatıcısı artık karanlık modda tüm kontrollerini gösteriyor; ayrıca kaydın süresi, boyutu ve bir indirme bağlantısı var.",
+      ],
+      de: [
+        "Der Player für Fehlermeldungs-Aufzeichnungen zeigt im Dunkelmodus jetzt alle Bedienelemente, dazu Länge und Größe der Aufzeichnung und einen Download-Link.",
+      ],
+    },
+  },
+  {
+    version: '0.447.0-beta',
+    date: '2026-10-27',
+    time: '22:38',
+    commit: '5bcb3dd',
+    highlights: {
+      en: [
+        "When you send a bug report and allow us to contact you, the support team can now let you know by e-mail once it is being worked on or fixed.",
+      ],
+      tr: [
+        "Bir hata bildirimi gönderip iletişime izin verdiğinde, destek ekibi artık üzerinde çalışılmaya başlandığında ya da düzeltildiğinde sana e-postayla haber verebiliyor.",
+      ],
+      de: [
+        "Wenn du eine Fehlermeldung sendest und eine Kontaktaufnahme erlaubst, kann dich das Support-Team jetzt per E-Mail informieren, sobald daran gearbeitet wird oder sie behoben ist.",
+      ],
+    },
+  },
+  {
+    version: '0.446.0-beta',
+    date: '2026-10-23',
+    time: '23:34',
+    commit: '2fd1880',
+    highlights: {
+      en: [
+        "Move your existing affiliate programme over: import partners, commissions and payouts from CSV files, checked first and reconciled to the cent per partner.",
+      ],
+      tr: [
+        "Mevcut affiliate programınızı taşıyın: partnerleri, komisyonları ve ödemeleri CSV dosyalarından içe aktarın — önce kontrol edilir, partner başına kuruşu kuruşuna mutabık tutulur.",
+      ],
+      de: [
+        "Übernehmen Sie Ihr bestehendes Partnerprogramm: Partner, Provisionen und Auszahlungen per CSV importieren – vorab geprüft und je Partner centgenau abgestimmt.",
+      ],
+    },
+  },
+  {
+    version: '0.445.0-beta',
+    date: '2026-10-23',
+    time: '22:35',
+    commit: 'e92aeb0',
+    highlights: {
+      en: [
+        "Invite your affiliate partners to their own portal: they accept the contract, share their referral link and follow their customers, commissions and payouts.",
+      ],
+      tr: [
+        "Affiliate partnerlerinizi kendi portallarına davet edin: sözleşmeyi kabul eder, referans linklerini paylaşır, müşterilerini, komisyonlarını ve ödemelerini takip ederler.",
+      ],
+      de: [
+        "Laden Sie Ihre Affiliate-Partner in ihr eigenes Portal ein: Sie nehmen den Vertrag an, teilen ihren Empfehlungslink und verfolgen ihre Kunden, Provisionen und Auszahlungen.",
+      ],
+    },
+  },
+  {
+    version: '0.444.0-beta',
+    date: '2026-10-23',
+    time: '01:23',
+    commit: '1619314',
+    highlights: {
+      en: [
+        "Leads from Klaviyo now land in an unassigned pool — each rep takes the ones they want with “Take it”.",
+        "Lead pages show the person's real e-mail address, and your company's own phone number is no longer stored as a lead's phone.",
+        "New on the Klaviyo card: delete what Klaviyo brought in and import it again cleanly — anything your team already worked on is kept.",
+      ],
+      tr: [
+        "Klaviyo'dan gelen lead'ler artık atanmamış bir havuza düşüyor — her temsilci istediğini “Üzerime al” ile alıyor.",
+        "Lead sayfaları kişinin gerçek e-posta adresini gösteriyor; şirketinizin kendi telefon numarası artık lead'in telefonu olarak kaydedilmiyor.",
+        "Klaviyo kartında yeni: Klaviyo'dan gelenleri silip temiz biçimde yeniden aktarın — ekibinizin üzerinde çalıştığı kayıtlar korunur.",
+      ],
+      de: [
+        "Leads aus Klaviyo landen jetzt in einem Pool ohne Zuständigen — jede:r im Vertrieb übernimmt die gewünschten mit „Übernehmen“.",
+        "Lead-Seiten zeigen die echte E-Mail-Adresse der Person, und die eigene Telefonnummer Ihres Unternehmens wird nicht mehr als Telefon eines Leads gespeichert.",
+        "Neu auf der Klaviyo-Karte: aus Klaviyo Übernommenes löschen und sauber neu einlesen — woran Ihr Team schon gearbeitet hat, bleibt erhalten.",
+      ],
+    },
+  },
+  {
+    version: '0.443.0-beta',
+    date: '2026-10-22',
+    time: '23:28',
+    commit: '9b465fd',
+    highlights: {
+      en: [
+        "Safety lock for the marketing product's test phase: leads and customers receive no e-mail at all — only your own team does.",
+      ],
+      tr: [
+        "Marketing ürününün test dönemi için güvenlik kilidi: lead'lere ve müşterilere hiçbir e-posta gitmez — yalnızca kendi ekibiniz alır.",
+      ],
+      de: [
+        "Sicherheitssperre für die Testphase des Marketing-Produkts: Leads und Kunden erhalten keinerlei E-Mail — nur Ihr eigenes Team.",
+      ],
+    },
+  },
+  {
+    version: '0.442.0-beta',
+    date: '2026-10-22',
+    time: '23:18',
+    commit: 'a77fbfd',
+    highlights: {
+      en: [
+        "Support messages now arrive as push notifications: admins are notified on their phone or browser when someone writes to support, and you are notified when support replies.",
+      ],
+      tr: [
+        "Destek mesajları artık anlık bildirim olarak geliyor: biri desteğe yazdığında admin'ler telefonda ya da tarayıcıda haberdar oluyor, destek yanıt verdiğinde de sen haberdar oluyorsun.",
+      ],
+      de: [
+        "Support-Nachrichten kommen jetzt als Push-Benachrichtigung: Admins werden auf dem Handy oder im Browser benachrichtigt, wenn jemand dem Support schreibt, und du, wenn der Support antwortet.",
+      ],
+    },
+  },
+  {
+    version: '0.441.0-beta',
+    date: '2026-10-22',
+    time: '23:02',
+    commit: 'd8067ef',
+    highlights: {
+      en: [
+        "Bug reports can now include a short replay of the last moments on screen, so the support team sees exactly what happened. Anything you typed and private fields are never recorded, and nothing is sent until you press Send.",
+      ],
+      tr: [
+        "Hata bildirimlerine artık ekrandaki son anların kısa bir kaydı eklenebiliyor; destek ekibi tam olarak ne olduğunu görüyor. Yazdıkların ve gizli alanlar asla kaydedilmez, Gönder’e basana kadar hiçbir şey gönderilmez.",
+      ],
+      de: [
+        "Fehlermeldungen können jetzt eine kurze Wiedergabe der letzten Momente auf dem Bildschirm enthalten, damit das Support-Team genau sieht, was passiert ist. Eingaben und private Felder werden nie aufgezeichnet, und nichts wird gesendet, bevor du auf Senden drückst.",
+      ],
+    },
+  },
+  {
+    version: '0.440.0-beta',
+    date: '2026-10-22',
+    time: '22:46',
+    commit: '7b75f8b',
+    highlights: {
+      en: [
+        "Klaviyo now brings in more than profiles: lists and segments with their members, e-mail engagement and order events, campaigns with their results, and flows — each with its own sync status on the integrations page.",
+      ],
+      tr: [
+        "Klaviyo artık profillerden fazlasını getiriyor: üyeleriyle birlikte listeler ve segmentler, e-posta etkileşimi ve sipariş olayları, sonuçlarıyla kampanyalar ve akışlar — her biri entegrasyonlar sayfasında kendi eşitleme durumuyla.",
+      ],
+      de: [
+        "Klaviyo bringt jetzt mehr als Profile: Listen und Segmente mit ihren Mitgliedern, E-Mail-Interaktionen und Bestell-Events, Kampagnen mit ihren Ergebnissen und Flows — jeweils mit eigenem Synchronisierungsstatus auf der Integrationsseite.",
+      ],
+    },
+  },
+  {
+    version: '0.439.3-beta',
+    date: '2026-10-22',
+    time: '22:20',
+    commit: '95833ba',
+    highlights: {
+      en: [
+        "The sales CRM no longer shows the Skills screen — it only fed mentor and candidate matching.",
+      ],
+      tr: [
+        "Satış CRM'inde Beceriler ekranı artık görünmüyor — yalnızca mentor ve aday eşleştirmesini besliyordu.",
+      ],
+      de: [
+        "Im Vertriebs-CRM erscheint der Bildschirm „Fähigkeiten“ nicht mehr — er diente nur dem Mentoren- und Kandidaten-Matching.",
+      ],
+    },
+  },
+  {
+    version: '0.439.0-beta',
+    date: '2026-10-22',
+    time: '21:44',
+    commit: '6c0e973',
+    highlights: {
+      en: [
+        "Found a problem? The new feedback button in the bottom-right corner sends the support team a screenshot and the technical details of the page in one go — passwords and other sensitive values are removed first.",
+      ],
+      tr: [
+        "Bir sorun mu buldun? Sağ alttaki yeni geri bildirim butonu, destek ekibine ekran görüntüsünü ve sayfanın teknik ayrıntılarını tek seferde gönderir — parolalar ve diğer hassas değerler önce çıkarılır.",
+      ],
+      de: [
+        "Ein Problem gefunden? Der neue Feedback-Button unten rechts schickt dem Support-Team einen Screenshot und die technischen Details der Seite in einem Schritt — Passwörter und andere sensible Werte werden vorher entfernt.",
+      ],
+    },
+  },
+  {
+    version: '0.438.4-beta',
+    date: '2026-10-22',
+    time: '20:23',
+    commit: '1cbf785',
+    highlights: {
+      en: [
+        "Erasing a lead now also removes that person's name, e-mail address and phone number from the account they were the contact of.",
+      ],
+      tr: [
+        "Bir lead silindiğinde, muhatabı olduğu hesaptaki adı, e-posta adresi ve telefonu da artık siliniyor.",
+      ],
+      de: [
+        "Beim Löschen eines Leads werden jetzt auch Name, E-Mail-Adresse und Telefonnummer der Person beim Account entfernt, dessen Kontakt sie war.",
+      ],
+    },
+  },
+  {
+    version: '0.437.0-beta',
+    date: '2026-10-22',
+    time: '16:44',
+    commit: '1a5e865',
+    highlights: {
+      en: [
+        "A paused pairing gets no reminders and does not count as active until it is resumed; its stage deadline picks up where it left off.",
+      ],
+      tr: [
+        "Duraklatılmış bir eşleşmeye hatırlatma gitmez ve devam ettirilene kadar aktif sayılmaz; aşama süresi kaldığı yerden devam eder.",
+      ],
+      de: [
+        "Eine pausierte Zusammenarbeit bekommt keine Erinnerungen und zählt bis zur Fortsetzung nicht als aktiv; ihre Phasenfrist läuft danach dort weiter, wo sie stand.",
+      ],
+    },
+  },
+  {
+    version: '0.436.0-beta',
+    date: '2026-10-22',
+    time: '16:23',
+    commit: 'ec105d5',
+    highlights: {
+      en: [
+        "Pairings can now be paused and resumed, and ending one asks why — an early end is no longer recorded as a completion.",
+      ],
+      tr: [
+        "Eşleşmeler artık duraklatılıp devam ettirilebiliyor; bir eşleşmeyi sonlandırırken sebebi soruluyor — erken bitiş artık tamamlanma olarak kaydedilmiyor.",
+      ],
+      de: [
+        "Zusammenarbeiten lassen sich jetzt pausieren und fortsetzen, und beim Beenden wird nach dem Grund gefragt — ein vorzeitiges Ende zählt nicht mehr als Abschluss.",
+      ],
+    },
+  },
+  {
+    version: '0.435.0-beta',
+    date: '2026-10-22',
+    time: '16:15',
+    commit: '543f0cf',
+    highlights: {
+      en: [
+        "You can now add and remove pipeline stages in the stage editor. A stage that still has candidates on it cannot be removed.",
+      ],
+      tr: [
+        "Aşama düzenleyicisinde artık pipeline aşaması ekleyip kaldırabilirsiniz. Üzerinde hâlâ aday bulunan bir aşama kaldırılamaz.",
+      ],
+      de: [
+        "Im Phasen-Editor lassen sich jetzt Pipeline-Phasen hinzufügen und entfernen. Eine Phase, in der noch Kandidat:innen stehen, kann nicht entfernt werden.",
+      ],
+    },
+  },
+  {
+    version: '0.434.0-beta',
+    date: '2026-10-22',
+    time: '16:12',
+    commit: '85f6f3a',
+    highlights: {
+      en: [
+        "Admins can now connect an HR export as a scheduled roster feed: map its columns from a sample file, preview a run, apply it, and see every row it changed.",
+      ],
+      tr: [
+        "Yöneticiler artık bir İK dışa aktarımını zamanlanmış kişi listesi beslemesi olarak bağlayabilir: sütunları örnek bir dosyadan eşleyin, bir çalıştırmayı önizleyin, uygulayın ve değiştirdiği her satırı görün.",
+      ],
+      de: [
+        "Admins können jetzt einen HR-Export als geplanten Personen-Feed anbinden: Spalten anhand einer Beispieldatei zuordnen, einen Lauf als Vorschau prüfen, anwenden und jede geänderte Zeile einsehen.",
+      ],
+    },
+  },
+  {
+    version: '0.433.1-beta',
+    date: '2026-10-22',
+    time: '16:06',
+    commit: '3191662',
+    highlights: {
+      en: [
+        "Settings no longer run off the edge of a phone screen.",
+      ],
+      tr: [
+        "Ayarlar artık telefon ekranından taşmıyor.",
+      ],
+      de: [
+        "Die Einstellungen laufen auf dem Handy nicht mehr über den Bildschirmrand.",
+      ],
+    },
+  },
+  {
+    version: '0.432.0-beta',
+    date: '2026-10-22',
+    time: '15:13',
+    commit: '82166dc',
+    highlights: {
+      en: [
+        "A company that shortlisted a candidate can now ask to send them a message — the candidate's programme team reviews it first, and the candidate can close the conversation at any time.",
+      ],
+      tr: [
+        "Bir adayı kısa listeye alan firma artık ona mesaj göndermek için talepte bulunabilir — önce adayın program ekibi inceler ve aday sohbeti istediği an kapatabilir.",
+      ],
+      de: [
+        "Ein Unternehmen, das eine Person in die engere Wahl genommen hat, kann jetzt anfragen, ihr eine Nachricht zu senden — zuerst prüft das Programmteam, und die Person kann das Gespräch jederzeit schließen.",
+      ],
+    },
+  },
+  {
+    version: '0.431.0-beta',
+    date: '2026-10-22',
+    time: '14:47',
+    commit: '98af2d9',
+    highlights: {
+      en: [
+        "Run your affiliate programme in the CRM: set the commission plan and partner contract, add partners, record customer payments, approve commissions and record payouts — every change is logged.",
+      ],
+      tr: [
+        "Affiliate programınızı CRM'de yönetin: komisyon planını ve partner sözleşmesini belirleyin, partner ekleyin, müşteri ödemelerini kaydedin, komisyonları onaylayın ve payout'ları kaydedin — her değişiklik kayıt altında.",
+      ],
+      de: [
+        "Führen Sie Ihr Partnerprogramm im CRM: Provisionsplan und Partnervertrag festlegen, Partner anlegen, Kundenzahlungen erfassen, Provisionen freigeben und Auszahlungen erfassen — jede Änderung wird protokolliert.",
+      ],
+    },
+  },
+  {
+    version: '0.430.0-beta',
+    date: '2026-10-22',
+    time: '11:06',
+    commit: '9ff0a22',
+    highlights: {
+      en: [
+        "Affiliate partners get their own sign-in area and are covered by your two-factor policy.",
+        "Partners must accept the current programme contract before they can use their area, and they are notified whenever their payout bank details change.",
+      ],
+      tr: [
+        "Affiliate partnerleri kendi giriş alanına sahip ve iki adımlı doğrulama politikanız onları da kapsıyor.",
+        "Partnerler, alanlarını kullanmadan önce güncel program sözleşmesini kabul ediyor ve ödeme banka bilgileri her değiştiğinde bilgilendiriliyor.",
+      ],
+      de: [
+        "Affiliate-Partner erhalten einen eigenen Anmeldebereich und sind von Ihrer Zwei-Faktor-Richtlinie erfasst.",
+        "Partner müssen den aktuellen Programmvertrag akzeptieren, bevor sie ihren Bereich nutzen, und werden bei jeder Änderung ihrer Bankverbindung für Auszahlungen benachrichtigt.",
+      ],
+    },
+  },
+  {
     version: '0.429.0-beta',
     date: '2026-10-21',
     time: '17:47',
