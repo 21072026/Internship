@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Analytics overview for a program admin (#1577):** `GET /api/admin/analytics` opens to a PROGRAM_ADMIN with `listing: true`; `loadAdminAnalytics()` takes the grants as `scope` and narrows like an always-on filter — relations AND `programRelationWhere`, interactions/meetings through them, projects and mentors only with a covered relation, the signup funnel over `programPeopleWhere`, the programme picker only the granted cohorts; the `?program=` filter ANDs on top. Every other reader's numbers are unchanged. The analytics sub-routes and the AI narrative still answer 403 to the tier. Pinned in `e2e/program-scoped-admin.spec.ts` (@smoke).",
+  "notes": {
+    "en": ["Program admins can now open the analytics overview — every figure counts their own programmes only."],
+    "tr": ["Program yöneticileri artık analitik özetini açabiliyor — her rakam yalnızca kendi programlarını sayıyor."],
+    "de": ["Programm-Admins können jetzt die Analytics-Übersicht öffnen – jede Zahl zählt nur ihre eigenen Programme."]
+  }
+}

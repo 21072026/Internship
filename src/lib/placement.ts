@@ -53,3 +53,19 @@ export function countsAsPlacement(
   const finished = finishedStageKeys instanceof Set ? finishedStageKeys : new Set(finishedStageKeys as readonly string[]);
   return isPlacementRelation(relation.kind) && finished.has(relation.pipelineStatus) && isOurHire(relation.employmentAttribution);
 }
+
+/**
+ * When a relation's hiring journey began (#1505): the moment it entered the
+ * funnel, not the day the pairing was made. The two differ for a coaching pair
+ * that later turned into a job search — measured from the pairing, its "time to
+ * hire" counts months nobody was looking for a job. A NULL `funnelEnteredAt`
+ * (every row from before #1503, and every pair created as PLACEMENT since,
+ * which stamps it to the start) falls back to `startDate`: those rows were in
+ * the funnel from the start, so their numbers do not move.
+ *
+ * Every journey builder (funnel, forecast, deal value) and the mentor's
+ * average days to hired read the start through this, never `startDate` alone.
+ */
+export function funnelStartedAt(relation: { startDate: Date; funnelEnteredAt?: Date | null }): Date {
+  return relation.funnelEnteredAt ?? relation.startDate;
+}

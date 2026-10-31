@@ -12,6 +12,10 @@ import { decideMeetingRequest } from '@/lib/meetingRequestDecision';
 import { recordMeetingRsvp } from '@/lib/meetingRsvp';
 import { decideInterviewRequest } from '@/lib/interviewRequestDecision';
 import { INTERVIEW_DECLINE_REASON_CODES, isInterviewDeclineReasonCode } from '@/lib/interviewDeclineReasons';
+import { submitSurveyResponse, SurveyAnswerInvalid, SurveyConflict, surveyAcceptsAnswers } from '@/lib/surveys';
+import { mintInvitationReminderToken, surveyInviteUrl } from '@/lib/surveyTokens';
+import { pickLocalized } from '@/lib/surveySchema';
+import { answerableInChat, choicesFor, decodeState, encodeState, type FlowState } from '@/lib/chat/surveyFlow';
 
 // The built-in chat actions (#1948). Each one is something the person could
 // do in the app, asking the same rule the app asks.
@@ -235,4 +239,103 @@ registerChatAction('interview_request.decline.reason', async ({ user, value }) =
   if (!id || !SAFE_ID.test(id) || !code || !isInterviewDeclineReasonCode(code)) return { text: t.unavailable };
   const res = await decideInterviewRequest(await sessionFor(user), id, { action: 'decline', declineReasonCode: code });
   return interviewOutcome(res, t.interviewDeclined, t);
+});
+
+// ── Check-ins in chat (#1953) ────────────────────────────────────────────────
+//
+// A survey campaign's invitation, answered one button at a time. The answers
+// so far ride in the next button's value (src/lib/chat/surveyFlow.ts), and
+// nothing is written until the last click hands the whole response to the
+// engine's own submitSurveyResponse() — the same call /s/[token] makes, with
+// the same validation, the same single-use claim on the invitation, and the
+// same anonymity rule: an ANONYMOUS survey stores neither the invitation nor
+// the respondent, so the answer cannot be joined back to the chat member.
+//
+// Only the invitation's own person may answer it here (`userId` must match the
+// verified clicker); anyone else gets the neutral "no longer available". A
+// survey with a question a button cannot answer sends the person to the page.
+
+const INVITATION_FOR_CHAT = {
+  id: true,
+  respondedAt: true,
+  expiresAt: true,
+  survey: {
+    select: {
+      id: true,
+      status: true,
+      opensAt: true,
+      closesAt: true,
+      questions: { orderBy: { sortOrder: 'asc' as const }, select: { key: true, type: true, required: true, labels: true, options: true } },
+    },
+  },
+};
+
+async function ownInvitation(user: ChatActor, invitationId: string) {
+  return prisma.surveyInvitation.findFirst({ where: { id: invitationId, userId: user.id }, select: INVITATION_FOR_CHAT });
+}
+
+type ChatInvitation = NonNullable<Awaited<ReturnType<typeof ownInvitation>>>;
+
+/** The reply for an invitation that can no longer be answered here, or null when it can. */
+async function surveyRefusal(user: ChatActor, inv: ChatInvitation) {
+  const t = getDictionary(user.locale).chatInteraction;
+  if (inv.respondedAt) return { text: t.surveyAnswered, replaceOriginal: true };
+  if (inv.expiresAt <= new Date() || !surveyAcceptsAnswers(inv.survey)) return { text: t.surveyClosed, replaceOriginal: true };
+  if (!answerableInChat(inv.survey.questions)) {
+    // A fresh link of the invitation's own, the way a reminder gets one.
+    const token = await mintInvitationReminderToken(inv.id);
+    return { text: `${t.surveyInApp}\n${surveyInviteUrl(token, await appOriginForOrg(user.orgId))}` };
+  }
+  return null;
+}
+
+function askQuestion(user: ChatActor, inv: ChatInvitation, state: FlowState) {
+  const t = getDictionary(user.locale).chatInteraction;
+  const questions = inv.survey.questions;
+  const q = questions[state.next];
+  const buttons = choicesFor(q, user.locale, { yes: t.surveyYes, no: t.surveyNo }).map((c) => ({
+    label: c.label,
+    actionId: 'survey.answer',
+    value: encodeState({ invitationId: inv.id, next: state.next + 1, answers: { ...state.answers, [q.key]: c.value } }),
+  }));
+  if (!q.required) buttons.push({ label: t.surveySkip, actionId: 'survey.answer', value: encodeState({ ...state, next: state.next + 1 }) });
+  return {
+    text: interpolate(t.surveyQuestion, { n: String(state.next + 1), total: String(questions.length), question: pickLocalized(q.labels, user.locale) }),
+    buttons,
+    replaceOriginal: true,
+  };
+}
+
+/** `survey.start` — the first question, or why there is none. Read-only, so a rerun is harmless. */
+registerChatAction('survey.start', async ({ user, value }) => {
+  const t = getDictionary(user.locale).chatInteraction;
+  if (!value || !SAFE_ID.test(value)) return { text: t.unavailable };
+  const inv = await ownInvitation(user, value);
+  if (!inv) return { text: t.unavailable };
+  return (await surveyRefusal(user, inv)) ?? askQuestion(user, inv, { invitationId: inv.id, next: 0, answers: {} });
+});
+
+/**
+ * `survey.answer` — the next question, or, after the last one, the whole
+ * response through submitSurveyResponse(). The engine claims the invitation
+ * (respondedAt) in the same transaction, so a second submit is "already
+ * answered" and a reminder that was due no longer goes out.
+ */
+registerChatAction('survey.answer', async ({ user, value }) => {
+  const t = getDictionary(user.locale).chatInteraction;
+  const state = decodeState(value);
+  if (!state) return { text: t.unavailable };
+  const inv = await ownInvitation(user, state.invitationId);
+  if (!inv) return { text: t.unavailable };
+  const refused = await surveyRefusal(user, inv);
+  if (refused) return refused;
+  if (state.next < inv.survey.questions.length) return askQuestion(user, inv, state);
+  try {
+    await submitSurveyResponse({ surveyId: inv.survey.id, invitationId: inv.id, respondentId: user.id, respondentRole: user.role, answers: state.answers });
+    return { text: t.surveyThanks, replaceOriginal: true };
+  } catch (error) {
+    if (error instanceof SurveyAnswerInvalid) return { text: t.surveyRestart };
+    if (error instanceof SurveyConflict) return { text: error.code === 'already_responded' ? t.surveyAnswered : t.surveyClosed, replaceOriginal: true };
+    throw error;
+  }
 });

@@ -81,6 +81,114 @@ jobs:
           echo "code=$code" >> "$GITHUB_OUTPUT"
           echo "$count path(s) examined; code=$code"
 
+  # ONE production build per run (#3509), shared with every job below.
+  #
+  # Each of the four test jobs used to run its own `next build` of the same
+  # commit with the same environment: four times the 2.5-8 min build, each
+  # needing a 7 GiB heap. This job builds once, in the environment the test
+  # jobs had (the same MySQL service and schema, the same env block, `npm ci`
+  # and therefore `prisma generate`), and hands `.next` - without the webpack
+  # cache, ~24 MB compressed - to the shards as an artifact named after the
+  # run's commit. Each consumer checks the sha stamped into the archive before
+  # it starts the server, so a test job can never run against another commit's
+  # build. The only env difference between the old builds was the isolation
+  # job's NEXTAUTH_URL (port 3010); its server still gets that value at RUNTIME
+  # from playwright.config.ts, which is where NextAuth reads it.
+  build:
+    name: Build app for E2E
+    needs: changes
+    # Same docs-only skip and fail-closed condition as the jobs that need it.
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: internship_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+    env:
+      DATABASE_URL: "mysql://root:root@127.0.0.1:3306/internship_test"
+      NODE_OPTIONS: --max-old-space-size=8192
+      NEXTAUTH_SECRET: "ci-test-secret-not-for-production"
+      NEXTAUTH_URL: "http://localhost:3000"
+      SEED_ADMIN_EMAIL: "admin@example.com"
+      SEED_ADMIN_PASSWORD: "ChangeMe123!"
+      ADMIN_EMAIL: "admin@example.com"
+      ADMIN_PASSWORD: "ChangeMe123!"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The builds this job replaces ran against a migrated, seeded database;
+      # keep that, so a page that reads the DB while prerendering sees the same.
+      - name: Apply DB schema
+        run: npx prisma db push
+
+      - name: Seed admin user
+        run: npx prisma db seed
+
+      # Next's webpack cache. Restored on every run, SAVED only by the push to
+      # main — so PR runs start from main's cache (a branch may read its base
+      # branch's caches) without each PR push adding a few hundred MB to the
+      # repo's 10 GB cache budget and evicting the npm/Playwright caches.
+      - name: Restore Next.js build cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+
+      - name: Build app
+        run: npm run build
+        # Keep the Next.js build worker above its default ~2 GiB heap limit.
+        # 4 GiB stopped being enough on 2026-10-30 (both smoke shards OOM'd in
+        # `next build`); a hosted runner has 16 GiB.
+        env:
+          NODE_OPTIONS: --max-old-space-size=7168
+
+      - name: Save Next.js build cache
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/cache/save@v6
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+
+      # A tarball, not the directory: upload-artifact drops hidden paths such
+      # as `.next` by default, and a tar keeps modes and layout exactly.
+      - name: Pack the build
+        run: |
+          set -euo pipefail
+          echo "$GITHUB_SHA" > .next/E2E_BUILD_SHA
+          tar -czf next-build.tgz --exclude=.next/cache .next
+          ls -lh next-build.tgz
+
+      - name: Upload the build
+        uses: actions/upload-artifact@v7
+        with:
+          name: next-build-${{ github.sha }}
+          path: next-build.tgz
+          retention-days: 1
+          if-no-files-found: error
+
   # The smoke set and the accessibility gate, run as PARALLEL jobs (#2811).
   #
   # Serially this job took ~19 min wall-clock: ~4 min installing CJK/Thai/X11
@@ -103,12 +211,14 @@ jobs:
   # matrix job is named `Playwright smoke (…)`, never `Playwright smoke`.
   e2e:
     name: Playwright smoke (${{ matrix.label }})
-    needs: changes
+    needs: [changes, build]
     # Runs unless the PR is docs-only. FAILS CLOSED: if `changes` errors, its
     # output is empty, which is not 'false', so the smoke runs instead of the
     # gate quietly passing. `!cancelled()` keeps a failed `changes` from
-    # skipping this job the way an implicit `success()` would.
-    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
+    # skipping this job the way an implicit `success()` would. A build that did
+    # not succeed skips it, and the aggregator below reads that skip (with
+    # code=true) as a failure.
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     strategy:
       # One red shard should not cancel the others: the report of every shard
@@ -164,31 +274,21 @@ jobs:
       - name: Seed admin user
         run: npx prisma db seed
 
-      # Next's webpack cache. Restored on every run, SAVED only by the push to
-      # main — so PR runs start from main's cache (a branch may read its base
-      # branch's caches) without each PR push adding a few hundred MB to the
-      # repo's 10 GB cache budget and evicting the npm/Playwright caches.
-      - name: Restore Next.js build cache
-        uses: actions/cache/restore@v6
+      # The build from the `build` job (#3509) — never a build of our own.
+      - name: Download the build
+        uses: actions/download-artifact@v8
         with:
-          path: .next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
-          restore-keys: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+          name: next-build-${{ github.sha }}
 
-      - name: Build app
-        run: npm run build
-        # Keep the Next.js build worker above its default ~2 GiB heap limit.
-        # 4 GiB stopped being enough on 2026-10-30 (both smoke shards OOM'd in
-        # `next build`); a hosted runner has 16 GiB, the browser runs later.
-        env:
-          NODE_OPTIONS: --max-old-space-size=7168
-
-      - name: Save Next.js build cache
-        if: ${{ github.event_name == 'push' && matrix.shard == '1/2' }}
-        uses: actions/cache/save@v6
-        with:
-          path: .next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+      - name: Unpack the build
+        run: |
+          set -euo pipefail
+          tar -xzf next-build.tgz
+          built="$(cat .next/E2E_BUILD_SHA)"
+          if [ "$built" != "$GITHUB_SHA" ]; then
+            echo "::error::.next was built from $built, this job tests $GITHUB_SHA"; exit 1
+          fi
+          echo "Using the build of $built"
 
       - name: Cache Playwright browsers
         uses: actions/cache@v6
@@ -259,8 +359,8 @@ jobs:
   # The scheduled e2e-full.yml `isolation` job still runs the same project 4×/day.
   isolation-gate:
     name: Playwright tenant isolation gate
-    needs: changes
-    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
+    needs: [changes, build]
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
 
     services:
@@ -308,18 +408,21 @@ jobs:
       - name: Seed admin user
         run: npx prisma db seed
 
-      # Read-only: main's push run saves it (the smoke job above), PRs reuse it.
-      - name: Restore Next.js build cache
-        uses: actions/cache/restore@v6
+      # The build from the `build` job (#3509) — never a build of our own.
+      - name: Download the build
+        uses: actions/download-artifact@v8
         with:
-          path: .next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
-          restore-keys: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
+          name: next-build-${{ github.sha }}
 
-      - name: Build app
-        run: npm run build
-        env:
-          NODE_OPTIONS: --max-old-space-size=7168
+      - name: Unpack the build
+        run: |
+          set -euo pipefail
+          tar -xzf next-build.tgz
+          built="$(cat .next/E2E_BUILD_SHA)"
+          if [ "$built" != "$GITHUB_SHA" ]; then
+            echo "::error::.next was built from $built, this job tests $GITHUB_SHA"; exit 1
+          fi
+          echo "Using the build of $built"
 
       - name: Cache Playwright browsers
         uses: actions/cache@v6
