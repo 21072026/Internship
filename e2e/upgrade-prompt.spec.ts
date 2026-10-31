@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle, gotoSettled } from './helpers/auth';
+import { pickPerson } from './helpers/personPicker';
 import { planLimits } from '../src/lib/orgPlans';
 
 // The upgrade prompt (#1745). A FREE tenant filled to its active-relation band:
@@ -70,11 +71,12 @@ test('a full FREE org: Turkish admin prompt, commerce-free /apply', async ({ pag
     await page.getByRole('button', { name: 'Mentorluk ata' }).first().click();
     const dialog = page.getByRole('dialog');
     await expect(dialog).toBeVisible();
-    // The pickers fill asynchronously; select by value once the option exists.
-    const selects = dialog.locator('select');
-    await expect(selects.nth(1).locator(`option[value="${overflow.id}"]`)).toHaveCount(1, { timeout: 20_000 });
-    await selects.nth(0).selectOption(fillerMentor.id);
-    await selects.nth(1).selectOption(overflow.id);
+    // The mentor picker fills asynchronously; select by value once the option
+    // exists. The mentee field is a server-side search (#1437).
+    const mentorSelect = dialog.locator('select').first();
+    await expect(mentorSelect.locator(`option[value="${fillerMentor.id}"]`)).toHaveCount(1, { timeout: 20_000 });
+    await mentorSelect.selectOption(fillerMentor.id);
+    await pickPerson(dialog, 'assign-mentee', overflow);
     await dialog.getByRole('button', { name: 'Ata', exact: true }).click();
 
     const prompt = dialog.getByTestId('upgrade-prompt');
