@@ -164,3 +164,19 @@ test('the public table follows the plan: sorted bands, then the open top band', 
   assert.equal(maxOneOffCommission(plan), 1_500);
   assert.deepEqual(commissionTableRows({ ...plan, tiers: [] }), [{ overMinor: null, upToMinor: null, commissionMinor: 1_500 }]);
 });
+
+test('a partner link sends the visitor to the sign-up page with that code only', async () => {
+  const { customerSignupRedirect, REFERRAL_CODE_RE } = await import('../../src/lib/affiliateLandingRule.ts');
+  const signup = 'https://app.acme.example/register';
+  assert.equal(customerSignupRedirect(signup, 'demo-partner'), 'https://app.acme.example/register?ref=demo-partner');
+  assert.equal(customerSignupRedirect('https://app.acme.example/register?lang=de&ref=old', 'K_1'), 'https://app.acme.example/register?lang=de&ref=K_1');
+  for (const bad of ['', 'https://evil.example', '-x', 'a b', 'x'.repeat(101), ['a'], undefined]) {
+    assert.equal(customerSignupRedirect(signup, bad), null, String(bad));
+  }
+  assert.equal(customerSignupRedirect(null, 'demo-partner'), null);
+  assert.equal(customerSignupRedirect('http://app.acme.example/', 'demo-partner'), null);
+  // The same shape as the partner code (src/lib/affiliatePartners.ts imports Prisma, so it is read as text).
+  const { readFileSync } = await import('node:fs');
+  const partners = readFileSync(new URL('../../src/lib/affiliatePartners.ts', import.meta.url), 'utf8');
+  assert.ok(partners.includes(`PARTNER_CODE_RE = /${REFERRAL_CODE_RE.source}/;`), 'REFERRAL_CODE_RE must match PARTNER_CODE_RE');
+});

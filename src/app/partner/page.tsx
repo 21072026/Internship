@@ -1,14 +1,16 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { headers } from 'next/headers';
+import { notFound, redirect } from 'next/navigation';
 import { Phone, Mail } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { hostBrand } from '@/lib/hostBrand';
 import { brandAssetPath } from '@/lib/brandRule';
 import { formatMinorPrice } from '@/lib/money';
 import { interpolate } from '@/lib/notificationText';
-import { publicProgrammeForRequest } from '@/lib/affiliatePublicPage';
-import { commissionTableRows, landingCopyFor, maxOneOffCommission, telHref } from '@/lib/affiliateLandingRule';
+import { affiliateProgrammeForHost, publicProgrammeForRequest } from '@/lib/affiliatePublicPage';
+import { requestHostHeader } from '@/lib/publicHostOrg';
+import { commissionTableRows, customerSignupRedirect, landingCopyFor, maxOneOffCommission, readStoredLanding, telHref } from '@/lib/affiliateLandingRule';
 
 // The public partner-programme page (docs/affiliate-module.md, #3360): the first
 // page someone who wants to become a partner sees, on the marketing host,
@@ -32,7 +34,18 @@ export async function generateMetadata(): Promise<Metadata> {
 const APPLY_HREF = '/partner/apply';
 const PORTAL_HREF = '/auth/signin?callbackUrl=%2Faffiliate';
 
-export default async function PartnerProgrammePage() {
+export default async function PartnerProgrammePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  // A partner's link (#3365): when this page is the programme's referral address,
+  // `?ref=<code>` brings a would-be CUSTOMER, not a would-be partner — send them
+  // on to the product's sign-up page with the same code, as the programme's
+  // previous page did, so links already shared keep working. Only the code is
+  // carried, and only to the address in the settings (no open redirect).
+  const { ref } = await searchParams;
+  if (ref !== undefined) {
+    const hosted = await affiliateProgrammeForHost(requestHostHeader(await headers()));
+    const target = hosted ? customerSignupRedirect(readStoredLanding(hosted.landing).productSignupUrl, ref) : null;
+    if (target) redirect(target);
+  }
   const programme = await publicProgrammeForRequest();
   if (!programme) notFound();
   const { t, locale } = await getServerDictionary();
