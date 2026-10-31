@@ -177,7 +177,7 @@ jobs:
         run: npm run build
         # Keep the Next.js build worker above its default ~2 GiB heap limit.
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
+          NODE_OPTIONS: --max-old-space-size=7168
 
       - name: Cache Playwright browsers
         uses: actions/cache@v6
@@ -304,7 +304,7 @@ jobs:
         run: npm run build
         # Keep the Next.js build worker above its default ~2 GiB heap limit.
         env:
-          NODE_OPTIONS: --max-old-space-size=4096
+          NODE_OPTIONS: --max-old-space-size=7168
 
       - name: Cache Playwright browsers
         uses: actions/cache@v6
