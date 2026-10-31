@@ -126,7 +126,8 @@ project — an ordinary `npm run test:e2e` and the CI smoke gate never pay for a
   server that does not enforce is worse than not testing it.
 
 **Where it runs.** `e2e-full.yml` has an `isolation` job beside the four shards: same
-4×/day cadence, same drift gate, and its JSON report is named
+4×/day cadence, same drift gate, the same shared build (one `Build app for E2E` job with
+full git history hands `.next` to the shards and to this job, #3509), and its JSON report is named
 `e2e-json-shard-isolation` so a red isolation run reaches the same Turkish summary email
 (`E2E_EXPECTED_REPORTS` counts it as the fifth report, so a job that crashes before
 writing one is caught too). Since #1568 it is **also on every PR**: the `Playwright
