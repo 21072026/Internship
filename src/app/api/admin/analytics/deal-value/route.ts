@@ -10,7 +10,7 @@ import { shellCapabilities } from '@/lib/shellCapabilities';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { isDealValueEnabled, valueByMonth, type ValueJourney } from '@/lib/dealValue';
-import { OUR_HIRE_WHERE, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
+import { funnelStartedAt, OUR_HIRE_WHERE, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
 
 // GET /api/admin/analytics/deal-value — the ESTIMATED value of won deals,
 // month by month (#2422, story #2393): per month, what was newly won, what was
@@ -68,6 +68,7 @@ export async function GET(request: Request) {
             lifecycleState: true,
             pipelineStatus: true,
             startDate: true,
+            funnelEnteredAt: true,
             value: { select: { valueMinor: true, currency: true } },
             // ALL of them, not just the window's: the first move's `fromStatus`
             // is where the record started, and a record that moved only after
@@ -88,7 +89,7 @@ export async function GET(request: Request) {
           id: r.id,
           previousRelationId: r.previousRelationId,
           startStatus: r.statusChanges[0]?.fromStatus ?? r.pipelineStatus,
-          startedAt: r.startDate.getTime(),
+          startedAt: funnelStartedAt(r).getTime(),
           changes: r.statusChanges.map((c) => ({ toStatus: c.toStatus, at: c.createdAt.getTime() })),
           valueMinor: r.value?.valueMinor ?? null,
           currency: r.value?.currency ?? null,

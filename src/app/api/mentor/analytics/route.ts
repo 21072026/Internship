@@ -9,7 +9,7 @@ import { outcomeStageKeys } from '@/lib/pipelineStages';
 import { getLocale } from '@/i18n/server';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
-import { countsAsPlacement, isPlacementRelation } from '@/lib/placement';
+import { countsAsPlacement, funnelStartedAt, isPlacementRelation } from '@/lib/placement';
 
 // GET — mentor-scoped analytics: their own pipeline funnel, goal summary and
 // engagement stats (EPIC: mentor analytics / pipeline funnel, roadmap #370).
@@ -64,6 +64,7 @@ export async function GET(request: Request) {
           kind: true,
           employmentAttribution: true,
           startDate: true,
+          funnelEnteredAt: true,
           mentee: { select: { id: true, fullName: true } },
           // Real moves only (#2264). Filtering here rather than at each reader
           // fixes all three at once: the "stage moves" count below, the
@@ -148,10 +149,10 @@ export async function GET(request: Request) {
         .map((r) => {
           const last = r.statusChanges[r.statusChanges.length - 1];
           if (!last) return null;
-          return Math.floor((last.createdAt.getTime() - r.startDate.getTime()) / (24 * 60 * 60 * 1000));
+          return Math.floor((last.createdAt.getTime() - funnelStartedAt(r).getTime()) / (24 * 60 * 60 * 1000));
         })
         // Backdated status changes can put the finishing transition before
-        // the relation's startDate, producing a negative duration — drop it
+        // the relation's funnel entry (#1505), producing a negative duration — drop it
         // rather than average in a nonsensical value.
         .filter((d): d is number => d !== null && d >= 0);
       if (durations.length > 0) {

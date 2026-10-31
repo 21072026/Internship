@@ -12,7 +12,7 @@ import { cutChurnLinks, mergeChainJourney, relationChains, type Journey } from '
 import { computeStageAging } from '@/lib/stageAging';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { capacityRequirement, horizonDaysFrom, projectPlacements, resolvedConversions } from '@/lib/forecast';
-import { OUR_HIRE_WHERE, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
+import { funnelStartedAt, OUR_HIRE_WHERE, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
 
 // GET /api/admin/analytics/forecast?horizon=YYYY-MM-DD — the forecast and
 // capacity panel of the executive dashboard (#1897).
@@ -41,6 +41,7 @@ const RELATION_SELECT = {
   status: true,
   pipelineStatus: true,
   startDate: true,
+  funnelEnteredAt: true,
   menteeId: true,
   statusChanges: { orderBy: { createdAt: 'asc' }, select: { fromStatus: true, toStatus: true, createdAt: true } },
 } satisfies Prisma.MentorshipRelationSelect;
@@ -51,7 +52,7 @@ type RelationRow = Prisma.MentorshipRelationGetPayload<{ select: typeof RELATION
 function relationJourney(r: RelationRow): Journey {
   return {
     startStatus: r.statusChanges[0]?.fromStatus ?? r.pipelineStatus,
-    startedAt: r.startDate.getTime(),
+    startedAt: funnelStartedAt(r).getTime(),
     changes: r.statusChanges.map((c) => ({ toStatus: c.toStatus, at: c.createdAt.getTime() })),
   };
 }
