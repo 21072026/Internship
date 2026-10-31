@@ -5,6 +5,7 @@ import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/pro
 import { MARKETING_OPT_IN_TEXT_VERSION, PRIVACY_POLICY_VERSION } from '../src/lib/privacy';
 import { doiMailCapKey, makeContactPermissionToken } from '../src/lib/contactPermissionTokens';
 import { __testable as emailInternals } from '@/services/emailService';
+import { dismissConsentBanner } from './helpers/consent';
 
 // The demo form on the MARKETING landing (#2569) and the default lead owner
 // (#2580 item 3).
@@ -136,7 +137,7 @@ async function notificationsFor(userId: string, companyName: string) {
 async function openMarketingLanding(page: Page, path = '/') {
   await page.setExtraHTTPHeaders({ 'x-forwarded-host': MARKETING_HOST, 'x-forwarded-for': clientIp() });
   await page.goto(path);
-  await page.getByRole('button', { name: /Necessary only/i }).click().catch(() => {});
+  await dismissConsentBanner(page);
 }
 
 test('a request on the marketing host lands in the mapped MARKETING org, unowned, and nowhere else', async ({ page, browser }) => {

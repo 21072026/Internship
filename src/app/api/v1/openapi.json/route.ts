@@ -476,7 +476,7 @@ export async function GET(request: Request) {
           },
           'Relationship',
           '200',
-          '`invalid_transition` — the relationship is not ACTIVE (`currentStage` in the body); `stage_conflict` — the stage changed meanwhile (`currentStage`).',
+          '`invalid_transition` — the relationship is not ACTIVE (`currentStage` in the body); `stage_gate_blocked` — the target stage entry gate is not met (`gate`: `code` capability | documents | evaluation | offer, `stage`, `missing`); `stage_conflict` — the stage changed meanwhile (`currentStage`).',
           [idParam],
         ),
       },

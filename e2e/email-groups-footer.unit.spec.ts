@@ -471,7 +471,12 @@ test.describe('the taxonomy covers what the app actually sends', () => {
             // notification-templates-editor unit spec holds against the taxonomy
             // entry by entry. Judged here by its strictest member, a
             // non-essential category, so the site must identify its recipient.
-            (/\bcategory:\s*EVENT_MAIL_CATEGORY\[/.test(literal) ? 'nudge' : null),
+            (/\bcategory:\s*EVENT_MAIL_CATEGORY\[/.test(literal) ? 'nudge' : null) ??
+            // The pre-rendered event mail (#1711, same file) forwards the category
+            // its call site passed in `notifyEvent(…, { email: { category } })` —
+            // a string the router seals and this job opens. Judged the same way:
+            // by a non-essential member, so the site must name its recipient.
+            (rel.endsWith(path.join('notifications', 'emailJob.ts')) && /\bcategory:\s*mail\.category\b/.test(literal) ? 'nudge' : null),
           categoryExpr,
           // Shorthand (`userId,`) as well as `userId: x` — the senders forward it
           // by shorthand and the call sites spell it out.

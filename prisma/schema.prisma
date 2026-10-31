@@ -757,26 +757,36 @@ model SlaBreach {
 }
 
 model PipelineStage {
-  id         String       @id @default(cuid())
-  orgId      String
-  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  key        String
+  id             String       @id @default(cuid())
+  orgId          String
+  org            Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  key            String
   /// A label the tenant actually typed, shown verbatim in every language — or
   /// "" meaning "use the built-in localized label for this key" (#2268). Always
   /// read it through resolvePipelineStages()/useResolvedStages(), never raw.
-  label      String
-  order      Int
-  isTerminal Boolean      @default(false)
-  isOffPath  Boolean      @default(false)
+  label          String
+  order          Int
+  isTerminal     Boolean      @default(false)
+  isOffPath      Boolean      @default(false)
   /// The board phase this stage is grouped under (#1637): 'pre' | 'internship'
   /// | 'result', whitelisted by PIPELINE_PHASES in src/lib/pipeline.ts. NULL =
   /// derive it: a canonical key takes its built-in phase, any other key the
   /// trailing "custom" group — exactly what every existing row showed before
   /// the column existed, which is why it is nullable rather than defaulted.
-  phase      String?      @db.VarChar(16)
-  color      String?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  phase          String?      @db.VarChar(16)
+  color          String?
+  /// Entry gates (#1589, src/lib/stageGate.ts): what must hold before a
+  /// relation moves FORWARD into this stage. All off by default, so a tenant
+  /// that configures nothing behaves exactly as before. A backwards move or a
+  /// move into an off-path stage is never gated. gateCapability is a Permission
+  /// name (src/lib/authzRule.ts) the mover must hold on the relation; an
+  /// unknown name refuses every forward move (fail-closed).
+  gateCapability String?      @db.VarChar(64)
+  gateDocuments  Boolean      @default(false)
+  gateEvaluation Boolean      @default(false)
+  gateOffer      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@unique([orgId, key])
   @@index([orgId, order])
@@ -4036,8 +4046,12 @@ model ProjectTask {
   // Read as a CALENDAR DAY, never as an instant — src/lib/taskDue.ts is the one
   // place that decides what "late" means.
   dueDate     DateTime?
+  // The goal this to-do is a step of (#1860). SetNull: deleting a goal must
+  // not delete the work done under it — the to-do stays on its list.
+  goalId      String?
 
   project     Project?               @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  goal        Goal?                  @relation(fields: [goalId], references: [id], onDelete: SetNull)
   assignee    User?                  @relation("ProjectTaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   author      User?                  @relation("ProjectTaskAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   // A template is archived rather than deleted, so this normally stays intact;
@@ -4050,6 +4064,7 @@ model ProjectTask {
   @@index([assigneeId])
   @@index([templateId])
   @@index([createdById])
+  @@index([goalId])
 }
 
 // Reusable goal/task text (#51). Every task written for a project member is
@@ -4094,6 +4109,7 @@ model ProjectTaskTemplate {
   project   Project?      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   createdBy User?         @relation("TaskTemplateAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   tasks     ProjectTask[] @relation("TaskFromTemplate")
+  goals     Goal[]        @relation("GoalFromTemplate")
 
   // One template per wording per project, so capturing a goal that already
   // exists is a no-op. MySQL allows many NULLs here, so the shared (global)
@@ -5025,10 +5041,20 @@ model Goal {
   // Sharing scope: PAIR (default) | PROGRAM | PRIVATE. Enforced at the route
   // level by src/lib/goalVisibilityRule.ts, never only in the component.
   visibility      String     @default("PAIR")
+  // Handed out from the shared pool (#1860): the title is read from the
+  // template in the reader's language on every view (resolveGoalTitle), and
+  // the person it was given to cannot reword or delete it — the same rule as a
+  // pooled to-do. SetNull leaves the snapshot `title` behind.
+  templateId      String?
 
-  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  relation MentorshipRelation   @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  template ProjectTaskTemplate? @relation("GoalFromTemplate", fields: [templateId], references: [id], onDelete: SetNull)
+  // The goal's sub-tasks ARE to-dos (#1860): ProjectTask rows with `goalId`.
+  // Two models bridged by a nullable FK, never merged (db push, #1515).
+  subtasks ProjectTask[]
 
   @@index([relationId])
+  @@index([templateId])
 }
 
 // ── Session agendas (#1841) ──────────────────────────────────────────────────

@@ -187,6 +187,8 @@ export interface JobPayloadMap {
     link: string | null;
     emailGroup: string;
     delivery: 'immediate' | 'batched';
+    /** A pre-rendered mail (#1711), sealed (src/lib/notifications/sealedEmail.ts). */
+    sealedEmail?: string;
   };
   /// A delivery held to the end of the recipient's quiet hours or an org
   /// blackout day (#1714); the consumer is runDeferredDelivery() in the router.
@@ -200,6 +202,7 @@ export interface JobPayloadMap {
     params: Record<string, unknown>;
     link: string;
     dedupeKey: string;
+    sealedEmail?: string;
     /** The chat card (#1942), carried so a held reminder keeps its join button. */
     card?: { subjectKey: string; actionUrl: string | null; supersede: boolean } | null;
   };

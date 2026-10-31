@@ -10,6 +10,7 @@ import { shellCapabilities } from '@/lib/shellCapabilities';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { isDealValueEnabled, valueByMonth, type ValueJourney } from '@/lib/dealValue';
+import { OUR_HIRE_WHERE, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
 
 // GET /api/admin/analytics/deal-value — the ESTIMATED value of won deals,
 // month by month (#2422, story #2393): per month, what was newly won, what was
@@ -56,7 +57,10 @@ export async function GET(request: Request) {
         // was valued over every org's won relations.
         const tenant = await tenantWhere(session);
         const relations = await prisma.mentorshipRelation.findMany({
-          where: withinTenant({ startDate: { lte: windowEnd } }, tenant),
+          // The one placement rule (#3472): a "won" record is a PLACEMENT relation
+          // whose win is ours. A sales book never sets either column, so its
+          // numbers are unchanged; the rule is here so no reader counts its own way.
+          where: withinTenant({ startDate: { lte: windowEnd }, ...PLACEMENT_RELATION_WHERE, ...OUR_HIRE_WHERE }, tenant),
           select: {
             id: true,
             previousRelationId: true,

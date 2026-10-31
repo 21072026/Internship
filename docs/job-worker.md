@@ -34,6 +34,13 @@ specialised drain for `email.send` rows and is not touched by this worker.
 While jobs run, a heartbeat refreshes `lockedAt` every `leaseMs / 3`, so a long
 job is not reaped and run twice.
 
+**Draining.** When a claim filled the free capacity, the tick claims again once
+those jobs have settled, until a claim comes back short or `drainMs` has passed
+(the route passes 4 s, under the 5 s tick interval). Without it, the throughput
+was `concurrency` jobs per tick interval however fast the jobs were (2 per 5 s),
+and a burst of instant `event.deliver` jobs queued for minutes. A retried job is
+not re-claimed in the same tick, because its backed-off `runAt` is not due yet.
+
 ## Delivery is at-least-once — handlers must be idempotent
 
 A container killed mid-job, a late failure after the side effect and an

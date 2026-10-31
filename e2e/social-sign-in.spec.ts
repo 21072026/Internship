@@ -58,6 +58,13 @@ async function redeem(request: APIRequestContext, location: string, totp = ''): 
   return new URL(target, 'http://x.invalid').searchParams.get('error');
 }
 
+/** The consent step a NEW account goes through: POST the answer, get where the browser goes next. */
+async function consent(request: APIRequestContext): Promise<string> {
+  const res = await request.post('/api/auth/social/consent', { data: { consent: true } });
+  expect(res.status(), await res.text()).toBe(200);
+  return (await res.json()).redirect as string;
+}
+
 async function sessionEmail(request: APIRequestContext): Promise<string | null> {
   const body = (await (await request.get('/api/auth/session')).json()) as { user?: { email?: string } } | null;
   return body?.user?.email ?? null;
@@ -71,12 +78,25 @@ test('social sign-in: Google, Microsoft and LinkedIn each sign a verified identi
       const email = uniqueEmail(`social-${provider}`).toLowerCase();
       emails.push(email);
       const location = await socialRoundTrip(ctx, provider, { email, name: `Social ${provider}`, sub: `${provider}|${crypto.randomUUID()}` });
-      expect(location).toContain('/auth/magic/complete?token=');
-      expect(await redeem(ctx, location)).toBeNull();
+      // A NEW account asks for consent first — nothing exists yet.
+      expect(location).toContain('/auth/social/consent');
+      expect(await prisma.user.count({ where: { email } })).toBe(0);
+      if (provider === 'google') {
+        const declined = await ctx.post('/api/auth/social/consent', { data: { consent: false } });
+        expect(declined.status()).toBe(400);
+        expect(await prisma.user.count({ where: { email } }), 'no consent, no account').toBe(0);
+      }
+      const next = await consent(ctx);
+      expect(next).toContain('/auth/magic/complete?token=');
+      expect(await redeem(ctx, next)).toBeNull();
       expect(await sessionEmail(ctx)).toBe(email);
       const user = await prisma.user.findFirstOrThrow({ where: { email }, include: { userIdentities: true } });
       expect(user.role).toBe('MENTEE');
       expect(user.emailVerified).toBe(true);
+      expect(user.consentAt).toBeTruthy();
+      expect(await prisma.userConsent.count({ where: { userId: user.id, type: 'PRIVACY_POLICY' } })).toBe(1);
+      // The ticket is single-use: a second POST creates nothing more.
+      expect((await ctx.post('/api/auth/social/consent', { data: { consent: true } })).status()).toBe(400);
       expect(user.userIdentities.map((i) => i.provider)).toEqual([provider]);
       await ctx.dispose();
     }
@@ -168,7 +188,8 @@ test('social sign-in: identities are listed and unlinkable, but never the last w
   const email = uniqueEmail('social-only').toLowerCase();
   try {
     const ctx = await playwright.request.newContext({ baseURL });
-    expect(await redeem(ctx, await socialRoundTrip(ctx, 'google', { email, sub: `google|${crypto.randomUUID()}` }))).toBeNull();
+    expect(await socialRoundTrip(ctx, 'google', { email, sub: `google|${crypto.randomUUID()}` })).toContain('/auth/social/consent');
+    expect(await redeem(ctx, await consent(ctx))).toBeNull();
     let listed = await (await ctx.get('/api/account/identities')).json();
     expect(listed.hasPassword).toBe(false);
     expect(listed.identities).toHaveLength(1);
