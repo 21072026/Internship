@@ -2,6 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'fs';
 import path from 'path';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { gotoSettled } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -135,7 +136,7 @@ test.describe('request this mentor', () => {
   test('a mentor who is not directory-visible falls back to an empty picker and a notice', async ({ page }) => {
     await signIn(page, menteeEmail, pw, '/portal');
 
-    await page.goto(`/portal?mentor=${hiddenId}`);
+    await gotoSettled(page, `/portal?mentor=${hiddenId}`);
     const panel = page.getByTestId('mentorship-request');
     await expect(panel).toBeVisible({ timeout: 15_000 });
     await expect(panel.getByTestId('request-preferred-mentor-unavailable')).toBeVisible({ timeout: 15_000 });
@@ -169,7 +170,7 @@ test.describe('request this mentor', () => {
   test('picking another mentor clears the "no longer available" notice', async ({ page }) => {
     await signIn(page, menteeEmail, pw, '/portal');
 
-    await page.goto(`/portal?mentor=${hiddenId}`);
+    await gotoSettled(page, `/portal?mentor=${hiddenId}`);
     const panel = page.getByTestId('mentorship-request');
     await expect(panel.getByTestId('request-preferred-mentor-unavailable')).toBeVisible({ timeout: 15_000 });
 
@@ -185,7 +186,9 @@ test.describe('request this mentor', () => {
     });
     try {
       await signIn(page, menteeEmail, pw, '/portal');
-      await page.goto(`/portal?mentor=${mentorId}`);
+      // /portal streams through a Suspense boundary: a plain goto can see the
+      // notice twice for ~300ms (strict-mode violation), gotoSettled waits it out.
+      await gotoSettled(page, `/portal?mentor=${mentorId}`);
       // The panel is not mounted at all while a mentorship is active, so the
       // click must be acknowledged rather than silently dropped.
       await expect(page.getByTestId('request-mentor-active-mentorship')).toBeVisible({ timeout: 15_000 });
