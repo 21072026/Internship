@@ -45,3 +45,30 @@ export function boardPageParams(params: URLSearchParams): BoardPage | { error: '
 export function listIsPaged(params: URLSearchParams): boolean {
   return params.get('page') !== null || params.get('pageSize') !== null;
 }
+
+// ── The e-mail composer's recipient list (#1438) ─────────────────────────────
+// `view=recipients` is the composer's own narrow read: a relation id and its
+// mentee's name and language, nothing else (no e-mail, no counts). One page at
+// a time for the list on screen; `all=1` answers every match for "select all
+// matching", bounded so a mistyped filter cannot ask for the whole database.
+
+/** Rows per page of the recipient list. */
+export const RECIPIENT_PAGE_SIZE = 50;
+/** The most "select all matching" will return in one answer. */
+export const RECIPIENT_ALL_MAX = 2000;
+
+export interface RecipientPage {
+  all: boolean;
+  page: number;
+  take: number;
+  /** One relation, for the composer's prefill link (?relation=<id>). */
+  relationId: string | null;
+}
+
+export function recipientPageParams(params: URLSearchParams): RecipientPage {
+  const all = params.get('all') === '1';
+  const rawRelation = params.get('relation');
+  const relationId = rawRelation && /^[A-Za-z0-9_-]{1,64}$/.test(rawRelation) ? rawRelation : null;
+  const page = all ? 1 : (positiveInt(params.get('page')) ?? 1);
+  return { all, page, take: all ? RECIPIENT_ALL_MAX : RECIPIENT_PAGE_SIZE, relationId };
+}

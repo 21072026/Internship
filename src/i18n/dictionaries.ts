@@ -3941,6 +3941,7 @@ const en = {
     },
   },
   mentorEmail: {
+    searchRecipients: 'Search recipients',
     title: 'Email mentees',
     subtitle: 'Send a message to one or more of your mentees',
     recipients: 'Recipients',
@@ -15606,6 +15607,7 @@ const tr: Dict = {
     },
   },
   mentorEmail: {
+    searchRecipients: 'Alıcılarda ara',
     title: 'Mentee’lere e-posta',
     subtitle: 'Bir veya birden çok mentee’ne mesaj gönder',
     recipients: 'Alıcılar',
@@ -27128,6 +27130,7 @@ const de: Dict = {
     },
   },
   mentorEmail: {
+    searchRecipients: 'Empfänger suchen',
     title: 'Mentees per E-Mail erreichen',
     subtitle: 'Sende eine Nachricht an einen oder mehrere deiner Mentees',
     recipients: 'Empfänger',

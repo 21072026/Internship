@@ -32,7 +32,7 @@ import { announceNewRelation, createGuardedRelation } from '@/lib/relationCreate
 import { MATCH_DECISION_NOTE_MAX } from '@/lib/matching/decisionRule';
 import { getLocale } from '@/i18n/server';
 import { isEligible } from '@/lib/eligibility';
-import { boardPageParams, listIsPaged } from '@/lib/boardPage';
+import { boardPageParams, listIsPaged, recipientPageParams } from '@/lib/boardPage';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
@@ -236,6 +236,26 @@ export async function GET(request: Request) {
         perStage: board.perStage,
         page: board.page,
       });
+    }
+
+    // The e-mail composer's recipient list (#1438): the relation id and the
+    // mentee's name and language only — the composer needs no e-mail, no
+    // counts, no stage clock. A page for the list on screen, or every match
+    // (bounded) for "select all matching". Same `where` as everything else.
+    if (searchParams.get('view') === 'recipients') {
+      const rp = recipientPageParams(searchParams);
+      const rWhere = rp.relationId ? andScope<Prisma.MentorshipRelationWhereInput>(where, { id: rp.relationId }) : where;
+      const [total, recipients] = await Promise.all([
+        prisma.mentorshipRelation.count({ where: rWhere }),
+        prisma.mentorshipRelation.findMany({
+          where: rWhere,
+          select: { id: true, mentee: { select: { id: true, fullName: true, preferredLanguage: true } } },
+          orderBy: [{ startDate: 'desc' }, { id: 'asc' }],
+          skip: (rp.page - 1) * rp.take,
+          take: rp.take,
+        }),
+      ]);
+      return NextResponse.json({ recipients, total, page: rp.page, pageSize: rp.take });
     }
 
     if (!paged) {
