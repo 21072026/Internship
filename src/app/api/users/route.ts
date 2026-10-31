@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { programPeopleWhere } from '@/lib/programScopeRule';
 import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
@@ -109,9 +110,11 @@ function withAccountState<T extends object>(users: T[]) {
 
 export async function GET(request: Request) {
   try {
-    const gate = await requireRoleOrPermission(['MENTOR'], 'user.read', { request });
+    // A list (#1577): a PROGRAM_ADMIN with grants passes and reads only the
+    // people its grants reach (programPeopleWhere, applied to every view below).
+    const gate = await requireRoleOrPermission(['MENTOR'], 'user.read', { request, listing: true });
     if ('error' in gate) return gate.error;
-    const { session } = gate;
+    const { session, grants } = gate;
 
     // Tenant (#2542). `User` is in TENANT_MODELS, so with MT_ENFORCE_ISOLATION
     // on the middleware scopes these reads too — but the flag is off in every
@@ -188,7 +191,8 @@ export async function GET(request: Request) {
       // The request's filters, narrowed to the caller's tenant as a conjunct —
       // an `AND`, so the search's `OR` and the tag filter's `AND` above can
       // neither widen nor replace it.
-      const where = withinTenant(filters, tenant);
+      const programScope: Prisma.UserWhereInput[] = grants ? [programPeopleWhere(grants) as Prisma.UserWhereInput] : [];
+      const where = withinTenant<Prisma.UserWhereInput>({ AND: [filters, ...programScope] }, tenant);
 
       // Mentor picker with capacity/availability (#942): same `where` filters
       // as everything else here, but the response needs two computed fields no
@@ -237,7 +241,7 @@ export async function GET(request: Request) {
       const [total, archivedCount, users] = await Promise.all([
         prisma.user.count({ where }),
         // For the "Archived (N)" tab: same role/search filter, opposite status.
-        prisma.user.count({ where: withinTenant({ ...filters, isActive: false }, tenant) }),
+        prisma.user.count({ where: withinTenant<Prisma.UserWhereInput>({ AND: [{ ...filters, isActive: false }, ...programScope] }, tenant) }),
         prisma.user.findMany({
           where,
           select,

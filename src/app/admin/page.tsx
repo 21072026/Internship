@@ -6,6 +6,9 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { programGrantsFor } from '@/lib/authzScope';
+import { grantRelationTerms, NOBODY, programMenteeWhere, programRelationWhere } from '@/lib/programScopeRule';
+import type { Prisma } from '@prisma/client';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Users, Building2, BookOpen, Bell, AlertTriangle } from 'lucide-react';
@@ -30,15 +33,26 @@ import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
 // admin. `tenantWhere` is the same rule the scoped API routes use.
 async function getStats(session: Session | null) {
   const tenant = await tenantWhere(session);
+  // A PROGRAM_ADMIN's dashboard counts and lists only its programmes (#1577):
+  // every query below takes these conjuncts, `{}` for every other tier.
+  const grants = session ? await programGrantsFor(session.user) : null;
+  const rel = (grants ? programRelationWhere(grants) : {}) as Prisma.MentorshipRelationWhereInput;
+  const mentees = (grants ? programMenteeWhere(grants) : {}) as Prisma.UserWhereInput;
+  const mentors = (grants
+    ? (grantRelationTerms(grants).length ? { mentorRelations: { some: rel } } : NOBODY)
+    : {}) as Prisma.UserWhereInput;
+  const companies = (grants
+    ? (grantRelationTerms(grants).length ? { mentorships: { some: rel } } : NOBODY)
+    : {}) as Prisma.CompanyWhereInput;
   return withTenantScope(session, async () => {
   const [menteeCount, mentorCount, companyCount, activeRelations, recentRelations, recentCandidates, pipelineGroups, overdueCount, totalRelations] =
     await Promise.all([
-      prisma.user.count({ where: withinTenant({ role: 'MENTEE' as const }, tenant) }),
-      prisma.user.count({ where: withinTenant({ role: 'MENTOR' as const }, tenant) }),
-      prisma.company.count({ where: withinTenant({}, tenant) }),
-      prisma.mentorshipRelation.count({ where: withinTenant({ status: 'ACTIVE' as const }, tenant) }),
+      prisma.user.count({ where: withinTenant<Prisma.UserWhereInput>({ AND: [{ role: 'MENTEE' }, mentees] }, tenant) }),
+      prisma.user.count({ where: withinTenant<Prisma.UserWhereInput>({ AND: [{ role: 'MENTOR' }, mentors] }, tenant) }),
+      prisma.company.count({ where: withinTenant<Prisma.CompanyWhereInput>(companies, tenant) }),
+      prisma.mentorshipRelation.count({ where: withinTenant<Prisma.MentorshipRelationWhereInput>({ AND: [{ status: 'ACTIVE' }, rel] }, tenant) }),
       prisma.mentorshipRelation.findMany({
-        where: withinTenant({}, tenant),
+        where: withinTenant<Prisma.MentorshipRelationWhereInput>(rel, tenant),
         take: 5,
         orderBy: { startDate: 'desc' },
         include: {
@@ -48,7 +62,7 @@ async function getStats(session: Session | null) {
         },
       }),
       prisma.user.findMany({
-        where: withinTenant({ role: 'MENTEE' as const }, tenant),
+        where: withinTenant<Prisma.UserWhereInput>({ AND: [{ role: 'MENTEE' }, mentees] }, tenant),
         take: 5,
         orderBy: { createdAt: 'desc' },
         select: {
@@ -63,18 +77,18 @@ async function getStats(session: Session | null) {
       }),
       prisma.mentorshipRelation.groupBy({
         by: ['pipelineStatus'],
-        where: withinTenant({}, tenant),
+        where: withinTenant<Prisma.MentorshipRelationWhereInput>(rel, tenant),
         _count: { _all: true },
       }),
       // Stage service levels (#817): the overdue count existed only inside the
       // analytics page, which is one click too far for the number that means
       // "somebody is waiting and nobody noticed".
       prisma.mentorshipRelation.count({
-        where: withinTenant({ status: 'ACTIVE' as const, stageDeadline: { lt: new Date() } }, tenant),
+        where: withinTenant<Prisma.MentorshipRelationWhereInput>({ AND: [{ status: 'ACTIVE', stageDeadline: { lt: new Date() } }, rel] }, tenant),
       }),
       // Any relation, in any state (#1751): zero means a brand-new tenant,
       // which gets the first-run panel instead of empty lists.
-      prisma.mentorshipRelation.count({ where: withinTenant({}, tenant) }),
+      prisma.mentorshipRelation.count({ where: withinTenant<Prisma.MentorshipRelationWhereInput>(rel, tenant) }),
     ]);
 
   const pipelineCounts = Object.fromEntries(
@@ -91,6 +105,7 @@ async function getStats(session: Session | null) {
     pipelineCounts,
     overdueCount,
     totalRelations,
+    programScoped: grants !== null,
   };
   });
 }
@@ -102,7 +117,8 @@ export default async function AdminDashboard() {
   const stages = await resolvePipelineStages(session?.user.orgId, locale);
   // The first-run panel (#1751) is a mentoring product's guidance: a vertical
   // without `mentorship` has no pairs to get to.
-  const firstRun = stats.totalRelations === 0 && (await shellCapabilities(session?.user.orgId)).includes('mentorship');
+  // Never for a PROGRAM_ADMIN (#1577): zero rows in its scope is not a new tenant.
+  const firstRun = !stats.programScoped && stats.totalRelations === 0 && (await shellCapabilities(session?.user.orgId)).includes('mentorship');
   const orgPlan = firstRun && session?.user.orgId
     ? (await prisma.organization.findUnique({ where: { id: session.user.orgId }, select: { plan: true } }))?.plan
     : null;

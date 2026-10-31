@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { getServerDictionary } from '@/i18n/server';
+import { programGrantsFor } from '@/lib/authzScope';
 import { buildAcceptanceReport } from '@/lib/contributorTermsReport';
 import { ContributorTermsReport } from '@/components/admin/ContributorTermsReport';
 
@@ -16,6 +17,9 @@ export default async function AdminContributorTermsPage() {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/auth/signin');
   if (session.user.role !== 'ADMIN') redirect('/');
+  // An org-wide report with no programme to narrow by: a PROGRAM_ADMIN gets
+  // nothing rather than everything (#1577).
+  if ((await programGrantsFor(session.user)) !== null) redirect('/admin');
 
   const { t, locale } = await getServerDictionary();
   const c = t.contributorTerms;
