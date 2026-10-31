@@ -71,3 +71,12 @@ Readers on the rule: the admin analytics screen (`adminAnalyticsData.ts`: funnel
 conversion, mentor workload), programme/cohort comparison (`analyticsReports.ts`), benchmark,
 source conversion (both `/api/admin/analytics/sources` and `/api/admin/sources`) and the mentor's
 own analytics.
+
+The remaining hire counters read the same rule since #3472: the forecast (learns from and
+projects PLACEMENT relations whose hire is ours), the deal-value book (a no-op for a sales book,
+which sets neither column), the ROI report (stage-trail hires on our placements only; a ledgered
+hire stamped SELF_FOUND / ALREADY_EMPLOYED is not counted), mentor impact (`mentored`/`active` are
+workload and count every pairing; internship and outcome count the funnel, the outcome only our
+hires) and a SOURCE's referral outcomes (a coaching pair or a hire that is not ours is no
+placement). The two pure rules stay dependency-free: their loaders pass the flags
+(`inFunnel`/`ourHire`, `countsAsHire`), and an absent flag reads as before.
