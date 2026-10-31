@@ -51,7 +51,29 @@ export const LANDING_LIMITS = {
   email: 191,
   phone: 30,
   url: 500,
+  /** A hand-typed figure on a stat card ("1.200+", "98 %"). */
+  statValue: 20,
 } as const;
+
+// The three figure cards (#3364). Each is `live` (counted from the programme,
+// through the overview's own query), `manual` (a figure the admin types and
+// answers for) or `hidden`. Satisfaction has no source in the product, so it
+// can only be typed or hidden — `live` there is refused, never faked. A live
+// card disappears while the programme is smaller than STAT_LIVE_MIN_PARTNERS:
+// "3 active partners" advertises the opposite of what the card is for.
+export const LANDING_STAT_KEYS = ['activePartners', 'customers', 'satisfaction'] as const;
+export type LandingStatKey = (typeof LANDING_STAT_KEYS)[number];
+export const STAT_MODES = ['live', 'manual', 'hidden'] as const;
+export type StatMode = (typeof STAT_MODES)[number];
+/** The keys that have a live source; the rest are `manual` or `hidden` only. */
+export const LIVE_STAT_KEYS: readonly LandingStatKey[] = ['activePartners', 'customers'];
+export const STAT_LIVE_MIN_PARTNERS = 10;
+
+export interface LandingStat {
+  mode: StatMode;
+  /** The typed figure, only for `manual`. */
+  value: string | null;
+}
 
 export interface LandingStep {
   title: string;
@@ -70,6 +92,8 @@ export interface Landing {
   email: string | null;
   /** https: the product's own sign-up page ("open an account" button). */
   productSignupUrl: string | null;
+  /** The figure cards; a key that is absent reads as `hidden`. */
+  stats: Partial<Record<LandingStatKey, LandingStat>>;
 }
 
 export type LandingIssueCode = 'type' | 'locale' | 'unknown' | 'too_long' | 'too_many' | 'invalid' | 'not_https';
@@ -81,7 +105,7 @@ export interface LandingIssue {
 
 export type LandingParseResult = { ok: true; landing: Landing } | { ok: false; issues: LandingIssue[] };
 
-export const EMPTY_LANDING: Landing = { copy: {}, phone: null, email: null, productSignupUrl: null };
+export const EMPTY_LANDING: Landing = { copy: {}, phone: null, email: null, productSignupUrl: null, stats: {} };
 
 const isLocale = (v: string): v is LandingLocale => (LANDING_LOCALES as readonly string[]).includes(v);
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -200,10 +224,10 @@ function parseCopy(input: unknown, path: string, issues: LandingIssue[]): Landin
 export function parseLanding(input: unknown): LandingParseResult {
   const issues: LandingIssue[] = [];
   if (!isObject(input)) return { ok: false, issues: [{ field: '*', code: 'type' }] };
-  const landing: Landing = { copy: {}, phone: null, email: null, productSignupUrl: null };
+  const landing: Landing = { copy: {}, phone: null, email: null, productSignupUrl: null, stats: {} };
 
   for (const key of Object.keys(input)) {
-    if (!['copy', 'phone', 'email', 'productSignupUrl'].includes(key)) issues.push({ field: key, code: 'unknown' });
+    if (!['copy', 'phone', 'email', 'productSignupUrl', 'stats'].includes(key)) issues.push({ field: key, code: 'unknown' });
   }
 
   const copy = input.copy;
@@ -249,7 +273,91 @@ export function parseLanding(input: unknown): LandingParseResult {
     else issues.push({ field: 'productSignupUrl', code: parsed.code });
   }
 
+  const stats = input.stats;
+  if (stats !== undefined && stats !== null) {
+    if (!isObject(stats)) issues.push({ field: 'stats', code: 'type' });
+    else landing.stats = parseStats(stats, issues);
+  }
+
   return issues.length > 0 ? { ok: false, issues } : { ok: true, landing };
+}
+
+function parseStats(input: Record<string, unknown>, issues: LandingIssue[]): Partial<Record<LandingStatKey, LandingStat>> {
+  const out: Partial<Record<LandingStatKey, LandingStat>> = {};
+  for (const [key, raw] of Object.entries(input)) {
+    const path = `stats.${key}`;
+    if (!(LANDING_STAT_KEYS as readonly string[]).includes(key)) {
+      issues.push({ field: path, code: 'unknown' });
+      continue;
+    }
+    if (raw === null || raw === undefined) continue;
+    if (!isObject(raw) || typeof raw.mode !== 'string' || !(STAT_MODES as readonly string[]).includes(raw.mode)) {
+      issues.push({ field: `${path}.mode`, code: 'invalid' });
+      continue;
+    }
+    const statKey = key as LandingStatKey;
+    const mode = raw.mode as StatMode;
+    if (mode === 'live' && !LIVE_STAT_KEYS.includes(statKey)) {
+      issues.push({ field: `${path}.mode`, code: 'invalid' });
+      continue;
+    }
+    if (mode !== 'manual') {
+      out[statKey] = { mode, value: null };
+      continue;
+    }
+    if (raw.value !== null && raw.value !== undefined && typeof raw.value !== 'string') {
+      issues.push({ field: `${path}.value`, code: 'type' });
+      continue;
+    }
+    const value = typeof raw.value === 'string' ? cleanText(raw.value, false) : null;
+    if (value === null) {
+      // A typed card with nothing typed would render an empty box.
+      issues.push({ field: `${path}.value`, code: 'invalid' });
+      continue;
+    }
+    if (value.length > LANDING_LIMITS.statValue) {
+      issues.push({ field: `${path}.value`, code: 'too_long' });
+      continue;
+    }
+    out[statKey] = { mode, value };
+  }
+  return out;
+}
+
+/** The live counts a page may show (from affiliateOverview), or null when unknown. */
+export interface LiveStatCounts {
+  activePartners: number;
+  customers: number;
+}
+
+export interface StatCard {
+  key: LandingStatKey;
+  value: string;
+}
+
+/**
+ * The cards a visitor sees, in a fixed order. `hidden` (or absent) shows
+ * nothing; `manual` shows the typed figure; `live` shows the count — unless the
+ * counts are unknown or the programme has fewer than STAT_LIVE_MIN_PARTNERS
+ * active partners, in which case every live card is left out.
+ */
+export function statCards(landing: Landing, live: LiveStatCounts | null, formatCount: (n: number) => string = String): StatCard[] {
+  const liveShown = live !== null && live.activePartners >= STAT_LIVE_MIN_PARTNERS;
+  const cards: StatCard[] = [];
+  for (const key of LANDING_STAT_KEYS) {
+    const stat = landing.stats[key];
+    if (!stat || stat.mode === 'hidden') continue;
+    if (stat.mode === 'manual' && stat.value) cards.push({ key, value: stat.value });
+    if (stat.mode === 'live' && liveShown && LIVE_STAT_KEYS.includes(key)) {
+      cards.push({ key, value: formatCount(live[key as keyof LiveStatCounts]) });
+    }
+  }
+  return cards;
+}
+
+/** True when any card asks for a live count — the page reads the counts only then. */
+export function needsLiveStats(landing: Landing): boolean {
+  return LANDING_STAT_KEYS.some((k) => landing.stats[k]?.mode === 'live');
 }
 
 /** A stored value (JSON column), read defensively: anything malformed reads as empty. */
@@ -271,7 +379,11 @@ export function canonicalLanding(landing: Landing): string {
       c.bullets ?? [],
     ];
   });
-  return JSON.stringify([copy, landing.phone, landing.email, landing.productSignupUrl]);
+  const stats = LANDING_STAT_KEYS.map((k) => {
+    const st = landing.stats[k];
+    return st && st.mode !== 'hidden' ? [st.mode, st.value] : null;
+  });
+  return JSON.stringify([copy, landing.phone, landing.email, landing.productSignupUrl, stats]);
 }
 
 /** True when the landing holds anything a visitor would see. */

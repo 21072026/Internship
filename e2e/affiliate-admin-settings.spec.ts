@@ -179,6 +179,16 @@ test('the public page content is validated, stored and audited (#3359)', async (
   const s = await (await observer.get('/api/admin/affiliate/settings', { headers: host })).json();
   expect(s.landing).toMatchObject({ copy: { de: { heroTitle: 'Partner werden' } }, phone: '+49 30 1234567', email: 'partners@acme.example' });
   expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.landing.update' } })).toBe(1);
+
+  // The figure cards (#3364): satisfaction has no live source, a typed card needs a figure.
+  const badStats = await put(owner, { landing: { ...landing, stats: { satisfaction: { mode: 'live' }, customers: { mode: 'manual', value: '' } } } });
+  expect(badStats.status()).toBe(400);
+  expect((await badStats.json()).issues.map((i: { field: string }) => i.field).sort()).toEqual(['stats.customers.value', 'stats.satisfaction.mode']);
+  const withStats = await put(owner, { landing: { ...landing, stats: { activePartners: { mode: 'live' }, satisfaction: { mode: 'manual', value: '96 %' } } } });
+  expect((await withStats.json()).changed).toBe(true);
+  const s2 = await (await observer.get('/api/admin/affiliate/settings', { headers: host })).json();
+  expect(s2.landing.stats).toEqual({ activePartners: { mode: 'live', value: null }, satisfaction: { mode: 'manual', value: '96 %' } });
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.landing.update' } })).toBe(2);
 });
 
 test('partners: create, codes unique, state changes under the lock, IBAN reveal audited', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
