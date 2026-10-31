@@ -101,6 +101,21 @@ both go through `decideInterviewRequest()`, the route's own body, and Decline
 first asks for one of `INTERVIEW_DECLINE_REASON_CODES` (`…decline.reason`, value
 `<id>|<code>`) because the company sees the reason. A decided card is replaced.
 
+**Check-ins in chat** (#1953): a survey campaign's invitation is also offered
+as a chat card (`survey.invited`, chat only, under the `surveys` opt-out group;
+the mail still goes). **Answer now** (`survey.start`, value = the invitation id)
+asks the questions one at a time as buttons — SELECT (≤ 11 options), BOOLEAN,
+SCALE, NPS — and an optional question gets Skip. Nothing is stored until the
+last click: the answers so far ride in the next button's value
+(`src/lib/chat/surveyFlow.ts`, `<invitationId>|<next>|<base64url JSON>`) and the
+last click hands the whole response to `submitSurveyResponse()` — the engine's
+own validation, invitation claim and ANONYMOUS rule (no invitation, respondent
+or relation stored), so a reminder after it is refused as `responded` and a
+replayed last click is "already answered". Only the invitation's own person can
+answer it. A survey with any free-text, number, date or multi-select question
+is not answered in chat: the card links to the survey page. Logging an
+interaction from the post-meeting card is the follow-up slice of #1953.
+
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the
 store-submission burden and the commercial decision are the parts that get lost

@@ -299,6 +299,11 @@ export const NOTIFICATION_EVENTS = [
   { key: 'interview_panel.outcome.advance', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
   { key: 'interview_panel.outcome.offer', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
   { key: 'interview_panel.outcome.reject', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
+  // A survey campaign's invitation, on chat (#1953). The invitation MAIL is
+  // sent by the campaign itself (src/lib/surveyCampaigns.ts); this is the same
+  // invitation offered where the person already is — chat only, to people with
+  // a confirmed chat identity who have not switched survey mail off.
+  { key: 'survey.invited', category: 'mentorship', emailGroup: 'surveys', defaultChannels: ['chat'], delivery: 'immediate', link: 'dashboard', params: [] },
   // A company asked to interview one of the mentor's mentees (#1949). In-app and
   // chat only — the chat card carries Approve/Decline; there is no mail for it.
   { key: 'interview_request.received', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'chat'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
