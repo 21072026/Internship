@@ -13,7 +13,7 @@ import { StartMeetingButton } from '@/components/meeting/StartMeetingButton';
 import { browserTimeZone, wallClockToInstantISO } from '@/lib/timezone';
 import { AttendeeTimes } from '@/components/meeting/AttendeeTimes';
 import { useSearchParams } from 'next/navigation';
-import { SkeletonRows } from '@/components/ui/Skeleton';
+import { AsyncSection } from '@/components/ui/AsyncSection';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { GuestInviteField, type PendingGuest } from '@/components/meeting/GuestInviteField';
 import { MeetingGuestList, type MeetingGuest } from '@/components/meeting/MeetingGuestList';
@@ -328,12 +328,18 @@ export function MeetingsManager() {
           </CardHeader>
           <div className="space-y-4">
             <div className="max-h-40 overflow-y-auto border border-gray-100 dark:border-gray-800 rounded-lg p-2">
-              {loading ? (
-                <div data-testid="meetings-relations-loading"><SkeletonRows rows={2} /></div>
-              ) : loadError ? null : relations.length === 0 ? (
-                <p className="text-sm text-gray-400">{t.mentor.noMenteesAssigned}</p>
-              ) : (
-                <>
+              {/* One request feeds both sections, so the failure is reported once,
+                  above them (meetings-load-error) — the sections only make sure
+                  that neither says "nobody here" while it loads or after it
+                  failed (#1450). */}
+              <AsyncSection
+                loading={loading}
+                error={loadError ? t.meetings.loadError : null}
+                errorDisplay="none"
+                empty={relations.length === 0}
+                emptyText={<p className="text-sm text-gray-400">{t.mentor.noMenteesAssigned}</p>}
+                testIdPrefix="meetings-relations"
+              >
                 <label className="flex items-center gap-2 text-sm py-1 mb-1 border-b border-gray-100 dark:border-gray-800 font-medium">
                   <input
                     type="checkbox"
@@ -360,8 +366,7 @@ export function MeetingsManager() {
                     <PersonHoverCard personId={r.mentee.id} name={r.mentee.fullName} role="MENTEE" className="truncate" />
                   </label>
                 ))}
-                </>
-              )}
+              </AsyncSection>
             </div>
             <div>
               <Input label={t.meetings.meetingTitle} value={title} onChange={(e) => setTitle(e.target.value)} list="meeting-topics" />
@@ -417,11 +422,14 @@ export function MeetingsManager() {
           <CardHeader>
             <CardTitle>{t.meetings.upcoming}{!loading && !loadError ? ` (${meetings.length})` : ''}</CardTitle>
           </CardHeader>
-          {loading ? (
-            <div data-testid="meetings-list-loading"><SkeletonRows rows={3} /></div>
-          ) : loadError ? null : meetings.length === 0 ? (
-            <p className="text-sm text-gray-400">{t.meetings.none}</p>
-          ) : (
+          <AsyncSection
+            loading={loading}
+            error={loadError ? t.meetings.loadError : null}
+            errorDisplay="none"
+            empty={meetings.length === 0}
+            emptyText={<p className="text-sm text-gray-400">{t.meetings.none}</p>}
+            testIdPrefix="meetings-list"
+          >
             <div className="divide-y divide-gray-50 dark:divide-gray-800">
               {meetings.map((m) => (
                 <div key={m.id} id={`meeting-${m.id}`} className={`flex flex-wrap items-center justify-between gap-3 py-3${m.id === linkedMeetingId ? ' rounded-lg bg-blue-50 px-2 dark:bg-blue-950/40' : ''}`}>
@@ -497,7 +505,7 @@ export function MeetingsManager() {
                 </div>
               ))}
             </div>
-          )}
+          </AsyncSection>
         </Card>
       </div>
       {changeError && <p className="mt-3 text-sm text-red-600" role="alert">{changeError}</p>}

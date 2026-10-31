@@ -12,6 +12,15 @@ interface AsyncSectionProps {
   retryText?: ReactNode;
   onRetry?: () => void;
   skeleton?: AsyncSectionSkeleton;
+  /**
+   * `none` when the screen reports the failure once, above several sections
+   * that came from the same request (#1450, MeetingsManager): the section then
+   * renders nothing on error instead of repeating the box — and still never
+   * shows its empty text, which is the bug this component exists to prevent.
+   */
+  errorDisplay?: 'box' | 'none';
+  /** Testid stem for the three states (`<prefix>-loading|error|empty`), so a screen keeps the ids its specs use. */
+  testIdPrefix?: string;
   children: ReactNode;
 }
 
@@ -46,21 +55,24 @@ export function AsyncSection({
   retryText,
   onRetry,
   skeleton = 'list',
+  errorDisplay = 'box',
+  testIdPrefix = 'async-section',
   children,
 }: AsyncSectionProps) {
   if (loading) {
     return (
-      <div data-testid="async-section-loading">
+      <div data-testid={`${testIdPrefix}-loading`}>
         <LoadingSkeleton variant={skeleton} />
       </div>
     );
   }
 
   if (error) {
+    if (errorDisplay === 'none') return null;
     return (
       <div
         role="alert"
-        data-testid="async-section-error"
+        data-testid={`${testIdPrefix}-error`}
         className="flex flex-col items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-800 dark:bg-red-950/30"
       >
         <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
@@ -72,7 +84,7 @@ export function AsyncSection({
   }
 
   if (empty) {
-    return <div data-testid="async-section-empty">{emptyText}</div>;
+    return <div data-testid={`${testIdPrefix}-empty`}>{emptyText}</div>;
   }
 
   return <>{children}</>;
