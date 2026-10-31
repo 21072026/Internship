@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Figure cards on the public partner page (#3364):** `landing.stats` adds three cards (active partners, customers referred, partner satisfaction), each `live`, `manual` or `hidden`, edited on `/admin/affiliates/settings`. Live values are `affiliateOverview()`'s own counts through `liveStatCounts()` (`src/lib/affiliatePublicStats.ts`), cached per organisation for an hour (`makeTtlCache`, unit-tested), and every live card is hidden below 10 active partners. Satisfaction has no source, so it is typed or hidden only; a live satisfaction card is refused at save. The rule (`statCards()`, the parse, the canonical comparison) is pure in `src/lib/affiliateLandingRule.ts`. Pinned by `scripts/test/affiliate-landing-rule.test.mjs`, `e2e/affiliate-public-page.spec.ts` and `e2e/affiliate-admin-settings.spec.ts`.",
+  "notes": {
+    "en": ["The public partner page can show figure cards — active partners and referred customers counted live, plus a satisfaction figure you enter — each one live, typed or hidden."],
+    "tr": ["Herkese açık partner sayfası artık rakam kartları gösterebiliyor: canlı sayılan aktif partner ve yönlendirilen müşteri sayısı ile sizin girdiğiniz memnuniyet oranı; her kart canlı, elle ya da gizli."],
+    "de": ["Die öffentliche Partnerseite kann jetzt Zahlenkarten zeigen – live gezählte aktive Partner und vermittelte Kunden sowie eine von Ihnen eingetragene Zufriedenheit; jede Karte live, eingetragen oder ausgeblendet."]
+  }
+}

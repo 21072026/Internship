@@ -2,9 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { notifyIfAllowed } from '@/lib/notify';
 import { resolveSetting } from '@/lib/settingsResolver';
 import { settingsOrgOfRow } from '@/lib/settingsOrg';
-import { emailAllowed } from '@/lib/notificationPrefs';
-import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
-import { sendEmail } from '@/services/emailService';
+import { notifyEvent } from '@/lib/notifications/router';
 import { getDictionary } from '@/i18n/dictionaries';
 import { locales, type Locale } from '@/i18n/config';
 import { logger } from '@/lib/logger';
@@ -110,8 +108,6 @@ export async function emitOutcomeComms(opts: {
     // Auto-send is on: the same template the composer would have shown, in the
     // mentee's own language, with their opt-out respected.
     const mentee = relation.mentee;
-    if (!mentee.email || !emailAllowed(mentee, 'stageUpdates')) return;
-    if (!emailGroupAllowedForCategory(mentee, 'outcome')) return;
     const dict = getDictionary(localeOf(mentee.preferredLanguage));
     const tpl = (dict.emailTemplates as Record<string, { subject: string; body: string }>)[
       OUTCOME_TEMPLATE_KEY[kind]
@@ -120,17 +116,23 @@ export async function emitOutcomeComms(opts: {
     const fill = (s: string) => s.replace(/\{name\}/g, () => mentee.fullName);
     const body = fill(tpl.body);
     const subject = fill(tpl.subject);
-    await sendEmail({
-      to: mentee.email,
-      subject,
-      html: `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.6;white-space:pre-wrap">${esc(body)}</div>`,
-      category: 'outcome',
-      // The mentee is the only recipient — the mentor gets an in-app
-      // notification above, never a copy of this mail. The body is rendered from
-      // the mentee's own dictionary, so the footer takes the same language.
-      userId: mentee.id,
-      locale: mentee.preferredLanguage,
+    // Through the router (#1711): the 'stageUpdates' switch, the outcome e-mail
+    // group and a missing address are its decision now, recorded per delivery;
+    // the mail is the template rendered above, sent as-is. The mentee is the only
+    // recipient — the mentor got the in-app notice above, never a copy — and the
+    // body is the mentee's own dictionary, so the footer takes the same language.
+    const sent = await notifyEvent(mentee.id, kind === 'placedElsewhere' ? 'outcome.placedElsewhere' : 'outcome.noMatch', {}, {
+      channels: ['email'],
+      orgId: relation.orgId,
+      email: {
+        subject,
+        html: `<div style="font-family:system-ui,sans-serif;font-size:14px;line-height:1.6;white-space:pre-wrap">${esc(body)}</div>`,
+        category: 'outcome',
+        locale: mentee.preferredLanguage,
+      },
     });
+    // Nothing left this house (an opt-out, no address): nothing to log either.
+    if (sent.queued + sent.sent === 0) return;
     // Logged on the relation like every other mentor→mentee email, so the
     // history shows what the candidate was actually told.
     await prisma.interactionLog.create({

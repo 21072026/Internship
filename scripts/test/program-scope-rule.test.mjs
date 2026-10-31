@@ -4,8 +4,10 @@
 // Run: npm run test:unit  (node --test --experimental-strip-types)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { register } from 'node:module';
 
-const { grantRelationTerms, programRelationWhere, programMenteeWhere, programPeopleWhere, NOBODY } = await import(
+register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
+const { grantRelationTerms, programRelationWhere, programMenteeWhere, programPeopleWhere, NOBODY, adminReceives, ORG_LEVEL_ADMIN_WHERE } = await import(
   '../../src/lib/programScopeRule.ts'
 );
 
@@ -44,4 +46,33 @@ test('people: either side of a relation, plus a company-only grant\'s own accoun
   });
   // A cohort+company grant does not hand over the company's whole account list.
   assert.equal(JSON.stringify(programPeopleWhere([both])).includes('"role":"COMPANY"'), false);
+});
+
+// ── Who hears about it (#3485) ──────────────────────────────────────────────
+
+test('ORG_ADMIN and OBSERVER hear about everything, the org-level notices included', () => {
+  for (const tier of ['ORG_ADMIN', 'OBSERVER']) {
+    assert.equal(adminReceives(tier, [], null), true);
+    assert.equal(adminReceives(tier, [], { cohortId: 'c-z' }), true);
+  }
+});
+
+test('a PROGRAM_ADMIN hears only about a subject one of its grants covers — never an org-level notice', () => {
+  assert.equal(adminReceives('PROGRAM_ADMIN', [cohortA], null), false);
+  assert.equal(adminReceives('PROGRAM_ADMIN', [cohortA], {}), false);
+  assert.equal(adminReceives('PROGRAM_ADMIN', [cohortA], { cohortId: 'c-a' }), true);
+  assert.equal(adminReceives('PROGRAM_ADMIN', [cohortA], { cohortId: 'c-b' }), false);
+  assert.equal(adminReceives('PROGRAM_ADMIN', [company1], { companyId: 'co-1' }), true);
+  // A grant naming both needs both.
+  assert.equal(adminReceives('PROGRAM_ADMIN', [both], { cohortId: 'c-b' }), false);
+  assert.equal(adminReceives('PROGRAM_ADMIN', [both], { cohortId: 'c-b', companyId: 'co-2' }), true);
+  assert.equal(adminReceives('PROGRAM_ADMIN', [], { cohortId: 'c-a' }), false);
+});
+
+test('an unknown tier hears nothing', () => {
+  assert.equal(adminReceives(null, [cohortA], { cohortId: 'c-a' }), false);
+});
+
+test('the org-level recipient filter: an empty column or ORG_ADMIN/OBSERVER — never PROGRAM_ADMIN', () => {
+  assert.deepEqual(ORG_LEVEL_ADMIN_WHERE, { OR: [{ adminLevel: null }, { adminLevel: { in: ['ORG_ADMIN', 'OBSERVER'] } }] });
 });

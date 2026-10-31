@@ -48,6 +48,7 @@ import { TrialEndPanel } from '@/components/TrialEndPanel';
 import { ContractEndPanel } from '@/components/ContractEndPanel';
 import { DealValuePanel } from '@/components/DealValuePanel';
 import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
+import { stageGateFrom, useStageGateDialog } from '@/components/StageGateDialog';
 
 interface Interaction { id: string; date: string; notes: string; type: string; autoLogged?: boolean }
 interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } | null }
@@ -125,6 +126,7 @@ export default function AdminMenteeDetailPage() {
   const label = useStageLabel();
   const stages = useResolvedStages();
   const toast = useToast();
+  const { show: showGate, dialog: gateDialog } = useStageGateDialog();
   const [user, setUser] = useState<MenteeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -156,7 +158,16 @@ export default function AdminMenteeDetailPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ pipelineStatus, ...(reasonCode ? { reasonCode, reasonNote } : {}) }),
         });
-        if (!res.ok) throw new Error();
+        if (!res.ok) {
+          // A gated stage (#1590): say what is missing instead of "save failed".
+          const gate = await stageGateFrom(res);
+          if (gate) {
+            showGate({ gate, stageLabel: label(pipelineStatus), documentsHref: `/admin/candidates/${id}#documents` });
+            await load();
+            return;
+          }
+          throw new Error();
+        }
         await load();
         toast(t.candidateDetail.saved);
       } catch {
@@ -165,7 +176,7 @@ export default function AdminMenteeDetailPage() {
         setSaving(false);
       }
     },
-    [load, toast, t]
+    [id, load, toast, t, showGate, label]
   );
 
   const changeProject = useCallback(
@@ -358,6 +369,7 @@ export default function AdminMenteeDetailPage() {
 
   return (
     <div>
+      {gateDialog}
       <div className="mb-6">
         <Link href="/admin/candidates" className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-4">
           <ArrowLeft className="h-4 w-4" />
@@ -666,7 +678,10 @@ export default function AdminMenteeDetailPage() {
             />
           </Card>
         )}
-        <DocumentsManager targetUserId={id} />
+        {/* The anchor a blocked stage move links to (#1590). */}
+        <div id="documents" className="scroll-mt-20">
+          <DocumentsManager targetUserId={id} />
+        </div>
         <UserActivityPanel userId={id} />
         {user && <CandidateEraseDangerZone userId={id} fullName={user.fullName} onAnonymized={load} />}
       </div>

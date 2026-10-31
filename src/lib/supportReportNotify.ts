@@ -5,9 +5,9 @@
 // response (the route calls it inside `after()`), and never throws: a mail or
 // Slack outage must not lose the report that is already stored.
 
+import { tenantAdminWhere } from '@/lib/tenantAdmins';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
-import { orgWhere } from '@/lib/tenantFilter';
 import { assertPublicHttpsUrl } from '@/lib/ssrfGuard';
 import { appUrlFor, sendSupportReportEmail } from '@/services/emailService';
 import { isSlackWebhookUrl, notifyChannels, pathOnly } from '@/lib/supportReportIntegrationRule';
@@ -26,8 +26,9 @@ export async function announceSupportReport(reportId: string): Promise<void> {
   const path = pathOnly(report.url).split('?')[0];
 
   if (channels.includes('email')) {
+    // An org-level notice: no PROGRAM_ADMIN, whose tier cannot open the inbox (#3485).
     const admins = await prisma.user.findMany({
-      where: { AND: [{ role: 'ADMIN', isActive: true }, await orgWhere(report.orgId)] },
+      where: await tenantAdminWhere(report.orgId),
       select: { id: true, email: true, preferredLanguage: true },
     });
     for (const admin of admins) {

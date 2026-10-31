@@ -1,3 +1,4 @@
+import { tenantAdminRows } from '@/lib/tenantAdmins';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { runWithOrg } from '@/lib/orgContext';
@@ -194,17 +195,15 @@ const RECIPIENT_SELECT = {
  * the ADMINs OF THAT ORG — never every admin on the platform, which is what an
  * unscoped `role: 'ADMIN'` query returns on a multi-tenant box.
  */
-async function recipientsFor(orgId: string, mentorId: string): Promise<Recipient[]> {
+async function recipientsFor(orgId: string, mentorId: string, companyId: string | null): Promise<Recipient[]> {
   const owner = await prisma.user.findUnique({ where: { id: mentorId }, select: RECIPIENT_SELECT });
   if (owner?.isActive) return [owner];
 
-  return prisma.user.findMany({
-    // `orgId` explicitly, not left to the tenant middleware: this runs with no
-    // session, and an unscoped fallback would mail another tenant's admins
-    // about a record they cannot even open.
-    where: { orgId, role: 'ADMIN', isActive: true },
-    select: RECIPIENT_SELECT,
-  });
+  // `orgId` explicitly, not left to the tenant middleware: this runs with no
+  // session, and an unscoped fallback would mail another tenant's admins
+  // about a record they cannot even open. Of its PROGRAM_ADMINs, only those
+  // whose grants cover the account (#3485).
+  return tenantAdminRows(orgId, { companyId }, RECIPIENT_SELECT);
 }
 
 /**
@@ -243,7 +242,7 @@ async function dispatchReminder(row: DueTrialReminderRow): Promise<DispatchResul
   const orgId = relation.orgId;
   if (!orgId) return skip();
 
-  const recipients = await recipientsFor(orgId, relation.mentorId);
+  const recipients = await recipientsFor(orgId, relation.mentorId, relation.companyId);
   if (recipients.length === 0) {
     logger.warning('Trial reminder has no reachable recipient', { relationId: relation.id, threshold });
     return skip();

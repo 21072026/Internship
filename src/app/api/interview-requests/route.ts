@@ -92,7 +92,7 @@ export async function POST(request: Request) {
     // has no flag, and the application is the record.
     const [requisition, relation, shortlist, shortlistedApplication] = await Promise.all([
       prisma.requisition.findFirst({ where: { id: requisitionId, orgId, companyId: session.user.companyId! }, select: { id: true } }),
-      prisma.mentorshipRelation.findFirst({ where: { orgId, companyId: session.user.companyId!, menteeId, status: 'ACTIVE' }, select: { id: true } }),
+      prisma.mentorshipRelation.findFirst({ where: { orgId, companyId: session.user.companyId!, menteeId, status: 'ACTIVE' }, select: { id: true, mentorId: true, mentee: { select: { fullName: true } } } }),
       prisma.companyInterest.findFirst({ where: { companyId: session.user.companyId!, menteeId, requisitionId, status: 'SHORTLISTED' }, select: { id: true } }),
       prisma.application.findFirst({ where: { orgId, requisitionId, menteeId, stage: 'SHORTLISTED' }, select: { id: true } }),
     ]);
@@ -106,6 +106,21 @@ export async function POST(request: Request) {
         { requestId: created.id, requisitionId, menteeId, companyId: created.companyId },
         { orgId, actor: { id: session.user.id, type: 'user' } },
       );
+      // The mentee's active mentor decides it (interviewRequestActorWhere), so
+      // they are told — in-app, and on chat with Approve/Decline on the card
+      // (#1949), which call decideInterviewRequest() as them.
+      await notifyEvent(relation.mentorId, 'interview_request.received', { menteeName: relation.mentee.fullName }, {
+        dedupeKey: `interview-request:${created.id}`,
+        chatCard: {
+          subjectKey: `interview-request:${created.id}`,
+          actionUrl: null,
+          supersede: false,
+          buttons: [
+            { label: 'approve', actionId: 'interview_request.approve', value: created.id },
+            { label: 'decline', actionId: 'interview_request.decline', value: created.id },
+          ],
+        },
+      });
       return NextResponse.json({ request: created }, { status: 201 });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') return NextResponse.json({ error: 'A pending request already exists', code: 'already_pending' }, { status: 409 });

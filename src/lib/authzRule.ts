@@ -217,7 +217,7 @@ export interface DecideInput {
 const DENY = (reason: DenialReason): Decision => ({ allow: false, reason });
 
 /** Does one grant cover the subject? A grant naming both narrows to both. */
-export function grantCovers(grant: ScopeGrant, subject: Subject): boolean {
+export function grantCovers(grant: Pick<ScopeGrant, 'cohortId' | 'companyId'>, subject: Subject): boolean {
   if (!grant.cohortId && !grant.companyId) return false; // names nothing → grants nothing
   if (grant.cohortId && grant.cohortId !== subject.cohortId) return false;
   if (grant.companyId && grant.companyId !== subject.companyId) return false;

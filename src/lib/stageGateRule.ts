@@ -65,3 +65,53 @@ export function gateCapability(stage: Partial<StageGateConfig>): Permission | 'i
 
 /** The offer statuses that count as "an offer was made" for an offer gate. */
 export const GATE_OFFER_STATUSES = ['SENT', 'ACCEPTED'] as const;
+
+/**
+ * The capabilities the stage editor offers (#1590). Anything else already on a
+ * row is kept and shown by name; the PUT accepts any known Permission.
+ */
+export const GATE_CAPABILITY_CHOICES = ['pipeline.transition'] as const;
+
+export interface EditableStage {
+  key: string;
+  label: string;
+  order: number;
+  isTerminal?: boolean;
+  isOffPath?: boolean;
+  color?: string | null;
+  phase?: string | null;
+}
+
+const norm = (v: string | null | undefined) => (v ?? '').trim().toLowerCase() || null;
+
+/**
+ * True when `next` changes nothing but the entry gates of `current` (#1590):
+ * the same keys in the same order, labels, flags, colours and phases. This is
+ * what a FREE tenant may save — gates are a compliance control and never
+ * paywalled; only the stage set's look and shape is a paid customisation.
+ * `isDefault(key, label)` says whether a label is just the built-in one in some
+ * language, so a FREE editor that echoes the localized default still matches.
+ */
+export function onlyGatesChanged(
+  current: readonly EditableStage[],
+  next: readonly EditableStage[],
+  isDefault: (key: string, label: string) => boolean,
+  isPhase: (value: unknown) => boolean,
+): boolean {
+  if (current.length !== next.length) return false;
+  const a = [...current].sort((x, y) => x.order - y.order);
+  const b = [...next].sort((x, y) => x.order - y.order);
+  return a.every((c, i) => {
+    const n = b[i];
+    if (c.key !== n.key) return false;
+    const sameLabel = c.label.trim() === n.label.trim() || (isDefault(c.key, c.label) && isDefault(n.key, n.label));
+    const phase = (p: string | null | undefined) => (isPhase(p) ? p : null);
+    return (
+      sameLabel &&
+      !!c.isTerminal === !!n.isTerminal &&
+      !!c.isOffPath === !!n.isOffPath &&
+      norm(c.color) === norm(n.color) &&
+      phase(c.phase) === phase(n.phase)
+    );
+  });
+}

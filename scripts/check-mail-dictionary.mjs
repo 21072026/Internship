@@ -11,7 +11,8 @@
 //   inbox.
 //
 // WHAT IT CHECKS
-//   Every tracked source file under src/ that calls sendEmail( is searched for
+//   Every tracked source file under src/ that calls sendEmail( — or hands the
+//   router a pre-rendered mail, notifyEvent(…, { email: { … } }) (#1711) — is searched for
 //   bare getDictionary( calls. The count per file is a RATCHET pinned in
 //   PINNED below: the remaining calls read copy that names no role (sign-in
 //   links, times, the unsubscribe footer, …) or have no org to ask about. A new
@@ -33,6 +34,11 @@ const PINNED = new Map([
 // Spelled in halves so this file does not match itself.
 const BARE = new RegExp('\\b' + 'getDictionary' + '\\(', 'g');
 const SENDS = 'send' + 'Email(';
+// A mail handed to the router pre-rendered (#1711) is still a mail this file
+// wrote: notifyEvent(…, { email: { subject, html } }). Without this the guard
+// went blind to every site the moment it moved behind the router.
+const ROUTED = 'notify' + 'Event(';
+const PRERENDERED = /\bemail:\s*\{/;
 
 const files = execFileSync('git', ['ls-files', 'src'], { encoding: 'utf8' })
   .split('\n')
@@ -47,7 +53,7 @@ for (const file of files) {
   } catch {
     continue;
   }
-  if (!text.includes(SENDS)) continue;
+  if (!text.includes(SENDS) && !(text.includes(ROUTED) && PRERENDERED.test(text))) continue;
   const count = (text.match(BARE) ?? []).length;
   if (count === 0) continue;
   seen.add(file);
