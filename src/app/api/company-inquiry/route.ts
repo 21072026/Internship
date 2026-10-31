@@ -16,8 +16,9 @@ import { requestOrigin } from '@/lib/servedHosts';
 
 // A company asking for a look at the product — from the public /for-companies
 // page on an internship host, or the demo form on the MARKETING landing (#2569).
-// Companies have no self-service sign-up (a COMPANY user is only born from an
-// InvitationToken), so this form is the bridge — and the request has to
+// A COMPANY user is only born from an InvitationToken — through this enquiry's
+// conversion or the employer self-signup (#1865, which also mints one) — so
+// this form is the conversational bridge, and the request has to
 // survive: it is stored, notified in-app and emailed, because an enquiry that
 // only exists in one inbox is an enquiry that gets lost.
 //
