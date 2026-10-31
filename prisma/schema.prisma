@@ -757,26 +757,36 @@ model SlaBreach {
 }
 
 model PipelineStage {
-  id         String       @id @default(cuid())
-  orgId      String
-  org        Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  key        String
+  id             String       @id @default(cuid())
+  orgId          String
+  org            Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  key            String
   /// A label the tenant actually typed, shown verbatim in every language — or
   /// "" meaning "use the built-in localized label for this key" (#2268). Always
   /// read it through resolvePipelineStages()/useResolvedStages(), never raw.
-  label      String
-  order      Int
-  isTerminal Boolean      @default(false)
-  isOffPath  Boolean      @default(false)
+  label          String
+  order          Int
+  isTerminal     Boolean      @default(false)
+  isOffPath      Boolean      @default(false)
   /// The board phase this stage is grouped under (#1637): 'pre' | 'internship'
   /// | 'result', whitelisted by PIPELINE_PHASES in src/lib/pipeline.ts. NULL =
   /// derive it: a canonical key takes its built-in phase, any other key the
   /// trailing "custom" group — exactly what every existing row showed before
   /// the column existed, which is why it is nullable rather than defaulted.
-  phase      String?      @db.VarChar(16)
-  color      String?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  phase          String?      @db.VarChar(16)
+  color          String?
+  /// Entry gates (#1589, src/lib/stageGate.ts): what must hold before a
+  /// relation moves FORWARD into this stage. All off by default, so a tenant
+  /// that configures nothing behaves exactly as before. A backwards move or a
+  /// move into an off-path stage is never gated. gateCapability is a Permission
+  /// name (src/lib/authzRule.ts) the mover must hold on the relation; an
+  /// unknown name refuses every forward move (fail-closed).
+  gateCapability String?      @db.VarChar(64)
+  gateDocuments  Boolean      @default(false)
+  gateEvaluation Boolean      @default(false)
+  gateOffer      Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 
   @@unique([orgId, key])
   @@index([orgId, order])
