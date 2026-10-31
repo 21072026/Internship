@@ -617,6 +617,11 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
         {view === 'day' && dayView}
         {view === 'agenda' && agendaView}
 
+        {/* Deliberately not <AsyncSection> (#1450): that component REPLACES its
+            children, and the calendar must keep its grid and navigation under
+            the loading/error state (an overlay), so paging a month does not
+            collapse the layout. It keeps the same contract by hand: loading
+            wins, and the empty line below shows only when neither is up. */}
         {requestPending && (
           <div
             data-testid="calendar-loading"

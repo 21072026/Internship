@@ -43,6 +43,18 @@ const render = (props: Partial<Parameters<typeof AsyncSection>[0]> = {}) => reso
     ...props,
   }));
 
+test('AsyncSection: errorDisplay none renders nothing on error and still never the empty text; testIdPrefix names the states (#1450)', () => {
+  const silent = render({ error: 'failed', empty: true, errorDisplay: 'none' });
+  expect(silent).toBeNull();
+
+  const loading = render({ loading: true, testIdPrefix: 'meetings-list' });
+  expect(allNodes(loading).some((node) => node.props?.['data-testid'] === 'meetings-list-loading')).toBe(true);
+  const empty = render({ empty: true, testIdPrefix: 'meetings-list' });
+  expect(allNodes(empty).some((node) => node.props?.['data-testid'] === 'meetings-list-empty')).toBe(true);
+  const error = render({ error: 'failed', testIdPrefix: 'meetings-list' });
+  expect(allNodes(error).some((node) => node.props?.['data-testid'] === 'meetings-list-error')).toBe(true);
+});
+
 test('AsyncSection enforces state precedence, retries, and renders every skeleton variant', () => {
   const loading = render({ loading: true, error: 'failed', empty: true });
   expect(allNodes(loading).some((node) => node.props?.['data-testid'] === 'async-section-loading')).toBe(true);
