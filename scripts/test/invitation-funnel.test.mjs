@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { funnelRate, invitationFunnel, reachedStage } from '../../src/lib/invitationFunnelRule.ts';
 
-const base = { role: 'MENTEE', invitedById: 'a', openedAt: null, registeredAt: null, used: false, revokedAt: null, activated: false };
+const base = { role: 'MENTEE', openedAt: null, registeredAt: null, used: false, revokedAt: null, activated: false };
 const at = '2026-10-01T00:00:00Z';
 
 test('each invitation reaches exactly one stage, later stages implying earlier ones', () => {
@@ -31,13 +31,13 @@ test('a revoked invitation leaves the funnel unless someone already registered t
   assert.equal(reachedStage({ ...base, registeredAt: at, revokedAt: at }), 'registered');
 });
 
-test('the funnel is cumulative, per role and per inviter, busiest first', () => {
+test('the funnel is cumulative and per role, busiest first', () => {
   const f = invitationFunnel([
     base,
     { ...base, openedAt: at },
     { ...base, registeredAt: at },
-    { ...base, registeredAt: at, activated: true, invitedById: 'b' },
-    { ...base, role: 'MENTOR', invitedById: 'b', openedAt: at, registeredAt: at, activated: true },
+    { ...base, registeredAt: at, activated: true },
+    { ...base, role: 'MENTOR', openedAt: at, registeredAt: at, activated: true },
     { ...base, revokedAt: at },
   ]);
   assert.deepEqual(f.total, { sent: 5, opened: 4, registered: 3, activated: 2 });
@@ -46,11 +46,9 @@ test('the funnel is cumulative, per role and per inviter, busiest first', () => 
     { role: 'MENTEE', sent: 4, opened: 3, registered: 2, activated: 1 },
     { role: 'MENTOR', sent: 1, opened: 1, registered: 1, activated: 1 },
   ]);
-  assert.deepEqual(f.byInviter, [
-    { invitedById: 'a', sent: 3, opened: 2, registered: 1, activated: 0 },
-    { invitedById: 'b', sent: 2, opened: 2, registered: 2, activated: 2 },
-  ]);
-  for (const row of [f.total, ...f.byRole, ...f.byInviter]) {
+  // Counts only: nothing in the result names a person.
+  assert.deepEqual(Object.keys(f).sort(), ['byRole', 'revoked', 'total']);
+  for (const row of [f.total, ...f.byRole]) {
     assert.ok(row.sent >= row.opened && row.opened >= row.registered && row.registered >= row.activated);
   }
 });

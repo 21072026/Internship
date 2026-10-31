@@ -3,7 +3,8 @@ import { prisma, seedUser, uniqueEmail, setOrgFeature } from './helpers/db';
 import { gotoSettled, signInAndSettle, signInViaApi } from './helpers/auth';
 
 // #1921 (slice 1): the invitation funnel — sent → opened → registered → signed
-// in — on the invitation board, its API and the report registry. Its own org.
+// in — on the invitation board, its API and the report registry. Counts and
+// rates only: the response names no person. Its own org.
 //
 //   MENTEE  sent only · opened · opened · registered (no sign-in yet) · registered + signed in
 //   MENTOR  registered + signed in
@@ -60,7 +61,8 @@ test('the invitation funnel counts in-app steps, per role, inside its own org', 
       { role: 'MENTEE', sent: 5, opened: 4, registered: 2, activated: 1 },
       { role: 'MENTOR', sent: 1, opened: 1, registered: 1, activated: 1 },
     ]);
-    expect(before.byInviter).toEqual([{ invitedById: admin.id, inviterName: 'IF Admin', sent: 6, opened: 5, registered: 3, activated: 2 }]);
+    expect(Object.keys(before).sort()).toEqual(['byRole', 'revoked', 'total']);
+    expect(JSON.stringify(before)).not.toContain('@');
     // A range that ends before today holds none of them.
     const empty = await (await page.request.get('/api/admin/invitations/funnel?to=2020-01-01')).json();
     expect(empty.total).toEqual({ sent: 0, opened: 0, registered: 0, activated: 0 });

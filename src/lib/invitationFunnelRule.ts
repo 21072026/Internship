@@ -20,6 +20,9 @@
 //   · A REVOKED invitation that never registered leaves the funnel. The admin
 //     withdrew it (a typo, the wrong person); counting it as "sent, not opened"
 //     would read as an invitee who walked away. It is reported on its own.
+//
+// Counts and rates only, per role at the finest: no per-person list, neither of
+// invitees nor of the staff who sent the invitations.
 
 export const INVITATION_FUNNEL_STAGES = ['sent', 'opened', 'registered', 'activated'] as const;
 export type InvitationFunnelStage = (typeof INVITATION_FUNNEL_STAGES)[number];
@@ -29,7 +32,6 @@ export type FunnelCounts = Record<InvitationFunnelStage, number>;
 /** What the funnel reads of one invitation. `activated` is resolved by the loader. */
 export interface FunnelInvitation {
   role: string;
-  invitedById: string | null;
   openedAt: Date | string | null;
   registeredAt: Date | string | null;
   used: boolean;
@@ -40,7 +42,6 @@ export interface FunnelInvitation {
 export interface InvitationFunnel {
   total: FunnelCounts;
   byRole: ({ role: string } & FunnelCounts)[];
-  byInviter: ({ invitedById: string | null } & FunnelCounts)[];
   /** Withdrawn before anyone registered: outside the funnel, counted here. */
   revoked: number;
 }
@@ -65,11 +66,10 @@ function add(counts: FunnelCounts, stage: InvitationFunnelStage): void {
   }
 }
 
-/** The whole funnel, per role and per inviter, busiest first. */
+/** The whole funnel, and per role, busiest first. */
 export function invitationFunnel(rows: readonly FunnelInvitation[]): InvitationFunnel {
   const total = emptyFunnelCounts();
   const roles = new Map<string, FunnelCounts>();
-  const inviters = new Map<string | null, FunnelCounts>();
   let revoked = 0;
   for (const inv of rows) {
     const stage = reachedStage(inv);
@@ -80,14 +80,11 @@ export function invitationFunnel(rows: readonly FunnelInvitation[]): InvitationF
     add(total, stage);
     if (!roles.has(inv.role)) roles.set(inv.role, emptyFunnelCounts());
     add(roles.get(inv.role)!, stage);
-    if (!inviters.has(inv.invitedById)) inviters.set(inv.invitedById, emptyFunnelCounts());
-    add(inviters.get(inv.invitedById)!, stage);
   }
   const bySent = (a: FunnelCounts, b: FunnelCounts) => b.sent - a.sent;
   return {
     total,
     byRole: [...roles].map(([role, c]) => ({ role, ...c })).sort(bySent),
-    byInviter: [...inviters].map(([invitedById, c]) => ({ invitedById, ...c })).sort(bySent),
     revoked,
   };
 }

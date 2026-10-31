@@ -22,7 +22,7 @@ export async function loadInvitationFunnel(tenant: TenantWhere, range: FunnelRan
   const createdAt = { ...(range.from ? { gte: range.from } : {}), ...(range.to ? { lte: range.to } : {}) };
   const rows = await prisma.invitationToken.findMany({
     where: withinTenant(range.from || range.to ? { createdAt } : {}, tenant),
-    select: { role: true, invitedById: true, openedAt: true, registeredAt: true, used: true, revokedAt: true, email: true, orgId: true },
+    select: { role: true, openedAt: true, registeredAt: true, used: true, revokedAt: true, email: true, orgId: true },
   });
 
   // Who of the registered invitees has signed in, one query per org involved
@@ -48,7 +48,6 @@ export async function loadInvitationFunnel(tenant: TenantWhere, range: FunnelRan
     rows.map(
       (r): FunnelInvitation => ({
         role: r.role,
-        invitedById: r.invitedById,
         openedAt: r.openedAt,
         registeredAt: r.registeredAt,
         used: r.used,

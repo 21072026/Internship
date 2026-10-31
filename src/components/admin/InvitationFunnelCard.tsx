@@ -8,17 +8,14 @@ import { INVITATION_FUNNEL_STAGES, funnelRate, type FunnelCounts } from '@/lib/i
 // registered → signed in, for the invitations sent in the board's date range.
 // The numbers come from GET /api/admin/invitations/funnel; the stages are
 // src/lib/invitationFunnelRule.ts. Every step is an in-app event, so the card
-// says so — there is no mail pixel behind any of it.
+// says so — there is no mail pixel behind any of it. Counts and rates only:
+// no list of people.
 
 interface FunnelResponse {
   total: FunnelCounts;
   byRole: ({ role: string } & FunnelCounts)[];
-  byInviter: ({ invitedById: string | null; inviterName: string | null } & FunnelCounts)[];
   revoked: number;
 }
-
-/** How many inviters the card lists; the API returns up to 50. */
-const INVITER_ROWS = 10;
 
 export function InvitationFunnelCard({ from, to }: { from: string; to: string }) {
   const t = useT();
@@ -107,16 +104,6 @@ export function InvitationFunnelCard({ from, to }: { from: string; to: string })
                 data.byRole.map((r) => ({ ...r, key: r.role, label: roleLabel(r.role) })),
                 v.role,
                 'invitation-funnel-role',
-              )}
-            </div>
-          )}
-          {data.byInviter.length > 0 && (
-            <div className="mt-4 overflow-x-auto">
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">{v.byInviter}</h3>
-              {table(
-                data.byInviter.slice(0, INVITER_ROWS).map((r) => ({ ...r, key: r.invitedById ?? 'none', label: r.inviterName ?? v.unknownInviter })),
-                v.inviter,
-                'invitation-funnel-inviter',
               )}
             </div>
           )}

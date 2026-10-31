@@ -93,10 +93,12 @@ same slice (`segmentBy`, `segment` in its `params`) and the scheduled send honou
 
 `/admin/invitations` shows, and `GET /api/admin/invitations/funnel?from=&to=` returns, how
 many of the invitations sent in a period were **opened → registered → signed in**, in
-total, per role and per inviter. The registry report `invitation-funnel` is the same
+total and per role — **counts and rates only**, never a list of invitees or of the staff who
+invited them. The registry report `invitation-funnel` is the same
 numbers per role over every invitation ever sent, under the usual privacy floor.
 
-- Every step is an **in-app event**: `openedAt` (the register link was opened),
+- Every step is an **in-app event**, and nothing new is stored for it: `openedAt` (the
+  first visit of the invitation's register link; no IP, user agent or device),
   `registeredAt` / `used` (an account was created) and `User.lastLoginAt` on that account
   (registration sends the invitee to the sign-in page, so this is the first real sign-in).
   No mail pixel, no tracking link. Newsletter opens and clicks wait for a legal decision on
