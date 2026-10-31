@@ -24,6 +24,24 @@ ones (`programId` null) plus the programme's own. Without a programme (SSO
 JIT, the apply form, a direct assignment) only the organisation's mode and
 its organisation-wide rules count.
 
+## Whom a rule judges (#3423)
+
+`ProgramEligibilityRule.appliesTo` is `MENTEE` (default), `MENTOR` or `BOTH`.
+Every rule written before the column is `MENTEE`, so it keeps its meaning.
+
+- **Mentees** are judged by `MENTEE` and `BOTH` rules, exactly as above.
+- **Mentors** are judged by `MENTOR` and `BOTH` rules only. Mentors are staff,
+  not applicants: a scope with **no active rule for mentors leaves every mentor
+  eligible**, so a `RULES` scope written for mentees never empties the mentor pool.
+- A mentor a rule does not admit is left out of mentor-suggest, the simulation
+  and match rounds (`loadMentorPool(tenant, { orgId, programId })`), and
+  `POST /api/mentorship` and the group routes refuse them with
+  `403 not_eligible` (`side: 'mentor'`).
+- **SSO JIT never holds a mentor.** A new MENTOR whom no rule admits signs in
+  normally and is only left out of matching — holding programme staff on their
+  first SSO login is the lockout this rule set exists to avoid.
+- The builder's dry run counts mentees and mentors separately.
+
 ## Precedence
 
 The same inputs always produce the same decision and name the same rule.

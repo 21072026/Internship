@@ -43,6 +43,12 @@ export function assertSeatableMentor(user: (Pick<User, 'id' | 'role' | 'isActive
   if (isBenched(user)) throw new GroupRefusal('mentor_benched', 409, { userId: id });
 }
 
+/** The programme's mentor rules (#3423) for someone about to mentor; none = everyone stands. Throws GroupRefusal. */
+export async function assertEligibleMentor(user: Pick<User, 'id' | 'orgId'>): Promise<void> {
+  const eligibility = await isEligible({ id: user.id, orgId: user.orgId }, null, 'MENTOR');
+  if (!eligibility.ok) throw new GroupRefusal('not_eligible', 403, { userId: user.id, side: 'mentor', reason: eligibility.reason, ruleId: eligibility.ruleId ?? null });
+}
+
 /** The invariant for one more mentee, inside the caller's transaction. Throws AlreadyMentoredError. */
 export async function assertNotMentored(tx: Parameters<typeof findActiveMentorship>[0], menteeId: string): Promise<void> {
   const active = await findActiveMentorship(tx, menteeId);

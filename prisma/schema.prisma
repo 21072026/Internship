@@ -4288,6 +4288,9 @@ model ProgramEligibilityRule {
   value       Json
   priority    Int          @default(0)
   active      Boolean      @default(true)
+  // Whom the rule judges (#3423): MENTEE | MENTOR | BOTH. Defaulted, so every
+  // rule written before the column keeps its meaning — it judges mentees.
+  appliesTo   String       @default("MENTEE") @db.VarChar(8)
   createdById String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt

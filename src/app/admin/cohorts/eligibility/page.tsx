@@ -26,6 +26,8 @@ interface Rule {
   value: unknown;
   priority: number;
   active: boolean;
+  // MENTEE | MENTOR | BOTH (#3423); older rows read MENTEE.
+  appliesTo?: string;
 }
 interface Attr { key: string; labelEn: string; labelTr: string; labelDe: string; type: string }
 interface Program { id: string; name: string; eligibilityMode: string }
@@ -60,10 +62,10 @@ function EligibilityPage() {
   const programId = params.get('programId');
   const [scope, setScope] = useState<Scope | null>(null);
   const [mode, setMode] = useState('OPEN');
-  const [preview, setPreview] = useState<{ total: number; admitted: number } | null>(null);
+  const [preview, setPreview] = useState<{ total: number; admitted: number; mentors?: { total: number; admitted: number } } | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [draft, setDraft] = useState({ effect: 'ALLOW', attribute: 'department', operator: 'IN', value: '', priority: 0 });
+  const [draft, setDraft] = useState({ effect: 'ALLOW', attribute: 'department', operator: 'IN', value: '', priority: 0, appliesTo: 'MENTEE' });
 
   const api = `/api/admin/eligibility${programId ? `?programId=${encodeURIComponent(programId)}` : ''}`;
   const load = useCallback(async () => {
@@ -90,7 +92,7 @@ function EligibilityPage() {
   useEffect(() => {
     if (!scope) return;
     const rules = [
-      ...scope.rules.map((r) => ({ effect: r.effect, attribute: r.attribute, operator: r.operator, value: r.value, priority: r.priority, active: r.active })),
+      ...scope.rules.map((r) => ({ effect: r.effect, attribute: r.attribute, operator: r.operator, value: r.value, priority: r.priority, active: r.active, appliesTo: r.appliesTo ?? 'MENTEE' })),
       ...(draftValid ? [{ ...draft, value: draftValue }] : []),
     ];
     const handle = setTimeout(async () => {
@@ -141,6 +143,7 @@ function EligibilityPage() {
       <td className="py-1.5 pr-3">
         <Badge variant={r.effect === 'ALLOW' ? 'success' : 'danger'}>{r.effect === 'ALLOW' ? e.allow : e.deny}</Badge>
       </td>
+      <td className="py-1.5 pr-3" data-testid={`eligibility-rule-target-${r.id}`}>{(e.targets as Record<string, string>)[r.appliesTo ?? 'MENTEE'] ?? r.appliesTo}</td>
       <td className="py-1.5 pr-3">{labelOf(r.attribute)}</td>
       <td className="py-1.5 pr-3">{opLabel(r.operator)}</td>
       <td className="py-1.5 pr-3 break-all">{valueText(r)}</td>
@@ -171,6 +174,7 @@ function EligibilityPage() {
       <thead>
         <tr className="text-left text-xs text-gray-500">
           <th className="py-1 pr-3">{e.effect}</th>
+          <th className="py-1 pr-3">{e.appliesTo}</th>
           <th className="py-1 pr-3">{e.attribute}</th>
           <th className="py-1 pr-3">{e.operator}</th>
           <th className="py-1 pr-3">{e.value}</th>
@@ -252,6 +256,12 @@ function EligibilityPage() {
             </select>
           </label>
           <label className="flex flex-col text-xs text-gray-600 dark:text-gray-300">
+            {e.appliesTo}
+            <select data-testid="eligibility-applies-to" className={inputClass} value={draft.appliesTo} onChange={(ev) => setDraft({ ...draft, appliesTo: ev.target.value })}>
+              {(['MENTEE', 'MENTOR', 'BOTH'] as const).map((k) => <option key={k} value={k}>{e.targets[k]}</option>)}
+            </select>
+          </label>
+          <label className="flex flex-col text-xs text-gray-600 dark:text-gray-300">
             {e.attribute}
             <select data-testid="eligibility-attribute" className={inputClass} value={draft.attribute} onChange={(ev) => setDraft({ ...draft, attribute: ev.target.value })}>
               {scope?.fields.map((f) => <option key={f} value={f}>{labelOf(f)}</option>)}
@@ -303,6 +313,12 @@ function EligibilityPage() {
         <p data-testid="eligibility-preview" className="text-sm text-gray-800 dark:text-gray-200">
           {preview ? e.preview.replace('{admitted}', String(preview.admitted)).replace('{total}', String(preview.total)) : e.previewPending}
         </p>
+        {preview?.mentors && (
+          <p data-testid="eligibility-preview-mentors" className="mt-1 text-sm text-gray-800 dark:text-gray-200">
+            {e.previewMentors.replace('{admitted}', String(preview.mentors.admitted)).replace('{total}', String(preview.mentors.total))}
+          </p>
+        )}
+        <p className="mt-1 text-xs text-gray-500">{e.mentorRulesHint}</p>
       </Card>
     </div>
   );
