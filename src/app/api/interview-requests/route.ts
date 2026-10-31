@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireCompanySeat } from '@/lib/companySeatGate';
+import { notifyEvent } from '@/lib/notifications/router';
 import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { Prisma } from '@prisma/client';
