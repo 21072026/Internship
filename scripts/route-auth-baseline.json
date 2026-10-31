@@ -50,6 +50,10 @@
     "methods": ["GET"],
     "why": "The OIDC redirect URI (#1929): the IdP sends a signed-out browser here with code + state. Pre-auth by nature; the caller is authenticated by the single-use state row, the browser-binding cookie and the ID token verified against the IdP's JWKS."
   },
+  "src/app/api/auth/social/consent/route.ts": {
+    "methods": ["POST"],
+    "why": "Social sign-up's consent step (#1962): a signed-out browser accepts the privacy notice before its new account exists. The caller is authenticated by the sealed, httpOnly, browser-bound ticket the callback minted after verifying the provider's ID token; the session is still minted by the `magic` provider."
+  },
   "src/app/api/auth/social/[provider]/callback/route.ts": {
     "methods": ["GET"],
     "why": "The social sign-in redirect URI (#1962): the provider sends a signed-out browser here with code + state. Pre-auth by nature; the caller is authenticated by the single-use state row, the browser-binding cookie and the ID token verified against the provider's JWKS — and the session is still minted only by the `magic` provider (every account rule, 2FA included)."
@@ -81,7 +85,11 @@
   "src/app/api/partner/apply/route.ts": { "methods": ["POST"], "why": "public partner application form (#3361): sessionless by design, the org comes from the host mapping, per-IP rate limit + honeypot + per-address cap; creates no account" },
   "src/app/api/company-inquiry/route.ts": {
     "methods": ["POST"],
-    "why": "The public /for-companies enquiry form. Companies have no self-service sign-up (a COMPANY user is only born from an InvitationToken), so this form is the only bridge. Anti-spam is a honeypot field, a minimum render-to-submit time and a per-IP rate limit — our CSP blocks third-party captchas."
+    "why": "The public /for-companies enquiry form — the conversational way in beside the employer self-signup (#1865). A COMPANY user is only born from an InvitationToken. Anti-spam is a honeypot field, a minimum render-to-submit time and a per-IP rate limit — our CSP blocks third-party captchas."
+  },
+  "src/app/api/public/signup/company/route.ts": {
+    "methods": ["POST"],
+    "why": "Employer self-signup (#1865, docs/company-verification.md). Creates a PENDING company — invisible to every candidate until verified — and an invitation mailed to the work address, never returned. Per-IP rate limit, honeypot, minimum fill time, free-mail domains refused, and the same 202 for a taken address so nothing can be probed."
   },
   "src/app/api/contact-permission/confirm/route.ts": {
     "methods": ["POST"],

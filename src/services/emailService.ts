@@ -44,7 +44,7 @@ import { RETENTION_GRACE_DAYS } from '@/lib/retention';
 import { pruneInBatches } from '@/lib/retentionPrune';
 import { getMentorMenteeActivity, getSystemMenteeActivity, type MenteeActivity } from '@/lib/activityReport';
 import { programGrantsFor } from '@/lib/authzScope';
-import { programRelationWhere } from '@/lib/programScopeRule';
+import { programPeopleWhere, programRelationWhere } from '@/lib/programScopeRule';
 import { orgWhere } from '@/lib/tenantFilter';
 import { runUnscoped } from '@/lib/tenantAmbient';
 import { activeAdminsByOrg, tenantAdminIds } from '@/lib/tenantAdmins';
@@ -4660,7 +4660,7 @@ export async function checkStageDeadlineReminders() {
     if (!(await claimEscalation(breach.id, breach.level, now))) continue;
     escalated++;
     const days = daysOverdue(dueAt, now);
-    const admins = await escalationRecipients(rel.orgId);
+    const admins = await escalationRecipients(rel.orgId, rel);
     await notifyEvent(
       admins,
       'deadline.slaEscalated',
@@ -6010,9 +6010,10 @@ export async function sendDailyActivityDigests() {
   // tenant, i.e. one product's mentee names in the other product's inbox. A
   // NULL-org admin is the default org's (orgWhere), the rule tenantWhere()
   // applies on every screen.
+  // PROGRAM_ADMINs included: each one's table is narrowed below (#1577).
   const adminsByOrg = await activeAdminsByOrg({
     id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true,
-  });
+  }, { includeProgramAdmins: true });
   const admins = [...adminsByOrg.values()].flat();
   await origins.prefetch(admins.map((a) => a.orgId));
   for (const [orgId, orgAdmins] of adminsByOrg) {
@@ -6028,8 +6029,11 @@ export async function sendDailyActivityDigests() {
           skipped++;
           continue;
         }
+        // A PROGRAM_ADMIN's to-dos: the people of its programmes only (#3485).
+        const todoGrants = await programGrantsFor({ id: a.id, role: 'ADMIN', orgId });
+        const todoPeople = (todoGrants ? { AND: [orgFilter, programPeopleWhere(todoGrants)] } : orgFilter) as Prisma.UserWhereInput;
         try {
-          if (await sendOverdueTodoMail(a, { assignee: { is: orgFilter } }, await origins.urlFor(a.orgId), brand)) sent++;
+          if (await sendOverdueTodoMail(a, { assignee: { is: todoPeople } }, await origins.urlFor(a.orgId), brand)) sent++;
         } catch (e) {
           console.error('Overdue to-do mail failed:', e);
         }
@@ -6050,8 +6054,10 @@ export async function sendDailyActivityDigests() {
       if (items.length === 0) continue;
       const aLocale = resolveLocale(a.preferredLanguage);
       const A = (await dictionaryOf(aLocale, a.orgId)).notifications.activityDigestEmail;
-      // Their own organisation's to-dos, by the same org rule as the table.
-      const overdue = await overdueTodoBlock({ assignee: { is: orgFilter } }, aLocale, a.id, A);
+      // Their own organisation's to-dos, by the same org rule as the table —
+      // a PROGRAM_ADMIN's narrowed to its programmes' people (#3485).
+      const todoPeople = (grants ? { AND: [orgFilter, programPeopleWhere(grants)] } : orgFilter) as Prisma.UserWhereInput;
+      const overdue = await overdueTodoBlock({ assignee: { is: todoPeople } }, aLocale, a.id, A);
       try {
         const base = await origins.urlFor(a.orgId);
         await sendEmail({

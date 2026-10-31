@@ -12,7 +12,7 @@ import { sendRematchRequestedEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { orgWhere, tenantWhere, withinTenant } from '@/lib/tenantFilter';
-import { tenantAdminWhere } from '@/lib/tenantAdmins';
+import { tenantAdminRows } from '@/lib/tenantAdmins';
 import { requireCapability } from '@/lib/capabilityGate';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { isEndReasonCode } from '@/lib/relationLifecycle';
@@ -66,7 +66,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   return await withTenantScope(session, async () => {
     const relation = await prisma.mentorshipRelation.findUnique({
       where: { id },
-      select: { id: true, menteeId: true, mentorId: true, status: true, orgId: true },
+      select: { id: true, menteeId: true, mentorId: true, status: true, orgId: true, cohortId: true, companyId: true },
     });
     if (!relation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (relation.menteeId !== session.user.id) {
@@ -186,18 +186,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
 
     const menteeName = session.user.name;
-    // That org's admins only (#2542) — the query used to have no org filter.
-    const admins = await prisma.user.findMany({
-      where: await tenantAdminWhere(relationOrgId),
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        orgId: true,
-        preferredLanguage: true,
-        emailNotifications: true,
-        notificationPrefs: true,
-      },
+    // That org's admins only (#2542) — the query used to have no org filter —
+    // and of its PROGRAM_ADMINs only those whose grants cover the relation (#3485).
+    const admins = await tenantAdminRows(relationOrgId, { cohortId: relation.cohortId, companyId: relation.companyId }, {
+      id: true,
+      fullName: true,
+      email: true,
+      orgId: true,
+      preferredLanguage: true,
+      emailNotifications: true,
+      notificationPrefs: true,
     });
     await Promise.all(
       admins.map((a) =>

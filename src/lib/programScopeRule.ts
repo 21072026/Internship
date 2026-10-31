@@ -11,6 +11,8 @@
 // never `{}`. A relation with no cohort and no company is outside every grant —
 // deliberately (docs/role-access-matrix.md § Program scope).
 
+import { grantCovers } from './authzRule';
+
 export interface GrantLike {
   cohortId: string | null;
   companyId: string | null;
@@ -56,4 +58,36 @@ export function programPeopleWhere(grants: readonly GrantLike[]): object {
   ];
   if (companyOnly.length) or.push({ role: 'COMPANY', companyId: { in: companyOnly } });
   return { OR: or };
+}
+
+// ── Who hears about it (#3485) ──────────────────────────────────────────────
+// A fan-out to "the org's admins" (a bell, a digest, an escalation mail) is a
+// read: it carries names and stages. So it follows the same scope as the
+// lists. An ORG_ADMIN and an OBSERVER hear about everything in their org (an
+// empty tier column is ORG_ADMIN, authzRule.ts). A PROGRAM_ADMIN hears about a
+// subject only when one of its grants covers it — the one coverage rule,
+// `grantCovers()` — and never about an org-level event (a sign-up, a support
+// ticket, a plan limit), which has no programme to be inside. An unknown tier
+// hears nothing.
+
+/** User `where` for the admins who receive org-level notices: ORG_ADMIN (or an empty column) and OBSERVER. */
+export const ORG_LEVEL_ADMIN_WHERE: { OR: Array<{ adminLevel: null } | { adminLevel: { in: string[] } }> } = {
+  OR: [{ adminLevel: null }, { adminLevel: { in: ['ORG_ADMIN', 'OBSERVER'] } }],
+};
+
+/** What a notice is about, as far as a grant can cover it. null = the org itself. */
+export interface NoticeSubject {
+  cohortId?: string | null;
+  companyId?: string | null;
+}
+
+export function adminReceives(
+  tier: 'ORG_ADMIN' | 'PROGRAM_ADMIN' | 'OBSERVER' | null,
+  grants: readonly GrantLike[],
+  subject: NoticeSubject | null,
+): boolean {
+  if (tier === 'ORG_ADMIN' || tier === 'OBSERVER') return true;
+  if (tier !== 'PROGRAM_ADMIN' || !subject) return false;
+  const s = { cohortId: subject.cohortId ?? null, companyId: subject.companyId ?? null };
+  return grants.some((g) => grantCovers(g, s));
 }

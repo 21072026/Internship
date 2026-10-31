@@ -80,4 +80,19 @@ Never gated: an org on the built-in stages (no rows), a stage with no gate, a
 backwards or same-stage move, a move into an off-path stage, and a `COACHING`
 relation. `replaceStages()` carries a stage's gates over by key when the caller
 does not send them, so an editor that does not know about gates never wipes
-them. The editor UI for the gates is #1590.
+them.
+
+**Editing the gates (#1590).** The stage editor shows an "Entry conditions"
+row under every on-path stage and saves it through the same atomic `PUT`. Gates
+are **not** a paid feature: on the FREE plan the PUT accepts a body that changes
+nothing but gates (`onlyGatesChanged()` in `src/lib/stageGateRule.ts`) and
+answers `403 plan_required` to any change of key, label, order, colour, phase or
+flags. The editor offers `pipeline.transition` (admins with pipeline rights) as
+the capability; any other Permission already on a row is kept and shown by name.
+
+**The refusal.** Every UI that moves a stage reads a `409 stage_gate_blocked`
+through `stageGateFrom()` and opens `StageGateDialog`
+(`src/components/StageGateDialog.tsx`): the stage's label, the reason in the
+viewer's language, the missing documents by name, and a link to the documents
+section (`#documents` on the candidate page and on the mentor's relation page).
+The board puts the card back.

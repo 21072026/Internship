@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { acceptConfirmDialog, cancelConfirmDialog, confirmDialog } from './helpers/confirm';
+import { gotoSettled, signInAndSettle } from './helpers/auth';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -13,12 +14,13 @@ test.afterAll(async () => {
 // at_capacity or not_accepting. An available mentor skips the dialog
 // entirely, and cancelling must never send the POST.
 
-async function signInAsAdmin(page: import('@playwright/test').Page, email: string, pw: string) {
-  await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email);
-  await page.fill('input[type="password"]', pw);
-  await page.click('button[type="submit"]');
-  await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+// Each test runs in its own organization: the candidates list and the mentor
+// picker then hold this test's people only, instead of every candidate the
+// rest of the suite left in the shared database — a card on page two of a
+// crowded list was a timeout, not a failure of the confirmation flow.
+async function freshOrg(tag: string) {
+  const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  return prisma.organization.create({ data: { name: `MAC ${tag} ${stamp}`, slug: `mac-${tag}-${stamp}` } });
 }
 
 test('assigning an available mentor from the candidates picker skips the dialog and assigns directly', async ({ page }) => {
@@ -26,14 +28,15 @@ test('assigning an available mentor from the candidates picker skips the dialog 
   const mentorEmail = uniqueEmail('mac-avail-mentor');
   const menteeEmail = uniqueEmail('mac-avail-mentee');
   const pw = 'AssignPass123';
-  await seedUser(adminEmail, pw, 'ADMIN', 'MAC Avail Admin');
-  const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'MAC Avail Mentor');
-  const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'MAC Avail Mentee');
+  const org = await freshOrg('avail');
+  await seedUser(adminEmail, pw, 'ADMIN', 'MAC Avail Admin', org.id);
+  const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'MAC Avail Mentor', org.id);
+  const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'MAC Avail Mentee', org.id);
   await prisma.user.update({ where: { id: mentor.id }, data: { mentorCapacity: 5, acceptingMentees: true } });
 
   try {
-    await signInAsAdmin(page, adminEmail, pw);
-    await page.goto('/admin/candidates');
+    await signInAndSettle(page, adminEmail, pw, '/admin');
+    await gotoSettled(page, '/admin/candidates');
     const card = page.getByTestId(`candidate-card-${mentee.id}`);
     await expect(card).toBeVisible({ timeout: 10_000 });
 
@@ -52,6 +55,7 @@ test('assigning an available mentor from the candidates picker skips the dialog 
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(mentorEmail);
     await cleanupByEmail(adminEmail);
+    await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
   }
 });
 
@@ -61,18 +65,19 @@ test('assigning an at-capacity mentor from the candidates picker asks for confir
   const existingMenteeEmail = uniqueEmail('mac-cap-existing-mentee');
   const newMenteeEmail = uniqueEmail('mac-cap-new-mentee');
   const pw = 'AssignPass123';
-  await seedUser(adminEmail, pw, 'ADMIN', 'MAC Cap Admin');
-  const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'MAC Cap Mentor');
-  const existingMentee = await seedUser(existingMenteeEmail, pw, 'MENTEE', 'MAC Cap Existing Mentee');
-  const newMentee = await seedUser(newMenteeEmail, pw, 'MENTEE', 'MAC Cap New Mentee');
+  const org = await freshOrg('cap');
+  await seedUser(adminEmail, pw, 'ADMIN', 'MAC Cap Admin', org.id);
+  const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'MAC Cap Mentor', org.id);
+  const existingMentee = await seedUser(existingMenteeEmail, pw, 'MENTEE', 'MAC Cap Existing Mentee', org.id);
+  const newMentee = await seedUser(newMenteeEmail, pw, 'MENTEE', 'MAC Cap New Mentee', org.id);
   await prisma.user.update({ where: { id: mentor.id }, data: { mentorCapacity: 1 } });
   await prisma.mentorshipRelation.create({
     data: { mentorId: mentor.id, menteeId: existingMentee.id, orgId: existingMentee.orgId, status: 'ACTIVE', startDate: new Date() },
   });
 
   try {
-    await signInAsAdmin(page, adminEmail, pw);
-    await page.goto('/admin/candidates');
+    await signInAndSettle(page, adminEmail, pw, '/admin');
+    await gotoSettled(page, '/admin/candidates');
     const card = page.getByTestId(`candidate-card-${newMentee.id}`);
     await expect(card).toBeVisible({ timeout: 10_000 });
     await card.locator('select').selectOption(mentor.id);
@@ -106,6 +111,7 @@ test('assigning an at-capacity mentor from the candidates picker asks for confir
     await cleanupByEmail(existingMenteeEmail);
     await cleanupByEmail(mentorEmail);
     await cleanupByEmail(adminEmail);
+    await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
   }
 });
 
@@ -114,14 +120,15 @@ test('assigning a not-accepting mentor from the candidates picker asks for confi
   const mentorEmail = uniqueEmail('mac-acc-mentor');
   const menteeEmail = uniqueEmail('mac-acc-mentee');
   const pw = 'AssignPass123';
-  await seedUser(adminEmail, pw, 'ADMIN', 'MAC Acc Admin');
-  const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'MAC Acc Mentor');
-  const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'MAC Acc Mentee');
+  const org = await freshOrg('acc');
+  await seedUser(adminEmail, pw, 'ADMIN', 'MAC Acc Admin', org.id);
+  const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'MAC Acc Mentor', org.id);
+  const mentee = await seedUser(menteeEmail, pw, 'MENTEE', 'MAC Acc Mentee', org.id);
   await prisma.user.update({ where: { id: mentor.id }, data: { mentorCapacity: 10, acceptingMentees: false } });
 
   try {
-    await signInAsAdmin(page, adminEmail, pw);
-    await page.goto('/admin/candidates');
+    await signInAndSettle(page, adminEmail, pw, '/admin');
+    await gotoSettled(page, '/admin/candidates');
     const card = page.getByTestId(`candidate-card-${mentee.id}`);
     await expect(card).toBeVisible({ timeout: 10_000 });
     await card.locator('select').selectOption(mentor.id);
@@ -142,6 +149,7 @@ test('assigning a not-accepting mentor from the candidates picker asks for confi
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(mentorEmail);
     await cleanupByEmail(adminEmail);
+    await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
   }
 });
 
@@ -151,18 +159,19 @@ test('the /admin/mentorship assign form asks for confirmation before assigning a
   const existingMenteeEmail = uniqueEmail('mac-form-existing-mentee');
   const newMenteeEmail = uniqueEmail('mac-form-new-mentee');
   const pw = 'AssignPass123';
-  await seedUser(adminEmail, pw, 'ADMIN', 'MAC Form Admin');
-  const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'MAC Form Mentor');
-  const existingMentee = await seedUser(existingMenteeEmail, pw, 'MENTEE', 'MAC Form Existing Mentee');
-  const newMentee = await seedUser(newMenteeEmail, pw, 'MENTEE', 'MAC Form New Mentee');
+  const org = await freshOrg('form');
+  await seedUser(adminEmail, pw, 'ADMIN', 'MAC Form Admin', org.id);
+  const mentor = await seedUser(mentorEmail, pw, 'MENTOR', 'MAC Form Mentor', org.id);
+  const existingMentee = await seedUser(existingMenteeEmail, pw, 'MENTEE', 'MAC Form Existing Mentee', org.id);
+  const newMentee = await seedUser(newMenteeEmail, pw, 'MENTEE', 'MAC Form New Mentee', org.id);
   await prisma.user.update({ where: { id: mentor.id }, data: { mentorCapacity: 1 } });
   await prisma.mentorshipRelation.create({
     data: { mentorId: mentor.id, menteeId: existingMentee.id, orgId: existingMentee.orgId, status: 'ACTIVE', startDate: new Date() },
   });
 
   try {
-    await signInAsAdmin(page, adminEmail, pw);
-    await page.goto('/admin/mentorship');
+    await signInAndSettle(page, adminEmail, pw, '/admin');
+    await gotoSettled(page, '/admin/mentorship');
     await page.getByRole('button', { name: 'Assign mentorship' }).click();
 
     // Exact + the trailing "*" of the required-field label: an unqualified
@@ -200,5 +209,6 @@ test('the /admin/mentorship assign form asks for confirmation before assigning a
     await cleanupByEmail(existingMenteeEmail);
     await cleanupByEmail(mentorEmail);
     await cleanupByEmail(adminEmail);
+    await prisma.organization.deleteMany({ where: { id: org.id } }).catch(() => {});
   }
 });

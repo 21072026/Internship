@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import bcrypt from 'bcryptjs';
 import { prisma, uniqueEmail } from './helpers/db';
-import { gotoSettled, submitSignInForm } from './helpers/auth';
+import { gotoSettled, signInViaApi, submitSignInForm } from './helpers/auth';
 
 // #1398 — the candidate page's Hiring card and the read behind it:
 // GET /api/candidates/[id]/hiring, scoped on the server per role. A PASS never
@@ -18,6 +18,17 @@ const ids: Record<string, string> = {};
 async function login(page: Page, email: string) {
   await submitSignInForm(page, email, password);
   await page.waitForURL((url) => !url.pathname.startsWith('/auth/signin'));
+}
+
+/**
+ * The API test reads JSON only, so it signs each role in over the credentials
+ * endpoint on the page's own request context (one cookie jar): eight UI
+ * sign-ins with their page loads and settle waits were most of the 14 s this
+ * @smoke test took. A refused sign-in fails here, loudly, not as a 401 later.
+ */
+async function apiLogin(page: Page, email: string) {
+  const res = await signInViaApi(page.request, email, password);
+  expect(res.ok, `sign-in of ${email}: ${res.error}`).toBe(true);
 }
 
 test.describe.serial('#1398 candidate hiring card', () => {
@@ -70,35 +81,35 @@ test.describe.serial('#1398 candidate hiring card', () => {
   test('each role reads only its own rows; the candidate and outsiders are refused', { tag: '@smoke' }, async ({ page }) => {
     const url = () => `/api/candidates/${ids.mentee}/hiring`;
 
-    await login(page, emails.admin);
+    await apiLogin(page, emails.admin);
     const admin = await (await page.request.get(url())).json();
     expect(admin.applications.map((a: { id: string }) => a.id)).toEqual([ids.app]);
     expect(admin.interests.map((i: { id: string }) => i.id).sort()).toEqual([ids.interestAcme, ids.interestGlobex].sort());
     expect(admin.interests.find((i: { id: string }) => i.id === ids.interestGlobex)).toMatchObject({ status: 'PASS', note: `globex note ${stamp}` });
     expect(admin.interviewRequests.map((r: { id: string }) => r.id)).toEqual([ids.ir]);
 
-    await login(page, emails.company);
+    await apiLogin(page, emails.company);
     const company = await (await page.request.get(url())).json();
     // Only Acme's rows; Globex's PASS is not Acme's business.
     expect(company.interests.map((i: { id: string }) => i.id)).toEqual([ids.interestAcme]);
     expect(company.applications).toHaveLength(1);
     expect(company.interviewRequests).toHaveLength(1);
 
-    await login(page, emails.mentor);
+    await apiLogin(page, emails.mentor);
     const mentor = await (await page.request.get(url())).json();
     expect(mentor.interests).toHaveLength(2);
     // A company's private note does not go to the mentor.
     expect(mentor.interests.every((i: Record<string, unknown>) => !('note' in i))).toBe(true);
 
     // The candidate never reads this view — a PASS is never relayed to them.
-    await login(page, emails.mentee);
+    await apiLogin(page, emails.mentee);
     expect((await page.request.get(url())).status()).toBe(403);
     // Not your mentee / no row of yours / another org: 404, never an empty 200.
-    await login(page, emails.otherMentor);
+    await apiLogin(page, emails.otherMentor);
     expect((await page.request.get(url())).status()).toBe(404);
-    await login(page, emails.otherCompany);
+    await apiLogin(page, emails.otherCompany);
     expect((await page.request.get(`/api/candidates/${ids.quiet}/hiring`)).status()).toBe(404);
-    await login(page, emails.adminB);
+    await apiLogin(page, emails.adminB);
     expect((await page.request.get(url())).status()).toBe(404);
   });
 

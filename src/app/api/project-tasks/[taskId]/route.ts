@@ -13,6 +13,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { reflectTaskInMinutes } from '@/lib/minutesSync';
+import { canReadGoal } from '@/lib/goalVisibilityRule';
 
 // One to-do: tick it off, put it away, reword it, hand it over.
 //
@@ -49,11 +50,19 @@ async function taskFor(
   // person it is on, and to whoever wrote it (their mentor) — plus an admin.
   if (!task.projectId || !task.project) {
     const own = task.assigneeId === user.id || task.createdById === user.id;
-    return own || user.role === 'ADMIN' ? task : null;
+    if (own || user.role === 'ADMIN') return task;
+    // A step of a goal (#1860) is the pair's shared plan: whoever may read the
+    // goal reaches it too — the goal's own rule, never a second one.
+    return task.goalId && (await stepOfReadableGoal(task.goalId, user)) ? task : null;
   }
   // Project tasks are collaborative (#619): owners AND mentor members may edit.
   if (canManageProject(user, task.project)) return task;
   return (await isProjectMember(user, task.projectId)) ? task : null;
+}
+
+async function stepOfReadableGoal(goalId: string, user: { id: string; role: string }): Promise<boolean> {
+  const goal = await prisma.goal.findUnique({ where: { id: goalId }, include: { relation: { select: { mentorId: true, menteeId: true } } } });
+  return !!goal && canReadGoal(goal, goal.relation, user);
 }
 
 const schema = z.object({
@@ -158,7 +167,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
 
   // Ticking off (or putting away) someone else's personal goal is not a member's
   // call either.
-  if ((parsed.data.done !== undefined || parsed.data.archived !== undefined) && !lead && task.assigneeId && !mine) {
+  // A goal's step is ticked by anyone who may read the goal (#1860) — taskFor
+  // already asked the goal's rule.
+  if ((parsed.data.done !== undefined || parsed.data.archived !== undefined) && !lead && task.assigneeId && !mine && !task.goalId) {
     return NextResponse.json({ error: 'This goal belongs to someone else' }, { status: 403 });
   }
 
@@ -228,6 +239,11 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   // members keep exactly the access they had.
   if (task.projectId && !lead && session.user.role === 'MENTEE' && task.assigneeId !== session.user.id) {
     return NextResponse.json({ error: 'This goal belongs to the project' }, { status: 403 });
+  }
+  // A goal's step reached through the goal (#1860) is ticked by the goal's
+  // readers, but deleted only by its author, an admin or its own assignee.
+  if (task.goalId && !lead && task.assigneeId !== session.user.id && task.createdById !== session.user.id) {
+    return NextResponse.json({ error: 'This step is not yours to delete' }, { status: 403 });
   }
   // A to-do that came from the shared pool is not the recipient's to delete: it
   // was handed to them, and it disappears when whoever leads the project (or an

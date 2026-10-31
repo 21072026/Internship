@@ -13,6 +13,7 @@
 // (the hook's / the event's), never the ambient tenant.
 
 import type { Prisma } from '@prisma/client';
+import { tenantAdminRows } from '@/lib/tenantAdmins';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { enqueue } from '@/lib/jobs/queue';
@@ -145,10 +146,8 @@ const deps: DeliveryDeps = {
       detail: reason,
     });
     if (!hook.orgId) return;
-    const admins = await prisma.user.findMany({
-      where: { orgId: hook.orgId, role: 'ADMIN', isActive: true },
-      select: { id: true, email: true, fullName: true, preferredLanguage: true },
-    });
+    // An org-level notice: no PROGRAM_ADMIN (#3485).
+    const admins = await tenantAdminRows(hook.orgId, null, { id: true, email: true, fullName: true, preferredLanguage: true });
     const { sendWebhookDisabledEmail } = await import('@/services/emailService');
     for (const a of admins) {
       try {

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Goal sub-tasks and pooled goals (#1860):** a goal's steps are to-dos — `ProjectTask.goalId` (nullable, `SetNull`: deleting a goal keeps the work done under it), added through `POST /api/goals/[id]/subtasks`, ticked on `/todos` or in the goals panel through the one to-do write path (`/api/project-tasks/[taskId]` now reaches a step through the goal's own reading rule). `Goal.progress` derives from the steps once there are any (`derivedGoalProgress`, pure, unit-tested); the hand-entered figure stays as `manualProgress`. `Goal.templateId` hands a goal out from the shared pool: `resolveGoalTitle()` reads it in the reader's language on every view, and its recipient can neither reword (`409 pooled_goal`) nor delete it (`403`). \"Has open development work\" is one query over goals, their steps and the mentor-visible to-dos (`relationsWithOpenWork`, `src/lib/openWork.ts`), shared by the attention queue and the health sweep. No model merged or re-keyed.",
+  "notes": {
+    "en": ["Goals now have steps: each step is a to-do on your list, and ticking it moves the goal's progress. Mentors can hand out starter goals from the shared pool, in each reader's language."],
+    "tr": ["Hedeflerin artık adımları var: her adım listendeki bir yapılacak iş, işaretlediğinde hedefin ilerlemesi güncellenir. Mentorlar ortak havuzdan, her okuyucunun dilinde başlangıç hedefleri verebilir."],
+    "de": ["Ziele haben jetzt Schritte: Jeder Schritt ist eine Aufgabe auf deiner Liste, und das Abhaken bewegt den Fortschritt des Ziels. Mentoren können Startziele aus dem gemeinsamen Pool vergeben – in der Sprache der Lesenden."]
+  }
+}
