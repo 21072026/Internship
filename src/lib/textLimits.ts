@@ -199,6 +199,8 @@ export const TEXT_LIMITS = {
   agendaItemText: 2000,
   /** SessionNote.body — @db.Text (#1847); the pair's shared minutes */
   sessionNoteBody: 10000,
+  /** Kudo.reason — @db.Text (#1868); a written thank-you */
+  kudoReason: 1000,
   /** AgendaTemplate.summary — a locale entry of the JSON column (#1843) */
   agendaSummary: 500,
   /** AgendaTemplateItem.guidance — @db.Text (#1843) */
@@ -233,6 +235,13 @@ export const TEXT_LIMITS = {
    * room for spacing without letting a paragraph reach the parser.
    */
   orgBrandPalette: 200,
+  /** Organization.welcomeTitle — VARCHAR(120) (#1664): a headline, not a paragraph */
+  orgWelcomeTitle: 120,
+  /**
+   * Organization.welcomeBody — @db.Text (#1664). A few short paragraphs on a
+   * public page; 2 000 is generous for that and far inside the TEXT column.
+   */
+  orgWelcomeBody: 2000,
   /** Organization.ssoIssuer — VARCHAR(191) */
   orgSsoIssuer: 191,
   /**

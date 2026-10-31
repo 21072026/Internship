@@ -1,4 +1,5 @@
 'use client';
+import { SocialSignInButtons } from '@/components/SocialSignInButtons';
 import { useT, useLocale } from "@/i18n/client";
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
@@ -45,7 +46,7 @@ function registerSchemaFor(policy: PasswordPolicy, dict: PasswordPolicyDict) {
 
 type RegisterData = z.infer<ReturnType<typeof registerSchemaFor>>;
 
-function RegisterForm() {
+function RegisterForm({ social }: { social: { id: string; label: string }[] }) {
   const t = useT();
   const locale = useLocale();
   const router = useRouter();
@@ -261,6 +262,10 @@ function RegisterForm() {
             </Button>
           </form>
 
+          {/* Social sign-up (#1962) is the open door only: an invitation is
+              redeemed by the form above, which carries its role and org. */}
+          {!inviteToken && <SocialSignInButtons providers={social} />}
+
           <p className="text-center text-sm text-gray-500 mt-6">
             {t.auth.alreadyAccount}{' '}
             <Link href="/auth/signin" className="text-blue-600 hover:underline font-medium">
@@ -280,11 +285,11 @@ function RegisterForm() {
   );
 }
 
-export default function RegisterClient() {
+export default function RegisterClient({ social = [] }: { social?: { id: string; label: string }[] }) {
   const t = useT();
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center">{t.common.loading}</div>}>
-      <RegisterForm />
+      <RegisterForm social={social} />
     </Suspense>
   );
 }

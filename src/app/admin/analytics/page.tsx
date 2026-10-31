@@ -265,7 +265,7 @@ export default function AdminAnalyticsPage() {
   // #1903), gated by the org's REPORT_EXPORT entitlement (the full report also
   // by ADVANCED_ANALYTICS). This screen only writes the file.
   const exportWorkbook = async (dataset: 'analytics' | 'analytics-full') => {
-    const res = await fetch(`/api/admin/export/${dataset}${rangeQuery(range)}`);
+    const res = await fetch(`/api/admin/export/${dataset}${analyticsQuery(range, program)}`);
     if (!res.ok) {
       setError(res.status === 403 ? t.common.exportLocked : t.common.error);
       return;
@@ -351,7 +351,7 @@ export default function AdminAnalyticsPage() {
       <ProgramScorecard />
 
       {/* "What changed" (#2046): AI prose grounded only in the figures below. */}
-      <AnalyticsNarrative query={rangeQuery(range)} />
+      <AnalyticsNarrative query={analyticsQuery(range, program)} />
       {/* Who actually met, and on the promised rhythm (#2014). */}
       <MeetingAttendanceCard />
       {/* Stage-SLA compliance (#1723) — free core, never behind premiumAnalytics. */}

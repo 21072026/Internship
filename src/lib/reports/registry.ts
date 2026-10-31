@@ -45,6 +45,13 @@ export interface ReportContext {
    * unsliced report, never to an error.
    */
   segment?: { by: string; value?: string | null } | null;
+  /**
+   * The analytics screen's programme filter (#1652), for the workbook exported
+   * from a filtered view: every loader that counts RELATIONS narrows to it, so
+   * the file says what the screen says. Absent for subscriptions and the
+   * registry route — their numbers do not change.
+   */
+  relation?: Prisma.MentorshipRelationWhereInput;
 }
 
 /** What a loader receives: the context plus, when sliced, the subject-person filter. */
@@ -61,11 +68,16 @@ async function scopeOf(ctx: LoaderContext): Promise<AnalyticsScope> {
     tenant: await orgWhere(ctx.orgId),
     locale: ctx.locale,
     ...(ctx.person ? { person: ctx.person } : {}),
+    ...(ctx.relation ? { relation: ctx.relation } : {}),
   };
 }
 
 /** A relation filter for a sliced loader: its mentee is in the segment. */
-const menteeIn = (ctx: LoaderContext): Prisma.MentorshipRelationWhereInput => (ctx.person ? { mentee: { is: ctx.person } } : {});
+const menteeIn = (ctx: LoaderContext): Prisma.MentorshipRelationWhereInput => ({
+  ...(ctx.person ? { mentee: { is: ctx.person } } : {}),
+  // The programme filter (#1652) narrows the same relations.
+  ...(ctx.relation ?? {}),
+});
 
 /** A report the caller cannot have (capability, entitlement) — the route answers with this status. */
 export class ReportUnavailable extends Error {
@@ -95,7 +107,7 @@ const LOADERS: Record<string, (ctx: LoaderContext) => Promise<Row[]>> = {
       prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: withinTenant(menteeIn(ctx), tenant), _count: { _all: true } }),
       prisma.mentorshipRelation.count({ where: withinTenant({ startDate: { gte: weekAgo }, ...menteeIn(ctx) }, tenant) }),
       prisma.interactionLog.count({
-        where: { date: { gte: weekAgo }, ...interactionInTenant(tenant), ...(ctx.person ? { AND: [{ relation: { is: menteeIn(ctx) } }] } : {}) },
+        where: { date: { gte: weekAgo }, ...interactionInTenant(tenant), ...(ctx.person || ctx.relation ? { AND: [{ relation: { is: menteeIn(ctx) } }] } : {}) },
       }),
     ]);
     // "Reached the final stage" is the tenant's own finished set (#1882).
@@ -181,7 +193,7 @@ const LOADERS: Record<string, (ctx: LoaderContext) => Promise<Row[]>> = {
   async 'weekly-report-compliance'(ctx) {
     const { tenant } = await scopeOf(ctx);
     const relations = await prisma.mentorshipRelation.findMany({
-      where: withinTenant(ctx.person ? { AND: [INTERNED_WHERE, menteeIn(ctx)] } : INTERNED_WHERE, tenant),
+      where: withinTenant(ctx.person || ctx.relation ? { AND: [INTERNED_WHERE, menteeIn(ctx)] } : INTERNED_WHERE, tenant),
       select: COMPLIANCE_RELATION_SELECT,
       orderBy: [{ mentee: { fullName: 'asc' } }, { id: 'asc' }],
       take: MAX_ROWS,
