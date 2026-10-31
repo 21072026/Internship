@@ -33,3 +33,11 @@ test('pageSize alone pages the list — it is no longer silently ignored', () =>
   assert.equal(listIsPaged(p('page=2')), true);
   assert.equal(listIsPaged(p('status=ACTIVE')), false);
 });
+
+test('recipients: one page of 50 by default; all=1 is bounded; the relation id is checked', async () => {
+  const { recipientPageParams, RECIPIENT_PAGE_SIZE, RECIPIENT_ALL_MAX } = await import('../../src/lib/boardPage.ts');
+  assert.deepEqual(recipientPageParams(p('page=3')), { all: false, page: 3, take: RECIPIENT_PAGE_SIZE, relationId: null });
+  assert.deepEqual(recipientPageParams(p('all=1&page=9')), { all: true, page: 1, take: RECIPIENT_ALL_MAX, relationId: null });
+  assert.equal(recipientPageParams(p('relation=abc_123')).relationId, 'abc_123');
+  assert.equal(recipientPageParams(p('relation=' + encodeURIComponent('a b'))).relationId, null);
+});
