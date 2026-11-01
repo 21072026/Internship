@@ -2475,6 +2475,10 @@ model SupportMessage {
   body      String    @db.Text
   createdAt DateTime  @default(now())
   readAt    DateTime?
+  // The record a message asks about (#3353): `affiliate:commission:<id>` or
+  // `affiliate:customer:<id>`, verified against the sender's own rows when it
+  // is written (src/lib/affiliateRecordRef.ts). Null for an ordinary message.
+  recordRef String?   @db.VarChar(120)
 
   ticket      SupportTicket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   sender      User                @relation("SupportMessageSender", fields: [senderId], references: [id], onDelete: Cascade)

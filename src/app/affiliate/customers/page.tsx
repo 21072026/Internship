@@ -8,6 +8,9 @@ import { AFFILIATE_CURRENCIES } from '@/lib/affiliateProgramSettings';
 import { formatMinorAmount } from '@/lib/money';
 import { formatDate } from '@/lib/relativeTime';
 import { PortalPager } from '../PortalPager';
+import { recordRef } from '@/lib/affiliateRecordRefRule';
+import Link from 'next/link';
+import { interpolate } from '@/lib/notificationText';
 
 // The partner's own customers (#3117): the customer's opaque reference, since
 // when it is credited to the partner, its payments and what it earned so far.
@@ -33,6 +36,7 @@ export default async function AffiliateCustomersPage({ searchParams }: { searchP
                   <th className="px-4 py-2">{L.colSince}</th>
                   <th className="px-4 py-2 text-right">{L.colPayments}</th>
                   <th className="px-4 py-2 text-right">{L.colEarned}</th>
+                  <th className="px-4 py-2"><span className="sr-only">{L.ask}</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -42,6 +46,16 @@ export default async function AffiliateCustomersPage({ searchParams }: { searchP
                     <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.since, locale, { timeZone: 'UTC' })}</td>
                     <td className="px-4 py-2 text-right">{r.payments}</td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">{formatMinorAmount(r.earnedMinor, AFFILIATE_CURRENCIES[0], locale)}</td>
+                    <td className="px-4 py-2 text-right">
+                      <Link
+                        href={`/affiliate/support?record=${encodeURIComponent(recordRef('customer', r.id))}`}
+                        className="whitespace-nowrap text-blue-700 hover:underline dark:text-blue-300"
+                        aria-label={interpolate(L.askAbout, { customer: r.ref })}
+                        data-testid="affiliate-ask"
+                      >
+                        {L.ask}
+                      </Link>
+                    </td>
                   </tr>
                 ))}
               </tbody>

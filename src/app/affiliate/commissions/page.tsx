@@ -11,6 +11,7 @@ import { formatMinorAmount } from '@/lib/money';
 import { interpolate } from '@/lib/notificationText';
 import { formatDate } from '@/lib/relativeTime';
 import { PortalPager } from '../PortalPager';
+import { recordRef } from '@/lib/affiliateRecordRefRule';
 
 const STATUS_VARIANT: Record<CommissionStatus, 'default' | 'success' | 'warning' | 'danger' | 'info'> = {
   PENDING: 'warning',
@@ -65,6 +66,7 @@ export default async function AffiliateCommissionsPage({ searchParams }: { searc
                   <th className="px-4 py-2 text-right">{L.colCommission}</th>
                   <th className="px-4 py-2">{L.colDue}</th>
                   <th className="px-4 py-2">{L.colStatus}</th>
+                  <th className="px-4 py-2"><span className="sr-only">{L.ask}</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -83,6 +85,16 @@ export default async function AffiliateCommissionsPage({ searchParams }: { searc
                     <td className="px-4 py-2 whitespace-nowrap">{date(r.dueAt)}</td>
                     <td className="px-4 py-2">
                       <Badge variant={STATUS_VARIANT[r.status]}>{L[`status${r.status}`]}</Badge>
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <Link
+                        href={`/affiliate/support?record=${encodeURIComponent(recordRef('commission', r.id))}`}
+                        className="whitespace-nowrap text-blue-700 hover:underline dark:text-blue-300"
+                        aria-label={interpolate(L.askAbout, { customer: r.customerRef })}
+                        data-testid="affiliate-ask"
+                      >
+                        {L.ask}
+                      </Link>
                     </td>
                   </tr>
                 ))}

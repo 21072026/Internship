@@ -476,6 +476,17 @@ the check.
 - **Bank details:** entered on `/affiliate/payout-details` through the existing
   partner API (2FA policy, impersonation refusal, sealed, audited, announced); the
   stored IBAN is shown masked and never read back into the form.
+- **Questions about a row (#3353):** "Ask" on a commission or customer row opens
+  `/affiliate/support?record=affiliate:<kind>:<id>` — the ordinary support channel
+  (#593, `SupportChat`), kept inside the portal because the partner shell never
+  opens `/messages`. The message carries `SupportMessage.recordRef`; `POST
+  /api/support` accepts it only for a row of the sender's own partner
+  (`ownRecord()` in `src/lib/affiliateRecordRef.ts`, the same `{ orgId, partnerId }`
+  scope as every portal read) and answers anything else `404 record_not_found`.
+  The admin's support inbox shows which row it is about (`describeRecords()`,
+  org-scoped). A question changes nothing: a correction is still the admin's, through
+  the one payment writer. No dispute model or status exists by design; one would
+  follow only if questions become frequent.
 
 ## Automatic attribution (#3354)
 

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
 import { signInViaApi, signInAndSettle, gotoSettled, MARKETING_HOST, asHost } from './helpers/auth';
+import { freshIp } from './helpers/rateLimit';
 
 /**
  * The partner portal (docs/affiliate-module.md, #3117).
@@ -91,6 +92,7 @@ test.afterAll(async () => {
     await prisma.affiliateProgramSettings.deleteMany({ where: { orgId } }).catch(() => {});
     await prisma.auditLog.deleteMany({ where: { orgId } }).catch(() => {});
   }
+  // Support tickets go with their requester (onDelete: Cascade) in cleanupByEmail.
   for (const e of [adminEmail, mineEmail, theirsEmail]) if (e) await cleanupByEmail(e);
   if (orgId) await prisma.organization.deleteMany({ where: { id: orgId } }).catch(() => {});
   await prisma.$disconnect();
@@ -285,4 +287,50 @@ test('the commissions table shows the kind and plan version, but no version for 
   await expect(imported).not.toContainText(/\((v|s)\d+\)/);
   await expect(table).not.toContainText('CUST-THEIRS');
   await expect(page.locator('body')).not.toContainText('INV-SECRET');
+});
+
+// #3353: "Ask" on a row opens the partner's support thread with the row attached.
+// Only the partner's own row is accepted — another partner's id is 404, like one
+// that does not exist — and the admin's inbox shows which row it is about. A
+// question changes nothing. @smoke: a data-isolation boundary on a write path.
+test('a partner asks about its own row through support; another partner’s row is refused', { tag: '@smoke' }, async ({ playwright, baseURL, page }) => {
+  const partner = await playwright.request.newContext({ baseURL });
+  contexts.push(partner);
+  expect((await signInViaApi(partner, mineEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
+  const mine = await prisma.affiliateCommission.findFirstOrThrow({ where: { orgId, partnerId: ids.mine, customer: { externalRef: 'CUST-MINE' } } });
+  const theirs = await prisma.affiliateCommission.findFirstOrThrow({ where: { orgId, partnerId: ids.theirs } });
+  const ask = (recordRef: string, label: string) =>
+    partner.post('/api/support', { headers: { ...host, ...freshIp(`affiliate-ask ${label}`) }, data: { body: 'Why this amount?', recordRef } });
+
+  for (const [ref, label] of [[`affiliate:commission:${theirs.id}`, 'theirs'], ['affiliate:commission:nope', 'unknown'], ['not-a-ref', 'garbage']]) {
+    const res = await ask(ref, label);
+    expect([res.status(), (await res.json()).code], label).toEqual([404, 'record_not_found']);
+  }
+  expect(await prisma.supportMessage.count({ where: { sender: { email: mineEmail } } })).toBe(0);
+
+  // From the screen: Ask on the customers page, then send.
+  await page.context().setExtraHTTPHeaders({ ...asHost(MARKETING_HOST), ...freshIp('affiliate-ask ui') });
+  await signInAndSettle(page, mineEmail, PW, '/affiliate');
+  await gotoSettled(page, '/affiliate/commissions');
+  await page.getByTestId('affiliate-commissions-table').locator('tbody tr').filter({ hasText: 'CUST-MINE' }).getByTestId('affiliate-ask').click();
+  await expect(page).toHaveURL(/\/affiliate\/support\?record=/);
+  await expect(page.getByTestId('support-record')).toContainText('CUST-MINE');
+  await page.getByTestId('support-input').fill('Is this commission final?');
+  await page.getByTestId('support-send').click();
+  // Sent: the draft's link is gone (no remove button) and the thread shows it on the message.
+  await expect(page.getByTestId('support-record-remove')).toHaveCount(0);
+  await expect(page.getByTestId('support-chat').getByTestId('support-record')).toContainText('CUST-MINE');
+  await expect.poll(() => prisma.supportMessage.count({ where: { sender: { email: mineEmail } } })).toBe(1);
+  const sent = await prisma.supportMessage.findFirstOrThrow({ where: { sender: { email: mineEmail } } });
+  expect(sent.recordRef).toBe(`affiliate:commission:${mine.id}`);
+  // Nothing moved: the commission is as it was.
+  expect((await prisma.affiliateCommission.findUniqueOrThrow({ where: { id: mine.id } })).status).toBe(mine.status);
+
+  // The admin's inbox names the row.
+  const admin = await playwright.request.newContext({ baseURL });
+  contexts.push(admin);
+  expect((await signInViaApi(admin, adminEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
+  const inbox = await (await admin.get('/api/admin/support', { headers: host })).json();
+  const message = inbox.tickets.flatMap((t: { messages: { id: string }[] }) => t.messages).find((m: { id: string }) => m.id === sent.id);
+  expect(message.record).toMatchObject({ kind: 'commission', customerRef: 'CUST-MINE', amountMinor: mine.amountMinor });
 });
