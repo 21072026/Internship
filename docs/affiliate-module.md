@@ -234,6 +234,12 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   row carries their sum, the transfer day (a calendar day, not in the future) and
   an optional bank reference; the commissions become PAID with `payoutId` and
   `paidAt`, and stay frozen for good. Audited (`affiliate.payout.create`).
+  **A partner without payout details can be paid** (#3351): a payout is a
+  record, not a payment order — the transfer happens outside the CRM and may
+  already have gone another way, so refusing it would make the CRM disagree with
+  the bank and leave the commissions "unpaid". The screen asks first ("No payout
+  details — record anyway?"); the server does not refuse. If the CRM ever
+  triggers the transfer itself, this turns into a server-side refusal.
 
 ## The public programme page
 
