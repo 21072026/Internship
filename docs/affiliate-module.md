@@ -148,6 +148,14 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
 - **AffiliateCustomer** — `partnerId`, `externalRef` (unique per org; shown to the
   partner, so a customer number — never a name or an address). Ordinals are not
   stored: the engine derives them from the payments every time.
+  `partnerLabel` (#3352, nullable, ≤ 80) is what the partner sees next to that
+  reference: a trade name the admin writes (`PATCH /api/admin/affiliate/customers/[id]`,
+  `affiliate.write`, from the Payments screen; audited as `affiliate.customer.label`
+  without the text). It is never filled automatically, and `externalRef` stays the
+  matching key — account events and API payments find a customer by the reference,
+  so a readable name never goes there. The form's hint asks for a trade name, not
+  a person's name. The rule is `src/lib/affiliateCustomerLabelRule.ts`, the one
+  writer `src/lib/affiliateCustomerLabel.ts`.
 - **AffiliatePayment** — `amountMinor`, `currency`, `receivedAt` (never in the
   future), `source` (MANUAL / API / IMPORT), `externalPaymentRef` (**required,
   unique per organisation**, so a double entry is caught even under a mistyped customer).

@@ -9418,16 +9418,20 @@ model AffiliatePartner {
 }
 
 model AffiliateCustomer {
-  id          String                @id @default(cuid())
-  orgId       String
-  org         Organization          @relation(fields: [orgId], references: [id])
-  partnerId   String
-  partner     AffiliatePartner      @relation(fields: [partnerId], references: [id])
+  id           String                @id @default(cuid())
+  orgId        String
+  org          Organization          @relation(fields: [orgId], references: [id])
+  partnerId    String
+  partner      AffiliatePartner      @relation(fields: [partnerId], references: [id])
   // The customer's id on the product side. Opaque here; one partner per customer.
-  externalRef String                @db.VarChar(120)
-  createdAt   DateTime              @default(now())
-  payments    AffiliatePayment[]
-  commissions AffiliateCommission[]
+  // Also the matching key of account events and API payments — never a label.
+  externalRef  String                @db.VarChar(120)
+  // What the partner sees next to the reference (#3352): written by an admin
+  // (a trade name, "Acme GmbH"), never filled automatically. Null = none.
+  partnerLabel String?               @db.VarChar(80)
+  createdAt    DateTime              @default(now())
+  payments     AffiliatePayment[]
+  commissions  AffiliateCommission[]
 
   @@unique([orgId, externalRef])
   @@index([partnerId])

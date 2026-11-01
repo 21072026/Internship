@@ -334,3 +334,52 @@ test('a partner asks about its own row through support; another partner’s row 
   const message = inbox.tickets.flatMap((t: { messages: { id: string }[] }) => t.messages).find((m: { id: string }) => m.id === sent.id);
   expect(message.record).toMatchObject({ kind: 'commission', customerRef: 'CUST-MINE', amountMinor: mine.amountMinor });
 });
+
+// #3352: the admin writes a label the partner recognises; the reference stays
+// the key. Only a writing admin of the org sets it; the partner reads it on its
+// own rows. A screen-and-write check, not a boundary of its own: no @smoke tag.
+test('an admin-written customer label shows next to the reference in the portal', async ({ playwright, baseURL, page, browser }) => {
+  const admin = await playwright.request.newContext({ baseURL });
+  contexts.push(admin);
+  expect((await signInViaApi(admin, adminEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
+  const partner = await playwright.request.newContext({ baseURL });
+  contexts.push(partner);
+  expect((await signInViaApi(partner, mineEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
+  const customer = await prisma.affiliateCustomer.findFirstOrThrow({ where: { orgId, externalRef: 'CUST-MINE' } });
+  const patch = (ctx: APIRequestContext, id: string, partnerLabel: unknown) =>
+    ctx.patch(`/api/admin/affiliate/customers/${id}`, { headers: host, data: { partnerLabel } });
+
+  expect((await patch(partner, customer.id, 'Acme Ltd')).status()).toBe(403);
+  expect((await patch(admin, 'no-such-customer', 'Acme Ltd')).status()).toBe(404);
+  expect((await patch(admin, customer.id, 'x'.repeat(81))).status()).toBe(400);
+  expect(await (await patch(admin, customer.id, '  Acme   Ltd ')).json()).toEqual({ ok: true, partnerLabel: 'Acme Ltd' });
+  expect((await prisma.affiliateCustomer.findUniqueOrThrow({ where: { id: customer.id } })).externalRef).toBe('CUST-MINE');
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.customer.label', targetId: customer.id } })).toBe(1);
+
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mineEmail, PW, '/affiliate');
+  for (const [path, table] of [['/affiliate/customers', 'affiliate-customers-table'], ['/affiliate/commissions', 'affiliate-commissions-table']]) {
+    await gotoSettled(page, path);
+    const row = page.getByTestId(table).locator('tbody tr').filter({ hasText: 'CUST-MINE' });
+    await expect(row, path).toContainText('Acme Ltd');
+  }
+  await gotoSettled(page, `/affiliate/payouts/${ids.myPayout}`);
+  await expect(page.locator('main')).toContainText('Acme Ltd');
+
+  // Cleared from the admin's Payments screen: the reference alone again.
+  const adminContext = await browser.newContext({ baseURL, extraHTTPHeaders: asHost(MARKETING_HOST) });
+  const adminPage = await adminContext.newPage();
+  await signInAndSettle(adminPage, adminEmail, PW, '/admin');
+  await gotoSettled(adminPage, '/admin/affiliates/payments');
+  const adminRow = adminPage.getByTestId('affiliate-payment-table').locator('tbody tr').filter({ hasText: 'CUST-MINE' });
+  await expect(adminRow).toContainText('Acme Ltd');
+  await adminRow.getByTestId('affiliate-customer-label-edit').click();
+  await expect(adminPage.getByTestId('affiliate-customer-label-input')).toHaveValue('Acme Ltd');
+  await adminPage.getByTestId('affiliate-customer-label-input').fill('');
+  await adminPage.getByTestId('confirm-dialog-confirm').click();
+  await expect(adminRow).not.toContainText('Acme Ltd');
+  await adminContext.close();
+  expect((await prisma.affiliateCustomer.findUniqueOrThrow({ where: { id: customer.id } })).partnerLabel).toBeNull();
+  await gotoSettled(page, '/affiliate/customers');
+  await expect(page.getByTestId('affiliate-customers-table')).not.toContainText('Acme Ltd');
+});
