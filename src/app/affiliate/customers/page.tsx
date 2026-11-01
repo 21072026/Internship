@@ -8,6 +8,7 @@ import { AFFILIATE_CURRENCIES } from '@/lib/affiliateProgramSettings';
 import { formatMinorAmount } from '@/lib/money';
 import { formatDate } from '@/lib/relativeTime';
 import { PortalPager } from '../PortalPager';
+import { CustomerName } from '@/components/affiliate/CustomerName';
 
 // The partner's own customers (#3117): the customer's opaque reference, since
 // when it is credited to the partner, its payments and what it earned so far.
@@ -38,7 +39,7 @@ export default async function AffiliateCustomersPage({ searchParams }: { searchP
               <tbody>
                 {data.rows.map((r) => (
                   <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800">
-                    <td className="px-4 py-2 font-mono">{r.ref}</td>
+                    <td className="px-4 py-2"><CustomerName label={r.label} reference={r.ref} /></td>
                     <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.since, locale, { timeZone: 'UTC' })}</td>
                     <td className="px-4 py-2 text-right">{r.payments}</td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">{formatMinorAmount(r.earnedMinor, AFFILIATE_CURRENCIES[0], locale)}</td>
