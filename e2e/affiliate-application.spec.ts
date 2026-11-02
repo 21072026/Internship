@@ -12,7 +12,9 @@ import { freshIp } from './helpers/rateLimit';
 //      a sessionless write must land in exactly one tenant;
 //   2. refused fields are named; an address with a pending application, a filled
 //      honeypot and an over-fast submit all answer the same 200 and write nothing;
-//   3. the form page exists where the programme exists.
+//   3. the form page exists where the programme exists, and a tab that already
+//      sent keeps showing the confirmation after a reload (the language switcher
+//      reloads the page).
 //
 // Serial and host-borrowing, like e2e/marketing-demo-form.spec.ts. Every request
 // gets its own client address (freshIp): the route's limit is 3/hour per IP.
@@ -116,6 +118,10 @@ test('the form page exists where the programme exists', async ({ page }) => {
   await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
   expect((await page.goto('/partner/apply'))?.status()).toBe(200);
   await expect(page.getByTestId('affiliate-apply-form')).toBeVisible();
+  await page.evaluate(() => sessionStorage.setItem('affiliate-apply-sent', '1'));
+  await page.reload();
+  await expect(page.getByTestId('affiliate-apply-sent')).toBeVisible();
+  await expect(page.getByTestId('affiliate-apply-form')).toHaveCount(0);
   await page.context().setExtraHTTPHeaders({});
   expect((await page.goto('/partner/apply'))?.status()).toBe(404);
 });
