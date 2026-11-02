@@ -255,3 +255,159 @@ test('a partner link sends the visitor to the sign-up page with that code only',
   const partners = readFileSync(new URL('../../src/lib/affiliatePartners.ts', import.meta.url), 'utf8');
   assert.ok(partners.includes(`PARTNER_CODE_RE = /${REFERRAL_CODE_RE.source}/;`), 'REFERRAL_CODE_RE must match PARTNER_CODE_RE');
 });
+
+// ── The page's look (#3535) ──────────────────────────────────────────────────
+import {
+  DEFAULT_THEME,
+  FONT_KEYS,
+  THEME_OPTIONS,
+  contrastRatio,
+  onFill,
+  parseHexColor,
+  themePalette,
+  themeMediaRefs,
+  changedLandingFields,
+  themeMediaKind,
+  themeMediaUrl,
+} from '../../src/lib/affiliateLandingRule.ts';
+
+const ID = 'clx0example0asset0id0001';
+
+test('no theme stays no theme: the page renders as it always did', () => {
+  assert.equal(parseLanding({}).landing.theme, null);
+  assert.equal(parseLanding({ theme: null }).landing.theme, null);
+  assert.equal(readStoredLanding({ copy: { en: { heroTitle: 'x' } } }).theme, null);
+});
+
+test('a partial theme is filled from the defaults, colours are normalised', () => {
+  const r = parseLanding({ theme: { colors: { primary: '#1D4ED8', heading: '#000' }, headingFont: 'poppins', animation: 'rise' } });
+  assert.equal(r.ok, true, JSON.stringify(r.issues));
+  assert.equal(r.landing.theme.colors.primary, '#1d4ed8');
+  assert.equal(r.landing.theme.colors.heading, '#000000');
+  assert.equal(r.landing.theme.colors.background, DEFAULT_THEME.colors.background);
+  assert.equal(r.landing.theme.headingFont, 'poppins');
+  assert.equal(r.landing.theme.bodyFont, 'inter');
+  assert.equal(r.landing.theme.animation, 'rise');
+  assert.equal(r.landing.theme.heroHeight, 'compact');
+});
+
+test('the default theme is AA-clean', () => {
+  assert.equal(parseLanding({ theme: DEFAULT_THEME }).ok, true);
+});
+
+test('only #rrggbb colours: names, functions, variables and CSS are refused', () => {
+  for (const bad of ['red', 'rgb(0,0,0)', 'var(--x)', '#12345', '#1234567', 'url(https://x.example/a.png)', '#fff;background:url(x)', 42]) {
+    assert.equal(parseHexColor(bad), null, String(bad));
+    const r = parseLanding({ theme: { colors: { primary: bad } } });
+    assert.deepEqual(fields(r), ['theme.colors.primary:invalid'], String(bad));
+  }
+});
+
+test('fonts and options come from fixed lists; unknown keys are refused', () => {
+  assert.ok(FONT_KEYS.includes('manrope'));
+  const r = parseLanding({
+    theme: {
+      headingFont: 'Comic Sans',
+      bodyFont: 'https://fonts.example/x.css',
+      heroHeight: 'giant',
+      animation: 'spin',
+      css: 'body{display:none}',
+      script: 'alert(1)',
+      colors: { link: '#000000' },
+    },
+  });
+  assert.deepEqual(fields(r).sort(), [
+    'theme.animation:invalid',
+    'theme.bodyFont:invalid',
+    'theme.colors.link:unknown',
+    'theme.css:unknown',
+    'theme.headingFont:invalid',
+    'theme.heroHeight:invalid',
+    'theme.script:unknown',
+  ]);
+  for (const [key, values] of Object.entries(THEME_OPTIONS)) {
+    for (const v of values) assert.equal(parseLanding({ theme: { [key]: v } }).ok, true, `${key}=${v}`);
+  }
+});
+
+test('media are asset ids of our own storage, never an address', () => {
+  assert.equal(parseLanding({ theme: { media: { logo: ID, hero: null, showcase: '' } } }).ok, true);
+  for (const bad of ['https://cdn.example/logo.png', '//cdn.example/x.png', 'data:image/png;base64,AAAA', '/api/public/partner-media/x', '../etc', 7]) {
+    assert.deepEqual(fields(parseLanding({ theme: { media: { hero: bad } } })), ['theme.media.hero:invalid'], String(bad));
+  }
+  assert.deepEqual(fields(parseLanding({ theme: { media: { favicon: ID } } })), ['theme.media.favicon:unknown']);
+  const r = parseLanding({ theme: { media: { logo: ID, showcase: ID } } });
+  assert.deepEqual(themeMediaRefs(r.landing.theme), [{ slot: 'logo', id: ID }, { slot: 'showcase', id: ID }]);
+  assert.equal(themeMediaUrl(ID), `/api/public/partner-media/${ID}`);
+});
+
+test('upload types: raster images and mp4/webm only — no SVG, no GIF', () => {
+  assert.equal(themeMediaKind('image/PNG'), 'image');
+  assert.equal(themeMediaKind('video/webm'), 'video');
+  for (const t of ['image/svg+xml', 'image/gif', 'text/html', 'video/quicktime', '']) assert.equal(themeMediaKind(t), null, t);
+});
+
+test('WCAG contrast: known ratios', () => {
+  assert.equal(Math.round(contrastRatio('#ffffff', '#000000') * 10) / 10, 21);
+  assert.equal(Math.round(contrastRatio('#777777', '#ffffff') * 100) / 100, 4.48);
+  assert.equal(contrastRatio('#123456', '#123456'), 1);
+});
+
+test('text on a fill: white when it reaches the bar, else black', () => {
+  assert.equal(onFill(['#1d4ed8'], 4.5), '#ffffff');
+  assert.equal(onFill(['#facc15'], 4.5), '#000000');
+  // A saturated orange: white is enough for large text (3:1), not for body text.
+  assert.equal(onFill(['#ff5500'], 3), '#ffffff');
+  assert.equal(onFill(['#ff5500'], 4.5), '#000000');
+  // Black → yellow: no single text colour reads on both stops.
+  assert.equal(onFill(['#000000', '#ffff00'], 3), null);
+});
+
+test('contrast is refused on the colour to change, and only for what is rendered', () => {
+  const pale = parseLanding({ theme: { colors: { text: '#cccccc' } } });
+  assert.deepEqual(fields(pale).sort(), ['theme.colors.surface:contrast', 'theme.colors.text:contrast']);
+  assert.deepEqual(fields(parseLanding({ theme: { colors: { heading: '#eeeeee' } } })), ['theme.colors.heading:contrast']);
+  // The primary colour itself is never refused: text on it is derived, and accents fall back to the heading colour.
+  assert.equal(parseLanding({ theme: { colors: { primary: '#f3f3f3', secondary: '#e5e7eb' } } }).ok, true);
+  // A gradient no text can sit on: refused for the gradient hero and the band…
+  const clash = { colors: { primary: '#000000', secondary: '#ffff00' }, ctaStyle: 'plain' };
+  assert.deepEqual(fields(parseLanding({ theme: clash })), ['theme.colors.secondary:contrast']);
+  // …but asked of nobody when the hero is a picture and the call to action is plain.
+  assert.equal(parseLanding({ theme: { ...clash, media: { hero: ID } } }).ok, true);
+  // A light orange → amber gradient carries large text, not body text: fine as a plain CTA, refused as a band.
+  const warm = { colors: { primary: '#ff5500', secondary: '#ff7a00', surface: '#ffffff' } };
+  assert.equal(parseLanding({ theme: { ...warm, ctaStyle: 'plain' } }).ok, true);
+  assert.equal(parseLanding({ theme: { ...warm, ctaStyle: 'band' } }).ok, true, 'black text reaches 4.5:1 on both');
+});
+
+test('the palette derives every text colour on a fill', () => {
+  const colors = { primary: '#ff5500', secondary: '#6d28d9', heading: '#0b1f4d', background: '#ffffff', surface: '#f3f5f8', text: '#4b4c50' };
+  // Orange → violet: white reads as large text on both stops (the hero), not as body text (a band).
+  assert.deepEqual(fields(parseLanding({ theme: { colors, ctaStyle: 'band' } })), ['theme.colors.secondary:contrast']);
+  const r = parseLanding({ theme: { colors, ctaStyle: 'plain' } });
+  assert.equal(r.ok, true, JSON.stringify(r.issues));
+  const p = themePalette(r.landing.theme);
+  assert.equal(p.onPrimary, '#ffffff');
+  assert.equal(p.onSecondary, '#ffffff');
+  assert.equal(p.onHeading, '#ffffff');
+  // Orange on white is below 4.5:1, so the small eyebrow text takes the heading colour.
+  assert.equal(p.accentText, '#0b1f4d');
+  // …and below 3:1 on the grey cards, so the figures do too.
+  assert.equal(p.accentLarge, '#0b1f4d');
+});
+
+test('an unchanged theme in another key order is not a change; the audit names fields only', () => {
+  const a = parseLanding({ copy: { en: { heroTitle: 'A' } }, theme: { colors: { primary: '#1d4ed8' }, animation: 'fade' } }).landing;
+  const b = parseLanding({ theme: { animation: 'fade', colors: { primary: '#1D4ED8' } }, copy: { en: { heroTitle: 'A' } } }).landing;
+  assert.equal(canonicalLanding(a), canonicalLanding(b));
+  assert.deepEqual(changedLandingFields(a, b), []);
+  assert.notEqual(canonicalLanding(a), canonicalLanding({ ...a, theme: null }));
+  assert.deepEqual(changedLandingFields(a, { ...a, theme: null }), ['theme']);
+  const c = parseLanding({
+    copy: { en: { heroTitle: 'A' }, de: { heroTitle: 'B' } },
+    phone: '+49 30 1234567',
+    theme: { colors: { primary: '#1e40af' }, animation: 'none', headingFont: 'lato', corners: 'square', media: { logo: ID } },
+  }).landing;
+  assert.deepEqual(changedLandingFields(a, c), ['copy.de', 'phone', 'theme.colors', 'theme.fonts', 'theme.layout', 'theme.animation', 'theme.media']);
+  for (const f of changedLandingFields(a, c)) assert.doesNotMatch(f, /#|B|1234/);
+});

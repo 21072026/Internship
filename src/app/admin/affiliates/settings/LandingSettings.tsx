@@ -24,7 +24,10 @@ import {
   type LandingLocale,
   type LandingParagraphField,
   type LandingTextField,
+  type LandingTheme,
 } from '@/lib/affiliateLandingRule';
+import type { ThemeMedia } from '@/lib/partnerThemeLook';
+import { ThemeSettings } from './ThemeSettings';
 
 // The public programme page's content (#3359): copy per locale plus the contact
 // details and the product's sign-up address. The server is the judge
@@ -45,11 +48,13 @@ const PARAGRAPHS: readonly string[] = ['intro', 'contactText', 'ctaText'];
 
 interface Props {
   initial: Landing;
+  /** The theme's uploads by slot (#3535), for the preview. */
+  initialMedia: ThemeMedia;
   readOnly: boolean;
   localeLabel: Record<LandingLocale, string>;
 }
 
-export function LandingSettings({ initial, readOnly, localeLabel }: Props) {
+export function LandingSettings({ initial, initialMedia, readOnly, localeLabel }: Props) {
   const t = useT();
   const L = t.affiliateSettings.landing;
   const toast = useToast();
@@ -59,6 +64,9 @@ export function LandingSettings({ initial, readOnly, localeLabel }: Props) {
   const [signupUrl, setSignupUrl] = useState(initial.productSignupUrl ?? '');
   // The figure cards (#3364): an absent key is shown as `hidden`.
   const [stats, setStats] = useState<Partial<Record<LandingStatKey, LandingStat>>>(initial.stats ?? {});
+  // The page's look (#3535): null = the standard look.
+  const [theme, setTheme] = useState<LandingTheme | null>(initial.theme ?? null);
+  const [media, setMedia] = useState<ThemeMedia>(initialMedia);
   const [lang, setLang] = useState<LandingLocale>('de');
   const [issues, setIssues] = useState<Map<string, LandingIssueCode>>(new Map());
   const [busy, setBusy] = useState(false);
@@ -78,7 +86,7 @@ export function LandingSettings({ initial, readOnly, localeLabel }: Props) {
       const res = await fetch('/api/admin/affiliate/settings/landing', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ landing: { copy, phone, email, productSignupUrl: signupUrl, stats } }),
+        body: JSON.stringify({ landing: { copy, phone, email, productSignupUrl: signupUrl, stats, theme } }),
       });
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -89,6 +97,7 @@ export function LandingSettings({ initial, readOnly, localeLabel }: Props) {
         setEmail(saved.email ?? '');
         setSignupUrl(saved.productSignupUrl ?? '');
         setStats(saved.stats ?? {});
+        setTheme(saved.theme ?? null);
       } else if (body.code === 'invalid_landing') {
         setIssues(new Map((body.issues as LandingIssue[]).map((i) => [i.field, i.code])));
         toast(t.affiliateSettings.errorInvalid, 'error');
@@ -265,6 +274,8 @@ export function LandingSettings({ initial, readOnly, localeLabel }: Props) {
             );
           })}
         </div>
+
+        <ThemeSettings theme={theme} onChange={setTheme} media={media} onMedia={setMedia} copy={c} err={err} />
 
         {!readOnly && (
           <Button type="button" onClick={() => void save()} disabled={busy} data-testid="affiliate-save-landing">

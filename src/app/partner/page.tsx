@@ -13,6 +13,8 @@ import { affiliateProgrammeForHost, publicProgrammeForRequest } from '@/lib/affi
 import { requestHostHeader } from '@/lib/publicHostOrg';
 import { commissionTableRows, customerSignupRedirect, landingCopyFor, maxOneOffCommission, needsLiveStats, readStoredLanding, statCards, telHref } from '@/lib/affiliateLandingRule';
 import { liveStatCounts } from '@/lib/affiliatePublicStats';
+import { themeMediaFor } from '@/lib/affiliateLandingAssets';
+import { ThemedPartnerPage } from './ThemedPartnerPage';
 
 // The public partner-programme page (docs/affiliate-module.md, #3360): the first
 // page someone who wants to become a partner sees, on the marketing host,
@@ -78,6 +80,44 @@ export default async function PartnerProgrammePage({ searchParams }: { searchPar
         })
       : null;
 
+  const rowLabel = (r: (typeof rows)[number]) =>
+    r.overMinor === null && r.upToMinor === null
+      ? L.anyPayment
+      : r.overMinor === null
+        ? interpolate(L.upTo, { amount: money(r.upToMinor as number) })
+        : r.upToMinor === null
+          ? interpolate(L.above, { amount: money(r.overMinor) })
+          : interpolate(L.range, { from: money(r.overMinor), to: money(r.upToMinor) });
+  const tableEyebrow = interpolate(L.tableEyebrow, { amount: money(maxOneOffCommission(plan)) });
+
+  // The organisation's own look (#3535): the same page, drawn by the theme.
+  const { theme } = programme.landing;
+  if (theme) {
+    return (
+      <ThemedPartnerPage
+        theme={theme}
+        media={await themeMediaFor(programme.orgId, theme)}
+        view={{
+          L,
+          locale,
+          copy,
+          productName: brand.productName,
+          markUrl: mark,
+          phone,
+          email,
+          productSignupUrl,
+          telHref: phone ? telHref(phone) : null,
+          cards,
+          tableEyebrow,
+          tableRows: rows.map((r) => ({ label: rowLabel(r), commission: money(r.commissionMinor) })),
+          percentLine,
+          applyHref: APPLY_HREF,
+          portalHref: PORTAL_HREF,
+        }}
+      />
+    );
+  }
+
   const heroButton = 'inline-flex items-center justify-center rounded-lg px-5 py-3 text-base font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2';
 
   return (
@@ -137,7 +177,7 @@ export default async function PartnerProgrammePage({ searchParams }: { searchPar
         <section aria-labelledby="partner-table" className="space-y-6">
           <div className="text-center">
             <p className="text-sm font-semibold uppercase tracking-wide" style={{ color: accent }}>
-              {interpolate(L.tableEyebrow, { amount: money(maxOneOffCommission(plan)) })}
+              {tableEyebrow}
             </p>
             <h2 id="partner-table" className="mt-1 text-3xl font-bold">{copy.tableTitle ?? L.tableTitle}</h2>
           </div>
@@ -152,15 +192,7 @@ export default async function PartnerProgrammePage({ searchParams }: { searchPar
               <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
                 {rows.map((r, i) => (
                   <tr key={i}>
-                    <td className="px-5 py-3">
-                      {r.overMinor === null && r.upToMinor === null
-                        ? L.anyPayment
-                        : r.overMinor === null
-                          ? interpolate(L.upTo, { amount: money(r.upToMinor as number) })
-                          : r.upToMinor === null
-                            ? interpolate(L.above, { amount: money(r.overMinor) })
-                            : interpolate(L.range, { from: money(r.overMinor), to: money(r.upToMinor) })}
-                    </td>
+                    <td className="px-5 py-3">{rowLabel(r)}</td>
                     <td className="px-5 py-3 text-right font-semibold">{money(r.commissionMinor)}</td>
                   </tr>
                 ))}
