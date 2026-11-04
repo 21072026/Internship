@@ -14,6 +14,7 @@ import { formatMinorAmount } from '@/lib/money';
 import { formatDate } from '@/lib/relativeTime';
 import { interpolate } from '@/lib/notificationText';
 import { AffiliateTabs } from '../AffiliateTabs';
+import { CustomerName } from '@/components/affiliate/CustomerName';
 
 // Payouts (docs/affiliate-module.md, #3116): after the bank transfer, record it —
 // the selected APPROVED commissions of one partner become PAID together, or
@@ -35,6 +36,7 @@ interface Commission {
   amountMinor: number;
   dueAt: string;
   customerRef: string;
+  customerLabel: string | null;
   payment: { externalPaymentRef: string };
 }
 interface Payout {
@@ -182,7 +184,7 @@ export default function AffiliatePayoutsPage() {
                           setSelected(next);
                         }}
                       />
-                      <span className="font-mono">{c.customerRef}</span>
+                      <CustomerName label={c.customerLabel} reference={c.customerRef} />
                       <span className="font-mono text-gray-500">{c.payment.externalPaymentRef}</span>
                       <span>{formatDate(c.dueAt, locale, { timeZone: 'UTC' })}</span>
                       <span className="ml-auto">{money(c.amountMinor)}</span>

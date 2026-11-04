@@ -7,6 +7,9 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { CustomerName } from '@/components/affiliate/CustomerName';
+import { CUSTOMER_LABEL_MAX } from '@/lib/affiliateCustomerLabelRule';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { useLocale, useT } from '@/i18n/client';
@@ -18,6 +21,7 @@ import { AffiliateTabs } from '../AffiliateTabs';
 // Customer payments (docs/affiliate-module.md, #3116): record one by hand, see
 // the commission the plan gave it. The writer decides everything; the amount is
 // typed the way a person writes it ("19,99") and sent as minor units.
+// A customer's partner-facing label (#3352) is edited from its row.
 
 interface Row {
   id: string;
@@ -25,7 +29,9 @@ interface Row {
   amountMinor: number;
   currency: string;
   externalPaymentRef: string;
+  customerId: string;
   customerRef: string;
+  customerLabel: string | null;
   partner: { id: string; code: string; displayName: string };
   commission: { kind: 'TIER' | 'PERCENT' | 'IMPORTED'; amountMinor: number; status: string } | null;
 }
@@ -53,6 +59,7 @@ export default function AffiliatePaymentsPage() {
   const [failed, setFailed] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [labelFor, setLabelFor] = useState<{ customerId: string; draft: string } | null>(null);
   const [form, setForm] = useState({ partnerId: '', customerExternalRef: '', amount: '', receivedOn: today(), externalPaymentRef: '' });
 
   const load = useCallback(async () => {
@@ -74,6 +81,27 @@ export default function AffiliatePaymentsPage() {
   }, [load]);
 
   const money = (minor: number, currency = 'EUR') => formatMinorAmount(minor, currency, locale);
+
+  async function saveLabel() {
+    if (!labelFor) return;
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/admin/affiliate/customers/${encodeURIComponent(labelFor.customerId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partnerLabel: labelFor.draft }),
+      });
+      if (!res.ok) {
+        toast(L.labelFailed, 'error');
+        return;
+      }
+      toast(L.labelSaved);
+      setLabelFor(null);
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function save() {
     const amountMinor = parseMinorUnits(form.amount);
@@ -176,7 +204,22 @@ export default function AffiliatePaymentsPage() {
                 {data.rows.map((r) => (
                   <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800">
                     <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.receivedAt, locale, { timeZone: 'UTC' })}</td>
-                    <td className="px-4 py-2 font-mono">{r.customerRef}</td>
+                    <td className="px-4 py-2">
+                      <div className="flex items-start gap-2">
+                        <CustomerName label={r.customerLabel} reference={r.customerRef} />
+                        {data.canWrite && (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setLabelFor({ customerId: r.customerId, draft: r.customerLabel ?? '' })}
+                            data-testid="affiliate-customer-label-edit"
+                          >
+                            {L.labelEdit}
+                          </Button>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-2">{r.partner.displayName}</td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">{money(r.amountMinor, r.currency)}</td>
                     <td className="px-4 py-2 font-mono">{r.externalPaymentRef}</td>
@@ -203,6 +246,25 @@ export default function AffiliatePaymentsPage() {
           )}
         </Card>
       )}
+      <ConfirmDialog
+        open={labelFor !== null}
+        title={L.labelTitle}
+        message={
+          <Input
+            label={L.labelField}
+            hint={L.labelHint}
+            maxLength={CUSTOMER_LABEL_MAX}
+            value={labelFor?.draft ?? ''}
+            onChange={(e) => setLabelFor((cur) => (cur ? { ...cur, draft: e.target.value } : cur))}
+            data-testid="affiliate-customer-label-input"
+          />
+        }
+        confirmLabel={L.labelSave}
+        cancelLabel={L.labelCancel}
+        loading={busy}
+        onConfirm={() => void saveLabel()}
+        onCancel={() => setLabelFor(null)}
+      />
     </div>
   );
 }
