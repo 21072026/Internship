@@ -166,7 +166,13 @@ test('over the per-visitor limit the visitor is still redirected, but not counte
 test('the portal hands out the /r/ link and keeps the direct one as the old link', async ({ page }) => {
   await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
   await signInAndSettle(page, partnerEmail, PW, '/affiliate');
-  await expect(page.getByTestId('affiliate-referral-link')).toHaveText(new RegExp(`^https?://${MARKETING_HOST.replace(/\./g, '\\.')}(:\\d+)?/r/${codes.active}$`));
+  const tracked = page.getByTestId('affiliate-referral-link');
+  await expect(tracked).toContainText(`/r/${codes.active}`);
+  // Parsed, not pattern-matched: the link is on the org's public host, whatever the protocol and port.
+  const url = new URL((await tracked.textContent())!.trim());
+  expect(url.hostname).toBe(MARKETING_HOST);
+  expect(url.pathname).toBe(`/r/${codes.active}`);
+  expect(url.search).toBe('');
   await expect(page.getByTestId('affiliate-referral-link-direct')).toHaveText(`${REFERRAL_URL}?ref=${codes.active}`);
 });
 
