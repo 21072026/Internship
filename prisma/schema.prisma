@@ -396,6 +396,7 @@ model Organization {
   affiliateCommissions    AffiliateCommission[]
   affiliatePayouts        AffiliatePayout[]
   affiliateAcceptances    AffiliateContractAcceptance[]
+  affiliateClicks         AffiliateClickDaily[]
   requisitionFits         RequisitionFit[]
 
   @@index([archivedAt])
@@ -9348,34 +9349,40 @@ model AffiliateApplication {
 }
 
 model AffiliateProgramSettings {
-  id              String       @id @default(cuid())
-  orgId           String       @unique
-  org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  id               String       @id @default(cuid())
+  orgId            String       @unique
+  org              Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   // The commission plan (src/lib/affiliateCommissionRule.ts, parseCommissionPlan).
   // Organisation data: no default mirrors a real contract. Null until configured;
   // the writer refuses payments without a plan.
-  plan            Json?
+  plan             Json?
   // Bumped on every plan change. A commission records the version it was computed
   // under; one of an older version is never recomputed.
-  planVersion     Int          @default(0)
+  planVersion      Int          @default(0)
   // When the current plan version took effect. Payments RECORDED before it never
   // get a commission created retroactively by the new plan (src/lib/affiliateCommissionSync.ts).
-  planEffectiveAt DateTime?
+  planEffectiveAt  DateTime?
   // The re-evaluation of every partner after a plan change (#3170): the admin's
   // progress report and the queued job's checkpoint, for the plan version it names
   // (src/lib/affiliatePlanResyncRule.ts). Ids and counters only. Null before the
   // first plan change.
-  planResync      Json?
+  planResync       Json?
   // The base URL a partner's referral link is built on (src/lib/affiliateReferralRule.ts):
   // https, the partner's code set as ?ref=. Null: the portal shows the code alone.
-  referralUrl     String?      @db.VarChar(500)
+  referralUrl      String?      @db.VarChar(500)
   // Locale maps ({ en, tr, de }): the public programme page and the partner contract.
-  landing         Json?
-  contract        Json?
+  landing          Json?
+  contract         Json?
   // Bumped on every contract text change; partners re-accept the current version.
-  contractVersion Int          @default(0)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  contractVersion  Int          @default(0)
+  // A customer's funnel status (src/lib/affiliateCustomerStatusRule.ts, #3542):
+  // the free period after registration in calendar months, and the days without a
+  // payment after which a paying customer counts as passive. Not part of the
+  // commission plan: a change never bumps planVersion.
+  freeMonths       Int          @default(2)
+  passiveAfterDays Int          @default(45)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 }
 
 model AffiliatePartner {
@@ -9408,6 +9415,7 @@ model AffiliatePartner {
   commissions         AffiliateCommission[]
   payouts             AffiliatePayout[]
   contractAcceptances AffiliateContractAcceptance[]
+  clicks              AffiliateClickDaily[]
 
   @@unique([orgId, code])
   @@index([orgId, status])
@@ -9422,6 +9430,10 @@ model AffiliateCustomer {
   // The customer's id on the product side. Opaque here; one partner per customer.
   externalRef String                @db.VarChar(120)
   createdAt   DateTime              @default(now())
+  // When the account was cancelled or deactivated (a `cancelled`/`deactivated`
+  // account event, src/lib/accountEventIngest.ts); cleared by `reactivated`.
+  // Read by the status rule (src/lib/affiliateCustomerStatusRule.ts, #3542).
+  endedAt     DateTime?
   payments    AffiliatePayment[]
   commissions AffiliateCommission[]
 
@@ -9510,6 +9522,26 @@ model AffiliateContractAcceptance {
 
   @@unique([partnerId, version])
   @@index([orgId])
+}
+
+// One partner's link clicks on one UTC day (#3541, docs/affiliate-module.md §
+// Link clicks): counters only. No IP, user-agent, cookie or visitor key is ever
+// stored — "unique" is decided in the rate-limit store, which forgets the
+// day's hashed visitor keys at the end of that day (src/lib/affiliateClicks.ts).
+model AffiliateClickDaily {
+  id           String           @id @default(cuid())
+  orgId        String
+  org          Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  partnerId    String
+  partner      AffiliatePartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  // Midnight UTC of the day the clicks fell on.
+  day          DateTime         @db.Date
+  clicks       Int              @default(0)
+  uniqueClicks Int              @default(0)
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([partnerId, day])
+  @@index([orgId, day])
 }
 
 // ── Chat apps (#1934, epic #1923) ──────────────────────────────────────────

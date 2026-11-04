@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Affiliate customer status (#3542):** one pure rule, `customerStatus()` (`src/lib/affiliateCustomerStatusRule.ts`), derives `FREE_PERIOD` / `NEVER_PAID` / `ACTIVE` / `PASSIVE` from the registration, the newest payment, `AffiliateCustomer.endedAt` and two new programme settings, `freeMonths` (default 2) and `passiveAfterDays` (default 45), editable on `/admin/affiliates/settings` through `PUT /api/admin/affiliate/settings/customer-status` and not part of the commission plan. `cancelled` / `deactivated` account events stamp `endedAt` on the org's own linked customer, `reactivated` clears it; a dry run writes nothing. `partnerCustomerStatusCounts()` (`src/lib/affiliateCustomerStatus.ts`) is the one per-partner count query the portal (#3543) and admin (#3544) funnels will read.",
+  "notes": {
+    "en": ["Affiliate settings now let admins set the customers' free period and after how many days without a payment a customer counts as passive."],
+    "tr": ["Affiliate ayarlarında artık müşterilerin ücretsiz dönemi ve kaç gün ödeme yapmayan müşterinin pasif sayılacağı belirlenebiliyor."],
+    "de": ["In den Affiliate-Einstellungen lassen sich jetzt der kostenlose Zeitraum der Kunden und die Zahl der Tage ohne Zahlung festlegen, nach denen ein Kunde als passiv gilt."]
+  }
+}

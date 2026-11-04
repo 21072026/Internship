@@ -23,7 +23,7 @@ per organisation, and every number in tests and examples here is synthetic.
 | 6 | Referral codes | Permanent once issued, unique per organisation. A migrated partner keeps the exact code the previous system used (a number or a custom slug). |
 | 7 | Payouts | Recorded and approved in the CRM; the bank transfer itself stays manual. |
 | 8 | Contract | Each organisation writes its programme copy and partner contract (per locale). A changed contract bumps its version, and every partner must accept the current version before the portal or its API answers. |
-| 9 | Clicks | Not migrated. New clicks, if recorded, store a keyed hash of the IP, never the raw address. |
+| 9 | Clicks | Not migrated. New clicks are counted through the tracked link `/r/<code>` as **per-partner, per-day counters only** — no IP, user-agent or cookie is stored ([Link clicks](#link-clicks-3541)). |
 
 ## The commission plan
 
@@ -148,6 +148,8 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
 - **AffiliateCustomer** — `partnerId`, `externalRef` (unique per org; shown to the
   partner, so a customer number — never a name or an address). Ordinals are not
   stored: the engine derives them from the payments every time.
+  `createdAt` is the registration (the linking event's time); `endedAt` is the
+  account's cancellation, null while live (#3542, [Customer status](#customer-status-3542)).
 - **AffiliatePayment** — `amountMinor`, `currency`, `receivedAt` (never in the
   future), `source` (MANUAL / API / IMPORT), `externalPaymentRef` (**required,
   unique per organisation**, so a double entry is caught even under a mistyped customer).
@@ -160,9 +162,12 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
 - **AffiliateProgramSettings** — one per organisation: the commission plan (JSON,
   validated by `parseCommissionPlan`) and its `planVersion`, the referral base URL
   (`referralUrl`), landing copy, contract text and `contractVersion`. Without a
-  valid plan the writer refuses payments.
+  valid plan the writer refuses payments. `freeMonths` / `passiveAfterDays` (defaults 2
+  and 45) are the customer-status thresholds — not part of the plan.
 - **InvitationToken.partnerId** — the partner an AFFILIATE invitation links to.
 - **AffiliateContractAcceptance** — one row per partner and contract version.
+- **AffiliateClickDaily** — one row per partner and UTC day: `clicks` and `uniqueClicks`
+  (`@@unique([partnerId, day])`). Counters only ([Link clicks](#link-clicks-3541)).
 
 ## Admin screens
 
@@ -189,6 +194,12 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   audited (`affiliate.landing.update`) with the locales and which contact fields are
   set, never the texts. The wording is the organisation's data — the code carries
   only generic labels.
+  The **customer-status thresholds** (#3542) sit on the same tab: `freeMonths` and
+  `passiveAfterDays`, written only by `saveCustomerStatusSettings()` through
+  `PUT /api/admin/affiliate/settings/customer-status` (`affiliate.write`), whole
+  numbers in 0…36 and 1…730. They are not part of the commission plan: a change
+  never bumps `planVersion` and re-evaluates nothing. Audited
+  (`affiliate.customer_status.update`) with the old and new values.
 - **Partners** (`src/lib/affiliatePartners.ts`, `/api/admin/affiliate/partners`) —
   the list with customer counts and PENDING / APPROVED / PAID totals summed in SQL,
   a new partner (referral code: letters, digits, `-`, `_`, unique per organisation
@@ -455,6 +466,13 @@ the check.
 
 - **Home:** the referral link, the customer count and the totals per commission
   status, and a notice while the partnership is suspended or ending.
+- **Funnel and threshold (#3543):** under the totals, the partner's own
+  [funnel](#the-funnel-35433544) for this month, the last 12 months or all time
+  (`?period=month|year|all`), and — when the plan has a switch to a percent — the
+  "N / target paying customers" indicator. The customer list shows each
+  customer's [status](#customer-status-3542) as a badge and filters by it
+  (`?status=`). Both read `partnerFunnel()` / `partnerCustomers()` in
+  `src/lib/affiliatePartnerView.ts`, narrowed to the session's partner.
 - **Commission terms (#3349):** a read-only box under the totals shows the
   organisation's current plan — bands, the commission above the last band, the percent
   phase, due days, the rule after a termination, the plan version and its effective
@@ -468,6 +486,11 @@ the check.
   fragment or its own `ref`; the link is that URL with `ref=<code>` set
   (`src/lib/affiliateReferralRule.ts`, unit-tested). Without one the portal shows
   the code alone.
+  When the organisation also has a public host this deployment serves
+  (`Organization.publicHost`), the portal shows the **tracked link**
+  `<public host>/r/<code>` first and keeps the direct link beside it as the
+  "old link": links already shared keep working and their customers are still
+  attributed, only the tracked one counts clicks ([Link clicks](#link-clicks-3541)).
 - **Customers, commissions, payouts:** read through `src/lib/affiliatePartnerView.ts`,
   narrowed by `affiliateRowScope()` to the partner's own rows. A partner sees its
   customers' opaque references, payment amounts and dates, commissions and payouts
@@ -476,6 +499,56 @@ the check.
 - **Bank details:** entered on `/affiliate/payout-details` through the existing
   partner API (2FA policy, impersonation refusal, sealed, audited, announced); the
   stored IBAN is shown masked and never read back into the form.
+
+## Link clicks (#3541)
+
+A partner's direct link goes straight to the product, so its clicks never reach
+us. The **tracked link** `/r/<code>` passes through the CRM and redirects on.
+Route: `src/app/r/[code]/route.ts`; rule (pure, unit-tested in
+`scripts/test/affiliate-click-rule.test.mjs`): `src/lib/affiliateClickRule.ts`;
+server half: `src/lib/affiliateClicks.ts`.
+
+- **Which organisation.** The request's host, through the same resolver as the
+  public programme page (`resolvePublicInquiryTarget`): the org mapped to the host,
+  MARKETING, with the `affiliate` capability. The code is looked up in that org
+  only, so another org's code is never counted on this host.
+- **Where the visitor goes.** Always a 302, never an error page. A well-formed code
+  goes to `referralLink(referralUrl, code)`; a malformed one to the bare
+  `referralUrl`; no programme or no referral URL here → this host's home page (`/`).
+  The target comes **only from the settings** — nothing of the request reaches it
+  (no open redirect). Whether the code belongs to a partner is not asked for the
+  redirect, so the `Location` reveals nothing (the same rule as `/partner?ref=`,
+  #3365). When the referral URL is the `/partner` page itself, that page forwards
+  to the sign-up page as before.
+- **What is counted.** After the response (`after()`, so timing reveals nothing
+  either), one click for an **ACTIVE** partner of the host's org, when the request is
+  a GET, not a browser prefetch (`Sec-Purpose`/`Purpose`), and not a known bot,
+  link-preview fetcher or command-line client (`isBotUserAgent`; an empty
+  user-agent counts as a bot). Unknown codes, suspended or terminated partners,
+  another org's codes and bots are redirected and counted never.
+- **Unique clicks.** The first click of a visitor for a partner on a UTC day. The
+  visitor key is `HMAC(dayKey, IP + user-agent)`, where `dayKey` is derived from
+  the server secret and the UTC date — the same on every replica, and a new one
+  every day, so yesterday's keys cannot be linked to today's. The key lives only
+  in the rate-limit store, in a window that ends at the next UTC midnight (≤ 24 h).
+- **Rate limit.** At most 30 counted clicks per visitor (hashed IP) and hour
+  (`CLICK_RATE_LIMIT`). Over it the visitor is **still redirected**, the click is
+  not counted. The limiter is called directly (`rateLimit()`), not through
+  `enforceRateLimit()`, because that one writes the client IP into the activity
+  log on a breach.
+- **Write.** One upsert on `(partnerId, day)` incrementing `clicks` (and
+  `uniqueClicks` for a unique click); a lost race on the first click of the day
+  retries as the update. The orgId is passed explicitly (sessionless route).
+
+**What is NOT stored**, anywhere — database, rate-limit store, logs:
+
+- the visitor's IP address (only an HMAC of it, in the rate-limit store, for at
+  most the rest of the UTC day);
+- the user-agent (likewise only inside the HMAC visitor key);
+- any cookie: the route sets none and reads none;
+- the referring page, the time of the click beyond its UTC day, or anything that
+  ties a click to a later registration — attribution stays with the
+  `referral_code` of the account event (below).
 
 ## Automatic attribution (#3354)
 
@@ -519,6 +592,68 @@ with `referral_code: "<code>"`, and the ingest links the customer:
 
 Pinned by `e2e/affiliate-auto-attribution.spec.ts` (@smoke: the four-step flow, repeat
 and dry run, another org's code, suspended/terminated partners).
+
+## Customer status (#3542)
+
+Every affiliate customer stands at one point of the partner's funnel, derived by
+ONE pure rule, `customerStatus()` in `src/lib/affiliateCustomerStatusRule.ts`
+(`scripts/test/affiliate-customer-status-rule.test.mjs`), from the registration
+(`AffiliateCustomer.createdAt`), the newest payment's `receivedAt`, `endedAt`, the
+clock and the two programme settings:
+
+| Status | When |
+|---|---|
+| `FREE_PERIOD` | No payment, not ended, and fewer than `freeMonths` calendar months (UTC, clamped to month end) since registration. |
+| `NEVER_PAID` | No payment, and the free period has run out or the account ended. |
+| `ACTIVE` | The last payment is less than `passiveAfterDays` × 24 h old, and the account has not ended since. |
+| `PASSIVE` | Paid before, but the last payment is `passiveAfterDays` × 24 h old or older, or the account ended after it. |
+
+- **A payment after the end brings the customer back.** An end counts only when no
+  payment was received after it (an end at the same instant as the payment counts).
+- **The end comes from the feed**: `cancelled` / `deactivated` account events stamp
+  `endedAt`, `reactivated` clears it
+  ([account-events.md](integrations/account-events.md#affiliate-customer-end-3542)),
+  in the event's own org only, never in a dry run.
+- **The status is never stored.** It moves with the clock, so it is computed when
+  read. `partnerCustomerStatusCounts(orgId, { partnerIds })`
+  (`src/lib/affiliateCustomerStatus.ts`) is the one query the partner portal and
+  the admin screens read the counts from: three queries whatever the programme's
+  size (settings, customers, newest payment per customer), the status judged in
+  memory by the rule — never a SQL copy of it.
+
+## The funnel (#3543/#3544)
+
+One aggregate, `src/lib/affiliateFunnel.ts`, feeds the partner portal and the
+admin screens, so a partner and the programme team read the same numbers. The
+rules are pure in `src/lib/affiliateFunnelRule.ts`
+(`scripts/test/affiliate-funnel-rule.test.mjs`).
+
+- **`partnerFunnels(orgId, { partnerIds?, period })`** → per partner:
+  - **clicks** (and unique clicks) — the tracked link's daily counter
+    ([Link clicks](#link-clicks-3541)) summed over the period's UTC days;
+  - **registrations** — customers registered (`AffiliateCustomer.createdAt`) in
+    the period, split into *in free period* (`FREE_PERIOD`) and *left without
+    paying* (`NEVER_PAID`);
+  - **paying** — of those, `ACTIVE` + `PASSIVE`;
+  - **active / passive** — the paying ones by their status today.
+- **A cohort, judged today.** Every step after the clicks counts the customers who
+  registered in the period, with today's [status](#customer-status-3542). A
+  customer who registered before the period and paid in it is not in it.
+- **Periods** are UTC calendar months: `month` from the first of this month,
+  `year` this month and the eleven before it, `all` no lower bound.
+- **Rates** are each step's share of the step before, rounded to a whole percent,
+  none when the step before is zero. Registrations may exceed clicks: a customer
+  who came through the direct (old) link registers without a click.
+- **`partnerThresholds(orgId, { partnerIds? })`** → "N / target" towards the
+  current plan's `switchAtCustomer`: the partner's payments run through the
+  engine's own `evaluatePartner()`, so N is the number of eligible paying
+  customers ordered by first-payment date (`customerOrder`), and the date shown
+  once reached is its `switchedAt` — exactly what the commissions use. No entry
+  (and no indicator) when the plan has no threshold or a 0 % rate.
+- The statuses come from `partnerCustomerStatusCounts()` with `registeredFrom`;
+  the customer list filters `partnerCustomerStatuses()`, the list those counts
+  fold, so a filter count and a funnel number cannot disagree. A partner reads
+  only its own partner id (session scope); every query names `orgId`.
 
 ## Payments from the source system (#3355)
 
