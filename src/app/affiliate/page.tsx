@@ -10,7 +10,8 @@ import { formatDate } from '@/lib/relativeTime';
 import { CommissionTerms } from './CommissionTerms';
 import { CopyLink } from './CopyLink';
 
-// The partner portal's home (docs/affiliate-module.md, #3117): the referral link,
+// The partner portal's home (docs/affiliate-module.md, #3117): the referral link
+// (the click-counting /r/<code> link with the direct one beside it, #3541),
 // the totals per commission status and the partnership's state. A partner who
 // has not accepted the current contract is sent to it first.
 export default async function AffiliateHomePage() {
@@ -52,7 +53,19 @@ export default async function AffiliateHomePage() {
         <CardHeader>
           <CardTitle>{L.linkTitle}</CardTitle>
         </CardHeader>
-        {summary.link ? (
+        {summary.trackedLink && summary.link ? (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <CopyLink value={summary.trackedLink} />
+              <p className="text-sm text-gray-600 dark:text-gray-400">{L.linkTrackedHint}</p>
+            </div>
+            <div className="space-y-2" data-testid="affiliate-referral-direct">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">{L.linkDirectTitle}</h3>
+              <CopyLink value={summary.link} testId="affiliate-referral-link-direct" />
+              <p className="text-sm text-gray-600 dark:text-gray-400">{L.linkDirectHint}</p>
+            </div>
+          </div>
+        ) : summary.link ? (
           <div className="space-y-2">
             <CopyLink value={summary.link} />
             <p className="text-sm text-gray-600 dark:text-gray-400">{L.linkHint}</p>
