@@ -182,6 +182,12 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   programme's size (an e2e counts them at 1 and 25 partners). While the plan, the
   contract or the first partner is missing it shows those setup steps.
   `affiliate.read` (OBSERVER included).
+- **Funnel** (`/admin/affiliates/funnel`, `/api/admin/affiliate/funnel`, #3544) — one
+  row per partner: clicks, unique clicks, registrations, paying, active, passive,
+  the two conversion rates and the customers left to the plan's switch, with warning
+  badges; a period selector and sortable columns, all three in the URL. The overview
+  shows the org total of the same funnel over the whole programme. See
+  [Admin funnel board](#admin-funnel-board-3544). `affiliate.read` (OBSERVER included).
 - **Settings** — the plan and the contract (above), the referral base URL, and the
   **public programme page's content** (#3359): `AffiliateProgramSettings.landing`,
   written only by `saveLanding()` through `PUT /api/admin/affiliate/settings/landing`.
@@ -613,6 +619,39 @@ clock and the two programme settings:
   the admin screens read the counts from: three queries whatever the programme's
   size (settings, customers, newest payment per customer), the status judged in
   memory by the rule — never a SQL copy of it.
+
+## Admin funnel board (#3544)
+
+The admin's Funnel tab (`/admin/affiliates/funnel`, `GET /api/admin/affiliate/funnel`,
+`affiliate.read`) and the overview's org total show the SAME numbers as the partner
+portal (#3543): the steps come from the shared `partnerFunnels()` and the threshold
+from `partnerThresholds()` in `src/lib/affiliateFunnel.ts` (the engine's own ordinal,
+through `evaluatePartner()`). The board adds only admin-only pieces on top, in
+`src/lib/affiliateFunnelBoard.ts` and the pure `src/lib/affiliateFunnelBoardRule.ts`
+(`scripts/test/affiliate-funnel-board-rule.test.mjs`) — never a second count.
+
+- **Columns**: clicks, unique clicks, registrations, paying, active, passive, click →
+  registration and registration → paying (whole %, the portal card's `stepRate`;
+  empty when there is nothing to divide by), and the customers left to the plan's
+  switch (lifetime whatever the period; "Reached" at 0; empty without a switch).
+- **Periods**: the shared vocabulary, `month` / `year` / `all`.
+- **Badges** (thresholds fixed in the rule file, not settings):
+  `CLICKS_NO_SIGNUPS` (more than 100 clicks, no registration in the period),
+  `MOSTLY_PASSIVE` (at least 3 paying, more than half of them passive),
+  `WINDOW_ENDING` (ACTIVE customers of a partner already in the percent phase whose
+  `windowMonths` window, counted from their first valid payment, ends within 30
+  days; none after a `STOP_ALL` termination, none for a customer first paid at or
+  after the termination). The window warning is lifetime.
+- **Sorting** takes a key from `FUNNEL_SORTS` and `asc`/`desc`; an unknown key,
+  direction, period or page is a 400. Sorting and paging (50 rows) happen on the
+  server over the computed rows — a request string never reaches a query — with the
+  partner id as the tiebreak and empty values last in both directions. Period,
+  sort and page are in the URL.
+- **Org total**: the sum of the partners' funnels (`funnelTotal()`); the overview
+  shows it for `all`.
+- A fixed number of queries whatever the programme's size: the partners, the shared
+  funnel and threshold queries, and for the window warning every customer's status
+  (`partnerCustomerStatuses()`) and the first valid payment per customer.
 
 ## Payments from the source system (#3355)
 
