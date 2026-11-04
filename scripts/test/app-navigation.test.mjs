@@ -45,6 +45,7 @@ test('an affiliate partner gets the partner menu only — never the portal (#311
     '/affiliate/commissions',
     '/affiliate/payouts',
     '/affiliate/payout-details',
+    '/affiliate/support',
     '/affiliate/contract',
   ]);
   // The internship product carries no affiliate module: nothing at all.
