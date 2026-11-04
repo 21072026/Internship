@@ -94,8 +94,8 @@ Example:
 | `account_created` | Opens a trial: the account's funnel record moves to `TRIAL_ACTIVE` (the account is created if it does not exist yet). |
 | `trial_started` | Same as `account_created`. |
 | `converted` | The record moves to `DEAL_WON`; on a lost record, a [new journey](#new-journeys) at `DEAL_WON`. An unknown account answers `unknown_account`. |
-| `cancelled`, `deactivated` | The record moves to `DEAL_LOST` with a drop-off reason: `CUSTOMER_CANCELLED` when the record had been won (it is at `DEAL_WON`, or its history shows it reached it), otherwise `OTHER` with the fixed note `"<source slug>: ended during trial"`. An unknown account answers `unknown_account`. |
-| `reactivated` | On a lost record, a [new journey](#new-journeys): at `DEAL_WON` when the lost record had been won, otherwise a new trial. On any other record it moves nothing (`recorded`). An unknown account answers `unknown_account`. |
+| `cancelled`, `deactivated` | The record moves to `DEAL_LOST` with a drop-off reason: `CUSTOMER_CANCELLED` when the record had been won (it is at `DEAL_WON`, or its history shows it reached it), otherwise `OTHER` with the fixed note `"<source slug>: ended during trial"`. An unknown account answers `unknown_account`. A customer linked to a partner is also marked ended ([Affiliate customer end](#affiliate-customer-end-3542)), whether or not the CRM knows the account. |
+| `reactivated` | On a lost record, a [new journey](#new-journeys): at `DEAL_WON` when the lost record had been won, otherwise a new trial. On any other record it moves nothing (`recorded`). An unknown account answers `unknown_account`. A partner's customer is no longer marked ended ([Affiliate customer end](#affiliate-customer-end-3542)). |
 | `payment_received` | No funnel move. The customer's payment is recorded for the affiliate programme ([Customer payments](#customer-payments-3355)). |
 | `commitment_confirmed`, `plan_changed`, `cancellation_requested`, `out_of_scope`, `deleted` | Recorded (an `IntegrationEvent` row and an `integration.event` activity entry) and nothing moves. A funnel mapping for any of them is a product decision for a later change. |
 
@@ -126,6 +126,10 @@ Any event that carries `referral_code` or `acquisition_source` fills the lead's 
 ### Affiliate attribution
 
 An event that carries `referral_code` also links the account's customer to the partner whose code it names (#3354), on any event type, after the account exists. Only an `ACTIVE` partner **of the key's organization** matches: another organization's code, an unknown code, a suspended partner, and a terminated one whose notice period has ended (the event's time, `occurred_at` on a replay, is not before `noticeEffectiveAt`), link nothing, and the event is otherwise handled as usual. The customer reference is the event's `external_id`; **the first link wins**, so a later event naming another partner changes nothing and leaves an `integration.affiliate_kept_first` activity line. A repeated event writes no second row. A [dry run](#dry-run) links nobody. The partner then sees the customer in the portal, and a later manual payment entry finds it without choosing a partner. The rule is in [affiliate-module.md](../affiliate-module.md#automatic-attribution-3354).
+
+### Affiliate customer end (#3542)
+
+`cancelled` and `deactivated` stamp the end of the affiliate customer whose reference is the event's `external_id` (`AffiliateCustomer.endedAt` = `occurred_at`); `reactivated` clears it. Only a customer row **of the key's organization** is touched, and only one that exists — an account no partner brought in writes nothing. The first end is kept: a second cancellation does not move it, and a reactivation clears only an end at or before its own `occurred_at`, so a late-arriving older reactivation cannot undo a newer cancellation. A [dry run](#dry-run) writes nothing. The write happens before the funnel move and does not change the event's outcome; it leaves an `integration.affiliate_ended` / `integration.affiliate_reactivated` activity line (counted into the replay line in historic mode). The partner funnel reads it as described in [affiliate-module.md](../affiliate-module.md#customer-status-3542).
 
 ### Customer payments (#3355)
 
