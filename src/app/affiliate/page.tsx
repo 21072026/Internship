@@ -2,19 +2,22 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { getServerDictionary } from '@/i18n/server';
 import { CONTRACT_PATH, requirePortalPartner } from '@/lib/affiliatePortal';
-import { partnerPlanTerms, partnerSummary } from '@/lib/affiliatePartnerView';
+import { partnerFunnel, partnerPlanTerms, partnerSummary } from '@/lib/affiliatePartnerView';
 import { AFFILIATE_CURRENCIES } from '@/lib/affiliateProgramSettings';
 import { formatMinorAmount } from '@/lib/money';
 import { interpolate } from '@/lib/notificationText';
 import { formatDate } from '@/lib/relativeTime';
 import { CommissionTerms } from './CommissionTerms';
 import { CopyLink } from './CopyLink';
+import { FunnelCard } from './FunnelCard';
+import { ThresholdCard } from './ThresholdCard';
 
 // The partner portal's home (docs/affiliate-module.md, #3117): the referral link
 // (the click-counting /r/<code> link with the direct one beside it, #3541),
 // the totals per commission status and the partnership's state. A partner who
-// has not accepted the current contract is sent to it first.
-export default async function AffiliateHomePage() {
+// has not accepted the current contract is sent to it first. The funnel and the
+// progress towards the plan's percent phase (#3543) sit under the totals.
+export default async function AffiliateHomePage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
   const { locale, t } = await getServerDictionary();
   const L = t.affiliatePortal;
   const portal = await requirePortalPartner();
@@ -27,7 +30,11 @@ export default async function AffiliateHomePage() {
     );
   }
 
-  const [summary, plan] = await Promise.all([partnerSummary(portal.partner), partnerPlanTerms(portal.partner)]);
+  const [summary, plan, funnel] = await Promise.all([
+    partnerSummary(portal.partner),
+    partnerPlanTerms(portal.partner),
+    partnerFunnel(portal.partner, (await searchParams).period),
+  ]);
   const money = (minor: number) => formatMinorAmount(minor, AFFILIATE_CURRENCIES[0], locale);
   const tiles: [string, string, string][] = [
     ['customers', L.customersCount, String(summary.customers)],
@@ -86,6 +93,10 @@ export default async function AffiliateHomePage() {
           ))}
         </div>
       </section>
+
+      {funnel.threshold && <ThresholdCard threshold={funnel.threshold} locale={locale} L={L} />}
+
+      <FunnelCard funnel={funnel.funnel} period={funnel.period} L={L} />
 
       <CommissionTerms terms={plan.terms} planVersion={plan.planVersion} effectiveAt={plan.effectiveAt} locale={locale} L={L} />
 
