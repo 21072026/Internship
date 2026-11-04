@@ -17,6 +17,7 @@ import { parseCommissionPlan } from '@/lib/affiliateCommissionRule';
 import { planTermsView } from '@/lib/affiliatePlanTerms';
 import { listPayouts } from '@/lib/affiliatePayouts';
 import { referralLink } from '@/lib/affiliateReferralRule';
+import { trackedReferralLink } from '@/lib/affiliateClicks';
 import type { GatedPartner } from '@/lib/affiliateContract';
 
 export const PORTAL_CUSTOMERS_PER_PAGE = 50;
@@ -35,8 +36,9 @@ const boundedPage = (raw: unknown) => {
 
 export async function partnerSummary(partner: GatedPartner) {
   const scope = scopeOf(partner);
-  const [settings, row, customers, sums] = await Promise.all([
+  const [settings, org, row, customers, sums] = await Promise.all([
     prisma.affiliateProgramSettings.findUnique({ where: { orgId: scope.orgId }, select: { referralUrl: true } }),
+    prisma.organization.findUnique({ where: { id: scope.orgId }, select: { publicHost: true } }),
     prisma.affiliatePartner.findFirst({ where: { id: scope.partnerId, orgId: scope.orgId }, select: { noticeEffectiveAt: true } }),
     prisma.affiliateCustomer.count({ where: scope }),
     prisma.affiliateCommission.groupBy({ by: ['status'], where: scope, _count: { _all: true }, _sum: { amountMinor: true } }),
@@ -52,6 +54,8 @@ export async function partnerSummary(partner: GatedPartner) {
     status: partner.status,
     noticeEffectiveAt: row?.noticeEffectiveAt?.toISOString() ?? null,
     link: referralLink(settings?.referralUrl, partner.code),
+    // The /r/<code> link that counts clicks (#3541); `link` stays as the old, direct one.
+    trackedLink: trackedReferralLink(org?.publicHost, settings?.referralUrl, partner.code),
     customers,
     totals,
   };
