@@ -396,6 +396,7 @@ model Organization {
   affiliateCommissions    AffiliateCommission[]
   affiliatePayouts        AffiliatePayout[]
   affiliateAcceptances    AffiliateContractAcceptance[]
+  affiliateClicks         AffiliateClickDaily[]
   requisitionFits         RequisitionFit[]
 
   @@index([archivedAt])
@@ -9414,6 +9415,7 @@ model AffiliatePartner {
   commissions         AffiliateCommission[]
   payouts             AffiliatePayout[]
   contractAcceptances AffiliateContractAcceptance[]
+  clicks              AffiliateClickDaily[]
 
   @@unique([orgId, code])
   @@index([orgId, status])
@@ -9520,6 +9522,26 @@ model AffiliateContractAcceptance {
 
   @@unique([partnerId, version])
   @@index([orgId])
+}
+
+// One partner's link clicks on one UTC day (#3541, docs/affiliate-module.md §
+// Link clicks): counters only. No IP, user-agent, cookie or visitor key is ever
+// stored — "unique" is decided in the rate-limit store, which forgets the
+// day's hashed visitor keys at the end of that day (src/lib/affiliateClicks.ts).
+model AffiliateClickDaily {
+  id           String           @id @default(cuid())
+  orgId        String
+  org          Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  partnerId    String
+  partner      AffiliatePartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  // Midnight UTC of the day the clicks fell on.
+  day          DateTime         @db.Date
+  clicks       Int              @default(0)
+  uniqueClicks Int              @default(0)
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([partnerId, day])
+  @@index([orgId, day])
 }
 
 // ── Chat apps (#1934, epic #1923) ──────────────────────────────────────────
