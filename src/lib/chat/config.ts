@@ -1,4 +1,5 @@
 import type { ChatPlatform } from '@prisma/client';
+import chatApp from './chatApp.json';
 
 // Configured vs ENABLED, the Google Calendar discipline (docs/chat-apps.md
 // § Environment variables): credentials can sit in an env for days of trial
@@ -52,4 +53,5 @@ export function teamsLoginBase(): string {
 }
 
 /** The bot scopes the Slack install asks for (#1935) — nothing beyond what delivery needs. */
-export const SLACK_BOT_SCOPES = ['chat:write', 'im:write', 'users:read', 'users:read.email', 'commands'] as const;
+// From chatApp.json (#1956), the same list the Slack manifest declares.
+export const SLACK_BOT_SCOPES: readonly string[] = chatApp.slackBotScopes;

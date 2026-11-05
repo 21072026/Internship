@@ -1,0 +1,18 @@
+{
+  "_comment": "The ONE description of the chat apps (#1956): the commands, the Slack bot scopes and the app version. Read by src/lib/chat/commands.ts and src/lib/chat/config.ts (the app) and by scripts/chat-manifest.mjs (the Teams and Slack manifests under apps/chat/). Change it, then `npm run gen:chat-manifest`; `npm run check:chat-manifest` (CI) fails while the committed manifests disagree.",
+  "name": "InternCRM",
+  "version": "1.0.0",
+  "description": {
+    "short": "Your programme in Teams and Slack: notifications, bookings, check-ins.",
+    "full": "InternCRM brings your programme into the conversation: meeting invites and reminders with a join link, interview decisions, survey check-ins answered with a click, session notes, and booking your next session. Every action runs as the person who linked their own account, with the same permissions as in the app."
+  },
+  "accentColor": "#2563EB",
+  "slash": "/interncrm",
+  "commands": [
+    { "name": "status", "description": "Your own status: your stage, or the people you work with" },
+    { "name": "book", "description": "Book your next session" },
+    { "name": "log", "description": "Add notes to your recent sessions" },
+    { "name": "help", "description": "What you can do from chat" }
+  ],
+  "slackBotScopes": ["chat:write", "im:write", "users:read", "users:read.email", "commands"]
+}

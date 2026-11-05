@@ -5,4 +5,4 @@ import './actions';
 
 export { dispatchInteraction, registeredChatActions } from './dispatch';
 export type { DispatchOutcome, ChatReply } from './dispatch';
-export { parseSlackInteraction, parseTeamsInteraction, isTeamsInteraction, isSlackResponseUrl } from './envelope';
+export { parseSlackInteraction, parseSlackCommand, parseTeamsInteraction, parseTeamsCommand, isTeamsInteraction, isSlackResponseUrl } from './envelope';

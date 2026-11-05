@@ -1,0 +1,67 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "00000000-0000-0000-0000-000000000000",
+  "developer": {
+    "name": "InternCRM",
+    "websiteUrl": "https://interncrm.com",
+    "privacyUrl": "https://interncrm.com/privacy",
+    "termsOfUseUrl": "https://interncrm.com/terms"
+  },
+  "name": {
+    "short": "InternCRM",
+    "full": "InternCRM"
+  },
+  "description": {
+    "short": "Your programme in Teams and Slack: notifications, bookings, check-ins.",
+    "full": "InternCRM brings your programme into the conversation: meeting invites and reminders with a join link, interview decisions, survey check-ins answered with a click, session notes, and booking your next session. Every action runs as the person who linked their own account, with the same permissions as in the app."
+  },
+  "icons": {
+    "color": "color.png",
+    "outline": "outline.png"
+  },
+  "accentColor": "#2563EB",
+  "bots": [
+    {
+      "botId": "00000000-0000-0000-0000-000000000000",
+      "scopes": [
+        "personal"
+      ],
+      "supportsFiles": false,
+      "isNotificationOnly": false,
+      "commandLists": [
+        {
+          "scopes": [
+            "personal"
+          ],
+          "commands": [
+            {
+              "title": "status",
+              "description": "Your own status: your stage, or the people you work with"
+            },
+            {
+              "title": "book",
+              "description": "Book your next session"
+            },
+            {
+              "title": "log",
+              "description": "Add notes to your recent sessions"
+            },
+            {
+              "title": "help",
+              "description": "What you can do from chat"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": [
+    "identity",
+    "messageTeamMembers"
+  ],
+  "validDomains": [
+    "interncrm.com"
+  ]
+}
