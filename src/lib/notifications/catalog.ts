@@ -275,6 +275,17 @@ export const NOTIFICATION_EVENTS = [
   { key: 'mentorship_request.nudge', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['from'] },
   { key: 'mentorship_request.expired', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'mentorship_request.cancelled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['reason'] },
+  // The pairing DM (#1946): chat only, beside the unchanged bell and mail of
+  // the two `…Assigned` events below, to whoever linked a chat identity. Each
+  // side reads only what the app already shows them about the other person.
+  { key: 'mentorship.matched.mentee', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['chat'], delivery: 'immediate', link: 'thread', params: ['name'] },
+  { key: 'mentorship.matched.mentor', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['chat'], delivery: 'immediate', link: 'thread', params: ['name', 'skills'] },
+  // The "still interested?" check-in on chat (#1946): the SAME nudge as the
+  // mail (sendDormantCheckIns), one of the person's two, sent on chat INSTEAD
+  // of the mail when they linked one — never in addition. `announcements` is
+  // the group whose switch silences the mail, so it silences this too.
+  { key: 'dormant.checkIn.first', category: 'announcements', emailGroup: 'announcements', defaultChannels: ['chat'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'dormant.checkIn.final', category: 'announcements', emailGroup: 'announcements', defaultChannels: ['chat'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'mentorship_request.mentorAssigned', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['mentorName'] },
   { key: 'mentorship_request.menteeAssigned', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'mentee', params: ['menteeName'] },
   // Mentor Offers (#1809). The mentee's two (the offer, the one reminder) are
