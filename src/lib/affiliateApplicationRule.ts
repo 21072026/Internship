@@ -43,7 +43,8 @@ export interface AffiliateApplicationInput {
   heardFromOther: string | null;
 }
 
-export type ApplicationField = keyof AffiliateApplicationInput | 'consent';
+// `contract`: the partner terms tick (#3363) — judged by the route, which knows the current version.
+export type ApplicationField = keyof AffiliateApplicationInput | 'consent' | 'contract';
 
 export type ApplicationParseResult =
   | { ok: true; application: AffiliateApplicationInput }

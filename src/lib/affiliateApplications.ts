@@ -26,6 +26,8 @@ export async function submitAffiliateApplication(args: {
   orgId: string;
   application: AffiliateApplicationInput;
   locale: string | null;
+  /** The partner contract version the applicant accepted (#3363); null when there is none. */
+  contractVersion?: number | null;
 }): Promise<{ outcome: SubmitOutcome; followUp: (() => Promise<void>) | null }> {
   const { orgId, application, locale } = args;
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -50,6 +52,7 @@ export async function submitAffiliateApplication(args: {
         // The consent record: when, and which privacy text — from the server. No IP is stored.
         consentAt: new Date(),
         consentTextVersion: PRIVACY_POLICY_VERSION,
+        contractVersion: args.contractVersion ?? null,
       },
       select: { id: true },
     });

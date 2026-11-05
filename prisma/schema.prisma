@@ -9339,6 +9339,9 @@ model AffiliateApplication {
   // The consent record: when, and which privacy text — set by the server, never the body.
   consentAt          DateTime
   consentTextVersion String                     @db.VarChar(32)
+  // The partner contract version the applicant ticked "read" for (#3363), checked
+  // against the current one at submit; null when the programme had no contract.
+  contractVersion    Int?
   status             AffiliateApplicationStatus @default(PENDING)
   decidedAt          DateTime?
   decidedById        String?

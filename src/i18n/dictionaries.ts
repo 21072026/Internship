@@ -782,6 +782,8 @@ const en = {
     heardFromOther: 'Please tell us where',
     consent: 'I agree that my details are processed to review my application.',
     consentLink: 'Privacy policy',
+    contractConsent: 'I have read and accept the {link} (version {n}).',
+    contractLink: 'partner terms',
     nextSteps: 'No account is opened yet. The partner terms are shown to you before your account starts.',
     submit: 'Send application',
     sentTitle: 'Thank you — your application has arrived.',
@@ -798,6 +800,7 @@ const en = {
       heardFrom: 'Please choose an answer.',
       heardFromOther: 'Please tell us where.',
       consent: 'Please agree to the processing of your details.',
+      contract: 'Please confirm the partner terms.',
     },
   },
   affiliateLanding: {
@@ -832,6 +835,10 @@ const en = {
     imprint: 'Imprint',
     privacy: 'Privacy policy',
     terms: 'Terms',
+    partnerTerms: 'Partner terms',
+    contractTitle: 'Partner terms',
+    contractVersion: 'Version {n}',
+    contractBack: 'Back to the programme'
   },
   affiliateSettings: {
     title: 'Programme settings',
@@ -928,6 +935,13 @@ const en = {
       emailHint: 'Opens the visitor’s e-mail program.',
       productSignupUrl: 'Sign-up page of the product',
       productSignupUrlHint: 'The https address where customers open an account. A partner link to this page (…/partner?ref=code) sends the visitor there with the code.',
+      legal: {
+        title: 'Legal pages',
+        hint: 'The https addresses of your own legal pages, linked in the footer of the programme page and the application form. Leave a field empty to link this site\'s own page instead.',
+        imprintUrl: 'Imprint',
+        privacyUrl: 'Privacy policy',
+        termsUrl: 'Terms and conditions',
+      },
       stats: {
         title: 'Figure cards',
         hint: 'Up to three figures under the introduction. “Live” counts them from the programme (refreshed hourly) and is hidden while fewer than 10 partners are active; “Typed” shows what you enter; “Hidden” shows nothing.',
@@ -12743,6 +12757,8 @@ const tr: Dict = {
     heardFromOther: 'Lütfen nereden olduğunu yazın',
     consent: 'Başvurumun incelenmesi için bilgilerimin işlenmesini kabul ediyorum.',
     consentLink: 'Gizlilik politikası',
+    contractConsent: '{link} (sürüm {n}) okudum ve kabul ediyorum.',
+    contractLink: 'Partner sözleşmesini',
     nextSteps: 'Henüz bir hesap açılmıyor. Partner koşulları, hesabınız başlamadan önce size gösterilir.',
     submit: 'Başvuruyu gönder',
     sentTitle: 'Teşekkürler — başvurunuz ulaştı.',
@@ -12759,6 +12775,7 @@ const tr: Dict = {
       heardFrom: 'Lütfen bir yanıt seçin.',
       heardFromOther: 'Lütfen nereden olduğunu yazın.',
       consent: 'Lütfen bilgilerinizin işlenmesini onaylayın.',
+      contract: 'Lütfen partner sözleşmesini onaylayın.',
     },
   },
   affiliateLanding: {
@@ -12793,6 +12810,10 @@ const tr: Dict = {
     imprint: 'Künye',
     privacy: 'Gizlilik politikası',
     terms: 'Kullanım koşulları',
+    partnerTerms: 'Partner sözleşmesi',
+    contractTitle: 'Partner sözleşmesi',
+    contractVersion: 'Sürüm {n}',
+    contractBack: 'Programa dön'
   },
   affiliateSettings: {
     title: 'Program ayarları',
@@ -12889,6 +12910,13 @@ const tr: Dict = {
       emailHint: 'Ziyaretçinin e-posta programını açar.',
       productSignupUrl: 'Ürünün kayıt sayfası',
       productSignupUrlHint: 'Müşterilerin hesap açtığı sayfanın https adresi. Bu sayfaya gelen bir partner linki (…/partner?ref=kod) ziyaretçiyi kodla birlikte oraya yönlendirir.',
+      legal: {
+        title: 'Hukuki sayfalar',
+        hint: 'Kendi hukuki sayfalarınızın https adresleri; program sayfasının ve başvuru formunun alt bilgisinde bağlanır. Boş bırakılan alan bu sitenin kendi sayfasına bağlanır.',
+        imprintUrl: 'Impressum (künye)',
+        privacyUrl: 'Gizlilik politikası',
+        termsUrl: 'Genel şartlar (AGB)',
+      },
       stats: {
         title: 'Rakam kartları',
         hint: 'Girişin altında en fazla üç rakam. “Canlı” programdan sayar (saatte bir yenilenir) ve 10’dan az aktif partner varken gizlenir; “Elle” yazdığınızı gösterir; “Gizli” hiçbir şey göstermez.',
@@ -24485,6 +24513,8 @@ const de: Dict = {
     heardFromOther: 'Bitte angeben',
     consent: 'Ich bin einverstanden, dass meine Angaben zur Prüfung meiner Bewerbung verarbeitet werden.',
     consentLink: 'Datenschutzerklärung',
+    contractConsent: 'Ich habe den {link} (Version {n}) gelesen und akzeptiere ihn.',
+    contractLink: 'Partnervertrag',
     nextSteps: 'Es wird noch kein Konto eröffnet. Die Partnerbedingungen werden Ihnen angezeigt, bevor Ihr Konto startet.',
     submit: 'Bewerbung senden',
     sentTitle: 'Vielen Dank – Ihre Bewerbung ist angekommen.',
@@ -24501,6 +24531,7 @@ const de: Dict = {
       heardFrom: 'Bitte wählen Sie eine Antwort.',
       heardFromOther: 'Bitte angeben.',
       consent: 'Bitte stimmen Sie der Verarbeitung Ihrer Angaben zu.',
+      contract: 'Bitte bestätigen Sie den Partnervertrag.',
     },
   },
   affiliateLanding: {
@@ -24535,6 +24566,10 @@ const de: Dict = {
     imprint: 'Impressum',
     privacy: 'Datenschutzerklärung',
     terms: 'AGB',
+    partnerTerms: 'Partnervertrag',
+    contractTitle: 'Partnervertrag',
+    contractVersion: 'Version {n}',
+    contractBack: 'Zurück zum Programm'
   },
   affiliateSettings: {
     title: 'Programmeinstellungen',
@@ -24631,6 +24666,13 @@ const de: Dict = {
       emailHint: 'Öffnet das E-Mail-Programm der Besucher.',
       productSignupUrl: 'Registrierungsseite des Produkts',
       productSignupUrlHint: 'Die https-Adresse, unter der Kunden ein Konto eröffnen. Ein Partnerlink auf diese Seite (…/partner?ref=Code) leitet Besucher mit dem Code dorthin weiter.',
+      legal: {
+        title: 'Rechtliche Seiten',
+        hint: 'Die https-Adressen Ihrer eigenen rechtlichen Seiten, verlinkt in der Fußzeile der Programmseite und des Bewerbungsformulars. Ein leeres Feld verlinkt stattdessen die eigene Seite dieser Website.',
+        imprintUrl: 'Impressum',
+        privacyUrl: 'Datenschutzerklärung',
+        termsUrl: 'AGB',
+      },
       stats: {
         title: 'Zahlenkarten',
         hint: 'Bis zu drei Zahlen unter der Einleitung. „Live“ zählt sie aus dem Programm (stündlich aktualisiert) und wird ausgeblendet, solange weniger als 10 Partner aktiv sind; „Eingetragen“ zeigt Ihre Eingabe; „Ausgeblendet“ zeigt nichts.',
