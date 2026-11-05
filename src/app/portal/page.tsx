@@ -63,6 +63,7 @@ async function getMenteeData(menteeId: string, locale: Locale) {
         startDate: true,
         completedAt: true,
         pipelineStatus: true,
+        kind: true,
         // The stage clock (#1724): the org's per-stage deadline when one is
         // configured, plus the newest recorded move so the shared helper can
         // date the current stage. One extra row per relation, not the trail.
@@ -202,7 +203,8 @@ export default async function PortalDashboard({
 
       {/* Journey / pipeline stage — the "where am I" strip stays on the summary
           (#692); the full mentorship detail lives on /portal/journey. */}
-      {relation && (
+      {/* A coaching pair is outside the hiring funnel (#1507): no stage strip. */}
+      {relation && relation.kind !== 'COACHING' && (
         <div className="mb-6">
           <JourneyTracker
             status={relation.pipelineStatus}

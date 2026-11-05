@@ -13,6 +13,8 @@ import { Select } from '@/components/ui/Select';
 import { ArrowLeft, Plus, Trash2, Pencil, ExternalLink, MessageSquare } from 'lucide-react';
 import Link from 'next/link';
 import { stageGateFrom, useStageGateDialog } from '@/components/StageGateDialog';
+import { EmploymentAttributionDialog, useNeedsAttribution } from '@/components/EmploymentAttributionDialog';
+import type { EmploymentAttribution } from '@/lib/placementKind';
 import { useResolvedStages, useStageLabel } from '@/lib/pipelineStagesClient';
 import { referrerLabel } from '@/lib/referrer';
 import { useT, useLocale } from '@/i18n/client';
@@ -71,6 +73,8 @@ interface RelationDetail {
   id: string;
   status: string;
   pipelineStatus: string;
+  /** PLACEMENT | COACHING (#1503); a coaching pair has no stage to pick (#1507). */
+  kind?: string | null;
   startDate: string;
   // The org's per-stage SLA deadline, when one is configured (lib/stageSla.ts).
   // `daysInStage` is derived client-side here from `statusChanges` below — this
@@ -326,7 +330,10 @@ export default function MenteeDetailPage() {
 
   // Stage and its deadline share one PUT (#1373): the deadline is what the
   // attention queue's "overdue" reason reads (src/lib/mentorAttention.ts).
-  const saveStageFields = async (patch: { pipelineStatus?: string; stageDeadline?: string | null }, done: string) => {
+  const saveStageFields = async (
+    patch: { pipelineStatus?: string; stageDeadline?: string | null; employmentAttribution?: EmploymentAttribution },
+    done: string,
+  ) => {
     setSavingStage(true);
     setStageError('');
     try {
@@ -355,7 +362,21 @@ export default function MenteeDetailPage() {
     }
   };
 
-  const handlePipelineChange = (pipelineStatus: string) => saveStageFields({ pipelineStatus }, t.mentor.stageUpdated);
+  // A move into a hire stage asks whose outcome it is first (#1507).
+  const needsAttribution = useNeedsAttribution();
+  const [pendingHire, setPendingHire] = useState<string | null>(null);
+  const handlePipelineChange = (pipelineStatus: string) => {
+    if (needsAttribution(pipelineStatus, relation?.kind)) {
+      setPendingHire(pipelineStatus);
+      return;
+    }
+    saveStageFields({ pipelineStatus }, t.mentor.stageUpdated);
+  };
+  const confirmPendingHire = (employmentAttribution: EmploymentAttribution) => {
+    if (!pendingHire) return;
+    saveStageFields({ pipelineStatus: pendingHire, employmentAttribution }, t.mentor.stageUpdated);
+    setPendingHire(null);
+  };
   // Committed on blur, not per change: typing a year digit by digit in a date
   // input yields a valid value ("0002-…") at every keystroke.
   const commitDeadline = async () => {
@@ -377,6 +398,13 @@ export default function MenteeDetailPage() {
   return (
     <>
     {gateDialog}
+    <EmploymentAttributionDialog
+      open={!!pendingHire}
+      stageLabel={pendingHire ? label(pendingHire) : ''}
+      loading={savingStage}
+      onConfirm={confirmPendingHire}
+      onCancel={() => setPendingHire(null)}
+    />
     <div>
       <div className="mb-6">
         <Link href="/mentor/mentees" className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-4">
@@ -417,13 +445,25 @@ export default function MenteeDetailPage() {
               />
             </div>
             <div className="w-full">
-              <Select
-                label={t.mentor.pipelineStage}
-                options={stages.map((s) => ({ value: s.key, label: s.label }))}
-                value={relation.pipelineStatus}
-                disabled={savingStage}
-                onChange={(e) => handlePipelineChange(e.target.value)}
-              />
+              {/* A coaching pair is outside the hiring funnel (#1507): no stage to
+                  pick. Moving it into the funnel is an admin's decision. */}
+              {relation.kind === 'COACHING' ? (
+                <div data-testid="relation-coaching">
+                  <span className="inline-block rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700" data-testid="relation-kind-coaching">
+                    {t.relationKind.coachingBadge}
+                  </span>
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">{t.relationKind.coachingNote}</p>
+                </div>
+              ) : (
+                <Select
+                  label={t.mentor.pipelineStage}
+                  data-testid="stage-select"
+                  options={stages.map((s) => ({ value: s.key, label: s.label }))}
+                  value={relation.pipelineStatus}
+                  disabled={savingStage}
+                  onChange={(e) => handlePipelineChange(e.target.value)}
+                />
+              )}
               <label htmlFor="stage-deadline" className="block text-sm font-medium text-gray-700 mt-2 mb-1.5">{t.candidateDetail.stageDeadline}</label>
               <input
                 id="stage-deadline"

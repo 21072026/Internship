@@ -52,6 +52,8 @@ interface Candidate {
   tags?: { tag: TagOption }[];
   menteeRelations: {
     pipelineStatus?: string;
+    /** COACHING pairs are badged (#1507); absent reads as PLACEMENT. */
+    kind?: string | null;
     mentor: { id: string; fullName: string };
     company: { id: string; name: string } | null;
   }[];
@@ -749,6 +751,9 @@ export default function CandidatesPage() {
                     <Badge data-testid="candidate-mobile-stage" variant={activeRelation?.pipelineStatus ? 'info' : 'warning'} className="max-w-full text-center whitespace-normal break-words">
                       {activeRelation?.pipelineStatus ? label(activeRelation.pipelineStatus) : t.candidates.unassigned}
                     </Badge>
+                    {activeRelation?.kind === 'COACHING' && (
+                      <Badge variant="default" data-testid={`candidate-mobile-coaching-${candidate.id}`}>{t.relationKind.coachingBadge}</Badge>
+                    )}
                     {candidate.orphan && (
                       <Badge variant="warning" data-testid={`candidate-mobile-orphan-${candidate.id}`} className="max-w-full whitespace-normal break-words">
                         {t.candidates.orphanBadge}
@@ -826,6 +831,10 @@ export default function CandidatesPage() {
                       <Badge variant="success">{t.candidates.assigned}</Badge>
                     ) : (
                       <Badge variant="warning">{t.candidates.unassigned}</Badge>
+                    )}
+                    {/* A coaching pair is outside the hiring funnel (#1507). */}
+                    {activeRelation?.kind === 'COACHING' && (
+                      <Badge variant="default" data-testid={`candidate-coaching-${candidate.id}`}>{t.relationKind.coachingBadge}</Badge>
                     )}
                     {/* Why this row is not a real candidate (#1780). */}
                     {candidate.orphan && (
