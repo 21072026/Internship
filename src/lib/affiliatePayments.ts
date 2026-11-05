@@ -13,7 +13,10 @@ export interface PaymentRow {
   currency: string;
   externalPaymentRef: string;
   source: 'MANUAL' | 'API' | 'IMPORT';
+  customerId: string;
   customerRef: string;
+  /** The admin-written label the partner sees (#3352); null when none. */
+  customerLabel: string | null;
   partner: { id: string; code: string; displayName: string };
   commission: { kind: 'TIER' | 'PERCENT' | 'IMPORTED'; amountMinor: number; status: string; planVersion: number } | null;
 }
@@ -37,7 +40,7 @@ export async function listPayments(orgId: string, opts: { partnerId?: string | n
         currency: true,
         externalPaymentRef: true,
         source: true,
-        customer: { select: { externalRef: true, partner: { select: { id: true, code: true, displayName: true } } } },
+        customer: { select: { id: true, externalRef: true, partnerLabel: true, partner: { select: { id: true, code: true, displayName: true } } } },
         commission: { select: { kind: true, amountMinor: true, status: true, planVersion: true } },
       },
     }),
@@ -51,7 +54,9 @@ export async function listPayments(orgId: string, opts: { partnerId?: string | n
       currency: r.currency,
       externalPaymentRef: r.externalPaymentRef,
       source: r.source,
+      customerId: r.customer.id,
       customerRef: r.customer.externalRef,
+      customerLabel: r.customer.partnerLabel,
       partner: r.customer.partner,
       commission: r.commission,
     })),

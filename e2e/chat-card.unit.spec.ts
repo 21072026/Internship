@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { slackBlocks, teamsActivity, safeAction } from '@/lib/chat/card';
+import { slackBlocks, teamsActivity, teamsAdaptiveCard, safeAction } from '@/lib/chat/card';
 import { meetingChatCard, meetingChatSubject } from '@/lib/meetingChatCard';
 
 // The chat card shapes (#1942) — no browser, no database. The rule that
@@ -38,4 +38,15 @@ test('a meeting card: the batch is the subject, a cancel drops the button and su
   expect(meetingChatCard(m, 'moved')).toEqual({ subjectKey: 'meeting:m1', actionUrl: m.meetLink, supersede: true, buttons: rsvp });
   expect(meetingChatCard(m, 'cancelled')).toEqual({ subjectKey: 'meeting:m1', actionUrl: null, supersede: true, buttons: [] });
   expect(meetingChatCard({ ...m, meetLink: null }, 'invite').actionUrl).toBeNull();
+});
+
+test('a card with a text field (#1953): Slack dispatches on Enter, Teams submits with the value', { tag: '@smoke' }, () => {
+  const input = { actionId: 'interaction.note.save', value: 'row1', label: 'What was discussed', placeholder: 'Topics…', submitLabel: 'Save notes' };
+  const blocks = slackBlocks('Notes for the session', null, null, input);
+  expect(blocks[1]).toMatchObject({ type: 'input', block_id: 'row1', dispatch_action: true, element: { type: 'plain_text_input', action_id: 'interaction.note.save', max_length: 2000 } });
+  const card = teamsAdaptiveCard('Notes for the session', null, null, input);
+  expect(card.body[1]).toMatchObject({ type: 'Input.Text', id: 'input', isMultiline: true, maxLength: 2000 });
+  expect(card.actions).toEqual([{ type: 'Action.Execute', title: 'Save notes', verb: 'interaction.note.save', data: { value: 'row1' } }]);
+  // A value that could not come back as an id renders no field at all.
+  expect(slackBlocks('x', null, null, { ...input, value: 'row 1;' })).toHaveLength(1);
 });

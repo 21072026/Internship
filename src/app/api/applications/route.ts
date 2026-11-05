@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { seatScopedActor } from '@/lib/companySeatGate';
 import { getServerSession } from 'next-auth';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
@@ -28,7 +29,7 @@ export async function GET() {
   if (capGate) return capGate;
   const orgId = resolveOrgId(session);
   if (!orgId) return NextResponse.json({ applications: [] });
-  const scope = visibleApplicationsWhere({ id: session.user.id, role: session.user.role, orgId, companyId: session.user.companyId ?? null });
+  const scope = visibleApplicationsWhere(await seatScopedActor({ id: session.user.id, role: session.user.role, orgId, companyId: session.user.companyId ?? null }));
   if (!scope) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   return withTenantScope(session, async () => {
     const rows = await prisma.application.findMany({

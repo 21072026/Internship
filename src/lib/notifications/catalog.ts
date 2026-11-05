@@ -291,6 +291,11 @@ export const NOTIFICATION_EVENTS = [
   { key: 'mentorship.extended', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name', 'date'] },
   { key: 'mentorship.connected', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['name'] },
   { key: 'application.received', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  // The post-meeting card (#1953): a meeting that took place was logged with
+  // the placeholder note; its mentor is offered "Add notes" in chat, which edits
+  // that row through the app's own edit path. Chat only — the app already shows
+  // the row with its "add what was discussed" placeholder.
+  { key: 'meeting.logPrompt', category: 'interactions', emailGroup: 'task_reminders', defaultChannels: ['chat'], delivery: 'immediate', link: 'relation', params: ['title'] },
   { key: 'interaction.logged', category: 'interactions', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: [] },
   { key: 'interview.assigned', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'interview.assignedBlind', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },

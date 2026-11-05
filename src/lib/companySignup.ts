@@ -89,12 +89,12 @@ export interface OnboardingFacts {
   industry: string | null;
   size: string | null;
   requisitionCount: number;
+  /** Active logins of the company plus its live teammate invitations (#1870). */
+  seatCount: number;
   verificationStatus: string;
 }
 
-// "Invite a teammate" joins this list with team seats (#1870): until a COMPANY
-// user can invite anyone, an item they cannot tick would be a dead end.
-export const ONBOARDING_ITEMS = ['profile', 'requisition', 'verified'] as const;
+export const ONBOARDING_ITEMS = ['profile', 'requisition', 'teammate', 'verified'] as const;
 export type OnboardingItem = (typeof ONBOARDING_ITEMS)[number];
 
 export function onboardingChecklist(f: OnboardingFacts): Record<OnboardingItem, boolean> {
@@ -102,6 +102,7 @@ export function onboardingChecklist(f: OnboardingFacts): Record<OnboardingItem, 
   return {
     profile: filled(f.logoUrl) && filled(f.description) && filled(f.industry) && filled(f.size),
     requisition: f.requisitionCount > 0,
+    teammate: f.seatCount > 1,
     verified: f.verificationStatus === 'VERIFIED',
   };
 }

@@ -7,6 +7,7 @@ import { partnerPayout } from '@/lib/affiliatePartnerView';
 import { formatMinorAmount } from '@/lib/money';
 import { interpolate } from '@/lib/notificationText';
 import { formatDate } from '@/lib/relativeTime';
+import { CustomerName } from '@/components/affiliate/CustomerName';
 
 // One of the partner's payouts with the commissions it paid (#3117). Another
 // partner's payout reads exactly like one that does not exist: 404.
@@ -49,7 +50,7 @@ export default async function AffiliatePayoutPage({ params }: { params: Promise<
               {payout.commissions.map((c) => (
                 <tr key={c.id} className="border-t border-gray-100 dark:border-gray-800">
                   <td className="px-4 py-2 whitespace-nowrap">{date(c.accruedAt)}</td>
-                  <td className="px-4 py-2 font-mono">{c.customerRef}</td>
+                  <td className="px-4 py-2"><CustomerName label={c.customerLabel} reference={c.customerRef} /></td>
                   <td className="px-4 py-2 text-right whitespace-nowrap">{formatMinorAmount(c.amountMinor, c.currency, locale)}</td>
                 </tr>
               ))}

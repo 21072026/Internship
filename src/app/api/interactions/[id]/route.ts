@@ -4,7 +4,7 @@ import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { actorFromSession, can, type Permission } from '@/lib/authz';
 import { resolveOrgId } from '@/lib/orgScope';
-import { inCallerTenant } from '@/lib/tenantFilter';
+import { interactionAccess, updateInteraction } from '@/lib/interactionWrite';
 import { updateInteractionSchema } from '@/lib/interactionSchema';
 
 
@@ -12,32 +12,6 @@ import { updateInteractionSchema } from '@/lib/interactionSchema';
 async function actsAsAdmin(session: Session, perm: Permission): Promise<boolean> {
   const actor = await actorFromSession(session);
   return !!actor && (await can(actor, perm, undefined, session));
-}
-
-async function getInteractionAndVerifyAccess(
-  id: string,
-  userId: string,
-  isAdmin: boolean,
-  callerOrgId: string | null
-) {
-  const interaction = await prisma.interactionLog.findUnique({
-    where: { id },
-    include: { relation: true },
-  });
-
-  if (!interaction) return { interaction: null, authorized: false };
-  // InteractionLog has no orgId: its tenant is its relation's, and neither the
-  // top-level lookup nor the nested include is scoped by the middleware. A log
-  // on another tenant's relation reads as not found — 404, never 403, so the id
-  // is not confirmed to exist (#2542). Checked before any write below.
-  if (!(await inCallerTenant(interaction.relation.orgId, callerOrgId))) {
-    return { interaction: null, authorized: false };
-  }
-
-  const authorized =
-    isAdmin || interaction.relation.mentorId === userId;
-
-  return { interaction, authorized };
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -49,7 +23,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { interaction, authorized } = await getInteractionAndVerifyAccess(
+    const { interaction, authorized } = await interactionAccess(
       id,
       session.user.id,
       await actsAsAdmin(session, 'program.read'),
@@ -80,7 +54,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { interaction, authorized } = await getInteractionAndVerifyAccess(
+    const { interaction, authorized } = await interactionAccess(
       id,
       session.user.id,
       await actsAsAdmin(session, 'relation.write'),
@@ -105,18 +79,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       );
     }
 
-    // The same fields the create route takes (src/lib/interactionSchema.ts,
-    // #1356), so a Call keeps its type and a subject can be corrected. An
-    // emptied subject is stored as NULL, as the create path stores a missing one.
-    const { date, subject, ...rest } = parsed.data;
-    const updated = await prisma.interactionLog.update({
-      where: { id },
-      data: {
-        ...rest,
-        ...(date !== undefined ? { date: new Date(date) } : {}),
-        ...(subject !== undefined ? { subject: subject?.trim() ? subject.trim() : null } : {}),
-      },
-    });
+    // The one edit path, shared with the chat card (#1953).
+    const updated = await updateInteraction(id, parsed.data);
 
     return NextResponse.json({ interaction: updated });
   } catch (error) {
@@ -134,7 +98,7 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { interaction, authorized } = await getInteractionAndVerifyAccess(
+    const { interaction, authorized } = await interactionAccess(
       id,
       session.user.id,
       await actsAsAdmin(session, 'relation.write'),
