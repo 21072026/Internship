@@ -23,15 +23,20 @@ buraya borçlu.
 > istisnanın kendisi ile gerekçesi aynı şey olsun, gerekçesiz bir istisna hiç
 > yazılamasın diye.
 
-Son gözden geçirme: **2026-10-27** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823) · Politika: [#2059](https://github.com/21072026/Internship/issues/2059)
+Son gözden geçirme: **2026-11-05** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823) · Politika: [#2059](https://github.com/21072026/Internship/issues/2059)
 
 ## Açık bulgular
 
 | Paket | Şiddet | Durum | Gerekçe |
 |---|---|---|---|
 | `xlsx` | high | **Yama yok** | Prototype pollution + ReDoS. Upstream (SheetJS) npm'deki `xlsx` paketini terk etti; düzeltme yalnız kendi CDN'lerinde yayınlanıyor. Tek kullanım yerimiz `src/lib/excel.ts`: **istemci tarafında**, dinamik `import('xlsx')` ile, yalnız `XLSX.writeFile` — hiç dosya okumuyoruz. Her iki advisory de *parse* yolunda, üstelik kod sunucuda değil tarayıcıda çalışıyor. Kalıcı çözüm paketi değiştirmek — ayrı iş. |
-| `zod` | high | Majör gerekiyor (3.x → 4.x) · **son tarih 2026-12-26** ([#3210](https://github.com/21072026/Internship/issues/3210)) | GHSA-mrhx-c7xc-m3w5: sınırlı (`.max(n)`) bir koleksiyon doğrulanırken aşırı büyük girdi belleği tüketebiliyor — veri sızıntısı değil, **hizmet dışı bırakma** riski. Tek düzeltme `zod@4`; ~300 dosya şemayı kullanıyor ve v4 API'si kırıcı, bu yüzden bir yama değil bir migrasyon. Gerçekçi değerlendirme: istismar edilebilir — App Router `request.json()` sınırsız ve önümüzdeki Caddy bir gövde sınırı koymuyor. Politikadaki ≤ 60 gün (2026-10-27'de tespit) içinde #3210 kapatır; ara önlem: `/api/*` JSON yazmalarında beyan edilen gövde 1 MiB'ı (admin içe aktarmada 32 MiB) aşarsa 413 (`src/lib/bodyLimitRule.ts`); chunked gövdeler için Caddy `request_body` sınırı operatör adımı olarak `infra/README.md` § Request body limit'te. |
 | `node-cron` · `uuid` | moderate | Majör gerekiyor (3.x → 4.x) | `uuid` v3/v5/v6'da buffer sınır kontrolü eksikliği; `node-cron` üzerinden geliyor. Bu kod yolunu **hiç çağırmıyoruz** — cron yalnız zamanlama için kullanılıyor. |
+
+## Kapatılanlar (2026-11-05, #3558)
+
+| Paket | Nasıl |
+|---|---|
+| `zod` | 3.25.76 → 4.6.7 (GHSA-mrhx-c7xc-m3w5, #3210). v4 koleksiyon boyut sınırını elemanları ayrıştırmadan önce denetliyor. `@hookform/resolvers` 3 → 5 aynı değişiklikte. Varsayılan hata metinleri zod 3 ifadesini koruyor (`src/lib/zodV3Messages.ts`, `zod/v3`'e karşı ölçülüyor). Webhook kontratı birebir aynı. `/api/*` gövde sınırı (`src/lib/bodyLimitRule.ts`) ara önlem olarak kaldı ve hâlâ yerinde. |
 
 ## Kapatılanlar (2026-08-07, #1143)
 

@@ -27,7 +27,7 @@ import { requirePermission } from '@/lib/authz';
 // the same value the middleware would inject, and the column is REQUIRED, so the
 // create below must name it whether or not a context happens to be bound.
 
-const labelsSchema = z.record(z.enum(locales as unknown as [string, ...string[]]), z.string().max(80));
+const labelsSchema = z.partialRecord(z.enum(locales as unknown as [string, ...string[]]), z.string().max(80));
 
 const criterionSchema = z.object({
   // Stored inside Evaluation.scores, so it stays machine-shaped and stable.
@@ -104,7 +104,7 @@ export async function PUT(request: Request) {
       );
     }
     // Every criterion needs at least one language, or it would render as its key.
-    const unlabelled = criteria.filter((c) => !Object.values(c.labels).some((v) => v.trim()));
+    const unlabelled = criteria.filter((c) => !Object.values(c.labels).some((v) => v?.trim()));
     if (unlabelled.length > 0) {
       return NextResponse.json(
         { error: 'Validation failed', details: { formErrors: [`Missing label: ${unlabelled.map((c) => c.key).join(', ')}`] } },

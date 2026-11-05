@@ -66,7 +66,7 @@ export async function checkPublicAnswers(orgId: string | null, role: 'MENTEE' | 
  * creation they ride on must never fail over a questionnaire.
  */
 export async function writeStagedAnswers(userId: string, staged: unknown): Promise<number> {
-  const parsed = z.array(z.object({ definitionId: z.string(), answers: z.record(z.unknown()) })).safeParse(staged);
+  const parsed = z.array(z.object({ definitionId: z.string(), answers: z.record(z.string(), z.unknown()) })).safeParse(staged);
   if (!parsed.success) return 0;
   let written = 0;
   for (const { definitionId, answers } of parsed.data) {

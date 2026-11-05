@@ -36,7 +36,7 @@ function registerSchemaFor(policy: PasswordPolicy, dict: PasswordPolicyDict) {
         if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, message });
       }),
       confirmPassword: z.string(),
-      consent: z.literal(true, { errorMap: () => ({ message: 'Consent is required' }) }),
+      consent: z.literal(true, { error: 'Consent is required' }),
     })
     .refine((data) => data.password === data.confirmPassword, {
       message: 'Passwords do not match',
