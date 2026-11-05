@@ -22,6 +22,9 @@ import { cohortComparison, mentorWorkload, sourceConversion, type AnalyticsScope
 import { slaCompliance } from '@/lib/slaQueue';
 import { loadInvitationFunnel } from '@/lib/invitationFunnel';
 import { funnelRate } from '@/lib/invitationFunnelRule';
+import { announcementReach } from '@/lib/announcementReach';
+import { announcementSentAt } from '@/lib/announcementReachRule';
+import { resolveAnnouncementText } from '@/lib/announcementText';
 import type { Prisma } from '@prisma/client';
 import { attributeLabel } from '@/lib/orgAttributesRule';
 import { attributedLeadWhere } from '@/lib/leadAttribution';
@@ -224,7 +227,35 @@ const LOADERS: Record<string, (ctx: LoaderContext) => Promise<Row[]>> = {
       activation: funnelRate(r.activated, r.sent),
     }));
   },
+
+  async 'announcement-reach'(ctx) {
+    const { tenant } = await scopeOf(ctx);
+    const rows = await prisma.announcement.findMany({
+      where: withinTenant({ status: 'SENT' as const }, tenant),
+      orderBy: { createdAt: 'desc' },
+      take: ANNOUNCEMENT_REACH_ROWS,
+      select: { id: true, status: true, scheduledAt: true, createdAt: true, text: true, translations: true, targeted: true, recipientCount: true, emailedCount: true },
+    });
+    const reach = await announcementReach(rows, ctx.orgId);
+    const A = getDictionary(ctx.locale).reports.announcementReach;
+    return rows.map((a) => {
+      const text = resolveAnnouncementText(a, ctx.locale).replace(/\s+/g, ' ').trim();
+      const r = reach.get(a.id);
+      return {
+        sentAt: announcementSentAt(a).toISOString().slice(0, 10),
+        announcement: text.length > 80 ? `${text.slice(0, 79)}…` : text,
+        audience: a.targeted ? A.targeted : A.everyone,
+        recipients: a.recipientCount,
+        emailed: a.emailedCount,
+        read: r?.read ?? null,
+        readRate: r?.rate ?? null,
+      };
+    });
+  },
 };
+
+/** The announcement history a report carries: the most recent ones, not the archive. */
+const ANNOUNCEMENT_REACH_ROWS = 200;
 
 export interface LoadedSegment {
   /** The attribute's key and its label in the reader's language. */

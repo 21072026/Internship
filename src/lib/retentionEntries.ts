@@ -4,6 +4,7 @@ import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
 import { SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
 import { resolveSettingRaw, resolveSettings } from '@/lib/settingsResolver';
+import { notificationWindowFor } from '@/lib/notificationRetentionWindow';
 import {
   RETAINED_NOTIFICATION_TYPES,
   notificationRetentionCutoff,
@@ -513,16 +514,6 @@ async function pruneCompanyInquiries(ctx: RetentionContext) {
   return { deleted: removal.processed, masked: scrub.processed, capped: removal.capped || scrub.capped };
 }
 
-/** The configured window for one org, falling back to the code default. */
-async function notificationWindowFor(orgId: string | null): Promise<number> {
-  const fallback = Number.parseInt(SETTING_DEFAULTS.notificationRetentionDays, 10);
-  try {
-    const parsed = Number.parseInt(await resolveSettingRaw('notificationRetentionDays', { orgId }), 10);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  } catch {
-    return fallback;
-  }
-}
 
 /**
  * In-app notification rows (#1646).
