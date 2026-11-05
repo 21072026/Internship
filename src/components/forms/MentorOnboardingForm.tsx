@@ -64,9 +64,9 @@ export function MentorOnboardingForm() {
   const [slotError, setSlotError] = useState('');
   const [savingSlot, setSavingSlot] = useState(false);
 
-  const step1Form = useForm<Step1Data>({ resolver: zodResolver(step1Schema), defaultValues: allData });
-  const step2Form = useForm<Step2Data>({ resolver: zodResolver(step2Schema), defaultValues: allData });
-  const step3Form = useForm<Step3Data>({ resolver: zodResolver(step3Schema), defaultValues: allData });
+  const step1Form = useForm<z.input<typeof step1Schema>, unknown, Step1Data>({ resolver: zodResolver(step1Schema), defaultValues: allData });
+  const step2Form = useForm<z.input<typeof step2Schema>, unknown, Step2Data>({ resolver: zodResolver(step2Schema), defaultValues: allData });
+  const step3Form = useForm<z.input<typeof step3Schema>, unknown, Step3Data>({ resolver: zodResolver(step3Schema), defaultValues: allData });
 
   // Prefill from the existing profile, same pattern as the mentee form.
   useEffect(() => {

@@ -1,6 +1,7 @@
 'use client';
 
 import { SessionProvider } from 'next-auth/react';
+import { installZodV3Messages } from '@/lib/zodV3Messages';
 import { LocaleProvider } from '@/i18n/client';
 import { ToastProvider } from '@/components/ui/Toast';
 import { LiveRegionProvider } from '@/components/ui/LiveRegion';
@@ -21,6 +22,10 @@ import { VerticalProvider } from '@/lib/verticalClient';
 import { BrandProvider } from '@/lib/brandClient';
 import type { ClientBrand } from '@/lib/brandRule';
 import type { ReplayConfig } from '@/lib/feedbackReplayRule';
+
+// zod's default messages keep their zod 3 wording in the browser too (#3558):
+// a form field without its own message shows one under the input.
+installZodV3Messages();
 
 export function Providers({
   children,

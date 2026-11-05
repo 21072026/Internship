@@ -137,7 +137,7 @@ export function ProfileForm({ role }: { role: 'MENTOR' | 'MENTEE' }) {
     reset,
     setValue,
     formState: { errors },
-  } = useForm<ProfileFormData>({
+  } = useForm<z.input<typeof profileSchema>, unknown, ProfileFormData>({
     resolver: zodResolver(profileSchema),
   });
 
