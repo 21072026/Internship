@@ -115,6 +115,18 @@ replayed last click is "already answered". Only the invitation's own person can
 answer it. A survey with any free-text, number, date or multi-select question
 is not answered in chat: the card links to the survey page.
 
+**Hiring-loop events in chat** (#1944): an interview request approved (→ the
+mentee) or declined (→ the company's users, the reason code only), a panel
+complete (→ its convener), a panel outcome (→ the company's users, the decision
+only) and an offer sent (→ the mentee) or answered (→ the admin who made it,
+linked to the candidate) are also posted as a chat card, through
+`offerHiringEventInChat()` (`src/lib/chat/hiringInChat.ts`), next to the bell
+and mail they already sent — unchanged for anyone without chat. WHO may receive
+each of them is the catalogue entry's `audience` (a role list), enforced by the
+router on every channel: a recipient outside it is recorded SKIPPED
+`not_audience`, so an internal approval event addressed to a mentee by mistake
+reaches nobody.
+
 **Notes from the post-meeting card** (#1953): when a relation meeting that took
 place is auto-logged with the placeholder note (`src/lib/meetingAutoLog.ts`,
 either path — the end click or the sweep), its mentor gets one chat card

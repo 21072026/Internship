@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { offerHiringEventInChat } from '@/lib/chat/hiringInChat';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
@@ -181,6 +182,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       for (const user of companyUsers) {
         await notifyIfAllowed(user.id, 'mentorship', outcomeNotificationKey(decision), { title: application.requisition.title }, `/company/requisitions/${application.requisitionId}`);
       }
+      // And on chat (#1944), with the same sentence: the decision, the role title.
+      await offerHiringEventInChat(companyUsers.map((u) => u.id), outcomeNotificationKey(decision), { title: application.requisition.title }, `interview-panel:${panel.id}:outcome`);
 
       // "Recommend, never apply": the pipeline moves only when asked, and a
       // rejection by one company never moves a person's programme stage.

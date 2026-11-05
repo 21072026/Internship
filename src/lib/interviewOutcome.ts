@@ -42,6 +42,6 @@ export function outcomeMayAdvancePipeline(decision: InterviewOutcome): boolean {
 }
 
 /** The notification the company receives — the outcome only, never a score. */
-export function outcomeNotificationKey(decision: InterviewOutcome): string {
-  return `interview_panel.outcome.${decision.toLowerCase()}`;
+export function outcomeNotificationKey(decision: InterviewOutcome): `interview_panel.outcome.${Lowercase<InterviewOutcome>}` {
+  return `interview_panel.outcome.${decision.toLowerCase() as Lowercase<InterviewOutcome>}`;
 }

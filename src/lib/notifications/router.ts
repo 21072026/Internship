@@ -460,6 +460,17 @@ export async function notifyEvent<K extends NotificationEventKey>(
     for (const rec of normalized) {
       const user = hydrated.get(rec.id) ?? rec;
       const orgId = user.orgId ?? rec.orgId ?? opts?.orgId ?? null;
+      // The catalogue's audience (#1944): a role the event does not list is
+      // refused on every channel. Read from the raw role, not asRole() — an
+      // unreadable role must fail closed, not pass as MENTEE.
+      if (def.audience && !def.audience.includes(user.role as NotificationRole)) {
+        logger.warning('notifyEvent recipient outside the event audience', { eventKey: def.key, role: String(user.role) });
+        for (const channel of chatUsers.has(rec.id) && !channels.includes('chat') ? [...channels, 'chat' as const] : channels) {
+          result.skipped += 1;
+          await recordSkipped({ orgId, userId: rec.id, eventKey: def.key, channel, dedupeKey: deliveryDedupeKey(def.key, rec.id, channel, opts?.dedupeKey) }, 'not_audience');
+        }
+        continue;
+      }
       const locale = asLocale(user.preferredLanguage);
       const link = notificationLink(asRole(user.role), def.link, linkIds, { capabilities: await capabilitiesOf(orgId) });
 

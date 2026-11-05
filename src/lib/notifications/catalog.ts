@@ -45,7 +45,7 @@
 
 import type { NotificationCategory } from '@/lib/notificationPrefs';
 import type { EmailGroupId } from '@/lib/emailGroups';
-import type { LinkKind } from '@/lib/notificationLink';
+import type { LinkKind, NotificationRole } from '@/lib/notificationLink';
 
 /**
  * The channels a notification can travel on. One adapter each, in router.ts.
@@ -97,6 +97,16 @@ export interface NotificationEventDef {
   readonly link: LinkKind;
   /** Placeholder names the dictionary template interpolates, exactly. */
   readonly params: readonly string[];
+  /**
+   * WHO may receive this event at all (#1944), by role — declared here, once,
+   * not at the call site. The call site still resolves the people (the
+   * request's mentor, the offer's creator, the company's users); the router
+   * refuses any recipient whose role is not listed, on every channel, recorded
+   * SKIPPED `not_audience`. It exists for the events that carry a candidate:
+   * an internal approval card must never land in a mentee's DM because a
+   * caller passed the wrong id. Absent = no role restriction.
+   */
+  readonly audience?: readonly NotificationRole[];
 }
 
 // ── Which events buzz a phone (#1715) ────────────────────────────────────────
@@ -237,13 +247,13 @@ export const NOTIFICATION_EVENTS = [
   // A prompt to the mentor to write the message themselves — no mail; the point
   // is the draft waiting in the app.
   { key: 'outcome.needsMessage', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: ['name'] },
-  { key: 'offer_sent.new', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['position'] },
-  { key: 'offer_accepted.admin', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'mentee', params: ['menteeName', 'position'] },
-  { key: 'offer_declined.admin', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'mentee', params: ['menteeName', 'position'] },
+  { key: 'offer_sent.new', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['position'], audience: ['MENTEE'] },
+  { key: 'offer_accepted.admin', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'mentee', params: ['menteeName', 'position'], audience: ['ADMIN'] },
+  { key: 'offer_declined.admin', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'mentee', params: ['menteeName', 'position'], audience: ['ADMIN'] },
   // A mentee applied through the job board (#1832): the company's users and the mentee's mentor hear it.
   { key: 'job_application.received', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['candidate', 'role'] },
   { key: 'job_application.mentee_applied', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'mentee', params: ['candidate', 'role'] },
-  { key: 'offer_expired.admin', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'mentee', params: ['menteeName', 'position'] },
+  { key: 'offer_expired.admin', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'mentee', params: ['menteeName', 'position'], audience: ['ADMIN'] },
   { key: 'company_interest.mentee', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'company_interest.interested', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'mentee', params: ['company', 'mentee'] },
   { key: 'company_interest.shortlisted', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'mentee', params: ['company', 'mentee'] },
@@ -299,11 +309,11 @@ export const NOTIFICATION_EVENTS = [
   { key: 'interaction.logged', category: 'interactions', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: [] },
   { key: 'interview.assigned', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'interview.assignedBlind', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
-  { key: 'interview.panelComplete', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'interview.panelComplete', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [], audience: ['ADMIN', 'MENTOR'] },
   // The outcome of a closed panel, told to the company — the decision only, never a score (#1846).
-  { key: 'interview_panel.outcome.advance', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
-  { key: 'interview_panel.outcome.offer', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
-  { key: 'interview_panel.outcome.reject', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
+  { key: 'interview_panel.outcome.advance', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'], audience: ['COMPANY'] },
+  { key: 'interview_panel.outcome.offer', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'], audience: ['COMPANY'] },
+  { key: 'interview_panel.outcome.reject', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'], audience: ['COMPANY'] },
   // A survey campaign's invitation, on chat (#1953). The invitation MAIL is
   // sent by the campaign itself (src/lib/surveyCampaigns.ts); this is the same
   // invitation offered where the person already is — chat only, to people with
@@ -311,9 +321,9 @@ export const NOTIFICATION_EVENTS = [
   { key: 'survey.invited', category: 'mentorship', emailGroup: 'surveys', defaultChannels: ['chat'], delivery: 'immediate', link: 'dashboard', params: [] },
   // A company asked to interview one of the mentor's mentees (#1949). In-app and
   // chat only — the chat card carries Approve/Decline; there is no mail for it.
-  { key: 'interview_request.received', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'chat'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
-  { key: 'interview_request.approved', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
-  { key: 'interview_request.declined', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['reasonCode'] },
+  { key: 'interview_request.received', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'chat'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'], audience: ['MENTOR', 'ADMIN'] },
+  { key: 'interview_request.approved', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [], audience: ['MENTEE'] },
+  { key: 'interview_request.declined', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['reasonCode'], audience: ['COMPANY'] },
   // The confirmed interview time, on the recipient's own clock (#1844); the cancellation of it.
   { key: 'interview_request.scheduled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
   { key: 'interview_request.cancelled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title'] },

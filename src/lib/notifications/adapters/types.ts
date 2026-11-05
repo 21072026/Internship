@@ -20,6 +20,8 @@ export type SkipReason =
   | 'no_adapter'
   | 'unknown_event'
   | 'invalid_payload'
+  // The recipient's role is not in the event's declared `audience` (#1944).
+  | 'not_audience'
   // The chat adapter's (#1939): the deployment switch is off, the person has no
   // confirmed identity any more, or their workspace's admin disabled it.
   | 'chat_apps_off'

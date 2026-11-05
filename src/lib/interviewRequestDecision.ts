@@ -9,6 +9,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { requireRoleOrPermission } from '@/lib/authz';
 import { decideInterviewRequestSchema, interviewRequestActorWhere } from '@/lib/interviewRequests';
 import { isInterviewDeclineReasonCode } from '@/lib/interviewDeclineReasons';
+import { offerHiringEventInChat } from '@/lib/chat/hiringInChat';
 import { notify, notifyIfAllowed } from '@/lib/notify';
 import { logActivity } from '@/lib/activity';
 import { emit } from '@/lib/events/emit';
@@ -104,6 +105,7 @@ export async function decideInterviewRequest(session: Session, id: string, input
     }
     if (nextStatus === 'APPROVED') {
       await notify(current.menteeId, 'interview_request.approved', {}, '/portal');
+      await offerHiringEventInChat([current.menteeId], 'interview_request.approved', {}, `interview-request:${current.id}:decided`);
     } else {
       // InterviewRequest does not record which company user created it, so the
       // decision belongs to the company account as a whole. Notify every active
@@ -123,6 +125,12 @@ export async function decideInterviewRequest(session: Session, id: string, input
             `/company/requisitions/${current.requisitionId}`
           )
         )
+      );
+      await offerHiringEventInChat(
+        companyUsers.map((u) => u.id),
+        'interview_request.declined',
+        { reasonCode: declineReasonCode! },
+        `interview-request:${current.id}:decided`,
       );
     }
     return NextResponse.json({ ok: true, status: nextStatus, pipelineRecommendation: nextStatus === 'APPROVED' ? 'INTERVIEW_PENDING_250' : null });

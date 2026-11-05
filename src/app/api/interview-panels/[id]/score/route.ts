@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { offerHiringEventInChat } from '@/lib/chat/hiringInChat';
 import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
@@ -103,6 +104,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
             notifyIfAllowed(userId, 'goalsEvaluations', 'interview.panelComplete', {}, `/interviews/${panel.id}`)
           )
         );
+        // The decision is the convener's: they also get it on chat (#1944).
+        if (panel.createdById) await offerHiringEventInChat([panel.createdById], 'interview.panelComplete', {}, `interview-panel:${panel.id}:complete`);
       }
     }
 

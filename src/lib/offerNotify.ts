@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { raiseOfferEvent } from '@/lib/offerEvents';
 import { notify } from '@/lib/notify';
 import { notifyEvent } from '@/lib/notifications/router';
+import { offerHiringEventInChat } from '@/lib/chat/hiringInChat';
 import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { sendOfferSentEmail, sendOfferDecisionEmail } from '@/services/emailService';
 
@@ -41,6 +42,8 @@ export async function notifyOfferSent(offerId: string): Promise<void> {
   // In-app + push through the router (#1715): an offer is the moment the
   // programme exists for, so it may buzz a closed app. The mail stays below.
   await notifyEvent(mentee, 'offer_sent.new', { position: offer.position }, { channels: ['inApp', 'push'] });
+  // And on chat (#1944), for a mentee who linked one.
+  await offerHiringEventInChat([mentee.id], 'offer_sent.new', { position: offer.position }, `offer:${offer.id}:sent`);
   // 'offer' is pipeline_updates. The `emailAllowed(mentee, 'mentorship')`
   // conjunct that used to stand here reads a key mapping to
   // mentorship_lifecycle, so it dropped offer letters that both preference
@@ -70,7 +73,7 @@ export async function notifyOfferDecided(offerId: string, outcome: 'ACCEPTED' | 
     select: {
       id: true,
       position: true,
-      relation: { select: { orgId: true, mentee: { select: { fullName: true } } } },
+      relation: { select: { orgId: true, menteeId: true, mentee: { select: { fullName: true } } } },
       createdBy: {
         select: {
           id: true,
@@ -86,7 +89,10 @@ export async function notifyOfferDecided(offerId: string, outcome: 'ACCEPTED' | 
   if (!offer) return;
   const admin = offer.createdBy;
   const menteeName = offer.relation.mentee.fullName;
-  await notify(admin.id, `offer_${outcome.toLowerCase()}.admin`, { menteeName, position: offer.position }, `/admin/candidates`);
+  const key = `offer_${outcome.toLowerCase()}.admin` as 'offer_accepted.admin' | 'offer_declined.admin' | 'offer_expired.admin';
+  await notify(admin.id, key, { menteeName, position: offer.position }, `/admin/candidates`);
+  // And on chat (#1944), deep-linked to the candidate.
+  await offerHiringEventInChat([admin.id], key, { menteeName, position: offer.position, menteeId: offer.relation.menteeId }, `offer:${offer.id}:decided`);
   // Same as notifyOfferSent above: the mail's own group decides, and the stray
   // 'mentorship' conjunct now lives in pipeline_updates.legacy instead.
   if (admin.email && emailGroupAllowedForCategory(admin, 'offer')) {

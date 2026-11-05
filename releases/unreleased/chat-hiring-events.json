@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Hiring-loop events in chat (#1944):** an interview request approved or declined, a panel complete, a panel outcome and an offer sent or answered also arrive as a Slack/Teams card for people with a confirmed chat identity (`offerHiringEventInChat()`), next to the unchanged bell and mail. Catalogue entries gain an `audience` role list that the router enforces on every channel (`SKIPPED not_audience`), so an internal approval event can never land with a mentee or a company. No schema change.",
+  "notes": {
+    "en": ["Interview decisions, panel results and offers now also reach the right person in Slack or Microsoft Teams."],
+    "tr": ["Mülakat kararları, panel sonuçları ve teklifler artık doğru kişiye Slack veya Microsoft Teams'te de ulaşıyor."],
+    "de": ["Interviewentscheidungen, Panel-Ergebnisse und Angebote erreichen die richtige Person jetzt auch in Slack oder Microsoft Teams."]
+  }
+}
