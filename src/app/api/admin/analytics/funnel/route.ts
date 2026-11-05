@@ -29,6 +29,7 @@ import { shellCapabilities } from '@/lib/shellCapabilities';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { tenantWhere, withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { relationProgramWhere, resolveProgramFilter } from '@/lib/programFilter';
+import { programRelationWhere } from '@/lib/programScopeRule';
 import { funnelStartedAt } from '@/lib/placement';
 
 // Hiring-funnel KPIs (#815): the two numbers HR reports upward — stage-to-stage
@@ -152,9 +153,12 @@ async function loadWholeChains(relations: RelationRow[], tenant: TenantWhere, sc
 }
 
 export async function GET(request: Request) {
-  const gate = await requirePermission('analytics.read', { request });
+  // A list read (#1577): a PROGRAM_ADMIN with grants passes, and every
+  // relation below — the window's and the rest of their chains — is ANDed
+  // with them, an always-on programme filter. Other tiers: unchanged.
+  const gate = await requirePermission('analytics.read', { request, listing: true });
   if ('error' in gate) return gate.error;
-  const { session } = gate;
+  const { session, grants } = gate;
 
   return await withTenantScope(session, async () => {
     // Optional window. TWO populations come out of it, because the sections of
@@ -196,7 +200,9 @@ export async function GET(request: Request) {
     // tenant-wide.
     const program = await resolveProgramFilter(searchParams.get('program'), tenant);
     if ('error' in program) return program.error;
-    const programWhere = relationProgramWhere(program.filter);
+    const programWhere: Prisma.MentorshipRelationWhereInput = grants
+      ? { AND: [relationProgramWhere(program.filter), programRelationWhere(grants) as Prisma.MentorshipRelationWhereInput] }
+      : relationProgramWhere(program.filter);
     const relations = await prisma.mentorshipRelation.findMany({
       where: withinTenant(rangeOk
         ? {
@@ -355,7 +361,11 @@ export async function GET(request: Request) {
     // never asked; the empty list is what the screen and the Excel export
     // already read as "no capacity section". INTERNSHIP carries the module, so
     // its report is unchanged.
-    const capacity = capabilities.includes('mentorship') ? await mentorCapacity(tenant) : [];
+    // Never for a PROGRAM_ADMIN (#1577): a mentor's load counts every pairing
+    // of theirs, inside the grants or not, and a load counted inside them only
+    // would misreport who is over their ceiling. The empty list is the
+    // screen's "no capacity section".
+    const capacity = capabilities.includes('mentorship') && !grants ? await mentorCapacity(tenant) : [];
 
     return NextResponse.json({
       order,
