@@ -25,18 +25,20 @@ interface Member {
 export function ProjectMembersPanel({
   projectId,
   myId,
-  canAdd = true,
+  viewerRole,
   isPublic = false,
 }: {
   projectId: string;
   myId: string;
   /**
-   * Whether this viewer may ADD people. False for a MENTEE owner (#2270): the
-   * member POST refuses them by design — they grow the team by approving join
-   * requests — and the pickers would be empty anyway, since /api/users is
-   * ADMIN/MENTOR-only. Removing a member stays available to any owner.
+   * The viewer's account role. It only picks where the add pickers are filled
+   * from (#2272): an ADMIN reads `/api/users`, which applies the admin tier's
+   * program scope; everyone else reads the project's own candidate list, which
+   * is exactly the set the member POST accepts from them — for a MENTEE owner,
+   * their own mentor(s) and those mentors' other mentees. The server decides;
+   * this never widens anything.
    */
-  canAdd?: boolean;
+  viewerRole: string;
   /**
    * Whether the project is on the public showcase — which decides whether the
    * "approve a join request" advice is actionable at all. Join requests are
@@ -67,16 +69,26 @@ export function ProjectMembersPanel({
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
-    if (!canAdd) return; // /api/users is ADMIN/MENTOR-only; don't ask for a 401
-    fetch('/api/users?view=picker')
-      .then((r) => (r.ok ? r.json() : { users: [] }))
+    if (viewerRole === 'ADMIN') {
+      fetch('/api/users?view=picker')
+        .then((r) => (r.ok ? r.json() : { users: [] }))
+        .then((d) => {
+          const users = (d.users ?? []) as { id: string; fullName: string; role: string }[];
+          setMentors(users.filter((u) => u.role === 'MENTOR' || u.role === 'ADMIN'));
+          setMentees(users.filter((u) => u.role === 'MENTEE'));
+        })
+        .catch(() => {});
+      return;
+    }
+    fetch(`/api/projects/${projectId}/members/candidates`)
+      .then((r) => (r.ok ? r.json() : { candidates: [] }))
       .then((d) => {
-        const users = (d.users ?? []) as { id: string; fullName: string; role: string }[];
-        setMentors(users.filter((u) => u.role === 'MENTOR' || u.role === 'ADMIN'));
-        setMentees(users.filter((u) => u.role === 'MENTEE'));
+        const people = (d.candidates ?? []) as { id: string; fullName: string; seats: string[] }[];
+        setMentors(people.filter((u) => u.seats.includes('MENTOR')));
+        setMentees(people.filter((u) => u.seats.includes('MENTEE')));
       })
       .catch(() => {});
-  }, [canAdd]);
+  }, [viewerRole, projectId]);
 
   const call = async (method: 'POST' | 'DELETE', body: Record<string, unknown>) => {
     setError('');
@@ -150,8 +162,7 @@ export function ProjectMembersPanel({
         ))}
       </div>
 
-      {canAdd ? (
-        <>
+      <>
         {/* Owners & mentors. Stacked on a phone: three controls side by side leave
             the select ~60px wide and unreadable. */}
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -217,12 +228,15 @@ export function ProjectMembersPanel({
           </div>
           {mentees.length === 0 && <p className="mt-1.5 text-xs text-gray-400">{t.projects.noMenteesToAdd}</p>}
         </div>
-        </>
-      ) : (
-        <p className="text-xs text-gray-500 dark:text-gray-400" data-testid="members-add-blocked">
-          {isPublic ? t.projects.ownerInviteViaJoinRequests : t.projects.ownerInviteAskAdmin}
-        </p>
-      )}
+        {/* A mentee owner's pickers hold only the people they are connected to
+            through their mentorship; anyone else still arrives by a join
+            request (public projects) or an admin. */}
+        {viewerRole === 'MENTEE' && (
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400" data-testid="members-add-hint">
+            {isPublic ? t.projects.ownerInviteViaJoinRequests : t.projects.ownerInviteAskAdmin}
+          </p>
+        )}
+      </>
     </div>
   );
 }
