@@ -75,6 +75,8 @@ export interface CreateInvitationInput {
    * Meaningless for any other role and simply carried through as null.
    */
   companyId?: string | null;
+  /** The seat a COMPANY teammate invitation carries (#1870); null = the company's first login (OWNER). */
+  companySeatRole?: string | null;
   /** The affiliate partner an invited AFFILIATE account is linked to (#3117). */
   partnerId?: string | null;
   /** Passed through to the activity log for IP/UA attribution. */
@@ -171,6 +173,7 @@ export async function persistInvitation(
       menteeId: input.menteeId ?? null,
       projectId: input.projectId ?? null,
       companyId: input.companyId ?? null,
+      companySeatRole: input.companySeatRole ?? null,
       partnerId: input.partnerId ?? null,
     },
     select: { id: true, locale: true },

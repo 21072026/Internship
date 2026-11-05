@@ -98,7 +98,9 @@ test('a series is ONE recurring event per connected member: created, moved in pl
     await prisma.projectMember.deleteMany({ where: { projectId: project.id, userId: mentor.id } });
     expect((await request.put('/api/meeting-series', { data: { id: seriesId, title: `${title} renamed` } })).ok()).toBeTruthy();
     await expect.poll(async () => (await eventsNamed(title)).length, { timeout: 15_000 }).toBe(0);
-    expect(await prisma.calendarEventLink.count({ where: { seriesId } })).toBe(0);
+    // The background sync deletes the provider's event first and its link row
+    // after it, so the mock can read empty a moment before the row is gone.
+    await expect.poll(() => prisma.calendarEventLink.count({ where: { seriesId } }), { timeout: 15_000 }).toBe(0);
 
     // Back on the team, then the series is deleted: withdrawn before the DELETE answers.
     await prisma.projectMember.create({ data: { projectId: project.id, userId: mentor.id, role: 'MENTOR' } });
@@ -156,7 +158,9 @@ test('a standing 1:1 is on both of its people’s calendars with its interval, a
     await prisma.mentorshipRelation.update({ where: { id: relation.id }, data: { status: 'COMPLETED' } });
     expect((await request.put('/api/meeting-series', { data: { id: seriesId, title: `${title} renamed` } })).ok()).toBeTruthy();
     await expect.poll(async () => (await eventsNamed(title)).length, { timeout: 15_000 }).toBe(0);
-    expect(await prisma.calendarEventLink.count({ where: { seriesId } })).toBe(0);
+    // The background sync deletes the provider's event first and its link row
+    // after it, so the mock can read empty a moment before the row is gone.
+    await expect.poll(() => prisma.calendarEventLink.count({ where: { seriesId } }), { timeout: 15_000 }).toBe(0);
   } finally {
     await menteeCtx.dispose();
     await prisma.calendarEventLink.deleteMany({ where: { seriesId } }).catch(() => {});

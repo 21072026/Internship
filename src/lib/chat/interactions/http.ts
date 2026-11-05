@@ -66,7 +66,7 @@ async function postSlackReply(responseUrl: string | null, reply: ChatReply): Pro
         // ephemeral line under it.
         replace_original: reply.replaceOriginal === true,
         text: reply.text,
-        ...(reply.buttons?.length ? { blocks: slackBlocks(reply.text, null, reply.buttons) } : {}),
+        ...(reply.buttons?.length || reply.input ? { blocks: slackBlocks(reply.text, null, reply.buttons, reply.input) } : {}),
       }),
       signal: AbortSignal.timeout(5_000),
       redirect: 'error',
@@ -116,8 +116,8 @@ export async function teamsVerifiedInteraction(activity: unknown): Promise<NextR
   const outcome = await dispatchInteraction('TEAMS', env);
   // The Universal Action invoke response: a card when the answer offers
   // buttons (#1951), else a message shown to the clicker.
-  if (outcome.reply.buttons?.length) {
-    return NextResponse.json({ statusCode: 200, type: 'application/vnd.microsoft.card.adaptive', value: teamsAdaptiveCard(outcome.reply.text, null, outcome.reply.buttons) });
+  if (outcome.reply.buttons?.length || outcome.reply.input) {
+    return NextResponse.json({ statusCode: 200, type: 'application/vnd.microsoft.card.adaptive', value: teamsAdaptiveCard(outcome.reply.text, null, outcome.reply.buttons, outcome.reply.input) });
   }
   return NextResponse.json({ statusCode: 200, type: 'application/vnd.microsoft.activity.message', value: outcome.reply.text });
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireCompanySeat } from '@/lib/companySeatGate';
 import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
@@ -16,6 +17,9 @@ export async function GET(request: Request) {
   const gate = await requireRoleOrPermission(['COMPANY'], 'user.read', { request });
   if ('error' in gate) return gate.error;
   const { session, admin } = gate;
+  // The seat AND the entitlement (#1870): orthogonal, both required.
+  const seatGate = await requireCompanySeat(session, 'talentPool.search');
+  if (seatGate) return seatGate;
   // Admins can always view (support); companies need the premium entitlement.
   if (session.user.role === 'COMPANY' && !(await hasFeature(session.user.companyId, 'TALENT_POOL_SEARCH'))) {
     // The shared gate shape (#1745), so the page renders the upgrade prompt from it.

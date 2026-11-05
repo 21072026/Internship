@@ -113,8 +113,22 @@ own validation, invitation claim and ANONYMOUS rule (no invitation, respondent
 or relation stored), so a reminder after it is refused as `responded` and a
 replayed last click is "already answered". Only the invitation's own person can
 answer it. A survey with any free-text, number, date or multi-select question
-is not answered in chat: the card links to the survey page. Logging an
-interaction from the post-meeting card is the follow-up slice of #1953.
+is not answered in chat: the card links to the survey page.
+
+**Notes from the post-meeting card** (#1953): when a relation meeting that took
+place is auto-logged with the placeholder note (`src/lib/meetingAutoLog.ts`,
+either path — the end click or the sweep), its mentor gets one chat card
+(`meeting.logPrompt`, chat only, `task_reminders` group; none when the pair's
+minutes already filled the log). **Add notes** (`interaction.note`, value = the
+log row's id) answers with a text field — Slack: an `input` block that
+dispatches on Enter, the row id as its `block_id`; Teams: an `Input.Text` and a
+Save `Action.Execute` — and the typed note (`interaction.note.save`, the
+envelope's `input`) replaces that row's notes through `updateInteraction()`
+after `interactionAccess()`, the same body and rule as `PUT
+/api/interactions/[id]`. The session's log is the meeting's log: chat never
+writes a second row. Type stays `Meeting` and there is no duration — the
+InteractionLog the app writes has no duration column, and a field only chat
+could fill would make the two shapes differ.
 
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
 import { signInViaApi, signInAndSettle, gotoSettled, MARKETING_HOST, asHost } from './helpers/auth';
+import { freshIp } from './helpers/rateLimit';
 
 /**
  * The partner portal (docs/affiliate-module.md, #3117).
@@ -91,6 +92,7 @@ test.afterAll(async () => {
     await prisma.affiliateProgramSettings.deleteMany({ where: { orgId } }).catch(() => {});
     await prisma.auditLog.deleteMany({ where: { orgId } }).catch(() => {});
   }
+  // Support tickets go with their requester (onDelete: Cascade) in cleanupByEmail.
   for (const e of [adminEmail, mineEmail, theirsEmail]) if (e) await cleanupByEmail(e);
   if (orgId) await prisma.organization.deleteMany({ where: { id: orgId } }).catch(() => {});
   await prisma.$disconnect();
@@ -285,4 +287,99 @@ test('the commissions table shows the kind and plan version, but no version for 
   await expect(imported).not.toContainText(/\((v|s)\d+\)/);
   await expect(table).not.toContainText('CUST-THEIRS');
   await expect(page.locator('body')).not.toContainText('INV-SECRET');
+});
+
+// #3353: "Ask" on a row opens the partner's support thread with the row attached.
+// Only the partner's own row is accepted — another partner's id is 404, like one
+// that does not exist — and the admin's inbox shows which row it is about. A
+// question changes nothing. @smoke: a data-isolation boundary on a write path.
+test('a partner asks about its own row through support; another partner’s row is refused', { tag: '@smoke' }, async ({ playwright, baseURL, page }) => {
+  const partner = await playwright.request.newContext({ baseURL });
+  contexts.push(partner);
+  expect((await signInViaApi(partner, mineEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
+  const mine = await prisma.affiliateCommission.findFirstOrThrow({ where: { orgId, partnerId: ids.mine, customer: { externalRef: 'CUST-MINE' } } });
+  const theirs = await prisma.affiliateCommission.findFirstOrThrow({ where: { orgId, partnerId: ids.theirs } });
+  const ask = (recordRef: string, label: string) =>
+    partner.post('/api/support', { headers: { ...host, ...freshIp(`affiliate-ask ${label}`) }, data: { body: 'Why this amount?', recordRef } });
+
+  for (const [ref, label] of [[`affiliate:commission:${theirs.id}`, 'theirs'], ['affiliate:commission:nope', 'unknown'], ['not-a-ref', 'garbage']]) {
+    const res = await ask(ref, label);
+    expect([res.status(), (await res.json()).code], label).toEqual([404, 'record_not_found']);
+  }
+  expect(await prisma.supportMessage.count({ where: { sender: { email: mineEmail } } })).toBe(0);
+
+  // From the screen: Ask on the customers page, then send.
+  await page.context().setExtraHTTPHeaders({ ...asHost(MARKETING_HOST), ...freshIp('affiliate-ask ui') });
+  await signInAndSettle(page, mineEmail, PW, '/affiliate');
+  await gotoSettled(page, '/affiliate/commissions');
+  await page.getByTestId('affiliate-commissions-table').locator('tbody tr').filter({ hasText: 'CUST-MINE' }).getByTestId('affiliate-ask').click();
+  await expect(page).toHaveURL(/\/affiliate\/support\?record=/);
+  await expect(page.getByTestId('support-record')).toContainText('CUST-MINE');
+  await page.getByTestId('support-input').fill('Is this commission final?');
+  await page.getByTestId('support-send').click();
+  // Sent: the draft's link is gone (no remove button) and the thread shows it on the message.
+  await expect(page.getByTestId('support-record-remove')).toHaveCount(0);
+  await expect(page.getByTestId('support-chat').getByTestId('support-record')).toContainText('CUST-MINE');
+  await expect.poll(() => prisma.supportMessage.count({ where: { sender: { email: mineEmail } } })).toBe(1);
+  const sent = await prisma.supportMessage.findFirstOrThrow({ where: { sender: { email: mineEmail } } });
+  expect(sent.recordRef).toBe(`affiliate:commission:${mine.id}`);
+  // Nothing moved: the commission is as it was.
+  expect((await prisma.affiliateCommission.findUniqueOrThrow({ where: { id: mine.id } })).status).toBe(mine.status);
+
+  // The admin's inbox names the row.
+  const admin = await playwright.request.newContext({ baseURL });
+  contexts.push(admin);
+  expect((await signInViaApi(admin, adminEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
+  const inbox = await (await admin.get('/api/admin/support', { headers: host })).json();
+  const message = inbox.tickets.flatMap((t: { messages: { id: string }[] }) => t.messages).find((m: { id: string }) => m.id === sent.id);
+  expect(message.record).toMatchObject({ kind: 'commission', customerRef: 'CUST-MINE', amountMinor: mine.amountMinor });
+});
+
+// #3352: the admin writes a label the partner recognises; the reference stays
+// the key. Only a writing admin of the org sets it; the partner reads it on its
+// own rows. A screen-and-write check, not a boundary of its own: no @smoke tag.
+test('an admin-written customer label shows next to the reference in the portal', async ({ playwright, baseURL, page, browser }) => {
+  const admin = await playwright.request.newContext({ baseURL });
+  contexts.push(admin);
+  expect((await signInViaApi(admin, adminEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
+  const partner = await playwright.request.newContext({ baseURL });
+  contexts.push(partner);
+  expect((await signInViaApi(partner, mineEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
+  const customer = await prisma.affiliateCustomer.findFirstOrThrow({ where: { orgId, externalRef: 'CUST-MINE' } });
+  const patch = (ctx: APIRequestContext, id: string, partnerLabel: unknown) =>
+    ctx.patch(`/api/admin/affiliate/customers/${id}`, { headers: host, data: { partnerLabel } });
+
+  expect((await patch(partner, customer.id, 'Acme Ltd')).status()).toBe(403);
+  expect((await patch(admin, 'no-such-customer', 'Acme Ltd')).status()).toBe(404);
+  expect((await patch(admin, customer.id, 'x'.repeat(81))).status()).toBe(400);
+  expect(await (await patch(admin, customer.id, '  Acme   Ltd ')).json()).toEqual({ ok: true, partnerLabel: 'Acme Ltd' });
+  expect((await prisma.affiliateCustomer.findUniqueOrThrow({ where: { id: customer.id } })).externalRef).toBe('CUST-MINE');
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.customer.label', targetId: customer.id } })).toBe(1);
+
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mineEmail, PW, '/affiliate');
+  for (const [path, table] of [['/affiliate/customers', 'affiliate-customers-table'], ['/affiliate/commissions', 'affiliate-commissions-table']]) {
+    await gotoSettled(page, path);
+    const row = page.getByTestId(table).locator('tbody tr').filter({ hasText: 'CUST-MINE' });
+    await expect(row, path).toContainText('Acme Ltd');
+  }
+  await gotoSettled(page, `/affiliate/payouts/${ids.myPayout}`);
+  await expect(page.locator('main')).toContainText('Acme Ltd');
+
+  // Cleared from the admin's Payments screen: the reference alone again.
+  const adminContext = await browser.newContext({ baseURL, extraHTTPHeaders: asHost(MARKETING_HOST) });
+  const adminPage = await adminContext.newPage();
+  await signInAndSettle(adminPage, adminEmail, PW, '/admin');
+  await gotoSettled(adminPage, '/admin/affiliates/payments');
+  const adminRow = adminPage.getByTestId('affiliate-payment-table').locator('tbody tr').filter({ hasText: 'CUST-MINE' });
+  await expect(adminRow).toContainText('Acme Ltd');
+  await adminRow.getByTestId('affiliate-customer-label-edit').click();
+  await expect(adminPage.getByTestId('affiliate-customer-label-input')).toHaveValue('Acme Ltd');
+  await adminPage.getByTestId('affiliate-customer-label-input').fill('');
+  await adminPage.getByTestId('confirm-dialog-confirm').click();
+  await expect(adminRow).not.toContainText('Acme Ltd');
+  await adminContext.close();
+  expect((await prisma.affiliateCustomer.findUniqueOrThrow({ where: { id: customer.id } })).partnerLabel).toBeNull();
+  await gotoSettled(page, '/affiliate/customers');
+  await expect(page.getByTestId('affiliate-customers-table')).not.toContainText('Acme Ltd');
 });

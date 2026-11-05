@@ -87,7 +87,7 @@ export async function partnerCustomers(partner: GatedPartner, rawPage?: unknown)
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       skip: (page - 1) * PORTAL_CUSTOMERS_PER_PAGE,
       take: PORTAL_CUSTOMERS_PER_PAGE,
-      select: { id: true, externalRef: true, createdAt: true, _count: { select: { payments: true } } },
+      select: { id: true, externalRef: true, partnerLabel: true, createdAt: true, _count: { select: { payments: true } } },
     }),
     prisma.affiliateCustomer.count({ where: scope }),
   ]);
@@ -111,6 +111,7 @@ export async function partnerCustomers(partner: GatedPartner, rawPage?: unknown)
     rows: rows.map((r) => ({
       id: r.id,
       ref: r.externalRef,
+      label: r.partnerLabel,
       since: (firstBy.get(r.id) ?? r.createdAt).toISOString(),
       payments: r._count.payments,
       earnedMinor: earnedBy.get(r.id) ?? 0,
@@ -141,6 +142,7 @@ export async function partnerCommissions(partner: GatedPartner, opts: { status?:
       dueAt: r.dueAt,
       paidAt: r.paidAt,
       customerRef: r.customerRef,
+      customerLabel: r.customerLabel,
       paymentAmountMinor: r.payment.amountMinor,
     })),
   };
@@ -165,7 +167,7 @@ export async function partnerPayout(partner: GatedPartner, payoutId: string) {
       reference: true,
       commissions: {
         orderBy: [{ accruedAt: 'asc' }, { id: 'asc' }],
-        select: { id: true, amountMinor: true, currency: true, accruedAt: true, customer: { select: { externalRef: true } } },
+        select: { id: true, amountMinor: true, currency: true, accruedAt: true, customer: { select: { externalRef: true, partnerLabel: true } } },
       },
     },
   });
@@ -182,6 +184,7 @@ export async function partnerPayout(partner: GatedPartner, payoutId: string) {
       currency: c.currency,
       accruedAt: c.accruedAt.toISOString(),
       customerRef: c.customer.externalRef,
+      customerLabel: c.customer.partnerLabel,
     })),
   };
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireCompanySeat, seatScopedActor } from '@/lib/companySeatGate';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
@@ -47,6 +48,9 @@ export async function POST(request: Request) {
     if (capGate) return capGate;
     const role = session.user.role;
     if (!ACTING_ROLES.includes(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // Seats (#1870): the route refuses, never a hidden button.
+    const seatGate = await requireCompanySeat(session, 'application.stage.write');
+    if (seatGate) return seatGate;
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
@@ -58,7 +62,7 @@ export async function POST(request: Request) {
     }
     const code = requiresDispositionCode(toStage) && dispositionCode && isDispositionCode(dispositionCode) ? dispositionCode : null;
     const actor = { id: session.user.id, role, orgId, companyId: session.user.companyId ?? null };
-    const scope = visibleApplicationsWhere(actor);
+    const scope = visibleApplicationsWhere(await seatScopedActor(actor));
     if (!scope) return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
     const uniqueIds = [...new Set(ids)];
 

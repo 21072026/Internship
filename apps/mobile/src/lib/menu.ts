@@ -58,6 +58,7 @@ const ICONS: Record<string, string> = {
   affiliateCommissions: 'receipt',
   affiliatePayouts: 'cash',
   affiliatePayoutDetails: 'card',
+  affiliateSupport: 'help-buoy',
   affiliateContract: 'document-text',
   activity: 'pulse',
   audit: 'finger-print',

@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { emit } from '@/lib/events/emit';
 import { isLocale, defaultLocale, type Locale } from '@/i18n/config';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { offerMeetingLogInChat } from '@/lib/chat/meetingLogInChat';
 
 // "The meeting we held should already be in the interaction log" (#1489).
 //
@@ -73,7 +74,7 @@ type LoggableMeeting = {
   title: string;
   scheduledAt: Date | null;
   relationId: string | null;
-  relation: { orgId: string | null; mentor: { preferredLanguage: string | null } } | null;
+  relation: { orgId: string | null; mentorId: string; mentor: { preferredLanguage: string | null } } | null;
   /** The pair's minutes for this meeting, newest first (#1849); absent or empty → placeholder. */
   sessionNotes?: { body: string }[];
 };
@@ -83,14 +84,17 @@ const loggableSelect = {
   title: true,
   scheduledAt: true,
   relationId: true,
-  relation: { select: { orgId: true, mentor: { select: { preferredLanguage: true } } } },
+  relation: { select: { orgId: true, mentorId: true, mentor: { select: { preferredLanguage: true } } } },
   sessionNotes: { select: { body: true }, orderBy: { createdAt: 'desc' as const }, take: 1 },
 } as const;
 
+function minutesOf(meeting: LoggableMeeting): string | undefined {
+  return meeting.sessionNotes?.[0]?.body.trim() || undefined;
+}
+
 /** The minutes when the pair wrote them, else the localized placeholder. */
 function notesFor(meeting: LoggableMeeting): string {
-  const minutes = meeting.sessionNotes?.[0]?.body.trim();
-  return minutes || noteFor(meeting.relation?.mentor.preferredLanguage);
+  return minutesOf(meeting) || noteFor(meeting.relation?.mentor.preferredLanguage);
 }
 
 /**
@@ -101,7 +105,7 @@ function notesFor(meeting: LoggableMeeting): string {
 export async function logMeetingInteraction(meeting: LoggableMeeting): Promise<boolean> {
   if (!meeting.relationId || !meeting.scheduledAt) return false;
   try {
-    await prisma.interactionLog.create({
+    const row = await prisma.interactionLog.create({
       data: {
         relationId: meeting.relationId,
         // The date of record is when the meeting was held, not when this ran:
@@ -121,6 +125,17 @@ export async function logMeetingInteraction(meeting: LoggableMeeting): Promise<b
       date: meeting.scheduledAt.toISOString(),
       autoLogged: true,
     }, { orgId: meeting.relation?.orgId ?? null, actor: { type: 'system' } });
+    // The placeholder asks for what was discussed; a mentor on chat is asked
+    // there too (#1953). Minutes already say it, so they get no card.
+    if (meeting.relation && !minutesOf(meeting)) {
+      await offerMeetingLogInChat({
+        mentorId: meeting.relation.mentorId,
+        relationId: meeting.relationId,
+        meetingId: meeting.id,
+        interactionId: row.id,
+        title: meeting.title,
+      });
+    }
     return true;
   } catch (error) {
     // P2002 on the unique meetingId — the other path (click vs. sweep, or two

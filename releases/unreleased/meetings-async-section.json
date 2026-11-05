@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**MeetingsManager on the shared `AsyncSection` (#1450):** both sections of the meetings screen (invitees, upcoming) now use the one loading → error → empty contract instead of hand-written ternaries. `AsyncSection` gains `errorDisplay=\"none\"`, for a screen that reports one request's failure once above several sections, and `testIdPrefix`, so the screen keeps its testids. `CalendarView` stays out on purpose: its loading and error states are overlays that keep the grid, and a comment there now says so."
+}

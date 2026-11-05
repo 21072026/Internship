@@ -9,6 +9,7 @@ import { sendSupportPush } from '@/lib/messagePush';
 import { supportPushRecipients } from '@/lib/supportPushRule';
 import { notificationLink } from '@/lib/notificationLink';
 import { tenantWhere } from '@/lib/tenantFilter';
+import { describeRecords } from '@/lib/affiliateRecordRef';
 import {
   SUPPORT_ATTACHMENT_MAX_COUNT,
   validateSupportFile,
@@ -64,7 +65,7 @@ export async function GET(request: Request) {
         orderBy: { createdAt: 'asc' },
         take: 100,
         select: {
-          id: true, body: true, createdAt: true, senderId: true, readAt: true,
+          id: true, body: true, createdAt: true, senderId: true, readAt: true, recordRef: true,
           sender: { select: { fullName: true, role: true } },
           attachments: { select: ATTACHMENT_SELECT },
         },
@@ -72,7 +73,18 @@ export async function GET(request: Request) {
     },
   });
 
-  return NextResponse.json({ tickets, me: session.user.id });
+  // A partner's question names the affiliate row it is about (#3353): described
+  // inside the admin's own org only.
+  const records = session.user.orgId
+    ? await describeRecords(session.user.orgId, tickets.flatMap((t) => t.messages.map((m) => m.recordRef)))
+    : new Map();
+  return NextResponse.json({
+    tickets: tickets.map((t) => ({
+      ...t,
+      messages: t.messages.map(({ recordRef, ...m }) => ({ ...m, record: (recordRef && records.get(recordRef)) || null })),
+    })),
+    me: session.user.id,
+  });
 }
 
 // POST — reply into a ticket. Replying moves an OPEN ticket to IN_PROGRESS,
