@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Clone a programme for the next intake (#1643):** `POST /api/cohorts/[id]/clone` copies a cohort's configuration into a new cohort in one transaction — `eligibilityMode`, its stage SLA overrides that name no mentor, its eligibility rules (re-authored by the cloner), its non-archived journey steps and its per-programme settings (through the settings writer's new `copyProgramSettingsTx()`, one `SettingChange` each, `setting.changed` after the commit). Nothing person-shaped is copied: relations, scope grants, match rounds, costs, events, step runs and per-mentor SLA rows stay behind; the rule is pure in `src/lib/programCloneRule.ts`. `program.write` on the source: a PROGRAM_ADMIN may clone a granted programme only, and the clone grants them nothing. Writes a `PROGRAM_CLONE` AuditLog row; another org's programme is a 404; the plan's programme quota applies. `/admin/cohorts` gets a clone action whose dialog suggests the next year's name and term.",
+  "notes": {
+    "en": ["Admins can clone a cohort for the next intake: its stage time limits, eligibility rules, journey and settings are copied, and no people are."],
+    "tr": ["Yöneticiler bir kohortu sonraki dönem için kopyalayabilir: aşama süreleri, uygunluk kuralları, program akışı ve ayarları kopyalanır, kişiler kopyalanmaz."],
+    "de": ["Admins können eine Kohorte für die nächste Aufnahme kopieren: Stufenfristen, Zulassungsregeln, Ablauf und Einstellungen werden übernommen, Personen nicht."]
+  }
+}
