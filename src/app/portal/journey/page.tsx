@@ -61,7 +61,8 @@ export default async function PortalJourneyPage() {
         <p className="text-gray-500 mt-1">{t.portal.journeySubtitle}</p>
       </div>
 
-      {relation && (
+      {/* A coaching pair is outside the hiring funnel (#1507): no stage strip. */}
+      {relation && relation.kind !== 'COACHING' && (
         <div className="mb-6">
           <JourneyTracker
             status={relation.pipelineStatus}

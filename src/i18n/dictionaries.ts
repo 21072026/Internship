@@ -1417,6 +1417,21 @@ const en = {
     deleteEntry: 'Delete entry',
     nextAction: 'Next action',
   },
+  // Whose outcome a hire is (#1507, the UI of #1503).
+  employmentAttribution: {
+    dialogTitle: 'Moving to "{stage}" — how was the job found?',
+    dialogHint: 'Only a job found through the programme counts as a placement in the numbers.',
+    options: { THROUGH_US: 'Through us (the programme)', SELF_FOUND: 'Found it on their own', ALREADY_EMPLOYED: 'Was already employed' },
+    confirm: 'Move',
+    cancel: 'Cancel',
+  },
+  // Coaching vs. placement relations (#1507).
+  relationKind: {
+    coachingBadge: 'Coaching',
+    coachingNote: 'A coaching relation is not in the hiring funnel, so it has no pipeline stage.',
+    toPlacement: 'Started looking for a job — move into the placement funnel',
+    movedToPlacement: 'Moved into the placement funnel.',
+  },
   dropoff: {
     reasons: {
       CANDIDATE_WITHDREW: 'Candidate withdrew',
@@ -13409,6 +13424,21 @@ const tr: Dict = {
     deleteEntry: 'Kaydı sil',
     nextAction: 'Sonraki aksiyon',
   },
+  // Whose outcome a hire is (#1507, the UI of #1503).
+  employmentAttribution: {
+    dialogTitle: '"{stage}" aşamasına geçiş — iş nasıl bulundu?',
+    dialogHint: 'Sayılarda yalnızca program aracılığıyla bulunan iş yerleştirme sayılır.',
+    options: { THROUGH_US: 'Bizim aracılığımızla (program)', SELF_FOUND: 'Kendi buldu', ALREADY_EMPLOYED: 'Zaten çalışıyordu' },
+    confirm: 'Taşı',
+    cancel: 'Vazgeç',
+  },
+  // Coaching vs. placement relations (#1507).
+  relationKind: {
+    coachingBadge: 'Koçluk',
+    coachingNote: 'Koçluk ilişkisi işe alım hattında değildir, bu yüzden pipeline aşaması yoktur.',
+    toPlacement: 'İş aramaya başladı — yerleştirme hattına al',
+    movedToPlacement: 'Yerleştirme hattına alındı.',
+  },
   dropoff: {
     reasons: {
       CANDIDATE_WITHDREW: 'Aday vazgeçti',
@@ -25188,6 +25218,21 @@ const de: Dict = {
     addEntry: 'Eintrag hinzufügen',
     deleteEntry: 'Eintrag löschen',
     nextAction: 'Nächster Schritt',
+  },
+  // Whose outcome a hire is (#1507, the UI of #1503).
+  employmentAttribution: {
+    dialogTitle: 'Wechsel zu „{stage}“ — wie wurde die Stelle gefunden?',
+    dialogHint: 'Nur eine über das Programm gefundene Stelle zählt in den Zahlen als Vermittlung.',
+    options: { THROUGH_US: 'Über uns (das Programm)', SELF_FOUND: 'Selbst gefunden', ALREADY_EMPLOYED: 'War bereits beschäftigt' },
+    confirm: 'Verschieben',
+    cancel: 'Abbrechen',
+  },
+  // Coaching vs. placement relations (#1507).
+  relationKind: {
+    coachingBadge: 'Coaching',
+    coachingNote: 'Eine Coaching-Beziehung ist nicht im Einstellungstrichter und hat daher keine Pipeline-Phase.',
+    toPlacement: 'Sucht jetzt eine Stelle — in den Vermittlungstrichter aufnehmen',
+    movedToPlacement: 'In den Vermittlungstrichter aufgenommen.',
   },
   dropoff: {
     reasons: {

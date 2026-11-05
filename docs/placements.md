@@ -88,3 +88,15 @@ the coaching months into its time to hire. Every journey builder (the funnel rou
 deal value) and the mentor's average days to hired read it; a row without a stamp (before #1503,
 and every PLACEMENT pair since, which stamps it to the start) measures from `startDate` as before.
 A SOURCE's time to placement is unchanged: it measures from the referral, a different question.
+
+**The kind and the attribution in the UI (#1507).** A COACHING relation shows a "Coaching"
+badge and no stage control: not on `/admin/candidates/[id]`, not on `/mentor/mentees/[id]`, and
+the mentee's portal shows no journey strip. The admin's candidate page offers one way into the
+funnel ("move into the placement funnel", `PUT /api/mentorship/[id] { kind: 'PLACEMENT' }`); the
+server refuses it from anyone else (`kind_admin_only`). A move into one of the tenant's hire
+stages (`outcomeStageKeysFrom().finished`, never in MARKETING, never for a coaching pair) first
+asks whose outcome it is — `EmploymentAttributionDialog`, the same shape as the drop-off reason
+dialog — and the answer rides the same stage write (`stageMoveData` + `recordStageMove`), so
+the stage gate (#1589) still decides and its dialog (#1590) still shows. The server flag
+`EMPLOYMENT_ATTRIBUTION_REQUIRED` stays off: the boards, bulk moves and API clients do not send
+it yet.
