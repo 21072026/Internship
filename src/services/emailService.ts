@@ -3587,7 +3587,6 @@ export async function sendOfferSentEmail({
 // stage-deadline nudge ("this record needs you before a date"), and somebody who
 // muted one meant to mute both. No new category, no new preference key.
 export async function sendTrialReminderEmail({
-  to,
   fullName,
   companyName,
   trialEndsAt,
@@ -3597,7 +3596,6 @@ export async function sendTrialReminderEmail({
   orgId,
   userId,
 }: {
-  to: string;
   fullName: string;
   /** The account the trial belongs to. A proper noun — never translated. */
   companyName: string;
@@ -3607,7 +3605,7 @@ export async function sendTrialReminderEmail({
   link: string;
   locale?: string | null;
   orgId?: string | null;
-  userId?: string | null;
+  userId: string;
 }) {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
@@ -3616,14 +3614,19 @@ export async function sendTrialReminderEmail({
   const M = getDictionary(loc).trials;
   const subject = threshold >= 7 ? M.subject7 : threshold >= 3 ? M.subject3 : M.subject0;
   const endsOn = new Intl.DateTimeFormat(dateLocale(loc), { dateStyle: 'medium', timeZone: 'UTC' }).format(trialEndsAt);
-  await sendEmail({
-    to,
-    userId,
-    category: 'stage-deadline',
-    locale,
-    fromName: brand.name,
-    subject: subject.replace('{company}', companyName),
-    html: `
+  // Through the router (#1711): the copy built here, sent as-is.
+  await notifyEvent(userId, 'trial.endingSoon', { company: companyName, days: String(threshold) }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    // One reminder per (trial end, threshold): a second tick — another replica,
+    // a retried job — is absorbed by the ledger instead of queuing a twin.
+    dedupeKey: `trial:${trialEndsAt.toISOString().slice(0, 10)}:${threshold}`,
+    email: {
+      category: 'stage-deadline',
+      locale,
+      fromName: brand.name,
+      subject: subject.replace('{company}', companyName),
+      html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         ${brandHeader(brand, esc(M.heading))}
         <p>${esc(M.greeting.replace('{name}', fullName))}</p>
@@ -3632,6 +3635,7 @@ export async function sendTrialReminderEmail({
         ${ctaBlock(brand, `${base}${link}`, esc(M.cta))}
       </div>
     `,
+    },
   });
 }
 
@@ -4625,16 +4629,25 @@ export async function checkStageDeadlineReminders() {
             const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
             // Say which day mode produced the date, so a mentor questioning it can see why (#1638).
             const dayNote = (await dayRuleOf(rel)).mode === 'business' ? `<p style="color:#6b7280;font-size:13px;">${esc(emailText.businessDays)}</p>` : '';
-            await brandOf(rel.orgId).then((brand) => sendEmail({
-              category: 'stage-deadline',
-              userId: rel.mentorId,
-              // The record's org — the same one that picks the bell's link above.
-              orgId: rel.orgId,
-              locale: rel.mentor.preferredLanguage,
-              to: rel.mentor.email,
-              subject,
-              html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>${dayNote}`,
-            })).catch((error) => {
+            // Through the router (#1711), the same event and key as the bell above:
+            // the mail is the copy built here, sent as-is, once per breach rung.
+            await brandOf(rel.orgId).then((brand) => notifyEvent(
+              rel.mentor,
+              'deadline.stagePassed',
+              { menteeName: rel.mentee.fullName, relationId: rel.id },
+              {
+                channels: ['email'],
+                // The record's org — the same one that picks the bell's link above.
+                orgId: rel.orgId,
+                dedupeKey: `sla-breach:${opened.id}:1`,
+                email: {
+                  category: 'stage-deadline',
+                  locale: rel.mentor.preferredLanguage,
+                  subject,
+                  html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>${dayNote}`,
+                },
+              },
+            )).catch((error) => {
               console.error('checkStageDeadlineReminders email failed:', { relationId: rel.id, mentorId: rel.mentorId, error });
             });
           }
@@ -4678,15 +4691,23 @@ export async function checkStageDeadlineReminders() {
         .replace('{mentee}', `<strong>${esc(rel.mentee.fullName)}</strong>`)
         .replace('{mentor}', esc(rel.mentor.fullName))
         .replace('{days}', String(days));
-      await brandOf(rel.orgId).then((brand) => sendEmail({
-        category: 'stage-deadline',
-        userId: admin.id,
-        orgId: rel.orgId,
-        locale: admin.preferredLanguage,
-        to: admin.email,
-        subject,
-        html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
-      })).catch((error) => {
+      // Through the router (#1711), the same event and key as the bell above.
+      await brandOf(rel.orgId).then((brand) => notifyEvent(
+        admin,
+        'deadline.slaEscalated',
+        { menteeName: rel.mentee.fullName, mentorName: rel.mentor.fullName, days: String(days), relationId: rel.id, menteeId: rel.menteeId },
+        {
+          channels: ['email'],
+          orgId: rel.orgId,
+          dedupeKey: `sla-breach:${breach.id}:${breach.level + 1}`,
+          email: {
+            category: 'stage-deadline',
+            locale: admin.preferredLanguage,
+            subject,
+            html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
+          },
+        },
+      )).catch((error) => {
         console.error('SLA escalation email failed:', { relationId: rel.id, adminId: admin.id, error });
       });
     }
@@ -4820,18 +4841,20 @@ export async function checkNextActionReminders(now = new Date()) {
         const base = await origins.urlFor(owner.orgId);
         const brand = await brandOf(owner.orgId);
         const subject = text.subject.replace('{name}', name);
-        await sendEmail({
-          category: 'stage-deadline',
-          userId: owner.id,
+        // Through the router (#1711): the copy built here, sent as-is.
+        await notifyEvent(owner.id, 'deadline.nextActionDue', { name, relationId: rel.id, menteeId: rel.menteeId }, {
+          channels: ['email'],
           orgId: owner.orgId,
-          locale: owner.preferredLanguage,
-          to: owner.email,
-          subject,
-          html: `${worldHeading(brand, esc(subject), '')}<p>${esc(text.greeting.replace('{owner}', owner.fullName))}</p><p>${esc(text.body.replace('{name}', name))}</p>${noteHtml}${
-            brand.vertical === DEFAULT_VERTICAL
-              ? `<p><a href="${base}${link}">${esc(text.cta)}</a></p>`
-              : ctaBlock(brand, `${base}${link}`, esc(text.cta))
-          }`,
+          email: {
+            category: 'stage-deadline',
+            locale: owner.preferredLanguage,
+            subject,
+            html: `${worldHeading(brand, esc(subject), '')}<p>${esc(text.greeting.replace('{owner}', owner.fullName))}</p><p>${esc(text.body.replace('{name}', name))}</p>${noteHtml}${
+              brand.vertical === DEFAULT_VERTICAL
+                ? `<p><a href="${base}${link}">${esc(text.cta)}</a></p>`
+                : ctaBlock(brand, `${base}${link}`, esc(text.cta))
+            }`,
+          },
         });
       } catch (error) {
         failures += 1;
@@ -6626,13 +6649,15 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
             try {
               const brand = await emailBrand(recipient.orgId);
               const base = await origins.urlFor(recipient.orgId);
-              await sendEmail({
-                category: 'document-reminder',
-                userId: recipient.id,
-                locale: recipient.preferredLanguage,
-                to: recipient.email,
-                fromName: brand.name,
+              // Through the router (#1711), the same event as the bell above; the
+              // weekly claim row already made this send once per week.
+              const mail = {
+                channels: ['email'] as const,
                 orgId: recipient.orgId,
+                email: {
+                category: 'document-reminder',
+                locale: recipient.preferredLanguage,
+                fromName: brand.name,
                 subject: t.reminderSubject.replace('{requirement}', label),
                 html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
                   ${brandHeader(brand, t.reminderHeading)}
@@ -6640,7 +6665,10 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
                   <p>${esc(t.reminderBody.replace('{requirement}', label).replace('{mentee}', mentee.fullName))}</p>
                   ${ctaBlock(brand, `${base}${link}`, t.reminderCta)}
                 </div>`,
-              });
+                },
+              };
+              if (isMentee) await notifyEvent(recipient.id, 'missing_document.self', { requirement: label }, mail);
+              else await notifyEvent(recipient.id, 'missing_document.mentor', { mentee: mentee.fullName, requirement: label, relationId: recipient.relationId ?? undefined }, mail);
               emailed++;
             } catch (error) {
               console.error('Missing document reminder email failed:', { menteeId: mentee.id, recipientId: recipient.id, requirementId: requirement.id, error });

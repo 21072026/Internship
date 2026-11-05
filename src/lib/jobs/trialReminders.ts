@@ -316,7 +316,6 @@ async function dispatchReminder(row: DueTrialReminderRow): Promise<DispatchResul
       // one broken address must not cost every other record its reminder.
       try {
         await sendTrialReminderEmail({
-          to: user.email,
           fullName: user.fullName,
           companyName: accountName,
           trialEndsAt: relation.trialEndsAt,
