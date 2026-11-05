@@ -111,6 +111,24 @@ numbers per role over every invitation ever sent, under the usual privacy floor.
   reported as a separate count. The rule is `src/lib/invitationFunnelRule.ts`, unit-tested in
   `scripts/test/invitation-funnel.test.mjs`.
 
+## Announcement reach (#1921)
+
+`/admin/announcements` shows, per sent announcement, the recipients, how many were e-mailed
+and how many **read it in the app**; the registry report `announcement-reach` carries the same
+row per announcement. The read signal is #1721's: the `read` flag on the bell rows a broadcast
+wrote (`Notification.announcementId`). No mail pixel, no per-person list.
+
+The read count is **withheld** (the response says why, `readWithheld`) in two cases, both in
+`src/lib/announcementReachRule.ts`:
+
+- **Fewer than 5 recipients** (`ANNOUNCEMENT_READ_FLOOR`, the registry's privacy floor): "1 of 1
+  read" is one person's behaviour, not a total.
+- **Sent before the org's notification retention cutoff** (`notificationRetentionDays`, read
+  through `src/lib/notificationRetentionWindow.ts`, the same resolver the nightly sweep uses): the
+  sweep deletes bell rows read and unread alike, so the count would shrink into a wrong one.
+
+Recipients and e-mailed are columns on the announcement itself and are always shown.
+
 ## Deliberately deferred
 
 Both are **decided against for this year**, not overlooked.

@@ -185,11 +185,13 @@ test.describe('targeted and scheduled announcements', () => {
     // Malformed criteria are refused, never widened to everyone.
     expect((await admin.post('/api/admin/announcements', { data: { text: 'x', audience: { roles: ['SUPERUSER'] } } })).status()).toBe(400);
 
-    // Read tracking: an aggregate over the bell rows.
+    // Read tracking: an aggregate over the bell rows — but one recipient is one
+    // person, so the count is withheld below the privacy floor (#1921;
+    // e2e/announcement-reach.spec.ts covers the counted case).
     await prisma.notification.updateMany({ where: { announcementId: row.id }, data: { read: true } });
     const hist = await (await admin.get('/api/admin/announcements')).json();
     const h = hist.announcements.find((a: { id: string }) => a.id === row.id);
-    expect(h).toMatchObject({ delivered: 1, read: 1, audience: { roles: ['MENTOR'], cohortIds: [cohortId] } });
+    expect(h).toMatchObject({ delivered: 1, read: null, readWithheld: 'small_audience', audience: { roles: ['MENTOR'], cohortIds: [cohortId] } });
   });
 
   test('a scheduled announcement sends once, at its time, to the audience resolved then', async () => {
