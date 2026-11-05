@@ -41,7 +41,7 @@ function ResetForm() {
     e.preventDefault();
     setError('');
     if (password !== confirm) {
-      setError(t.account.passwordMismatch);
+      setError(t.auth.passwordMismatch);
       return;
     }
     const policyError = passwordPolicyError(password, pw.policy, t.passwordPolicy);
