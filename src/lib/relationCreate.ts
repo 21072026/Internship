@@ -30,6 +30,7 @@ import { findActiveMentorship, AlreadyMentoredError } from '@/lib/activeMentorsh
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { recordMatchDecision, type MatchDecisionInput } from '@/lib/matching/decision';
 import { writePairSeats } from '@/lib/relationParticipants';
+import { introducePairInChat } from '@/lib/chat/pairingInChat';
 
 export const NEW_RELATION_INCLUDE = {
   mentor: { select: { id: true, fullName: true, email: true } },
@@ -96,6 +97,8 @@ export async function announceNewRelation({ relation, mentor, mentee, companyId,
   if ((await shellCapabilities(relation.orgId)).includes('mentorship')) {
     await notify(mentee.id, 'agreement.review', {}, '/portal');
     await notify(mentor.id, 'agreement.review', {}, `/mentor/mentees/${relation.id}`);
+    // And the pairing DM on chat (#1946), for whoever linked one.
+    await introducePairInChat(relation.id, mentor, mentee);
   }
 
   // Both halves are mailed, and the `userId`s are not interchangeable: each
