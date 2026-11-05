@@ -70,7 +70,8 @@ deployed env instead.
 After switching branches, run `npx prisma generate` so the client matches the schema —
 a stale client causes schema-drift 500s (the smoke test will catch these).
 The **full suite** also runs on a schedule, 4× a day at 03/09/15/21 UTC
-(`.github/workflows/e2e-full.yml`, 4-way sharded, GitHub-hosted). A drift gate skips the
+(`.github/workflows/e2e-full.yml`, 4-way sharded, GitHub-hosted; one shared `Build app for E2E`
+job like the PR gate, #3509). A drift gate skips the
 scheduled firing when the commit already has a **green** run (#2374 — it used to accept the
 last *completed* run of any conclusion, so one red run masked itself green 4× a day forever;
 a red commit is now re-tested until it passes or a new commit lands), and the skip path says
