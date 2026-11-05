@@ -9,69 +9,23 @@ import { RelativeTime } from '@/components/ui/RelativeTime';
 import { showBrowserNotification } from '@/lib/browserNotifications';
 import { NotificationTypeIcon } from '@/components/NotificationTypeIcon';
 import { renderNotification } from '@/lib/notificationText';
-import { useRealtime } from '@/hooks/useRealtime';
-
-interface Note {
-  id: string;
-  type: string;
-  text?: string | null;
-  params?: unknown;
-  link?: string | null;
-  read: boolean;
-  createdAt: string;
-}
+import { markAllReadLocally, useNotificationFeed, type FeedNote } from '@/components/notificationFeed';
 
 export function NotificationBell() {
   const t = useT();
   const locale = useLocale();
   const { status } = useSession();
-  const [items, setItems] = useState<Note[]>([]);
-  const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  // Ids we've already accounted for, so a browser notification fires once per
-  // new item. null until the first poll establishes a baseline — that first
-  // batch of existing unread items must NOT trigger a burst of popups.
-  const seenIds = useRef<Set<string> | null>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const res = await fetch('/api/notifications');
-      if (!res.ok) return;
-      const d = await res.json();
-      const next: Note[] = d.items ?? [];
-      if (seenIds.current === null) {
-        seenIds.current = new Set(next.map((n) => n.id));
-      } else {
-        for (const n of next) {
-          if (!seenIds.current.has(n.id)) {
-            seenIds.current.add(n.id);
-            if (!n.read) showBrowserNotification(t.notifications.title, renderNotification(n, t, locale), n.link);
-          }
-        }
-      }
-      setItems(next);
-      setUnread(d.unread ?? 0);
-    } catch {
-      /* ignore */
-    }
-  }, [t, locale]);
-
-  useEffect(() => {
-    if (status !== 'authenticated') return;
-    load();
-    // Kept as a backstop under the live stream (#1464): the stream carries the
-    // unread *count*, but the dropdown's rows are fetched, and a run of the
-    // hourly crons can create rows with nobody publishing.
-    const id = setInterval(load, 60_000);
-    return () => clearInterval(id);
-  }, [status, load]);
-
-  // A new row arrived, or the viewer read a thread and its message.* rows were
-  // retired with it (#1464) — either way the bell's contents just changed.
-  useRealtime((signal) => {
-    if (signal.type === 'notification' || signal.type === 'read' || signal.type === 'tick') void load();
-  });
+  // One feed for every bell on the page (#3573): the shell mounts two (mobile
+  // bar + desktop strip), which used to mean two fetches, two pollers and two
+  // browser popups per new row. src/components/notificationFeed.ts owns the
+  // fetching; a bell only renders the shared snapshot.
+  const onNew = useCallback(
+    (n: FeedNote) => showBrowserNotification(t.notifications.title, renderNotification(n, t, locale), n.link),
+    [t, locale],
+  );
+  const { items, unread } = useNotificationFeed(status === 'authenticated', onNew);
 
   useEffect(() => {
     const onClick = (e: MouseEvent) => {
@@ -88,8 +42,7 @@ export function NotificationBell() {
     setOpen(next);
     if (next && unread > 0) {
       await fetch('/api/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      setUnread(0);
-      setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+      markAllReadLocally();
     }
   };
 
