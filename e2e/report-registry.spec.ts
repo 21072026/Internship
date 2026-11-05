@@ -82,7 +82,7 @@ test.describe('report registry', () => {
 
     // Every registered report loads for an INTERNSHIP org (it carries every
     // capability) and labels each of its columns.
-    for (const key of ['pipeline-funnel', 'source-conversion', 'mentor-workload', 'placement-outcomes', 'weekly-report-compliance']) {
+    for (const key of ['pipeline-funnel', 'source-conversion', 'mentor-workload', 'placement-outcomes', 'weekly-report-compliance', 'invitation-funnel']) {
       const r = await get(key);
       expect(r.status(), key).toBe(200);
       const b = await r.json();
