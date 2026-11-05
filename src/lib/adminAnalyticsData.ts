@@ -20,11 +20,23 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { interactionInTenant, meetingInTenant } from '@/lib/analyticsScope';
 import { mentorWorkload as mentorWorkloadRows } from '@/lib/analyticsReports';
 import { relationProgramWhere, type ProgramFilter } from '@/lib/programFilterRule';
+import { programPeopleWhere, programRelationWhere, type GrantLike } from '@/lib/programScopeRule';
+import type { Prisma } from '@prisma/client';
 import { countsAsPlacement, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
 
 export async function loadAdminAnalytics(
   session: Session,
-  params: { from: string | null; to: string | null; program?: ProgramFilter },
+  params: {
+    from: string | null;
+    to: string | null;
+    program?: ProgramFilter;
+    /**
+     * A PROGRAM_ADMIN's grants (#1577): every number below is computed over
+     * the relations — and the people — they cover, on top of the programme
+     * filter. Absent for every other reader, whose numbers do not change.
+     */
+    scope?: readonly GrantLike[];
+  },
   locale: Locale,
 ) {
   const now = new Date();
@@ -66,8 +78,15 @@ export async function loadAdminAnalytics(
   // filtered view rather than being guessed into one. The signup funnel is
   // about accounts, not relations, and stays tenant-wide.
   const program = params.program ?? { kind: 'all' as const };
-  const relWhere = relationProgramWhere(program);
-  const filtered = program.kind !== 'all';
+  // A PROGRAM_ADMIN's grants narrow like a filter that is always on (#1577):
+  // relations AND the grants, interactions/meetings through them, projects and
+  // mentors only with a relation inside them, signups only the people they
+  // reach, the programme list only the granted cohorts.
+  const scope = params.scope ?? null;
+  const relWhere: Prisma.MentorshipRelationWhereInput = scope
+    ? { AND: [relationProgramWhere(program), programRelationWhere(scope) as Prisma.MentorshipRelationWhereInput] }
+    : relationProgramWhere(program);
+  const filtered = program.kind !== 'all' || scope !== null;
   const relationInScope = { relation: { is: { ...tenant, ...relWhere } } };
   const interactionWhere = { date: inRange, ...(filtered ? relationInScope : interactionInTenant(tenant)) };
   const meetingWhere = { scheduledAt: inRange, ...(filtered ? relationInScope : meetingInTenant(tenant)) };
@@ -100,7 +119,8 @@ export async function loadAdminAnalytics(
     [7, 30].map(async (days) => {
       const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
       const createdIn = { createdAt: { gte: since } };
-      const inTenant = <W extends object>(w: W) => withinTenant(w, tenant);
+      const people = scope ? [programPeopleWhere(scope) as Prisma.UserWhereInput] : [];
+      const inTenant = (w: Prisma.UserWhereInput) => withinTenant<Prisma.UserWhereInput>(people.length ? { AND: [w, ...people] } : w, tenant);
       const [registered, verified, active] = await Promise.all([
         prisma.user.count({ where: inTenant(createdIn) }),
         prisma.user.count({ where: inTenant({ ...createdIn, emailVerified: true }) }),
@@ -159,7 +179,11 @@ export async function loadAdminAnalytics(
   // screen — /api/cohorts needs `program.read`, which an analytics reader may
   // not hold. Names only; nothing else about a programme leaks through here.
   const programs = capabilities.includes('mentorship')
-    ? await prisma.cohort.findMany({ where: withinTenant({}, tenant), orderBy: { createdAt: 'desc' }, select: { id: true, name: true, term: true } })
+    ? await prisma.cohort.findMany({
+        where: withinTenant(scope ? { id: { in: scope.flatMap((g) => (g.cohortId ? [g.cohortId] : [])) } } : {}, tenant),
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, name: true, term: true },
+      })
     : [];
 
   const rsvp = Object.fromEntries(rsvpGroups.map((g) => [g.rsvp, g._count._all]));

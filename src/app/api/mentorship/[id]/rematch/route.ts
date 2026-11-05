@@ -216,7 +216,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           // open the queue, and the fewer places the mentee's words travel the
           // better. Each admin is written to in their own language.
           await sendRematchRequestedEmail({
-            to: a.email,
             adminName: a.fullName,
             menteeName: menteeName ?? 'a mentee',
             orgId: a.orgId,

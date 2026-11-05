@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { seatScopedActor } from '@/lib/companySeatGate';
 import type { Prisma } from '@prisma/client';
 import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
@@ -38,7 +39,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
     const companyId = session.user.companyId ?? null;
-    const appScope = visibleApplicationsWhere({ id: session.user.id, role, orgId, companyId });
+    const appScope = visibleApplicationsWhere(await seatScopedActor({ id: session.user.id, role, orgId, companyId }));
     const irScope = interviewRequestActorWhere({ role, userId: session.user.id, orgId, companyId });
     if (!appScope || !irScope) return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
     const { id } = await params;

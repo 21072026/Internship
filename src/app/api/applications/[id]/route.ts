@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { seatScopedActor } from '@/lib/companySeatGate';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
@@ -30,7 +31,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Invalid request', code: 'validation_failed' }, { status: 400 });
     const actor = { id: session.user.id, role: session.user.role, orgId, companyId: session.user.companyId ?? null };
-    const scope = visibleApplicationsWhere(actor);
+    const scope = visibleApplicationsWhere(await seatScopedActor(actor));
     if (!scope) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     const { id } = await params;
 

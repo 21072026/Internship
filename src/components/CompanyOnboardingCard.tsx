@@ -18,6 +18,7 @@ interface Onboarding {
 const HREF: Record<OnboardingItem, string | null> = {
   profile: '/company/profile',
   requisition: '/company/requisitions',
+  teammate: '/company/team',
   verified: null,
 };
 

@@ -5,6 +5,8 @@ import { useT, useLocale } from '@/i18n/client';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
+import { PersonPicker } from '@/components/ui/PersonPicker';
+import { PICKER_ROLES } from '@/lib/userPickerQuery';
 import { formatDate } from '@/lib/relativeTime';
 
 interface Participant {
@@ -22,13 +24,14 @@ interface Participant {
  * ones kept as history. An admin seats another mentee or a co-mentor, or lets
  * a seat go (`leftAt`); the pair itself changes only through the transfer.
  */
-export function RelationParticipantsPanel({ relationId, active, candidates }: { relationId: string; active: boolean; candidates: { id: string; fullName: string }[] }) {
+export function RelationParticipantsPanel({ relationId, active }: { relationId: string; active: boolean }) {
   const t = useT();
   const locale = useLocale();
   const g = t.relationGroups;
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<Participant[]>([]);
   const [userId, setUserId] = useState('');
+  const [userName, setUserName] = useState('');
   const [role, setRole] = useState('MENTEE');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -46,6 +49,7 @@ export function RelationParticipantsPanel({ relationId, active, candidates }: { 
     if (res.ok) {
       setRows((await res.json()).participants);
       setUserId('');
+      setUserName('');
       return;
     }
     const body = await res.json().catch(() => ({}));
@@ -105,15 +109,22 @@ export function RelationParticipantsPanel({ relationId, active, candidates }: { 
           {error && <p role="alert" className="text-sm text-red-700" data-testid="group-member-error">{error}</p>}
           {active && (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-              <Select
-                aria-label={g.addPerson}
-                data-testid={`group-add-person-${relationId}`}
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                placeholder={g.addPerson}
-                options={candidates.filter((c) => !current.has(c.id)).map((c) => ({ value: c.id, label: c.fullName }))}
-                className="sm:w-56"
-              />
+              {/* Searched on the server (#1437) — the panel used to need the
+                  tenant's whole user list handed down to open. */}
+              <div className="sm:w-56">
+                <PersonPicker
+                  label={g.addPerson}
+                  testId={`group-add-person-${relationId}`}
+                  roles={PICKER_ROLES}
+                  value={userId}
+                  selectedName={userName}
+                  excludeIds={[...current]}
+                  onChange={(p) => {
+                    setUserId(p?.id ?? '');
+                    setUserName(p?.fullName ?? '');
+                  }}
+                />
+              </div>
               <Select
                 aria-label={g.role}
                 value={role}

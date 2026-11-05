@@ -14,6 +14,11 @@ export interface InteractionEnvelope {
   externalUserId: string;
   actionId: string;
   value: string | null;
+  /**
+   * Text the person typed into a card's field (#1953), or null. A claim like
+   * the rest: the handler validates it as it would a form field.
+   */
+  input: string | null;
   /** Slack only: where the reply goes (checked again before it is used, respond.ts). */
   responseUrl: string | null;
   /** Teams only: the activity id, so one activity is answered once. */
@@ -53,14 +58,25 @@ export function parseSlackInteraction(rawBody: string): InteractionEnvelope | nu
   if (payload?.type !== 'block_actions') return null;
   const team = payload.team as { id?: unknown } | undefined;
   const user = payload.user as { id?: unknown } | undefined;
-  const action = Array.isArray(payload.actions) ? (payload.actions[0] as { action_id?: unknown; value?: unknown } | undefined) : undefined;
+  const action = Array.isArray(payload.actions)
+    ? (payload.actions[0] as { action_id?: unknown; value?: unknown; type?: unknown; block_id?: unknown } | undefined)
+    : undefined;
   const teamId = id(team?.id);
   const externalUserId = id(user?.id);
   const actionId = str(action?.action_id);
   if (!teamId || !externalUserId || !actionId || !ACTION_ID.test(actionId)) return null;
+  const responseUrl = str(payload.response_url);
+  // A card's text field (#1953, card.ts): the typed text is the action's
+  // value and the card's own value rides as the block_id.
+  if (action?.type === 'plain_text_input') {
+    const v = id(action.block_id);
+    const typed = str(action.value);
+    if (!v || typed === null || typed.length > MAX_VALUE) return null;
+    return { teamId, externalUserId, actionId, value: v, input: typed, responseUrl, activityId: null };
+  }
   const v = value(action?.value);
   if (action?.value !== undefined && v === null) return null;
-  return { teamId, externalUserId, actionId, value: v, responseUrl: str(payload.response_url), activityId: null };
+  return { teamId, externalUserId, actionId, value: v, input: null, responseUrl, activityId: null };
 }
 
 /**
@@ -86,11 +102,14 @@ export function parseTeamsInteraction(activity: unknown): InteractionEnvelope | 
   if (!teamId || !externalUserId || !actionId || !ACTION_ID.test(actionId)) return null;
   // Our own Adaptive Card buttons send `data: { value }` (src/lib/chat/card.ts);
   // that string is the value, exactly like a Slack button's.
-  const data = a.value?.action?.data as { value?: unknown } | undefined;
+  // A card's text field (#1953) is merged into the same data as `input`.
+  const data = a.value?.action?.data as { value?: unknown; input?: unknown } | undefined;
   const raw = data && typeof data === 'object' && typeof data.value === 'string' ? data.value : data;
   const v = value(raw);
   if (raw !== undefined && v === null) return null;
-  return { teamId, externalUserId, actionId, value: v, responseUrl: null, activityId: id(a.id) };
+  const typed = data && typeof data === 'object' && typeof data.input === 'string' ? data.input : null;
+  if (typed !== null && typed.length > MAX_VALUE) return null;
+  return { teamId, externalUserId, actionId, value: v, input: typed, responseUrl: null, activityId: id(a.id) };
 }
 
 /** Is this Teams activity an interaction at all (so the messages route hands it over)? */

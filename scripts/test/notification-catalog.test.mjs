@@ -47,7 +47,7 @@ const CATEGORIES = new Set([
 const EMAIL_GROUPS = new Set([
   'account_security', 'direct_messages', 'mentorship_lifecycle', 'pipeline_updates',
   'meeting_invites', 'meeting_reminders', 'task_reminders', 'digests', 'reports_analytics',
-  'opportunities', 'inbound_requests', 'newsletter', 'announcements',
+  'opportunities', 'inbound_requests', 'newsletter', 'surveys', 'announcements',
 ]);
 const LINK_KINDS = new Set(['relation', 'thread', 'mentee', 'support', 'project', 'dashboard']);
 

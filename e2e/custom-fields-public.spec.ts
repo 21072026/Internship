@@ -51,7 +51,11 @@ test('apply link: the question is shown, a bad answer creates nothing, a good on
     await page.getByRole('button', { name: /Apply|Submit|Send/i }).click();
     await expect.poll(() => prisma.user.count({ where: { email: applicant } }), { timeout: 30_000 }).toBe(1);
     const created = await prisma.user.findFirstOrThrow({ where: { email: applicant } });
-    expect((await prisma.formResponse.findFirst({ where: { userId: created.id, fieldKey: 'track' } }))?.value).toBe('data');
+    // /api/apply creates the account first and writes the answers after it
+    // (skills sync in between), so the user row can be read before them.
+    await expect
+      .poll(async () => (await prisma.formResponse.findFirst({ where: { userId: created.id, fieldKey: 'track' } }))?.value, { timeout: 30_000 })
+      .toBe('data');
   } finally {
     await prisma.mentorshipRequest.deleteMany({ where: { mentee: { email: { in: [applicant, refused] } } } });
     for (const email of [applicant, refused, mentorEmail]) await cleanupByEmail(email);

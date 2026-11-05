@@ -440,8 +440,27 @@ test.describe('the taxonomy covers what the app actually sends', () => {
     return constsIn(src).get(id) ?? allExportedCategoryConsts().get(id) ?? null;
   }
 
+  // Senders in emailService.ts that hand their mail to the router (#1711):
+  // `notifyEvent(userId, …, { email })` with no sendEmail() of their own. Their
+  // recipient is a required `userId: string` the type system enforces, and the
+  // router reads the address, the preferences and the footer from that account —
+  // so their call sites are not send sites in this scan's sense (and carry no `to`).
+  let routedSenders: Set<string> | null = null;
+  function routedSenderNames(): Set<string> {
+    if (routedSenders) return routedSenders;
+    routedSenders = new Set();
+    const src = fs.readFileSync(path.join(SRC, 'services', 'emailService.ts'), 'utf8');
+    const fns = [...src.matchAll(TOP_LEVEL_FN)].map((m) => ({ name: m[1], at: m.index! }));
+    fns.forEach((f, i) => {
+      const body = src.slice(f.at, i + 1 < fns.length ? fns[i + 1].at : src.length);
+      if (/^send[A-Z]\w*Email$/.test(f.name) && body.includes('notifyEvent(') && !body.includes('sendEmail(')) routedSenders!.add(f.name);
+    });
+    return routedSenders;
+  }
+
   function sendSites(): SendSite[] {
     const sites: SendSite[] = [];
+    const routed = routedSenderNames();
     for (const file of walk(SRC)) {
       const src = fs.readFileSync(file, 'utf8');
       if (!src.includes('sendEmail(') && !src.includes('emailService')) continue;
@@ -449,6 +468,7 @@ test.describe('the taxonomy covers what the app actually sends', () => {
       const fns = [...src.matchAll(TOP_LEVEL_FN)].map((m) => ({ name: m[1], at: m.index! }));
       for (const m of src.matchAll(SEND_CALL)) {
         if (m[1]) continue; // a declaration's parameter list, not a call
+        if (routed.has(m[2])) continue; // goes through the router, see routedSenderNames()
         const open = src.indexOf('{', m.index!);
         const end = literalAt(src, open);
         const literal = end === -1 ? src.slice(open) : src.slice(open, end + 1);

@@ -52,7 +52,9 @@ when every path is `docs/**`, `releases/unreleased/**`, `*.md` or a root `.HANDO
 other path (a rename counts by both names) runs it, and a failed detection runs it too.
 Don't reintroduce a `paths:`/`paths-ignore:` filter on a workflow that carries a required check. The gate runs as **parallel jobs**: Playwright `--shard` 1/2, 2/2 over the `@smoke` set plus
 the a11y baseline scan as a fifth job, each on its own runner with its own MySQL (so `workers: 1`
-stays — specs were never written to share one DB concurrently). The required `Playwright smoke`
+stays — specs were never written to share one DB concurrently). They do not build: one
+`Build app for E2E` job runs `next build` once and hands `.next` over as an artifact named after
+the commit, which each job checks before `next start` (#3509). The required `Playwright smoke`
 check is a small aggregator job over them; never rename it or make the matrix job carry that
 name. The smoke job installs Chromium **without** `--with-deps` (that only added fonts, ~4 min
 of apt per run). The **smoke set** is the tests

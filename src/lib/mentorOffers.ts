@@ -110,7 +110,6 @@ export async function createMentorOffer(opts: { session: Session; tenant: Tenant
   await notifyIfAllowed(menteeId, 'mentorship', 'mentor_offer.new', { mentorName: mentor.fullName }, '/portal');
   if (mentee.email && emailAllowed(mentee, 'mentorship') && emailGroupAllowedForCategory(mentee, 'mentor-offer')) {
     await sendMentorOfferEmail({
-      to: mentee.email,
       menteeName: mentee.fullName,
       mentorName: mentor.fullName,
       message,
@@ -244,7 +243,6 @@ export async function sweepMentorOffers(now = new Date()): Promise<{ expired: nu
     await notifyIfAllowed(o.mentee.id, 'mentorship', 'mentor_offer.reminder', { mentorName: o.mentor.fullName }, '/portal');
     if (o.mentee.email && emailAllowed(o.mentee, 'mentorship') && emailGroupAllowedForCategory(o.mentee, 'mentor-offer')) {
       await sendMentorOfferEmail({
-        to: o.mentee.email,
         menteeName: o.mentee.fullName,
         mentorName: o.mentor.fullName,
         kind: 'reminder',

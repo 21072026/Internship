@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Searchable people picker (#1437):** `GET /api/users?view=mentorAvailability` returns only the picker roles (ADMIN/MENTOR/MENTEE, never COMPANY/SOURCE), takes `roles=<CSV>` to narrow, and `limit` (clamped to 50, `src/lib/userPickerQuery.ts`) turns it into one bounded, name-sorted page with `total` beside it. A new `<PersonPicker>` combobox (`src/components/ui/PersonPicker.tsx`, `usePeopleSearch()`) searches on the server as you type. It replaces the native mentee `<select>` in the assign form and the invite form, and the person select in the group-members panel; the group dialog's mentee list is searched too. The mentor pickers ask for `roles=ADMIN,MENTOR` only, so the assign form no longer downloads the whole tenant (228 KB at 1 000 users).",
+  "notes": {
+    "en": ["Picking a mentee is now a search: type a name instead of scrolling through everyone, and the mentorship screens open faster in large programmes."],
+    "tr": ["Mentee seçmek artık bir arama: herkesi kaydırmak yerine bir isim yazın. Büyük programlarda mentorluk ekranları da daha hızlı açılıyor."],
+    "de": ["Mentees wählen Sie jetzt per Suche aus: Namen eintippen statt durch alle zu scrollen. In großen Programmen öffnen sich die Mentoring-Seiten schneller."]
+  }
+}

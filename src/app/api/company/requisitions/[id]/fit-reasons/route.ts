@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { seatScopedActor } from '@/lib/companySeatGate';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -50,7 +51,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if ('error' in gate) return gate.error;
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
-    const scope = visibleApplicationsWhere({ id: session.user.id, role, orgId, companyId: session.user.companyId ?? null });
+    const scope = visibleApplicationsWhere(await seatScopedActor({ id: session.user.id, role, orgId, companyId: session.user.companyId ?? null }));
     if (!scope) return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
 
     const limited = enforceRateLimit(request, 'ai:requisition_fit', { ...AI_RATE_LIMITS.requisition_fit, subject: session.user.id });

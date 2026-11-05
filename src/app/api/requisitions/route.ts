@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireCompanySeat } from '@/lib/companySeatGate';
 import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import type { Prisma } from '@prisma/client';
@@ -97,6 +98,9 @@ export async function POST(request: Request) {
   if (capGate) return capGate;
   const scope = await authScope(request, 'company.write');
   if ('error' in scope) return scope.error;
+  // Seats (#1870): an INTERVIEWER seat writes no requisition.
+  const seatGate = await requireCompanySeat(scope.session, 'requisition.write');
+  if (seatGate) return seatGate;
   return withTenantScope(scope.session, async () => {
     const body: unknown = await request.json().catch(() => null);
     const protectedList = protectedFields(body);

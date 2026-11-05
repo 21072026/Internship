@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import crypto from 'crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { signInAndSettle } from './helpers/auth';
+import { gotoSettled, signInAndSettle } from './helpers/auth';
 
 /**
  * Forget a company contact who never had an account (#2559, DSGVO Art. 17).
@@ -134,11 +134,16 @@ test('the enquiry list offers "Forget this contact" and the row reads as forgott
   const s = await seed();
   try {
     await signInAndSettle(page, s.adminEmail, PW, '/admin');
-    await page.goto('/admin/company-inquiries');
+    await gotoSettled(page, '/admin/company-inquiries');
     // The list opens on "New"; the seeded enquiry has been contacted already.
-    await page.getByRole('button', { name: 'All', exact: true }).click();
+    // A click on "All" that lands before hydration is lost (the run of
+    // 2026-10-31 timed out with the list still on "New"), so click until the
+    // row shows rather than once.
     const row = page.getByTestId(`inquiry-forget-${s.own.inquiry.id}`);
-    await expect(row).toBeVisible({ timeout: 20_000 });
+    await expect(async () => {
+      await page.getByRole('button', { name: 'All', exact: true }).click();
+      await expect(row).toBeVisible({ timeout: 5_000 });
+    }).toPass({ timeout: 30_000 });
     await row.getByTestId('forget-contact-open').click();
     await expect(row.getByTestId('forget-contact-submit')).toBeDisabled();
     await row.getByTestId('forget-contact-confirm-email').fill(s.contact);
