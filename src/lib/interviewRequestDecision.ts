@@ -9,7 +9,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { requireRoleOrPermission } from '@/lib/authz';
 import { decideInterviewRequestSchema, interviewRequestActorWhere } from '@/lib/interviewRequests';
 import { isInterviewDeclineReasonCode } from '@/lib/interviewDeclineReasons';
-import { notify, notifyIfAllowed } from '@/lib/notify';
+import { notifyEvent } from '@/lib/notifications/router';
 import { logActivity } from '@/lib/activity';
 import { emit } from '@/lib/events/emit';
 import { advanceApplicationOnInterview } from '@/lib/applicationStage';
@@ -102,27 +102,25 @@ export async function decideInterviewRequest(session: Session, id: string, input
         orgId,
       });
     }
+    // Through the router (#1944): who may hear each answer is the catalogue
+    // entry's `audience` (approved: the mentee and the company; declined: the
+    // company only — the decline reason code never reaches the candidate), and
+    // chat rides along for anybody with a confirmed identity. InterviewRequest
+    // does not record which company user created it, so the decision belongs
+    // to the company account as a whole: every active user of it hears.
+    const companyUsers = await prisma.user.findMany({
+      where: { orgId, companyId: current.companyId, role: 'COMPANY', isActive: true },
+      select: { id: true },
+    });
+    const dedupeKey = `interview-request-decided:${current.id}`;
     if (nextStatus === 'APPROVED') {
-      await notify(current.menteeId, 'interview_request.approved', {}, '/portal');
-    } else {
-      // InterviewRequest does not record which company user created it, so the
-      // decision belongs to the company account as a whole. Notify every active
-      // company user in the same tenant; each person's mentorship preference is
-      // still honoured by notifyIfAllowed.
-      const companyUsers = await prisma.user.findMany({
-        where: { orgId, companyId: current.companyId, role: 'COMPANY', isActive: true },
-        select: { id: true },
-      });
-      await Promise.all(
-        companyUsers.map((user) =>
-          notifyIfAllowed(
-            user.id,
-            'mentorship',
-            'interview_request.declined',
-            { reasonCode: declineReasonCode! },
-            `/company/requisitions/${current.requisitionId}`
-          )
-        )
+      await notifyEvent([current.menteeId, ...companyUsers.map((u) => u.id)], 'interview_request.approved', { requisitionId: current.requisitionId }, { dedupeKey, orgId });
+    } else if (companyUsers.length > 0) {
+      await notifyEvent(
+        companyUsers.map((u) => u.id),
+        'interview_request.declined',
+        { reasonCode: declineReasonCode!, requisitionId: current.requisitionId },
+        { dedupeKey, orgId }
       );
     }
     return NextResponse.json({ ok: true, status: nextStatus, pipelineRecommendation: nextStatus === 'APPROVED' ? 'INTERVIEW_PENDING_250' : null });

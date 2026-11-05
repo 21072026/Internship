@@ -116,7 +116,7 @@ test('cloning a programme copies its configuration and no person, audited, tenan
 
     // --- a PROGRAM_ADMIN: its granted programme only, and no grant on the clone ---
     const progCtx = await ctxFor(progEmail);
-    expect((await progCtx.post(`/api/cohorts/${ungranted.id}/clone`, { data: { name: 'Not mine' } })).status()).toBe(403);
+    expect((await progCtx.post(`/api/cohorts/${ungranted.id}/clone`, { data: { name: 'Not mine' } })).status()).toBe(404);
     const progRes = await progCtx.post(`/api/cohorts/${source.id}/clone`, { data: { name: `Interns 2028 ${s}` } });
     expect(progRes.status()).toBe(201);
     const progClone: string = (await progRes.json()).cohort.id;

@@ -156,7 +156,8 @@ test("an admin cannot put another tenant's user on their project; their own tena
   test.slow();
   await signInAsFreshUser(page, users.aAdmin.email, PASSWORD, '/admin');
   const foreign = await call(page, 'POST', `/api/projects/${privateA.id}/members`, { userId: users.bMentee.id, role: 'MENTEE' });
-  expect(foreign.status).toBe(400);
+  // Another tenant's person is a missing one (#2272): 404, the answer an unknown id gets.
+  expect(foreign.status).toBe(404);
   expect(foreign.body).not.toContain(MARK);
   expect(await prisma.projectMember.count({ where: { projectId: privateA.id, userId: users.bMentee.id } })).toBe(0);
 
