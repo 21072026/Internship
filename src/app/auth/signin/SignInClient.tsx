@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { roleHome } from '@/lib/roleHome';
+import type { DemoAccount } from '@/lib/demoMode';
 import { sameOriginPath } from '@/lib/safeRedirect';
 import { useVertical } from '@/lib/verticalClient';
 import { verticalHasCapability } from '@/lib/verticals';
@@ -37,7 +38,7 @@ type SignInData = z.infer<typeof signinSchema>;
 
 // Filled in by the server page on the demo instance only; null everywhere else.
 export interface DemoQuickLogin {
-  accounts: { role: 'admin' | 'mentor' | 'mentee'; email: string }[];
+  accounts: DemoAccount[];
   password: string;
 }
 

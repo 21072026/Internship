@@ -53,7 +53,8 @@ export function cohortPassLoaders(opts: {
       ).map((r) => r.id)),
     mentorCount: () => prisma.user.count({ where: mentorPoolWhere(tenant) }),
     mentees: (ids) => loadMentees(tenant, ids),
-    mentors: () => loadMentorPool(tenant),
+    // Mentor rules (#3423): a round proposes only mentors the programme admits.
+    mentors: () => loadMentorPool(tenant, { orgId, programId: opts.programId ?? null }),
     skillIds: (ids) => skillIdsByUser(ids),
     preferences: async (ids) => {
       const out = new Map<string, { preferredField: string | null; preferredLanguages: unknown }>();

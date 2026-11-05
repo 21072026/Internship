@@ -50,27 +50,27 @@ export function fieldSchema(field: FormFieldDef): z.ZodType<unknown> {
   const scale = field.scale ?? DEFAULT_SCALE;
   switch (field.type) {
     case 'TEXT':
-      return z.string({ invalid_type_error: 'invalid_type' }).max(TEXT_MAX, 'too_long');
+      return z.string({ error: 'invalid_type' }).max(TEXT_MAX, 'too_long');
     case 'LONG_TEXT':
-      return z.string({ invalid_type_error: 'invalid_type' }).max(LONG_TEXT_MAX, 'too_long');
+      return z.string({ error: 'invalid_type' }).max(LONG_TEXT_MAX, 'too_long');
     case 'SELECT':
-      return z.string({ invalid_type_error: 'invalid_type' }).refine((v) => options.has(v), 'not_an_option');
+      return z.string({ error: 'invalid_type' }).refine((v) => options.has(v), 'not_an_option');
     case 'MULTI_SELECT':
       return z
-        .array(z.string({ invalid_type_error: 'invalid_type' }), { invalid_type_error: 'invalid_type' })
+        .array(z.string({ error: 'invalid_type' }), { error: 'invalid_type' })
         .refine((vs) => vs.every((v) => options.has(v)) && new Set(vs).size === vs.length, 'not_an_option');
     case 'NUMBER':
-      return z.number({ invalid_type_error: 'invalid_type' }).finite('invalid_type');
+      return z.number({ error: 'invalid_type' }).finite('invalid_type');
     case 'BOOLEAN':
-      return z.boolean({ invalid_type_error: 'invalid_type' });
+      return z.boolean({ error: 'invalid_type' });
     case 'DATE':
       return z
-        .string({ invalid_type_error: 'invalid_type' })
+        .string({ error: 'invalid_type' })
         .regex(/^\d{4}-\d{2}-\d{2}$/, 'invalid_date')
         .refine((v) => !Number.isNaN(Date.parse(`${v}T00:00:00Z`)), 'invalid_date');
     case 'SCALE':
       return z
-        .number({ invalid_type_error: 'invalid_type' })
+        .number({ error: 'invalid_type' })
         .int('invalid_type')
         .min(scale.min, 'out_of_range')
         .max(scale.max, 'out_of_range');

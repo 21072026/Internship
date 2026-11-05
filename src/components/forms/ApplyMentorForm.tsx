@@ -22,7 +22,7 @@ const applyMentorSchema = z.object({
   motivation: z.string().max(TEXT_LIMITS.mentorApplicationMotivation).optional(),
   capacity: z.string().optional(),
   linkedinUrl: z.string().url().optional().or(z.literal('')),
-  consent: z.literal(true, { errorMap: () => ({ message: 'Consent is required' }) }),
+  consent: z.literal(true, { error: 'Consent is required' }),
   // Honeypot (mirrors PublicContactForm) — real users never fill this in.
   website: z.string().optional(),
 });

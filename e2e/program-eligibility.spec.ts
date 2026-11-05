@@ -78,7 +78,8 @@ test('eligibility: RULES admits only an ALLOW match, DENY beats ALLOW, and POST 
     const listed = await (await admin.get('/api/admin/eligibility')).json();
     const draft = listed.rules.map((r: Record<string, unknown>) => ({ effect: r.effect, attribute: r.attribute, operator: r.operator, value: r.value, priority: r.priority }));
     const preview = await (await admin.post('/api/admin/eligibility/preview', { data: { mode: 'RULES', rules: draft } })).json();
-    expect(preview).toEqual({ total: 3, admitted: 1 }); // only engineering-in-Köln
+    // toMatchObject: the dry run also counts mentors since #3423 (`mentors`).
+    expect(preview).toMatchObject({ total: 3, admitted: 1 }); // only engineering-in-Köln
     // Still OPEN, so the dry run changed nothing: anyone can be assigned.
     expect((await admin.post('/api/mentorship', { data: { mentorId: mentor.id, menteeId: c.id } })).status()).toBe(201);
     await prisma.mentorshipRelation.deleteMany({ where: { menteeId: c.id } });

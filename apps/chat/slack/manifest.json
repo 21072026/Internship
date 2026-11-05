@@ -1,0 +1,57 @@
+{
+  "_metadata": {
+    "major_version": 1,
+    "minor_version": 1
+  },
+  "display_information": {
+    "name": "InternCRM",
+    "description": "Your programme in Teams and Slack: notifications, bookings, check-ins.",
+    "long_description": "InternCRM brings your programme into the conversation: meeting invites and reminders with a join link, interview decisions, survey check-ins answered with a click, session notes, and booking your next session. Every action runs as the person who linked their own account, with the same permissions as in the app.",
+    "background_color": "#2563EB"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "InternCRM",
+      "always_online": false
+    },
+    "slash_commands": [
+      {
+        "command": "/interncrm",
+        "url": "https://interncrm.com/api/integrations/chat/slack/interactions",
+        "description": "Your programme in Teams and Slack: notifications, bookings, check-ins.",
+        "usage_hint": "status | book | log | help",
+        "should_escape": false
+      }
+    ]
+  },
+  "oauth_config": {
+    "redirect_urls": [
+      "https://interncrm.com/api/integrations/chat/slack/callback"
+    ],
+    "scopes": {
+      "bot": [
+        "chat:write",
+        "im:write",
+        "users:read",
+        "users:read.email",
+        "commands"
+      ]
+    }
+  },
+  "settings": {
+    "event_subscriptions": {
+      "request_url": "https://interncrm.com/api/integrations/chat/slack/uninstall",
+      "bot_events": [
+        "app_uninstalled",
+        "tokens_revoked"
+      ]
+    },
+    "interactivity": {
+      "is_enabled": true,
+      "request_url": "https://interncrm.com/api/integrations/chat/slack/interactions"
+    },
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false,
+    "token_rotation_enabled": true
+  }
+}

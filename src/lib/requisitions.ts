@@ -38,7 +38,14 @@ export const requisitionInputSchema = z.object({
   screeningQuestions: screeningQuestionsSchema.optional(),
 }).strict();
 
-export const requisitionPatchSchema = requisitionInputSchema.partial().omit({ companyId: true });
+// A PATCH sets only the keys it sends. zod 4 applies a `.default()` even inside
+// `.partial()` (zod 3 did not), so the two defaulted fields are re-declared
+// without their default first — or an empty PATCH would reset `status` to
+// DRAFT and `filled` to 0 (#3558).
+export const requisitionPatchSchema = requisitionInputSchema
+  .extend({ status: z.enum(REQUISITION_STATUSES), filled: z.number().int().min(0) })
+  .partial()
+  .omit({ companyId: true });
 
 export const PROTECTED_REQUISITION_FIELDS = [
   'orgId', 'legacyCompanyNeedId', 'createdAt', 'closedAt',

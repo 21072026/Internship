@@ -26,7 +26,7 @@ const schema = z.object({
   eventType: z.string().min(1).max(64),
   // "vpaas-magic-cookie-…/RoomName" — which tenant room the event is about.
   fqn: z.string().max(400).optional(),
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 });
 
 /** Everyone currently in a room; capped so a hostile feed can't grow a row unboundedly. */

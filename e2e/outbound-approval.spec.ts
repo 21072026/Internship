@@ -11,6 +11,7 @@ import {
   sendTrialReminderEmail,
 } from '@/services/emailService';
 import { startFakeSmtp, type FakeSmtp } from './helpers/fakeSmtp';
+import { drainNotificationMail } from './helpers/notificationMail';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { asHost, gotoSettled, MARKETING_HOST, signInAndSettle, signInViaApi } from './helpers/auth';
 
@@ -154,7 +155,6 @@ test.describe('outbound approval', () => {
     { tag: '@smoke' },
     async () => {
       const reminder = {
-        to: E.lead1,
         fullName: 'Lead One',
         companyName: 'Acme Sales',
         trialEndsAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
@@ -166,6 +166,9 @@ test.describe('outbound approval', () => {
       await sendTrialReminderEmail(reminder);
       // The cron runs again (another replica, tomorrow's tick): still one draft.
       await sendTrialReminderEmail(reminder);
+      // Routed through notifyEvent (#1711): the hold happens when the
+      // notification.email job reaches sendEmail(), so run it here.
+      await drainNotificationMail([ids.lead1]);
 
       expect(smtp.to(E.lead1)).toHaveLength(0);
       expect(await jobsFor(E.lead1)).toHaveLength(0);
