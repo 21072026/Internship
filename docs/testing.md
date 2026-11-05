@@ -335,6 +335,24 @@ BASE_URL=https://preview.interncrm.com npm run test:stress
 | `STRESS_MIN_RPS` | `0` (off) | Fail if throughput drops below this |
 | `STRESS_SUMMARY_FILE` | — | If set, writes a JSON summary (used by the alert email) |
 
+### Admin screens at scale: `scripts/seed-scale.mjs` (#1434)
+
+The demo set has 8 candidates; a real programme has thousands. To see how the admin screens hold up,
+seed a **local** database with a programme of 5 000 and open them as its admin:
+
+```bash
+npx prisma db push && node scripts/seed-scale.mjs      # SCALE_MENTEES / SCALE_MENTORS / SCALE_RELATION_EVERY
+npm run build && npx next start                        # measure a production build, not next dev
+# sign in as admin.scale@scale.example.test / ScalePass123!
+```
+
+It writes into its own organisation (`scale-local`), so the default org and the demo set are untouched,
+and a re-run only tops the numbers up. It refuses any `DATABASE_URL` whose host is not `localhost` or
+`127.0.0.1` (`isLocalOnlyTarget()` in `prisma/demoTarget.mjs`, unit-tested in
+`scripts/test/demo-target.test.mjs`). There is no force flag and no database-name exception, and the
+seeder is deliberately in no deploy or CI step. The names come from small lists on purpose, so the
+duplicate scan meets a worst case: about 17 people per name, plus numbered near-twins.
+
 ## Nightly automation (the cron)
 
 [`.github/workflows/stress.yml`](../.github/workflows/stress.yml) runs the stress test

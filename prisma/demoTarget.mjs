@@ -52,3 +52,38 @@ export function assertSafeDemoTarget(tool) {
   );
   process.exit(1);
 }
+
+// ── The scale seeder's stricter rule (#1434) ──────────────────────────────────
+// scripts/seed-scale.mjs writes THOUSANDS of synthetic people, which a shared
+// database must never receive — not even the public demo's `_demo` DB, a
+// docker `mysql`/`db` host or a topic env. So it accepts a DATABASE_URL only
+// when its host is literally localhost or 127.0.0.1, and nothing else: no
+// database-name exception and no force flag. The host is read by URL parsing,
+// not the regex above, so a password that happens to contain "@localhost:"
+// cannot pass for a local host.
+
+/** @param {string} url */
+export function isLocalOnlyTarget(url = '') {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (!/^mysql:$/.test(parsed.protocol)) return false;
+  return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+}
+
+/**
+ * Exit the process unless DATABASE_URL is a localhost/127.0.0.1 MySQL URL.
+ * @param {string} tool - name used in the error message
+ */
+export function assertLocalOnlyTarget(tool) {
+  if (isLocalOnlyTarget(process.env.DATABASE_URL || '')) return;
+  console.error(
+    `${tool}: DATABASE_URL is not a localhost/127.0.0.1 MySQL database. Refusing to write.\n` +
+      'This tool seeds thousands of synthetic rows and runs on a developer machine only:\n' +
+      'there is no force flag and no database-name exception.',
+  );
+  process.exit(1);
+}

@@ -55,3 +55,37 @@ test('an empty or missing DATABASE_URL is not safe', () => {
   assert.equal(isSafeDemoTarget(undefined), false);
   assert.equal(classifyDemoTarget('').safe, false);
 });
+
+// ── isLocalOnlyTarget: the scale seeder's stricter rule (#1434) ──────────────
+test('local-only: accepts localhost and 127.0.0.1 MySQL URLs only', async () => {
+  const { isLocalOnlyTarget } = await import('../../prisma/demoTarget.mjs');
+  for (const url of ['mysql://root:pw@localhost:3306/internship', 'mysql://u:p@127.0.0.1/internship_scale']) {
+    assert.equal(isLocalOnlyTarget(url), true, `should accept ${url}`);
+  }
+  for (const url of [
+    'mysql://user:pw@db.internal:3306/internship_crm',
+    'mysql://user:pw@db.internal:3306/internship_crm_preview',
+    'mysql://user:pw@mysql:3306/internship_demo', // docker host + _demo: fine for seed-demo, not here
+    'mysql://user:pw@db:3306/internship_pr42',
+    'mysql://user:pw@demo.example.test:3306/internship_demo',
+    'mysql://user:x@localhost:1@evil.example.test:3306/db', // "@localhost:" inside the credentials
+    'mysql://user:pw@localhost.evil.example.test/db',
+    'postgres://user:pw@localhost/db',
+    '',
+    'not a url',
+  ]) {
+    assert.equal(isLocalOnlyTarget(url), false, `should refuse ${url}`);
+  }
+});
+
+test('local-only: SEED_DEMO_FORCE does not widen it', async () => {
+  const { isLocalOnlyTarget } = await import('../../prisma/demoTarget.mjs');
+  const before = process.env.SEED_DEMO_FORCE;
+  process.env.SEED_DEMO_FORCE = '1';
+  try {
+    assert.equal(isLocalOnlyTarget('mysql://u:p@db:3306/internship_pr7'), false);
+  } finally {
+    if (before === undefined) delete process.env.SEED_DEMO_FORCE;
+    else process.env.SEED_DEMO_FORCE = before;
+  }
+});
