@@ -11,7 +11,8 @@ import { signInViaApi } from './helpers/auth';
  *   • opening or writing a cohort-B relation is a 403, not a silent no-op;
  *   • moving its own relation into cohort B (out of its reach) is refused;
  *   • the candidate and user lists and the /admin dashboard narrow the same
- *     way; bulk edit (`user.write`, not in the tier) and analytics stay a 403;
+ *     way, and so does the analytics overview; bulk edit (`user.write`, not in
+ *     the tier) and the other analytics routes stay a 403;
  *   • with zero grants the list is empty, and an ORG_ADMIN still reads all three.
  * The builders themselves are unit-tested in
  * scripts/test/authz-scope-program-admin.test.mjs.
@@ -107,8 +108,19 @@ test('program admin: reads and writes only its granted cohort; cohort-less relat
     expect(dash).not.toContain(`Mentee B ${stamp}`);
     expect(dash).not.toContain(`Mentee N ${stamp}`);
 
-    // Analytics is refused, not narrowed (yet): a 403 tells nothing about the tenant.
-    expect((await ctxProg.get('/api/admin/analytics')).status()).toBe(403);
+    // The analytics overview counts its programme only — relations, signups,
+    // the programme picker — and the routes not narrowed yet stay a 403.
+    const progStats = await ctxProg.get('/api/admin/analytics');
+    expect(progStats.status()).toBe(200);
+    const ps = await progStats.json();
+    expect(ps.totalRelations).toBe(1);
+    expect(ps.programs.map((p: { id: string }) => p.id)).toEqual([cohortA.id]);
+    expect(ps.signupFunnel[0].registered).toBe(2); // mentee A and the mentor, nobody else of the org
+    const orgStats = await (await ctxOrg.get('/api/admin/analytics')).json();
+    expect(orgStats.totalRelations).toBe(3);
+    expect(orgStats.programs.map((p: { id: string }) => p.id).sort()).toEqual([cohortA.id, cohortB.id].sort());
+    expect((await ctxProg.get('/api/admin/analytics/funnel')).status()).toBe(403);
+    expect((await ctxProg.get('/api/admin/analytics/narrative')).status()).toBe(403);
 
     // The org admin is unaffected.
     expect(await listedIds(ctxOrg)).toEqual([rA.id, rB.id, rN.id].sort());

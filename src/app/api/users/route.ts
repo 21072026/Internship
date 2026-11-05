@@ -8,6 +8,7 @@ import { accountState } from '@/lib/accountState';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import type { Prisma } from '@prisma/client';
 import { isTagMode, parseTagIds } from '@/lib/tags';
+import { pickerLimit, pickerRoles } from '@/lib/userPickerQuery';
 
 // Field sets, narrowest first (#855). The admin list used to return every
 // column — email, phone, university, department, birth year — for every user in
@@ -199,9 +200,28 @@ export async function GET(request: Request) {
       // Prisma `select` can produce — activeMenteeCount and the availability
       // derived from it. One groupBy covers every returned mentor's ACTIVE
       // count instead of a query per mentor. Full list, like `picker`/
-      // `directory` — a picker dropdown has no use for pagination.
+      // `directory`, unless the caller asks for a bounded page (#1437).
+      //
+      // Only the picker roles (src/lib/userPickerQuery.ts): a COMPANY or SOURCE
+      // account is never a mentor or a mentee, and shipping their names to be
+      // discarded in the browser was most of a 228 KB response. `roles` narrows
+      // further (the mentor pickers ask for ADMIN,MENTOR — a handful of rows);
+      // `limit` turns the call into one searchable page with its `total`, which
+      // is how the mentee picker reaches a thousand people without downloading
+      // them.
       if (view === 'mentorAvailability') {
-        const users = await prisma.user.findMany({ where, select: SELECTS.mentorAvailability, orderBy: { fullName: 'asc' } });
+        const roles = pickerRoles(searchParams.get('roles'), roleParam);
+        const limit = pickerLimit(searchParams.get('limit'));
+        const pickerWhere = withinTenant<Prisma.UserWhereInput>({ ...filters, role: { in: roles } }, tenant);
+        const [users, total] = await Promise.all([
+          prisma.user.findMany({
+            where: pickerWhere,
+            select: SELECTS.mentorAvailability,
+            orderBy: { fullName: 'asc' },
+            ...(limit ? { take: limit } : {}),
+          }),
+          limit ? prisma.user.count({ where: pickerWhere }) : Promise.resolve(null),
+        ]);
         const counts = users.length
           ? await prisma.mentorshipRelation.groupBy({
               by: ['mentorId'],
@@ -223,6 +243,7 @@ export async function GET(request: Request) {
               }),
             };
           }),
+          ...(total === null ? {} : { total, limit }),
         });
       }
 

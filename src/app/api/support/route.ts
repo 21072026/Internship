@@ -16,13 +16,19 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { enforceRateLimit } from '@/lib/rateLimit';
+import { affiliatePartnerGate } from '@/lib/affiliateContract';
+import { describeRecords, ownRecord } from '@/lib/affiliateRecordRef';
 
 // User side of the support channel (#593): every role has a pinned "Support"
 // conversation. The first message opens a SupportTicket; further messages join
 // the user's open (OPEN/IN_PROGRESS) ticket; a closed ticket means the next
 // message opens a fresh one. Separate from the mentorship message API.
+//
+// A partner's message may carry `recordRef` (#3353): the commission or customer
+// it asks about. Only a row of the sender's own partner is accepted (anything
+// else is 404 `record_not_found`); it changes nothing, it only points.
 
-const postSchema = z.object({ body: z.string().max(5000).optional().default('') });
+const postSchema = z.object({ body: z.string().max(5000).optional().default(''), recordRef: z.string().max(120).optional() });
 const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true, altText: true } as const;
 
 // GET — the caller's tickets (newest first) with their messages. Admin replies
@@ -49,6 +55,7 @@ export async function GET() {
             body: true,
             createdAt: true,
             senderId: true,
+            recordRef: true,
             sender: { select: { fullName: true, role: true } },
             attachments: { select: ATTACHMENT_SELECT },
           },
@@ -64,7 +71,16 @@ export async function GET() {
     // as every other thread: reading the message IS reading the notification.
     await markSupportNotificationsRead(session.user.id);
 
-    return NextResponse.json({ tickets, me: session.user.id });
+    const records = session.user.orgId
+      ? await describeRecords(session.user.orgId, tickets.flatMap((t) => t.messages.map((m) => m.recordRef)))
+      : new Map();
+    return NextResponse.json({
+      tickets: tickets.map((t) => ({
+        ...t,
+        messages: t.messages.map(({ recordRef, ...m }) => ({ ...m, record: (recordRef && records.get(recordRef)) || null })),
+      })),
+      me: session.user.id,
+    });
   });
 }
 
@@ -107,6 +123,16 @@ export async function POST(request: Request) {
         { error: 'Invalid request' },
         { status: 400 },
       );
+    }
+
+    // A question about one of the partner's own rows (#3353).
+    let recordRef: string | null = null;
+    if (parsed.data.recordRef) {
+      const gate = await affiliatePartnerGate(session);
+      if (!gate.ok) return NextResponse.json({ code: 'record_not_found' }, { status: 404 });
+      const own = await ownRecord({ orgId: gate.partner.orgId, partnerId: gate.partner.id }, parsed.data.recordRef);
+      if (!own) return NextResponse.json({ code: 'record_not_found' }, { status: 404 });
+      recordRef = own.ref;
     }
 
     const built = await buildSupportAttachments(files, read.altTexts);
@@ -152,6 +178,7 @@ export async function POST(request: Request) {
           ticketId: ticket.id,
           senderId: session.user.id,
           body,
+          recordRef,
           attachments: attachments.length
             ? {
                 create: attachments,

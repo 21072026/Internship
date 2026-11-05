@@ -2962,19 +2962,17 @@ function participantClocks(
 // wasn't logged in never learned their request had been decided.
 
 export async function sendMentorshipDecisionEmail({
-  to,
   fullName,
   approved,
   mentorName,
   orgId,
   userId,
 }: {
-  to: string;
   fullName?: string | null;
   approved: boolean;
   mentorName?: string | null;
   orgId?: string | null;
-  userId?: string | null;
+  userId: string;
 }) {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
@@ -2984,20 +2982,22 @@ export async function sendMentorshipDecisionEmail({
     ? `<p>Good news — your mentorship request has been approved${mentorName ? ` and <strong>${esc(mentorName)}</strong> is now your mentor` : ''}. Open your portal to say hi and get started.</p>`
     : `<p>Your mentorship request has been reviewed, but it could not be approved right now. You are welcome to submit a new request later — keeping your profile and CV up to date helps.</p>`;
 
-  await sendEmail({
-    to,
-    userId,
-    category: 'mentorship-decision',
-    fromName: brand.name,
-    subject: approved ? `Your mentorship request was approved` : `Update on your mentorship request`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, heading)}
-        ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
-        ${body}
-        ${ctaBlock(brand, `${base}/portal`, 'Open your portal')}
-      </div>
-    `,
+  await notifyEvent(userId, approved ? 'mentorship_request.approved' : 'mentorship_request.rejected', {}, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    email: {
+      category: 'mentorship-decision',
+      fromName: brand.name,
+      subject: approved ? `Your mentorship request was approved` : `Update on your mentorship request`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, heading)}
+          ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
+          ${body}
+          ${ctaBlock(brand, `${base}/portal`, 'Open your portal')}
+        </div>
+      `,
+    },
   });
 }
 
@@ -3032,18 +3032,16 @@ async function assignedEmailLocale(locale: string | null | undefined, userId: st
 }
 
 export async function sendMenteeAssignedEmail({
-  to,
   mentorName,
   menteeName,
   orgId,
   userId,
   locale,
 }: {
-  to: string;
   mentorName?: string | null;
   menteeName: string;
   orgId?: string | null;
-  userId?: string | null;
+  userId: string;
   locale?: string | null;
 }) {
   const brand = await emailBrand(orgId);
@@ -3054,20 +3052,22 @@ export async function sendMenteeAssignedEmail({
   const M = (await emailDictionary(await assignedEmailLocale(locale, userId), orgId)).notifications.menteeAssignedEmail;
   const parts = assignedEmailParts(M, { self: mentorName, other: menteeName, selfKey: 'mentor', otherKey: 'mentee' });
   const home = notificationLink('MENTOR', 'dashboard', {}, { capabilities: await shellCapabilities(orgId) });
-  await sendEmail({
-    to,
-    userId,
-    category: 'mentee-assigned',
-    fromName: brand.name,
-    subject: parts.subject,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, parts.heading)}
-        ${parts.greeting}
-        ${parts.body}
-        ${ctaBlock(brand, `${base}${home}`, parts.cta)}
-      </div>
-    `,
+  await notifyEvent(userId, 'mentorship_request.menteeAssigned', { menteeName }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    email: {
+      category: 'mentee-assigned',
+      fromName: brand.name,
+      subject: parts.subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, parts.heading)}
+          ${parts.greeting}
+          ${parts.body}
+          ${ctaBlock(brand, `${base}${home}`, parts.cta)}
+        </div>
+      `,
+    },
   });
 }
 
@@ -3076,7 +3076,6 @@ export async function sendMenteeAssignedEmail({
 // (User.openToOffers) — the caller checks that and the opt-out chain; the
 // footer says why the mail came and where to switch it off.
 export async function sendMentorOfferEmail({
-  to,
   menteeName,
   mentorName,
   message,
@@ -3085,7 +3084,6 @@ export async function sendMentorOfferEmail({
   userId,
   locale,
 }: {
-  to: string;
   menteeName: string;
   mentorName: string;
   message?: string | null;
@@ -3098,23 +3096,24 @@ export async function sendMentorOfferEmail({
   const base = await appUrlForRecipient(orgId, userId);
   const M = (await emailDictionary(await assignedEmailLocale(locale, userId), orgId)).notifications.mentorOfferEmail;
   const fill = (t: string) => t.replace('{mentorName}', mentorName).replace('{name}', menteeName);
-  await sendEmail({
-    to,
-    userId,
-    orgId,
-    category: 'mentor-offer',
-    fromName: brand.name,
-    subject: fill(kind === 'new' ? M.newSubject : M.reminderSubject),
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, M.heading)}
-        <p>${esc(fill(M.greeting))}</p>
-        <p>${esc(fill(kind === 'new' ? M.newBody : M.reminderBody))}</p>
-        ${kind === 'new' && message ? `<p><strong>${esc(M.messageLabel)}</strong><br>${esc(message).replace(/\n/g, '<br>')}</p>` : ''}
-        ${ctaBlock(brand, `${base}/portal`, M.cta)}
-        <p style="color:#6b7280;font-size:12px">${esc(M.why)}</p>
-      </div>
-    `,
+  await notifyEvent(userId, 'mentor_offer.new', { mentorName }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    email: {
+      category: 'mentor-offer',
+      fromName: brand.name,
+      subject: fill(kind === 'new' ? M.newSubject : M.reminderSubject),
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, M.heading)}
+          <p>${esc(fill(M.greeting))}</p>
+          <p>${esc(fill(kind === 'new' ? M.newBody : M.reminderBody))}</p>
+          ${kind === 'new' && message ? `<p><strong>${esc(M.messageLabel)}</strong><br>${esc(message).replace(/\n/g, '<br>')}</p>` : ''}
+          ${ctaBlock(brand, `${base}/portal`, M.cta)}
+          <p style="color:#6b7280;font-size:12px">${esc(M.why)}</p>
+        </div>
+      `,
+    },
   });
 }
 
@@ -3123,7 +3122,6 @@ export async function sendMentorOfferEmail({
 // relation's stamp. The mentor's copy carries the signed one-click "extend by
 // the original length" link; the mentee cannot extend, so theirs does not.
 export async function sendRelationEndingEmail({
-  to,
   userId,
   orgId,
   locale,
@@ -3134,7 +3132,6 @@ export async function sendRelationEndingEmail({
   bookPath,
   extend,
 }: {
-  to: string;
   userId: string;
   orgId?: string | null;
   locale?: string | null;
@@ -3155,43 +3152,42 @@ export async function sendRelationEndingEmail({
   const date = formatInTimeZone(new Date(`${endDay}T00:00:00Z`), 'UTC', { dateStyle: 'long' }, intlLocaleFor(lang));
   const fill = (t: string) =>
     t.replace('{name}', otherName).replace('{recipient}', recipientName).replace('{date}', date).replace('{months}', String(extend?.months ?? ''));
-  await sendEmail({
-    to,
-    userId,
-    orgId,
-    category: 'relation-ending',
-    // One per recipient per end date, even if the sweep is retried.
+  await notifyEvent(userId, 'mentorship.ending_soon', { name: otherName, date: endDay, relationId }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
     dedupeKey: dedupeKeyFor({ kind: 'relation-ending', relationId, userId, endDay }),
-    fromName: brand.name,
-    subject: fill(M.subject),
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, M.heading)}
-        <p>${esc(fill(M.greeting))}</p>
-        <p>${esc(fill(M.body))}</p>
-        ${ctaBlock(brand, `${base}${bookPath}`, M.bookCta)}
-        ${extend ? `<p>${esc(fill(M.extendHint))}</p>${ctaBlock(brand, extendRelationUrl(relationId, userId, endDay, base), fill(M.extendCta))}` : ''}
-        <p style="color:#6b7280;font-size:12px">${esc(M.why)}</p>
-      </div>
-    `,
+    email: {
+      category: 'relation-ending',
+      // One per recipient per end date, even if the sweep is retried.
+      fromName: brand.name,
+      subject: fill(M.subject),
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, M.heading)}
+          <p>${esc(fill(M.greeting))}</p>
+          <p>${esc(fill(M.body))}</p>
+          ${ctaBlock(brand, `${base}${bookPath}`, M.bookCta)}
+          ${extend ? `<p>${esc(fill(M.extendHint))}</p>${ctaBlock(brand, extendRelationUrl(relationId, userId, endDay, base), fill(M.extendCta))}` : ''}
+          <p style="color:#6b7280;font-size:12px">${esc(M.why)}</p>
+        </div>
+      `,
+    },
   });
 }
 
 // An admin wiring up a mentorship directly (no prior mentee request, #668) —
 // the mentee never asked, so the request-approval copy would not fit.
 export async function sendMentorAssignedEmail({
-  to,
   menteeName,
   mentorName,
   orgId,
   userId,
   locale,
 }: {
-  to: string;
   menteeName?: string | null;
   mentorName: string;
   orgId?: string | null;
-  userId?: string | null;
+  userId: string;
   locale?: string | null;
 }) {
   const brand = await emailBrand(orgId);
@@ -3204,25 +3200,26 @@ export async function sendMentorAssignedEmail({
   // role-neutral place their contact person can be reached.
   const capabilities = await shellCapabilities(orgId);
   const home = capabilities.includes('mentorship') ? '/portal' : '/messages';
-  await sendEmail({
-    to,
-    userId,
-    category: 'mentor-assigned',
-    fromName: brand.name,
-    subject: parts.subject,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, parts.heading)}
-        ${parts.greeting}
-        ${parts.body}
-        ${ctaBlock(brand, `${base}${home}`, parts.cta)}
-      </div>
-    `,
+  await notifyEvent(userId, 'mentorship_request.mentorAssigned', { mentorName }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    email: {
+      category: 'mentor-assigned',
+      fromName: brand.name,
+      subject: parts.subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, parts.heading)}
+          ${parts.greeting}
+          ${parts.body}
+          ${ctaBlock(brand, `${base}${home}`, parts.cta)}
+        </div>
+      `,
+    },
   });
 }
 
 export async function sendMentorshipRequestEmail({
-  to,
   adminName,
   menteeName,
   targetPosition,
@@ -3230,32 +3227,33 @@ export async function sendMentorshipRequestEmail({
   orgId,
   userId,
 }: {
-  to: string;
   adminName?: string | null;
   menteeName: string;
   targetPosition?: string | null;
   message?: string | null;
   orgId?: string | null;
-  userId?: string | null;
+  userId: string;
 }) {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
-  await sendEmail({
-    to,
-    userId,
-    category: 'mentorship-request',
-    fromName: brand.name,
-    subject: `New mentorship request: ${menteeName}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, 'New mentorship request')}
-        ${adminName ? `<p>Hi ${esc(adminName)},</p>` : ''}
-        <p><strong>${esc(menteeName)}</strong> asked to be matched with a mentor${targetPosition ? ` (target position: ${esc(targetPosition)})` : ''}.</p>
-        ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message)}</blockquote>` : ''}
-        ${ctaBlock(brand, `${base}/admin/mentorship`, 'Review the request')}
-      </div>
-    `,
+  await notifyEvent(userId, 'mentorship_request.new', { from: menteeName }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    email: {
+      category: 'mentorship-request',
+      fromName: brand.name,
+      subject: `New mentorship request: ${menteeName}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, 'New mentorship request')}
+          ${adminName ? `<p>Hi ${esc(adminName)},</p>` : ''}
+          <p><strong>${esc(menteeName)}</strong> asked to be matched with a mentor${targetPosition ? ` (target position: ${esc(targetPosition)})` : ''}.</p>
+          ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message)}</blockquote>` : ''}
+          ${ctaBlock(brand, `${base}/admin/mentorship`, 'Review the request')}
+        </div>
+      `,
+    },
   });
 }
 
@@ -3269,82 +3267,82 @@ export async function sendMentorshipRequestEmail({
 // by the person it is about.
 
 export async function sendRematchRequestedEmail({
-  to,
   adminName,
   menteeName,
   orgId,
   locale,
   userId,
 }: {
-  to: string;
   adminName?: string | null;
   menteeName: string;
   orgId?: string | null;
   /** The admin's User.preferredLanguage. */
   locale?: string | null;
-  userId?: string | null;
+  userId: string;
 }) {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const resolved = resolveLocale(locale);
   const R = (await emailDictionary(resolved, orgId)).notifications.rematchRequestedEmail;
-  await sendEmail({
-    to,
-    userId,
-    category: 'mentorship-request',
-    locale: resolved,
-    fromName: brand.name,
-    subject: R.subject.replace('{name}', menteeName),
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, esc(R.heading))}
-        ${adminName ? `<p>${esc(R.greeting.replace('{name}', adminName))}</p>` : ''}
-        <p>${esc(R.body.replace('{name}', menteeName))}</p>
-        <p style="color:#6b7280;font-size:14px;">${esc(R.privacy)}</p>
-        ${ctaBlock(brand, `${base}/admin/mentorship`, esc(R.cta))}
-      </div>
-    `,
+  await notifyEvent(userId, 'mentorship_request.rematch', { from: menteeName }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    email: {
+      category: 'mentorship-request',
+      locale: resolved,
+      fromName: brand.name,
+      subject: R.subject.replace('{name}', menteeName),
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, esc(R.heading))}
+          ${adminName ? `<p>${esc(R.greeting.replace('{name}', adminName))}</p>` : ''}
+          <p>${esc(R.body.replace('{name}', menteeName))}</p>
+          <p style="color:#6b7280;font-size:14px;">${esc(R.privacy)}</p>
+          ${ctaBlock(brand, `${base}/admin/mentorship`, esc(R.cta))}
+        </div>
+      `,
+    },
   });
 }
 
 export async function sendRematchMentorNoticeEmail({
-  to,
   mentorName,
   menteeName,
   orgId,
   locale,
   userId,
 }: {
-  to: string;
   mentorName?: string | null;
   menteeName: string;
   orgId?: string | null;
   /** The outgoing mentor's User.preferredLanguage. */
   locale?: string | null;
-  userId?: string | null;
+  userId: string;
 }) {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const resolved = resolveLocale(locale);
   const R = (await emailDictionary(resolved, orgId)).notifications.rematchMentorEmail;
-  await sendEmail({
-    to,
-    userId,
-    category: 'mentorship-decision',
-    locale: resolved,
-    fromName: brand.name,
-    subject: R.subject.replace('{name}', menteeName),
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, esc(R.heading))}
-        ${mentorName ? `<p>${esc(R.greeting.replace('{name}', mentorName))}</p>` : ''}
-        <p>${esc(R.body.replace('{name}', menteeName))}</p>
-        <p>${esc(R.thanks)}</p>
-        ${ctaBlock(brand, `${base}/mentor`, esc(R.cta))}
-      </div>
-    `,
+  await notifyEvent(userId, 'mentorship_request.rematchMentorNotice', { menteeName }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    email: {
+      category: 'mentorship-decision',
+      locale: resolved,
+      fromName: brand.name,
+      subject: R.subject.replace('{name}', menteeName),
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, esc(R.heading))}
+          ${mentorName ? `<p>${esc(R.greeting.replace('{name}', mentorName))}</p>` : ''}
+          <p>${esc(R.body.replace('{name}', menteeName))}</p>
+          <p>${esc(R.thanks)}</p>
+          ${ctaBlock(brand, `${base}/mentor`, esc(R.cta))}
+        </div>
+      `,
+    },
   });
 }
 

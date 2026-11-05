@@ -26,8 +26,12 @@ export async function GET() {
       select: { logoUrl: true, description: true, industry: true, size: true, verificationStatus: true, rejectionReason: true, signupDomain: true },
     });
     if (!company) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const requisitionCount = await prisma.requisition.count({ where: { orgId, companyId } });
-    const checklist = onboardingChecklist({ ...company, requisitionCount });
+    const [requisitionCount, users, invitations] = await Promise.all([
+      prisma.requisition.count({ where: { orgId, companyId } }),
+      prisma.user.count({ where: { orgId, companyId, role: 'COMPANY', isActive: true } }),
+      prisma.invitationToken.count({ where: { companyId, role: 'COMPANY', used: false, revokedAt: null, expiresAt: { gt: new Date() } } }),
+    ]);
+    const checklist = onboardingChecklist({ ...company, requisitionCount, seatCount: users + invitations });
     const proofOpen = company.verificationStatus === 'PENDING' && !!company.signupDomain;
     return NextResponse.json({
       verificationStatus: company.verificationStatus,

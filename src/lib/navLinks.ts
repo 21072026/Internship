@@ -315,6 +315,8 @@ export const AFFILIATE_NAV_LINKS: NavLink[] = [
   { href: '/affiliate/commissions', icon: Receipt, key: 'affiliateCommissions', capability: 'affiliate' },
   { href: '/affiliate/payouts', icon: Wallet, key: 'affiliatePayouts', capability: 'affiliate' },
   { href: '/affiliate/payout-details', icon: Lock, key: 'affiliatePayoutDetails', capability: 'affiliate' },
+  // Questions about a row (#3353) go to the ordinary support channel, kept inside the portal.
+  { href: '/affiliate/support', icon: LifeBuoy, key: 'affiliateSupport', capability: 'affiliate' },
   { href: '/affiliate/contract', icon: FileSignature, key: 'affiliateContract', capability: 'affiliate' },
 ];
 

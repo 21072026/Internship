@@ -21,6 +21,7 @@
 // Scheduled as the queued job `surveys.campaigns` (src/jobs/platform.ts,
 // #1677); the sweep is a plain exported function.
 
+import { offerSurveyInChat } from '@/lib/chat/surveyInChat';
 import type { MentorshipRelation, SurveyAudience, SurveyCampaign, User } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -257,6 +258,8 @@ async function sendInvite(user: Person, campaign: SurveyCampaign, token: string,
         <p style="font-size:12px;color:#6b7280;">${esc(expires)}</p>
       </div>`,
   }).catch((error) => logger.error('Survey invite failed', { campaignId: campaign.id, userId: user.id, error: String(error) }));
+  // …and the same invitation on chat, for a person who linked it (#1953).
+  await offerSurveyInChat(user.id, invitationId, url);
 }
 
 // ── Scheduling ───────────────────────────────────────────────────────────────

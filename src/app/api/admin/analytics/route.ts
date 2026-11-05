@@ -20,9 +20,13 @@ import { resolveProgramFilter } from '@/lib/programFilter';
 // one programme (#1652) — free on every plan; another org's id is a 404
 // (src/lib/programFilter.ts).
 export async function GET(request: Request) {
-  const gate = await requirePermission('analytics.read', { request });
+  // A list read (#1577): a PROGRAM_ADMIN with grants passes and every number
+  // is computed over them (loadAdminAnalytics `scope`); other tiers get
+  // `grants` undefined and read their whole org. The other analytics routes
+  // still refuse a PROGRAM_ADMIN.
+  const gate = await requirePermission('analytics.read', { request, listing: true });
   if ('error' in gate) return gate.error;
-  const { session } = gate;
+  const { session, grants } = gate;
 
   const locale = await getLocale();
   const { searchParams } = new URL(request.url);
@@ -30,7 +34,7 @@ export async function GET(request: Request) {
     const program = await resolveProgramFilter(searchParams.get('program'), await tenantWhere(session));
     if ('error' in program) return program.error;
     return NextResponse.json(
-      await loadAdminAnalytics(session, { from: searchParams.get('from'), to: searchParams.get('to'), program: program.filter }, locale),
+      await loadAdminAnalytics(session, { from: searchParams.get('from'), to: searchParams.get('to'), program: program.filter, scope: grants }, locale),
     );
   });
 }

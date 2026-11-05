@@ -22,6 +22,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { locales } from '@/i18n/config';
 import { useVertical } from '@/lib/verticalClient';
 import { verticalHasCapability } from '@/lib/verticals';
+import { PersonPicker, type PickedPerson } from '@/components/ui/PersonPicker';
 
 const inviteSchema = z.object({
   // Optional since #670: an empty address mints a shareable link instead of
@@ -115,10 +116,12 @@ export default function InvitePage() {
   const [mentors, setMentors] = useState<
     { id: string; fullName: string; mentorCapacity: number | null; activeMenteeCount: number; availability: MentorAvailability }[]
   >([]);
-  const [mentees, setMentees] = useState<{ id: string; fullName: string }[]>([]);
+  // The mentee to pre-link is searched on the server (#1437); this is the pick.
+  const [pickedMentee, setPickedMentee] = useState<PickedPerson | null>(null);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => {
-    fetch('/api/users?view=mentorAvailability')
+    // Mentors only (#1437) — the mentee side is a server-side search.
+    fetch('/api/users?view=mentorAvailability&roles=ADMIN,MENTOR')
       .then((r) => (r.ok ? r.json() : { users: [] }))
       .then((d) => {
         const users = (d.users ?? []) as {
@@ -140,7 +143,6 @@ export default function InvitePage() {
               availability: u.availability,
             }))
         );
-        setMentees(users.filter((u) => u.role === 'MENTEE').map((u) => ({ id: u.id, fullName: u.fullName })));
       })
       .catch(() => {});
     // Projects are an internship module: a vertical without it (MARKETING) has
@@ -232,6 +234,7 @@ export default function InvitePage() {
       if (body.invitationId && body.registerUrl) setLinks((p) => ({ ...p, [body.invitationId]: body.registerUrl }));
       await loadInvites();
       reset({ role: 'MENTEE', locale });
+      setPickedMentee(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -360,10 +363,16 @@ export default function InvitePage() {
               />
             )}
             {watchedRole === 'MENTOR' && (
-              <Select
+              <PersonPicker
                 label={t.invite.connectMentee}
-                options={[{ value: '', label: '—' }, ...mentees.map((m) => ({ value: m.id, label: m.fullName }))]}
-                {...register('menteeId')}
+                testId="invite-connect-mentee"
+                roles={['MENTEE']}
+                value={watch('menteeId') ?? ''}
+                selectedName={pickedMentee?.fullName}
+                onChange={(m) => {
+                  setPickedMentee(m);
+                  setValue('menteeId', m?.id ?? '');
+                }}
               />
             )}
             {watchedRole !== 'ADMIN' && hasProjects && (

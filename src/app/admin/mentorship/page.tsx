@@ -15,6 +15,8 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { MentorshipRequestQueue } from '@/components/admin/MentorshipRequestQueue';
 import { GroupRelationDialog } from '@/components/admin/GroupRelationDialog';
 import { RelationParticipantsPanel } from '@/components/admin/RelationParticipantsPanel';
+import { PersonPicker, type PickedPerson } from '@/components/ui/PersonPicker';
+import { PICKER_ROLES } from '@/lib/userPickerQuery';
 import { Select } from '@/components/ui/Select';
 import { SavedViews } from '@/components/SavedViews';
 import { SkeletonRows } from '@/components/ui/Skeleton';
@@ -101,7 +103,8 @@ export default function MentorshipPage() {
   const [relations, setRelations] = useState<MentorshipRelation[]>([]);
   const [total, setTotal] = useState(0);
   const [mentors, setMentors] = useState<User[]>([]);
-  const [mentees, setMentees] = useState<User[]>([]);
+  // The mentee field searches the server (#1437); this is the one it picked.
+  const [pickedMentee, setPickedMentee] = useState<PickedPerson | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -167,19 +170,18 @@ export default function MentorshipPage() {
   const fetchPickers = async () => {
     try {
       const [usersRes, companiesRes] = await Promise.all([
-        fetch('/api/users?view=mentorAvailability'),
+        // The mentor pickers only (#1437): admins and mentors, a handful of
+        // rows. The mentee side is a server-side search — this used to download
+        // every user in the tenant, COMPANY/SOURCE included, to fill both lists.
+        fetch('/api/users?view=mentorAvailability&roles=ADMIN,MENTOR'),
         // `all=1`: the company picker offers every company, not one page (#2437).
         fetch('/api/companies?all=1'),
       ]);
       const [usersData, companiesData] = await Promise.all([usersRes.json(), companiesRes.json()]);
-      // Both pickers hold the same people (#1141): admins mentor, and a mentor
-      // can be mentored in turn. `sortForPicker` keeps each list's usual role
-      // first, so the common case still reads as "pick a mentor / pick a mentee".
-      const participants = (usersData.users || []).filter((u: User) =>
-        ['ADMIN', 'MENTOR', 'MENTEE'].includes(u.role)
-      );
-      setMentors(sortForPicker(participants, 'MENTOR'));
-      setMentees(sortForPicker(participants, 'MENTEE'));
+      // Admins mentor too (#1141); `sortForPicker` keeps mentors first. The
+      // mentee picker offers admins and mentors as well (a mentor can be
+      // mentored in turn), with mentees first — see the PersonPicker below.
+      setMentors(sortForPicker(usersData.users || [], 'MENTOR'));
       setCompanies(companiesData.companies || []);
     } catch {
       setError(t.mentorships.loadFailed);
@@ -268,6 +270,7 @@ export default function MentorshipPage() {
       await fetchRelations();
       setShowForm(false);
       setFormData({ mentorId: '', menteeId: '', companyId: '', durationMonths: '', cadenceWeeks: '' });
+      setPickedMentee(null);
     } catch {
       setFormError(t.mentorships.assignFailed);
     } finally {
@@ -386,9 +389,6 @@ export default function MentorshipPage() {
       value: m.id,
       label: `${m.fullName}${roleSuffix(m.role, 'MENTOR')} · ${formatMentorAvailability(m, t.mentorAvailability)}`,
     }));
-  const menteeOptions = mentees
-    .filter((m) => m.id !== formData.mentorId)
-    .map((m) => ({ value: m.id, label: m.fullName + roleSuffix(m.role, 'MENTEE') }));
   const companyOptions = [
     { value: '', label: t.mentorships.noCompany },
     ...companies.map((c) => ({ value: c.id, label: c.name })),
@@ -431,7 +431,7 @@ export default function MentorshipPage() {
           <p className="text-gray-500 mt-1">{t.mentorships.subtitle}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-        <GroupRelationDialog mentors={mentors} mentees={mentees} onCreated={fetchRelations} />
+        <GroupRelationDialog mentors={mentors} onCreated={fetchRelations} />
         <Button
           onClick={() => {
             // A stale refusal from the last attempt must not greet the next one.
@@ -503,8 +503,7 @@ export default function MentorshipPage() {
                       {
                         relationId: assignBlocked.relationId,
                         menteeId: formData.menteeId || null,
-                        menteeName:
-                          mentees.find((m) => m.id === formData.menteeId)?.fullName ?? t.mentorships.mentee,
+                        menteeName: pickedMentee?.fullName ?? t.mentorships.mentee,
                         // Unknown from a 409 body — see TransferTarget. The
                         // picker therefore cannot pre-drop the current mentor,
                         // and the server answers `same_mentor` if they are picked.
@@ -530,13 +529,21 @@ export default function MentorshipPage() {
                 value={formData.mentorId}
                 onChange={(e) => setFormData((p) => ({ ...p, mentorId: e.target.value }))}
               />
-              <Select
+              <PersonPicker
                 label={t.mentorships.mentee}
+                testId="assign-mentee"
                 required
-                options={menteeOptions}
+                roles={PICKER_ROLES}
+                preferRole="MENTEE"
                 placeholder={t.mentorships.selectMentee}
                 value={formData.menteeId}
-                onChange={(e) => setFormData((p) => ({ ...p, menteeId: e.target.value }))}
+                selectedName={pickedMentee?.fullName}
+                excludeIds={formData.mentorId ? [formData.mentorId] : []}
+                describe={(m) => roleSuffix(m.role, 'MENTEE')}
+                onChange={(m) => {
+                  setPickedMentee(m);
+                  setFormData((p) => ({ ...p, menteeId: m?.id ?? '' }));
+                }}
               />
               <Select
                 label={t.mentorships.companyOptional}
@@ -769,7 +776,6 @@ export default function MentorshipPage() {
                     <RelationParticipantsPanel
                       relationId={rel.id}
                       active={rel.status === 'ACTIVE'}
-                      candidates={[...mentees, ...mentors.filter((m) => !mentees.some((x) => x.id === m.id))]}
                     />
                   )}
                 </div>

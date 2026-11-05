@@ -101,6 +101,35 @@ both go through `decideInterviewRequest()`, the route's own body, and Decline
 first asks for one of `INTERVIEW_DECLINE_REASON_CODES` (`…decline.reason`, value
 `<id>|<code>`) because the company sees the reason. A decided card is replaced.
 
+**Check-ins in chat** (#1953): a survey campaign's invitation is also offered
+as a chat card (`survey.invited`, chat only, under the `surveys` opt-out group;
+the mail still goes). **Answer now** (`survey.start`, value = the invitation id)
+asks the questions one at a time as buttons — SELECT (≤ 11 options), BOOLEAN,
+SCALE, NPS — and an optional question gets Skip. Nothing is stored until the
+last click: the answers so far ride in the next button's value
+(`src/lib/chat/surveyFlow.ts`, `<invitationId>|<next>|<base64url JSON>`) and the
+last click hands the whole response to `submitSurveyResponse()` — the engine's
+own validation, invitation claim and ANONYMOUS rule (no invitation, respondent
+or relation stored), so a reminder after it is refused as `responded` and a
+replayed last click is "already answered". Only the invitation's own person can
+answer it. A survey with any free-text, number, date or multi-select question
+is not answered in chat: the card links to the survey page.
+
+**Notes from the post-meeting card** (#1953): when a relation meeting that took
+place is auto-logged with the placeholder note (`src/lib/meetingAutoLog.ts`,
+either path — the end click or the sweep), its mentor gets one chat card
+(`meeting.logPrompt`, chat only, `task_reminders` group; none when the pair's
+minutes already filled the log). **Add notes** (`interaction.note`, value = the
+log row's id) answers with a text field — Slack: an `input` block that
+dispatches on Enter, the row id as its `block_id`; Teams: an `Input.Text` and a
+Save `Action.Execute` — and the typed note (`interaction.note.save`, the
+envelope's `input`) replaces that row's notes through `updateInteraction()`
+after `interactionAccess()`, the same body and rule as `PUT
+/api/interactions/[id]`. The session's log is the meeting's log: chat never
+writes a second row. Type stays `Meeting` and there is no duration — the
+InteractionLog the app writes has no duration column, and a field only chat
+could fill would make the two shapes differ.
+
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the
 store-submission burden and the commercial decision are the parts that get lost

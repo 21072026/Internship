@@ -7,6 +7,9 @@ import { Select } from '@/components/ui/Select';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 import { GROUP_MAX_MENTEES } from '@/lib/relationShapes';
 import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
+import { usePeopleSearch } from '@/components/ui/PersonPicker';
+import { fillTemplate } from '@/components/ui/fillTemplate';
+import { PICKER_MAX_LIMIT, PICKER_ROLES } from '@/lib/userPickerQuery';
 
 interface Person {
   id: string;
@@ -18,19 +21,28 @@ interface Person {
  * decides every refusal (bench, eligibility, one active mentor); this only
  * collects the choice and shows the code it answers with.
  */
-export function GroupRelationDialog({ mentors, mentees, onCreated }: { mentors: Person[]; mentees: Person[]; onCreated: () => void }) {
+export function GroupRelationDialog({ mentors, onCreated }: { mentors: Person[]; onCreated: () => void }) {
   const t = useT();
   const g = t.relationGroups;
   const [open, setOpen] = useState(false);
   const [mentorId, setMentorId] = useState('');
-  const [picked, setPicked] = useState<string[]>([]);
+  // Picked people by id, with their names: a pick stays listed (and nameable in
+  // a refusal) after the search moves on to other people.
+  const [picked, setPicked] = useState<Person[]>([]);
   const [filter, setFilter] = useState('');
+  // The mentee list is searched on the server, one bounded page at a time
+  // (#1437) — the dialog used to be handed the tenant's whole user list.
+  const found = usePeopleSearch(filter, { roles: PICKER_ROLES, limit: PICKER_MAX_LIMIT, enabled: open });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const ref = useModalFocus<HTMLDivElement>(open, () => setOpen(false));
 
-  const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
-  const shown = mentees.filter((m) => m.id !== mentorId && m.fullName.toLowerCase().includes(filter.trim().toLowerCase()));
+  const isPicked = (id: string) => picked.some((p) => p.id === id);
+  const toggle = (person: Person) =>
+    setPicked((p) => (p.some((x) => x.id === person.id) ? p.filter((x) => x.id !== person.id) : [...p, { id: person.id, fullName: person.fullName }]));
+  const shown = found.people.filter((m) => m.id !== mentorId && !isPicked(m.id));
+  // Picks first, then the page of matches that are not picked yet.
+  const rows: Person[] = [...picked.filter((p) => p.id !== mentorId), ...shown];
   // A screen reader hears how many mentees the filter left (WCAG 4.1.3).
   useFilterAnnouncement(open && filter.trim() !== '' ? resultCountMessage(t.a11y, shown.length) : null);
 
@@ -45,11 +57,11 @@ export function GroupRelationDialog({ mentors, mentees, onCreated }: { mentors: 
       const res = await fetch('/api/admin/relations/group', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mentorId, menteeIds: picked }),
+        body: JSON.stringify({ mentorId, menteeIds: picked.map((p) => p.id) }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        const name = mentees.find((m) => m.id === body.menteeId || m.id === body.userId)?.fullName;
+        const name = picked.find((m) => m.id === body.menteeId || m.id === body.userId)?.fullName;
         const msg = (g.errors as Record<string, string>)[body.code] ?? g.errors.failed;
         setError(name ? `${name}: ${msg}` : msg);
         return;
@@ -103,13 +115,18 @@ export function GroupRelationDialog({ mentors, mentees, onCreated }: { mentors: 
                 className="w-full mb-2 rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
               <div className="max-h-56 overflow-y-auto space-y-1 border border-gray-200 rounded-lg p-2">
-                {shown.map((m) => (
+                {rows.map((m) => (
                   <label key={m.id} className="flex items-center gap-2 text-sm text-gray-800">
-                    <input type="checkbox" data-testid={`group-mentee-${m.id}`} checked={picked.includes(m.id)} onChange={() => toggle(m.id)} disabled={!picked.includes(m.id) && picked.length >= GROUP_MAX_MENTEES} />
+                    <input type="checkbox" data-testid={`group-mentee-${m.id}`} checked={isPicked(m.id)} onChange={() => toggle(m)} disabled={!isPicked(m.id) && picked.length >= GROUP_MAX_MENTEES} />
                     {m.fullName}
                   </label>
                 ))}
               </div>
+              {found.total > found.people.length && (
+                <p className="mt-1 text-xs text-gray-500" data-testid="group-mentee-more">
+                  {fillTemplate(t.personPicker.more, { shown: String(found.people.length), total: String(found.total) })}
+                </p>
+              )}
             </fieldset>
             <div className="flex justify-end gap-3 mt-6">
               <Button variant="outline" onClick={() => setOpen(false)}>{t.common.cancel}</Button>
