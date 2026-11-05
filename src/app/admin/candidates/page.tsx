@@ -24,6 +24,7 @@ import { clipSkillLabel } from '@/lib/skills';
 import { useAnalyticsEntitlements } from '@/lib/analyticsEntitlementsClient';
 import { shownEmail } from '@/lib/leadEmail';
 import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
+import { UNASSIGNED_FILTER, isUnassignedFilter } from '@/lib/unassignedCandidates';
 
 interface Candidate {
   id: string;
@@ -336,7 +337,7 @@ export default function CandidatesPage() {
         <p className="text-gray-500 mt-1">{t.candidates.subtitle}</p>
         {statusFilter && (
           <div data-testid="candidates-status-filter-chip" className="mt-3 inline-flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-full px-3 py-1 text-sm text-blue-700">
-            {label(statusFilter)}
+            {isUnassignedFilter(statusFilter) ? t.candidates.unassigned : label(statusFilter)}
             <button
               type="button"
               onClick={() => {
@@ -447,7 +448,13 @@ export default function CandidatesPage() {
           <Select
             data-testid="candidates-stage-filter"
             aria-label={t.candidates.allStages}
-            options={[{ value: '', label: t.candidates.allStages }, ...stages.map((s) => ({ value: s.key, label: s.label }))]}
+            // "Unassigned" (#1440) sits right after "all stages": it is the
+            // admin's queue — no ACTIVE relation, oldest registration first.
+            options={[
+              { value: '', label: t.candidates.allStages },
+              { value: UNASSIGNED_FILTER, label: t.candidates.unassigned },
+              ...stages.map((s) => ({ value: s.key, label: s.label })),
+            ]}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           />
