@@ -9,6 +9,7 @@ import { mailQueueNotice } from '@/lib/mailOutbox';
 import { enqueue } from '@/lib/jobs/queue';
 import { isValidAudienceInput, parseAudience } from '@/lib/announcementAudience';
 import { announcementMailRecipients, announcementRecipients, deliverAnnouncement } from '@/lib/announcementSend';
+import { announcementReach } from '@/lib/announcementReach';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -151,30 +152,20 @@ async function handleGet(request: Request) {
 
   // Read tracking (#1721): an aggregate over the bell rows each broadcast
   // already wrote (`Notification.read`, keyed by announcementId) — no new
-  // mechanism. Delivered = rows written; read = rows the reader opened.
-  const ids = announcements.map((a) => a.id);
-  const counts = ids.length
-    ? await prisma.notification.groupBy({
-        by: ['announcementId', 'read'],
-        where: { announcementId: { in: ids } },
-        _count: { _all: true },
-      })
-    : [];
-  const stats = new Map<string, { delivered: number; read: number }>();
-  for (const c of counts) {
-    if (!c.announcementId) continue;
-    const s = stats.get(c.announcementId) ?? { delivered: 0, read: 0 };
-    s.delivered += c._count._all;
-    if (c.read) s.read += c._count._all;
-    stats.set(c.announcementId, s);
-  }
+  // mechanism. Delivered = rows written; read = rows the reader opened. Since
+  // #1921 the read count is withheld below the privacy floor and for an
+  // announcement the retention sweep has already thinned
+  // (src/lib/announcementReachRule.ts); `readWithheld` says which.
+  const reach = await announcementReach(announcements, resolveOrgId(session));
 
   return NextResponse.json({
     announcements: announcements.map(({ image, ...a }) => ({
       ...a,
       audience: parseAudience(a.audience),
-      delivered: stats.get(a.id)?.delivered ?? 0,
-      read: stats.get(a.id)?.read ?? 0,
+      delivered: reach.get(a.id)?.delivered ?? 0,
+      read: reach.get(a.id)?.read ?? null,
+      readRate: reach.get(a.id)?.rate ?? null,
+      readWithheld: reach.get(a.id)?.withheld ?? null,
       // Normalized rather than passed through raw: the edit form binds one box
       // per language and should never be handed an unexpected key (#1163).
       translations: normalizeAnnouncementTranslations(a.translations),

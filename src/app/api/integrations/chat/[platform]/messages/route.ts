@@ -5,7 +5,7 @@ import { verifyBotFrameworkRequest } from '@/lib/chat/botFrameworkAuth';
 import { markChatWorkspaceRemovedByPlatform } from '@/lib/chat/workspaces';
 import { withRequestScope } from '@/lib/requestContext';
 import { isTeamsInteraction } from '@/lib/chat/interactions';
-import { teamsVerifiedInteraction } from '@/lib/chat/interactions/http';
+import { teamsVerifiedCommand, teamsVerifiedInteraction } from '@/lib/chat/interactions/http';
 
 // POST — the Teams bot's messaging endpoint (#3322). The Bot Framework posts
 // every activity here, authenticated by its signed JWT, never by a session
@@ -13,7 +13,8 @@ import { teamsVerifiedInteraction } from '@/lib/chat/interactions/http';
 // and the activity's own serviceUrl). Anything that does not verify is a bare
 // 401 and changes nothing.
 //
-// One activity has an effect today: `installationUpdate` with action
+// Two activities have an effect: a `message` typed to the bot is a command
+// (#1956, src/lib/chat/commands.ts), and `installationUpdate` with action
 // `remove` — the tenant removed the app — switches that tenant's workspace off
 // and clears its tokens (markChatWorkspaceRemovedByPlatform, audited as
 // CHAT_PLATFORM_UNINSTALL), so nothing keeps sending to a bot that is gone.
@@ -49,6 +50,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
 
     // A Universal Action (a card button, #1948) goes to the one dispatcher.
     if (isTeamsInteraction(activity)) return teamsVerifiedInteraction(activity);
+    // A command typed to the bot (#1956) goes to the same dispatcher.
+    if (activity.type === 'message') return teamsVerifiedCommand(activity);
 
     if (activity.type === 'installationUpdate' && activity.action === 'remove') {
       const tenant = activity.channelData?.tenant?.id ?? activity.conversation?.tenantId;

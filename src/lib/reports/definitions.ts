@@ -189,6 +189,26 @@ export const REPORT_DEFINITIONS: readonly ReportDefinition[] = [
       { key: 'activation', labelKey: 'col.activation', type: 'percent' },
     ],
   },
+  // Announcement reach (#1921): one row per sent announcement, newest first —
+  // recipients, e-mailed, and read in the app. Row-level: a row is an
+  // announcement, not a group of people. The read count is withheld (empty)
+  // below the floor and once the retention sweep has thinned the bell rows;
+  // the rule is src/lib/announcementReachRule.ts, the same the history shows.
+  {
+    key: 'announcement-reach',
+    titleKey: 'announcementReach.title',
+    descriptionKey: 'announcementReach.description',
+    aggregate: false,
+    columns: [
+      { key: 'sentAt', labelKey: 'col.sentAt', type: 'date' },
+      { key: 'announcement', labelKey: 'col.announcement', type: 'string' },
+      { key: 'audience', labelKey: 'col.audience', type: 'string' },
+      { key: 'recipients', labelKey: 'col.recipients', type: 'number' },
+      { key: 'emailed', labelKey: 'col.emailed', type: 'number' },
+      { key: 'read', labelKey: 'col.read', type: 'number' },
+      { key: 'readRate', labelKey: 'col.readRate', type: 'percent' },
+    ],
+  },
 ];
 
 export function getReportDefinition(key: string): ReportDefinition | null {
