@@ -4266,6 +4266,14 @@ const en = {
     reactionRemovedBody: 'You had already reacted with this emoji, so it has been taken off again.',
     openMessages: 'Open messages',
   },
+  embed: {
+    signedInTitle: 'You’re signed in',
+    signedInAs: 'Signed in as {name}.',
+    openApp: 'Open the app',
+    linkTitle: 'Link your account first',
+    linkBody: 'This tab signs you in with your Microsoft account once you have linked it to your account in the app. Open the app, go to your account page and confirm the link — then come back here.',
+    linkCta: 'Open my account page',
+  },
   rsvp: {
     notFound: 'This invitation could not be found.',
     addToCalendar: '📅 Add to calendar',
@@ -16175,6 +16183,14 @@ const tr: Dict = {
     reactionRemovedBody: 'Bu emojiyle zaten tepki vermiştin, o yüzden geri alındı.',
     openMessages: 'Mesajları aç',
   },
+  embed: {
+    signedInTitle: 'Oturum açık',
+    signedInAs: '{name} olarak oturum açtın.',
+    openApp: 'Uygulamayı aç',
+    linkTitle: 'Önce hesabını bağla',
+    linkBody: 'Bu sekme, Microsoft hesabını uygulamadaki hesabına bağladıktan sonra seni onunla oturum açtırır. Uygulamayı aç, hesap sayfana git ve bağlantıyı onayla — sonra buraya dön.',
+    linkCta: 'Hesap sayfamı aç',
+  },
   rsvp: {
     notFound: 'Bu davet bulunamadı.',
     addToCalendar: '📅 Takvime ekle',
@@ -27948,6 +27964,14 @@ const de: Dict = {
     reactionRemovedTitle: 'Reaktion entfernt',
     reactionRemovedBody: 'Du hattest bereits mit diesem Emoji reagiert, daher wurde es wieder entfernt.',
     openMessages: 'Nachrichten öffnen',
+  },
+  embed: {
+    signedInTitle: 'Du bist angemeldet',
+    signedInAs: 'Angemeldet als {name}.',
+    openApp: 'App öffnen',
+    linkTitle: 'Verknüpfe zuerst dein Konto',
+    linkBody: 'Dieser Tab meldet dich mit deinem Microsoft-Konto an, sobald du es in der App mit deinem Konto verknüpft hast. Öffne die App, geh zu deiner Kontoseite und bestätige die Verknüpfung – dann komm hierher zurück.',
+    linkCta: 'Meine Kontoseite öffnen',
   },
   rsvp: {
     notFound: 'Diese Einladung konnte nicht gefunden werden.',

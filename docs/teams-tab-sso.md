@@ -1,6 +1,19 @@
 # Teams tab and Teams SSO — design (#1954)
 
-**Status: design, awaiting approval. No code yet.**
+**Status: approved 2026-11-05 with decision B. Slice 1 (server side) is implemented: the token
+check, the grant, the embed session, the framing split and the security tests. Slice 2 is the
+Teams SDK hand-off in the tab and the role home rendered inside it.**
+
+What differs from the original design, and why:
+
+- **No NextAuth `chat` provider.** NextAuth's credentials callback needs its own CSRF cookie. That
+  cookie is `SameSite=Lax`, so it never reaches a cross-site Teams iframe. The grant is redeemed
+  instead by `POST /api/integrations/chat/teams/session` through `redeemChatLoginGrant()` in
+  `src/lib/auth.ts`, which applies the same checks in the same order as `magic`. The route then
+  hands the result to `authOptions.callbacks.jwt`, so claims are still decided in one place, and
+  writes the JWT into the embed cookie.
+- **`ChatLoginGrant` has no `orgId`.** It is user-keyed like `SsoLoginGrant` and `LoginLinkToken`:
+  an auth artefact read before any tenant context exists. So it is not in `TENANT_MODELS`.
 
 The goal is to render the app's own role home inside a Microsoft Teams tab, with a real session,
 **without weakening clickjacking protection on any other route** and **without opening a sign-in
@@ -133,7 +146,9 @@ written, carrying neither the token, its hash nor the grant.
 - `/embed` is a route group that renders the **existing** role-home components in a chrome-free
   layout: no global nav, no chat widget, and `data-app-chrome` hidden as in the native app. It has
   its own `<I18nScope scope="embed">`.
-- `next.config.js` `headers()` splits by source:
+- `next.config.js` `headers()` leaves the two framing headers off `/embed` only. The middleware
+  sets them per request: the Teams hosts while Teams SSO is configured, and `frame-ancestors
+  'none'` plus `DENY` while it is not. The originally planned static split was:
   - `/embed/:path*` sends `frame-ancestors` with exactly the Teams hosts and **no
     `X-Frame-Options`**: `https://teams.microsoft.com`, `https://*.teams.microsoft.com`,
     `https://*.cloud.microsoft` and `https://*.office.com`.
@@ -162,6 +177,25 @@ inside the tab would be invisible to the very next request from the tab. There a
 
 **Recommendation: B.** It is the only option that delivers the tab without touching the CSRF
 posture outside Teams, and the partitioned cookie cannot leak into a first-party browsing context.
+
+**Decided: B** (2026-11-05). As built, in `src/lib/embedSession.ts`:
+
+- **The cookie.** Its own name: `embed-session`, or `__Secure-embed-session` on https. It is set
+  `HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=28800`, and only by the `/session` route.
+- **NextAuth's own cookie keeps its name and `SameSite=Lax`.** A test signs in normally and
+  asserts this.
+- **Middleware.** It hands the embed cookie to the server as the session cookie, on the request
+  side only, and only when there is no real session cookie. It also marks the request with
+  `x-embed-session`; any inbound copy of that header is stripped first. Any Set-Cookie of
+  NextAuth's session cookie on a marked request is rewritten to the embed cookie by the
+  `[...nextauth]` route, so a refresh inside Teams never mints a first-party session.
+- **Eight hours, absolute.** The jwt callback stamps `embed` and `embedExpiresAt` and invalidates
+  the token after that, so there is no rolling.
+- **Revocation.** `sessionsValidFrom` ends an embed session like any other; a test shows this.
+- **No remembered device.** `POST /api/auth/remember` refuses an embed session.
+- **Writes.** Every write passes the middleware's `writeOriginVerdict` like any other session;
+  a test shows a cross-site write refused.
+- **Off.** Without `CHAT_APPS_ENABLED=1` and `TEAMS_SSO_CLIENT_ID`, every helper is a no-op.
 
 ## Security tests (@smoke)
 

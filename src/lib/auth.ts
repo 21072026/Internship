@@ -23,6 +23,8 @@ import { toVerticalKey } from '@/lib/verticals';
 import { spendGrant } from '@/lib/grantSpend';
 import { findLoginLink, spendLoginLink } from '@/lib/magicLink';
 import { isLoginLinkLive } from '@/lib/magicLinkToken';
+import { hashGrant } from '@/lib/chat/teamsSso';
+import { EMBED_SESSION_MAX_AGE_S } from '@/lib/embedSession';
 
 // Exactly the columns the sign-in path needs — nothing else.
 //
@@ -294,6 +296,70 @@ async function requireSecondFactor(
     });
     clearRateLimit(totpKey);
   }
+}
+
+/**
+ * Redeem a Teams tab grant (#1954, docs/teams-tab-sso.md) — the sign-in door
+ * for the embed session. Not a NextAuth provider on purpose: NextAuth's
+ * credentials callback needs its own CSRF cookie, which is `SameSite=Lax` and
+ * so never reaches a cross-site Teams iframe. The caller (POST
+ * /api/integrations/chat/teams/session) hands what this returns to the jwt
+ * callback, so a session's claims are still decided in ONE place.
+ *
+ * The same refusals as every other door, in the magic link's order: inactive /
+ * unverified / pending, enforced SSO, an archived tenant, the world of the host,
+ * and an enrolled second factor BEFORE the grant is spent (the first redemption
+ * of a 2FA account answers `2FA_REQUIRED` and leaves it unspent). The grant is
+ * spent last, by one conditional UPDATE. Nothing here logs the grant.
+ */
+export async function redeemChatLoginGrant(
+  raw: string,
+  totp: string | undefined,
+  req: { headers: Record<string, string>; host: string },
+) {
+  const grant = await prisma.chatLoginGrant.findUnique({ where: { tokenHash: hashGrant(raw) } });
+  if (!grant || grant.used || grant.expiresAt <= new Date() || grant.host !== req.host) throw new Error('Invalid or expired grant');
+  // The identity it was minted from must still be confirmed, in an enabled workspace.
+  const identity = await prisma.chatIdentity.findUnique({
+    where: { id: grant.identityId },
+    select: { userId: true, verifiedAt: true, workspace: { select: { enabled: true } } },
+  });
+  if (!identity?.verifiedAt || !identity.workspace.enabled || identity.userId !== grant.userId) throw new Error('Invalid or expired grant');
+
+  const user = await prisma.user.findUnique({ where: { id: grant.userId }, select: AUTH_USER_SELECT });
+  if (!user) throw new Error('Invalid or expired grant');
+  if (!user.isActive) {
+    if (!user.emailVerified) throw new Error('EMAIL_NOT_VERIFIED');
+    if (user.pendingApproval) throw new Error('ACCOUNT_PENDING_APPROVAL');
+    throw new Error('This account has been deactivated. Please contact an administrator.');
+  }
+  if (await isPasswordLoginBlocked(user)) throw new Error(AUTH_SSO_REQUIRED);
+  if (await tenantArchived(user.orgId)) throw new Error('Invalid or expired grant');
+  await assertAccountMatchesHost(user, req);
+
+  const origin = headerSource(req.headers);
+  if (user.twoFactorEnabled && user.twoFactorSecret) {
+    await requireSecondFactor(
+      { id: user.id, email: user.email, orgId: user.orgId, twoFactorSecret: user.twoFactorSecret, lastTotpStep: user.lastTotpStep },
+      totp,
+      { email: user.email.toLowerCase(), ip: clientIp(origin), origin },
+    );
+  }
+
+  const spent = await spendGrant((where) => prisma.chatLoginGrant.updateMany({ where, data: { used: true } }), grant.id);
+  if (!spent) throw new Error('Invalid or expired grant');
+
+  await logActivity({ action: 'auth.teams_sso_used', actorId: user.id, actorEmail: user.email, request: origin });
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.fullName,
+    role: user.role,
+    emailVerified: user.emailVerified,
+    companyId: user.companyId,
+    orgId: user.orgId,
+    adminLevel: user.adminLevel,
+  };
 }
 
 export const authOptions: NextAuthOptions = {
@@ -758,8 +824,14 @@ export const authOptions: NextAuthOptions = {
     }),
   ]),
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user, trigger, account }) {
       if (user) {
+        // The Teams tab's session (#1954): an absolute eight-hour life, no
+        // rolling, never a remembered device (src/lib/embedSession.ts).
+        if (account?.provider === 'chat') {
+          token.embed = true;
+          token.embedExpiresAt = Date.now() + EMBED_SESSION_MAX_AGE_S * 1000;
+        }
         token.id = user.id;
         token.role = (user as unknown as { role: string }).role;
         token.emailVerified = (user as unknown as { emailVerified: boolean }).emailVerified;
@@ -831,6 +903,10 @@ export const authOptions: NextAuthOptions = {
         }
       }
 
+      if (token.embed === true && (typeof token.embedExpiresAt !== 'number' || Date.now() > token.embedExpiresAt)) {
+        token.invalidated = true;
+      }
+
       // Global sign-out ("all devices"): reject any token minted before the
       // account's sessionsValidFrom cutoff. Runs per request — one indexed point
       // lookup — so a revocation on one device logs the others out on their next
@@ -886,6 +962,7 @@ export const authOptions: NextAuthOptions = {
         session.user.companyId = (token.companyId as string) ?? null;
         session.user.orgId = (token.orgId as string) ?? null;
         session.user.adminLevel = (token.adminLevel as string) ?? null;
+        session.user.embed = token.embed === true;
         if (token.email) session.user.email = token.email as string;
         if (token.name) session.user.name = token.name as string;
       }
@@ -950,6 +1027,8 @@ declare module 'next-auth' {
       orgId?: string | null;
       // User.adminLevel (#1567) for the UI; authorization reads it live.
       adminLevel?: string | null;
+      /** A Teams tab session (#1954): eight hours, never a remembered device. */
+      embed?: boolean;
     };
   }
 }

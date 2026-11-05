@@ -443,6 +443,10 @@ export default defineConfig({
           TEAMS_LOGIN_BASE: `http://127.0.0.1:${E2E_BOTFRAMEWORK_MOCK_PORT}`,
           GRAPH_API_BASE: `http://127.0.0.1:${E2E_BOTFRAMEWORK_MOCK_PORT}`,
           TEAMS_GRAPH_DIRECTORY_ENABLED: '1',
+          // The Teams tab sign-in (#1954): our Entra app id, and the stub's key set
+          // standing in for Entra's — so the tab's token is signed by the spec.
+          TEAMS_SSO_CLIENT_ID: 'e2e-teams-sso-client',
+          TEAMS_SSO_JWKS_URL: `http://127.0.0.1:${E2E_BOTFRAMEWORK_MOCK_PORT}/keys`,
           // Bug-report session replay (#3131): off by default in a production
           // build, which is what the e2e server is — the replay spec needs it on.
           FEEDBACK_REPLAY_ENABLED: '1',
