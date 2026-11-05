@@ -286,6 +286,11 @@ export const NOTIFICATION_EVENTS = [
   // the group whose switch silences the mail, so it silences this too.
   { key: 'dormant.checkIn.first', category: 'announcements', emailGroup: 'announcements', defaultChannels: ['chat'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'dormant.checkIn.final', category: 'announcements', emailGroup: 'announcements', defaultChannels: ['chat'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // The three digest mails (#1711): pre-rendered by their senders and sent on
+  // the e-mail channel only. 'immediate' because a digest IS the roll-up.
+  { key: 'digest.mentorWeekly', category: 'digest', emailGroup: 'digests', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'digest.activity', category: 'digest', emailGroup: 'digests', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'digest.overdueTodos', category: 'digest', emailGroup: 'digests', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'mentorship_request.mentorAssigned', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['mentorName'] },
   { key: 'mentorship_request.menteeAssigned', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'mentee', params: ['menteeName'] },
   // Mentor Offers (#1809). The mentee's two (the offer, the one reminder) are

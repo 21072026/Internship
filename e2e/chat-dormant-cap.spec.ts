@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { drainNotificationMail } from './helpers/notificationMail';
 import { setChatClientsForTests, type ChatPlatformClient } from '@/lib/chat/client';
 import { sealBotToken } from '@/lib/chat/tokens';
 import { sweepDormantFirstContacts } from '../src/lib/dormantFirstContact';
@@ -65,7 +66,11 @@ async function dormantPair(stamp: string) {
   });
   const link = () => prisma.chatIdentity.create({ data: { orgId: org.id, workspaceId: ws.id, userId: mentee.id, externalUserId: `UE${stamp}`, verifiedAt: new Date() } });
   const unlink = () => prisma.chatIdentity.deleteMany({ where: { workspaceId: ws.id, userId: mentee.id } });
-  const mails = () => prisma.emailLog.count({ where: { to: emails.mentee, category: 'dormant-check-in' } });
+  // The mail leaves through the notification.email job (#1711): run it first.
+  const mails = async () => {
+    await drainNotificationMail([mentee.id]);
+    return prisma.emailLog.count({ where: { to: emails.mentee, category: 'dormant-check-in' } });
+  };
   const cleanup = async () => {
     await prisma.notificationDelivery.deleteMany({ where: { userId: mentee.id } });
     await prisma.chatDelivery.deleteMany({ where: { workspaceId: ws.id } }).catch(() => {});
