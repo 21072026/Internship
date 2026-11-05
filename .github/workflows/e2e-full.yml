@@ -115,10 +115,97 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           fi
 
+  # ONE production build per run (#3509), shared with the four shards and the
+  # isolation job — the same shape as the PR gate (e2e.yml). Each of those five
+  # jobs used to build the same commit itself. This one builds in the shards'
+  # environment (MySQL service + schema + seed, the same env block, `npm ci`,
+  # a 7 GiB build heap) and with FULL git history: release dates come from git,
+  # and the shards checked out with fetch-depth 0 precisely so the build would
+  # date them (#2829, #2750). `.next` without its cache goes up as an artifact
+  # named after the commit, with the sha stamped inside; every consumer checks
+  # the stamp before `next start`. The isolation job's different NEXTAUTH_URL
+  # (port 3010) is a runtime value its webServer passes in playwright.config.ts.
+  build:
+    name: Build app for E2E
+    runs-on: ubuntu-latest
+    needs: [gate]
+    if: needs.gate.outputs.run == 'true'
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: internship_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+    env:
+      DATABASE_URL: "mysql://root:root@127.0.0.1:3306/internship_test"
+      NODE_OPTIONS: --max-old-space-size=8192
+      NEXTAUTH_SECRET: "ci-test-secret-not-for-production"
+      NEXTAUTH_URL: "http://localhost:3000"
+      SEED_ADMIN_EMAIL: "admin@example.com"
+      SEED_ADMIN_PASSWORD: "ChangeMe123!"
+      ADMIN_EMAIL: "admin@example.com"
+      ADMIN_PASSWORD: "ChangeMe123!"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Release dates come from git history; a shallow clone leaves every pending
+          # release undated and the release-notes specs find no date (#2829, #2750).
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply DB schema
+        run: npx prisma db push
+
+      - name: Seed admin user
+        run: npx prisma db seed
+
+      - name: Build app
+        run: npm run build
+        # Keep the Next.js build worker above its default ~2 GiB heap limit.
+        env:
+          NODE_OPTIONS: --max-old-space-size=7168
+
+      # A tarball, not the directory: upload-artifact drops hidden paths such
+      # as `.next` by default, and a tar keeps modes and layout exactly.
+      - name: Pack the build
+        run: |
+          set -euo pipefail
+          echo "$GITHUB_SHA" > .next/E2E_BUILD_SHA
+          tar -czf next-build.tgz --exclude=.next/cache .next
+          ls -lh next-build.tgz
+
+      - name: Upload the build
+        uses: actions/upload-artifact@v7
+        with:
+          name: next-build-${{ github.sha }}
+          path: next-build.tgz
+          retention-days: 1
+          if-no-files-found: error
+
   e2e-full:
     name: Playwright full (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    needs: [gate]
+    # The implicit success() of `if:` also requires `build` to have succeeded.
+    needs: [gate, build]
     if: needs.gate.outputs.run == 'true'
     strategy:
       fail-fast: false
@@ -173,11 +260,21 @@ jobs:
       - name: Seed admin user
         run: npx prisma db seed
 
-      - name: Build app
-        run: npm run build
-        # Keep the Next.js build worker above its default ~2 GiB heap limit.
-        env:
-          NODE_OPTIONS: --max-old-space-size=7168
+      # The build from the `build` job (#3509) — never a build of our own.
+      - name: Download the build
+        uses: actions/download-artifact@v8
+        with:
+          name: next-build-${{ github.sha }}
+
+      - name: Unpack the build
+        run: |
+          set -euo pipefail
+          tar -xzf next-build.tgz
+          built="$(cat .next/E2E_BUILD_SHA)"
+          if [ "$built" != "$GITHUB_SHA" ]; then
+            echo "::error::.next was built from $built, this job tests $GITHUB_SHA"; exit 1
+          fi
+          echo "Using the build of $built"
 
       - name: Cache Playwright browsers
         uses: actions/cache@v6
@@ -252,7 +349,7 @@ jobs:
   isolation:
     name: Playwright tenant isolation
     runs-on: ubuntu-latest
-    needs: [gate]
+    needs: [gate, build]
     if: needs.gate.outputs.run == 'true'
 
     services:
@@ -300,11 +397,21 @@ jobs:
       - name: Seed admin user
         run: npx prisma db seed
 
-      - name: Build app
-        run: npm run build
-        # Keep the Next.js build worker above its default ~2 GiB heap limit.
-        env:
-          NODE_OPTIONS: --max-old-space-size=7168
+      # The build from the `build` job (#3509) — never a build of our own.
+      - name: Download the build
+        uses: actions/download-artifact@v8
+        with:
+          name: next-build-${{ github.sha }}
+
+      - name: Unpack the build
+        run: |
+          set -euo pipefail
+          tar -xzf next-build.tgz
+          built="$(cat .next/E2E_BUILD_SHA)"
+          if [ "$built" != "$GITHUB_SHA" ]; then
+            echo "::error::.next was built from $built, this job tests $GITHUB_SHA"; exit 1
+          fi
+          echo "Using the build of $built"
 
       - name: Cache Playwright browsers
         uses: actions/cache@v6
