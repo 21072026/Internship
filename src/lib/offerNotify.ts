@@ -1,15 +1,26 @@
 // Notification + email side-effects for offer transitions (#809). Shared
 // between the offers API route and the expiry cron so both send exactly the
-// same in-app notification + email for a given transition.
+// same notifications for a given transition.
+//
+// EVERYTHING THROUGH THE ROUTER (#1944). Each party hears its own catalogue
+// event, and WHO may hear it is that entry's `audience`, not this file:
+//   sent    → the mentee (`offer_sent.new`, with the offer mail) and their
+//             active mentor (`offer_sent.mentor`);
+//   decided → the admin who made the offer (`offer_<outcome>.admin`, with the
+//             decision mail) and the offering company's seats that may see the
+//             candidate (`offer_<outcome>.company`).
+// The mails are rendered here and handed over as they are (`email`), so the
+// router's preference, quiet-hour and ledger rules apply without a word of the
+// copy changing — and the channels are no longer pinned, so chat rides along
+// for anybody with a confirmed chat identity.
 
 import { prisma } from '@/lib/prisma';
 import { raiseOfferEvent } from '@/lib/offerEvents';
-import { notify } from '@/lib/notify';
 import { notifyEvent } from '@/lib/notifications/router';
-import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
-import { sendOfferSentEmail, sendOfferDecisionEmail } from '@/services/emailService';
+import { companyUsersWhoMaySee } from '@/lib/companySeatGate';
+import { renderOfferSentEmail, renderOfferDecisionEmail } from '@/services/emailService';
 
-// SENT — notify + (opt-in) email the mentee; they are the one who must act.
+// SENT — the mentee must act; their mentor should know it is out.
 export async function notifyOfferSent(offerId: string): Promise<void> {
   const offer = await prisma.offer.findUnique({
     where: { id: offerId },
@@ -20,89 +31,88 @@ export async function notifyOfferSent(offerId: string): Promise<void> {
       expiresAt: true,
       relation: {
         select: {
+          id: true,
           orgId: true,
-          mentee: {
-            select: {
-              id: true,
-              fullName: true,
-              email: true,
-              emailNotifications: true,
-              notificationPrefs: true,
-              preferredLanguage: true,
-            },
-          },
+          mentorId: true,
+          status: true,
+          mentee: { select: { id: true, fullName: true, preferredLanguage: true } },
         },
       },
       company: { select: { name: true } },
     },
   });
   if (!offer) return;
-  const mentee = offer.relation.mentee;
-  // In-app + push through the router (#1715): an offer is the moment the
-  // programme exists for, so it may buzz a closed app. The mail stays below.
-  await notifyEvent(mentee, 'offer_sent.new', { position: offer.position }, { channels: ['inApp', 'push'] });
-  // 'offer' is pipeline_updates. The `emailAllowed(mentee, 'mentorship')`
-  // conjunct that used to stand here reads a key mapping to
-  // mentorship_lifecycle, so it dropped offer letters that both preference
-  // surfaces reported as enabled; 'mentorship' now sits in
-  // pipeline_updates.legacy, where it is honoured *and* shown.
-  if (mentee.email && emailGroupAllowedForCategory(mentee, 'offer')) {
-    await sendOfferSentEmail({
-      to: mentee.email,
-      fullName: mentee.fullName,
-      position: offer.position,
-      companyName: offer.company?.name ?? null,
-      startDate: offer.startDate,
-      expiresAt: offer.expiresAt,
-      locale: mentee.preferredLanguage,
-      orgId: offer.relation.orgId,
-      // The mentee is the one being made the offer, so they are the recipient.
-      userId: mentee.id,
-    }).catch((e) => console.error('sendOfferSentEmail failed:', e));
+  const { relation } = offer;
+  const mentee = relation.mentee;
+  const email = await renderOfferSentEmail({
+    fullName: mentee.fullName,
+    position: offer.position,
+    companyName: offer.company?.name ?? null,
+    startDate: offer.startDate,
+    expiresAt: offer.expiresAt,
+    locale: mentee.preferredLanguage,
+    orgId: relation.orgId,
+    // The mentee is the one being made the offer, so they are the recipient.
+    userId: mentee.id,
+  });
+  await notifyEvent(mentee.id, 'offer_sent.new', { position: offer.position }, { dedupeKey: `offer-sent:${offer.id}`, orgId: relation.orgId, email });
+  if (relation.mentorId && relation.status === 'ACTIVE') {
+    await notifyEvent(
+      relation.mentorId,
+      'offer_sent.mentor',
+      { menteeName: mentee.fullName, position: offer.position, relationId: relation.id },
+      { dedupeKey: `offer-sent:${offer.id}`, orgId: relation.orgId }
+    );
   }
 }
 
-// ACCEPTED / DECLINED / EXPIRED — notify + (opt-in) email the admin who
-// created the offer; the decision is theirs to act on next.
+const ADMIN_EVENT = { ACCEPTED: 'offer_accepted.admin', DECLINED: 'offer_declined.admin', EXPIRED: 'offer_expired.admin' } as const;
+const COMPANY_EVENT = { ACCEPTED: 'offer_accepted.company', DECLINED: 'offer_declined.company', EXPIRED: 'offer_expired.company' } as const;
+
+// ACCEPTED / DECLINED / EXPIRED — the admin who created the offer acts on it
+// next; the offering company learns the answer.
 export async function notifyOfferDecided(offerId: string, outcome: 'ACCEPTED' | 'DECLINED' | 'EXPIRED'): Promise<void> {
   const offer = await prisma.offer.findUnique({
     where: { id: offerId },
     select: {
       id: true,
       position: true,
-      relation: { select: { orgId: true, mentee: { select: { fullName: true } } } },
-      createdBy: {
-        select: {
-          id: true,
-          fullName: true,
-          email: true,
-          emailNotifications: true,
-          notificationPrefs: true,
-          preferredLanguage: true,
-        },
-      },
+      companyId: true,
+      requisitionId: true,
+      relation: { select: { orgId: true, mentee: { select: { id: true, fullName: true } } } },
+      createdBy: { select: { id: true, fullName: true, preferredLanguage: true } },
     },
   });
   if (!offer) return;
+  const orgId = offer.relation.orgId;
   const admin = offer.createdBy;
-  const menteeName = offer.relation.mentee.fullName;
-  await notify(admin.id, `offer_${outcome.toLowerCase()}.admin`, { menteeName, position: offer.position }, `/admin/candidates`);
-  // Same as notifyOfferSent above: the mail's own group decides, and the stray
-  // 'mentorship' conjunct now lives in pipeline_updates.legacy instead.
-  if (admin.email && emailGroupAllowedForCategory(admin, 'offer')) {
-    await sendOfferDecisionEmail({
-      to: admin.email,
-      fullName: admin.fullName,
-      menteeName,
-      position: offer.position,
-      outcome,
-      locale: admin.preferredLanguage,
-      orgId: offer.relation.orgId,
-      // The offer's CREATOR is the recipient here — the mentee only decided it.
-      // `offer.relation.mentee` is selected in this query for the name in the
-      // body, which makes mixing the two up easy and expensive.
-      userId: admin.id,
-    }).catch((e) => console.error('sendOfferDecisionEmail failed:', e));
+  const mentee = offer.relation.mentee;
+  const dedupeKey = `offer-decided:${offer.id}`;
+  const email = await renderOfferDecisionEmail({
+    fullName: admin.fullName,
+    menteeName: mentee.fullName,
+    position: offer.position,
+    outcome,
+    locale: admin.preferredLanguage,
+    orgId,
+    // The offer's CREATOR is the recipient here — the mentee only decided it.
+    // `offer.relation.mentee` is selected for the name in the body, which makes
+    // mixing the two up easy and expensive.
+    userId: admin.id,
+  });
+  await notifyEvent(admin.id, ADMIN_EVENT[outcome], { menteeName: mentee.fullName, position: offer.position, menteeId: mentee.id }, { dedupeKey, orgId, email });
+  // The company names the candidate only to the seats that may already see
+  // them (an INTERVIEWER off their panels may not, #1870).
+  if (offer.companyId) {
+    const seats = await companyUsersWhoMaySee(orgId, offer.companyId, mentee.id);
+    if (seats.length > 0) {
+      await notifyEvent(
+        seats.map((s) => s.id),
+        COMPANY_EVENT[outcome],
+        { menteeName: mentee.fullName, position: offer.position, ...(offer.requisitionId ? { requisitionId: offer.requisitionId } : {}) },
+        { dedupeKey, orgId }
+      );
+    }
   }
 }
 

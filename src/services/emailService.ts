@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import type { PrerenderedEmail } from '@/lib/notifications/adapters/types';
 import type { Transporter } from 'nodemailer';
 import type Mail from 'nodemailer/lib/mailer';
 import addressparser from 'nodemailer/lib/addressparser';
@@ -3519,8 +3520,11 @@ function formatOfferDate(d: Date | null | undefined, locale: Locale): string | n
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(d);
 }
 
-export async function sendOfferSentEmail({
-  to,
+// RENDER, NOT SEND (#1944): the offer mails are handed to the notification
+// router as a PrerenderedEmail (`notifyEvent(…, { email })`), which sends them
+// byte-for-byte once it has said yes — so the offer events gain the ledger, the
+// channel matrix, quiet hours and chat without a word of the mail changing.
+export async function renderOfferSentEmail({
   fullName,
   position,
   companyName,
@@ -3530,7 +3534,6 @@ export async function sendOfferSentEmail({
   orgId,
   userId,
 }: {
-  to: string;
   fullName: string;
   position: string;
   companyName?: string | null;
@@ -3539,7 +3542,7 @@ export async function sendOfferSentEmail({
   locale?: string | null;
   orgId?: string | null;
   userId?: string | null;
-}) {
+}): Promise<PrerenderedEmail> {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
@@ -3547,11 +3550,9 @@ export async function sendOfferSentEmail({
   const M = (await emailDictionary(loc, orgId)).offerEmail;
   const start = formatOfferDate(startDate, loc);
   const expires = formatOfferDate(expiresAt, loc);
-  await sendEmail({
-    to,
-    userId,
+  return {
     category: 'offer',
-    locale,
+    locale: locale ?? null,
     fromName: brand.name,
     subject: M.sent.subject.replace('{position}', position),
     html: `
@@ -3564,12 +3565,12 @@ export async function sendOfferSentEmail({
         ${ctaBlock(brand, `${base}/portal`, M.sent.cta)}
       </div>
     `,
-  });
+  };
 }
 
 // The trial reminder mail (#2415, copy from #2412, story #2392).
 //
-// Lives here rather than in the job for the reason `sendOfferSentEmail` does:
+// Lives here rather than in the job for the reason `renderOfferSentEmail` does:
 // the org brand header, the CTA block, `esc()` and `appUrl()` are this module's,
 // and a second copy of them in src/lib/jobs would drift. The job keeps the
 // DECISION (who, when, which threshold, and both preference gates); this
@@ -3640,8 +3641,7 @@ export async function sendTrialReminderEmail({
   });
 }
 
-export async function sendOfferDecisionEmail({
-  to,
+export async function renderOfferDecisionEmail({
   fullName,
   menteeName,
   position,
@@ -3650,7 +3650,6 @@ export async function sendOfferDecisionEmail({
   orgId,
   userId,
 }: {
-  to: string;
   fullName: string;
   menteeName: string;
   position: string;
@@ -3658,17 +3657,15 @@ export async function sendOfferDecisionEmail({
   locale?: string | null;
   orgId?: string | null;
   userId?: string | null;
-}) {
+}): Promise<PrerenderedEmail> {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const M = (await emailDictionary(resolveLocale(locale), orgId)).offerEmail;
   const copy = outcome === 'ACCEPTED' ? M.accepted : outcome === 'DECLINED' ? M.declined : M.expired;
-  await sendEmail({
-    to,
-    userId,
+  return {
     category: 'offer',
-    locale,
+    locale: locale ?? null,
     fromName: brand.name,
     subject: copy.subject.replace('{mentee}', menteeName),
     html: `
@@ -3679,7 +3676,7 @@ export async function sendOfferDecisionEmail({
         ${ctaBlock(brand, `${base}/admin/candidates`, M.cta)}
       </div>
     `,
-  });
+  };
 }
 
 // Account role converted by an admin (#1252). Deliberately NOT gated on

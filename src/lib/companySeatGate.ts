@@ -11,7 +11,7 @@
 import { NextResponse } from 'next/server';
 import type { Session } from 'next-auth';
 import { prisma } from '@/lib/prisma';
-import { companyCan, IMPLICIT_SEAT_ROLE, INSUFFICIENT_SEAT_ROLE, isSeatRole, type CompanyAction, type SeatRole } from '@/lib/companySeats';
+import { companyCan, IMPLICIT_SEAT_ROLE, INSUFFICIENT_SEAT_ROLE, isSeatRole, seatMaySeeCandidate, type CompanyAction, type SeatRole } from '@/lib/companySeats';
 import type { ApplicationActor } from '@/lib/applicationStage';
 
 /** The seat role of a COMPANY user at its company: its membership's, or OWNER for the implicit first login. */
@@ -49,4 +49,26 @@ export async function seatScopedActor(actor: ApplicationActor): Promise<Applicat
     select: { subjectId: true },
   });
   return { ...actor, interviewerMenteeIds: [...new Set(panels.map((p) => p.subjectId))] };
+}
+
+/**
+ * The active COMPANY users of `companyId` who may see `menteeId` (#1944) — the
+ * recipients of a notification that names that candidate. A login without a
+ * membership row is the implicit OWNER; an INTERVIEWER counts only when it sits
+ * on a panel about this candidate (seatMaySeeCandidate()).
+ */
+export async function companyUsersWhoMaySee(orgId: string | null, companyId: string, menteeId: string): Promise<{ id: string }[]> {
+  const users = await prisma.user.findMany({
+    where: { ...(orgId ? { orgId } : {}), companyId, role: 'COMPANY', isActive: true },
+    select: { id: true, companyMemberships: { where: { companyId }, select: { seatRole: true } } },
+  });
+  if (users.length === 0) return [];
+  const panels = await prisma.interviewPanel.findMany({
+    where: { ...(orgId ? { orgId } : {}), subjectId: menteeId, members: { some: { userId: { in: users.map((u) => u.id) } } } },
+    select: { members: { select: { userId: true } } },
+  });
+  const onPanel = new Set(panels.flatMap((p) => p.members.map((m) => m.userId)));
+  return users
+    .filter((u) => seatMaySeeCandidate(u.companyMemberships[0]?.seatRole ?? IMPLICIT_SEAT_ROLE, onPanel.has(u.id)))
+    .map((u) => ({ id: u.id }));
 }
