@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { actorFromSession, can, requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { canManageProject, isProjectMember, projectInCallerTenant } from '@/lib/projectAccess';
+import { canWriteProjectSeries, nonManagerStatus } from '@/lib/projectTeamRule';
 import { sendMeetingInviteEmail } from '@/services/emailService';
 import { emit } from '@/lib/events/emit';
 import { withTenantScope } from '@/lib/orgContext';
@@ -73,6 +74,12 @@ const updateSchema = recurrenceSchema.partial().extend({ id: z.string().min(1) }
 
 const deleteSchema = z.object({ id: z.string().min(1) });
 
+/**
+ * Who may write a project's recurring meeting is `canWriteProjectSeries()`
+ * (src/lib/projectTeamRule.ts, #2272): the team's managers — a MENTEE owner
+ * included — and its MENTOR members. A plain member is refused with a 403 (they
+ * know the project); anyone else gets the 404 a missing project gets.
+ */
 async function ensureProjectAccess(
   user: { id: string; role: string; companyId?: string | null; orgId?: string | null },
   projectId: string
@@ -84,18 +91,17 @@ async function ensureProjectAccess(
   }
   const project = await prisma.project.findUnique({
     where: { id: projectId },
-    select: { id: true, ownerType: true, ownerUserId: true, ownerCompanyId: true, orgId: true },
+    select: { id: true, ownerUserId: true, orgId: true, members: { select: { userId: true, role: true } } },
   });
   // Another tenant's project is a missing one — for an admin too, whose
   // allowance below is "any project of my tenant" (#2542 follow-up).
   if (!project || !(await inCallerTenant(project.orgId, user.orgId))) {
     return { error: NextResponse.json({ error: 'Not found' }, { status: 404 }) as NextResponse };
   }
-  if (user.role !== 'ADMIN') {
-    const member = await isProjectMember(user, projectId);
-    if (!canManageProject(user, project) && !member) {
-      return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) as NextResponse };
-    }
+  if (!canWriteProjectSeries(user, project)) {
+    return nonManagerStatus(user.id, project) === 403
+      ? { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) as NextResponse }
+      : { error: NextResponse.json({ error: 'Not found' }, { status: 404 }) as NextResponse };
   }
   return { project };
 }
@@ -405,7 +411,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const gate = await requireRoleOrPermission(['MENTOR'], 'program.write', { request });
+  // A MENTEE passes this gate only to reach the project rule below (#2272):
+  // they write a series as the project's owner, never on a relation.
+  const gate = await requireRoleOrPermission(['MENTOR', 'MENTEE'], 'program.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
   const raw = await request.json().catch(() => null);
@@ -484,7 +492,9 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const gate = await requireRoleOrPermission(['MENTOR'], 'program.write', { request });
+  // A MENTEE passes this gate only to reach the project rule below (#2272):
+  // they write a series as the project's owner, never on a relation.
+  const gate = await requireRoleOrPermission(['MENTOR', 'MENTEE'], 'program.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
   const earlyGate = await eitherSeriesModule(session.user.orgId);
@@ -604,7 +614,9 @@ export async function PUT(request: Request) {
 // the rule is deactivated *and* every occurrence it ever put in the database is
 // removed, so no ghost entry is left on anyone's calendar (#1110).
 export async function DELETE(request: Request) {
-  const gate = await requireRoleOrPermission(['MENTOR'], 'program.write', { request });
+  // A MENTEE passes this gate only to reach the project rule below (#2272):
+  // they write a series as the project's owner, never on a relation.
+  const gate = await requireRoleOrPermission(['MENTOR', 'MENTEE'], 'program.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
   const earlyGate = await eitherSeriesModule(session.user.orgId);

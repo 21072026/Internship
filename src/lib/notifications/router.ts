@@ -72,6 +72,7 @@ import {
 } from '@/lib/notificationChannelPrefs';
 import { isLocale, defaultLocale, type Locale } from '@/i18n/config';
 import {
+  audienceAllows,
   eventDef,
   validateEventPayload,
   LINK_ID_KEYS,
@@ -472,6 +473,22 @@ export async function notifyEvent<K extends NotificationEventKey>(
           : resolveChannels(readChannelMap(user.notificationPrefs, NOTIFICATION_CATEGORIES), def.category, channels);
       const recipientChannels: readonly NotificationChannel[] =
         chatUsers.has(rec.id) && !base.includes('chat') ? [...base, 'chat'] : base;
+
+      // AUDIENCE FIRST (#1944). The catalogue entry names the roles the event is
+      // written for; anybody else is recorded SKIPPED `audience` on every
+      // channel and told nothing — whoever the call site passed. A hiring card
+      // carries a candidate's name or an internal decision, and the rule that
+      // keeps it from the wrong kind of account lives with the event, once.
+      if (!audienceAllows(def, asRole(user.role))) {
+        for (const channel of recipientChannels) {
+          result.skipped += 1;
+          await recordSkipped(
+            { orgId, userId: rec.id, eventKey: def.key, channel, dedupeKey: deliveryDedupeKey(def.key, rec.id, channel, opts?.dedupeKey) },
+            'audience'
+          );
+        }
+        continue;
+      }
       for (const channel of recipientChannels) {
         const row: LedgerRow = {
           orgId,

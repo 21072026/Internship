@@ -9,13 +9,17 @@ export type LinkKind =
   | 'mentee'
   | 'support'
   | 'project'
-  | 'dashboard';
+  | 'dashboard'
+  // A hiring role (#1944): the applicant board for the company that owns it,
+  // the requisition record for an admin, the role's root for everybody else.
+  | 'requisition';
 
 type LinkIds = {
   relationId?: string;
   menteeId?: string;
   projectId?: string;
   conversationId?: string;
+  requisitionId?: string;
 };
 
 const ROOTS: Record<NotificationRole, string> = {
@@ -58,6 +62,12 @@ export function notificationLink(
   if (kind === 'dashboard') return root;
   if (kind === 'support') return '/messages/support';
   if (kind === 'project') return projectId ? `/projects/${projectId}` : root;
+  if (kind === 'requisition') {
+    const requisitionId = validId(ids.requisitionId);
+    if (requisitionId && role === 'COMPANY') return `/company/requisitions/${requisitionId}`;
+    if (requisitionId && role === 'ADMIN') return `/admin/requisitions/${requisitionId}`;
+    return root;
+  }
   if (kind === 'thread') {
     const conversationId = validId(ids.conversationId);
     if (conversationId) return `/messages/c/${conversationId}`;

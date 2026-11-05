@@ -230,3 +230,16 @@ test('GET /api/admin/duplicates as each admin, twice: own pair only, cached or n
     await prisma.user.deleteMany({ where: { id: { in: twins.map((t) => t.id) } } });
   }
 });
+
+test("PATCH and DELETE /api/cohorts/<A's cohort> as B's admin: 404 and the cohort is untouched (#3576)", async ({ browser }) => {
+  const before = await prisma.cohort.findUniqueOrThrow({ where: { id: rows.A.cohort.id } });
+  const request = await requestAs(browser, 'B', 'admin');
+  const patch = await request.patch(`/api/cohorts/${rows.A.cohort.id}`, { data: { name: 'iso cross-tenant rename' } });
+  expect(patch.status(), 'a cross-tenant write must read as not found').toBe(404);
+  const del = await request.delete(`/api/cohorts/${rows.A.cohort.id}`);
+  expect(del.status(), 'a cross-tenant delete must read as not found').toBe(404);
+  const clone = await request.post(`/api/cohorts/${rows.A.cohort.id}/clone`, { data: { name: 'iso cross-tenant clone' } });
+  expect(clone.status(), 'a cross-tenant clone must read as not found').toBe(404);
+  const after = await prisma.cohort.findUnique({ where: { id: rows.A.cohort.id } });
+  expect(after?.name).toBe(before.name);
+});

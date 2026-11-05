@@ -10,7 +10,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { requireRoleOrPermission } from '@/lib/authz';
 import { logActivity } from '@/lib/activity';
 import { emit } from '@/lib/events/emit';
-import { notifyIfAllowed } from '@/lib/notify';
+import { notifyEvent } from '@/lib/notifications/router';
 import { findActiveMentorship } from '@/lib/activeMentorship';
 import { isDispositionCode, requiresDispositionCode } from '@/lib/applications';
 import { moveApplicationStage } from '@/lib/applicationStage';
@@ -178,8 +178,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         where: { orgId, companyId: application.companyId, role: 'COMPANY', isActive: true },
         select: { id: true },
       });
-      for (const user of companyUsers) {
-        await notifyIfAllowed(user.id, 'mentorship', outcomeNotificationKey(decision), { title: application.requisition.title }, `/company/requisitions/${application.requisitionId}`);
+      // Through the router (#1944): the `COMPANY` audience is the catalogue's,
+      // and chat rides along for a seat with a confirmed identity.
+      if (companyUsers.length > 0) {
+        await notifyEvent(
+          companyUsers.map((u) => u.id),
+          outcomeNotificationKey(decision),
+          { title: application.requisition.title, requisitionId: application.requisitionId },
+          { dedupeKey: `interview-panel-outcome:${panel.id}`, orgId }
+        );
       }
 
       // "Recommend, never apply": the pipeline moves only when asked, and a
