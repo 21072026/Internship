@@ -76,7 +76,7 @@ test('the write gate stores only what the evaluator reads', () => {
   for (const bad of ['email', 'role', 'orgId', 'password', 'attr:', 'attr:Bad']) assert.equal(isEligibilityAttribute(bad), false, bad);
   assert.deepEqual(parseRuleInput({ effect: 'ALLOW', attribute: 'city', operator: 'IN', value: ' Berlin , ,berlin', priority: 5 }), {
     ok: true,
-    rule: { effect: 'ALLOW', attribute: 'city', operator: 'IN', value: ['Berlin'], priority: 5 },
+    rule: { effect: 'ALLOW', attribute: 'city', operator: 'IN', value: ['Berlin'], priority: 5, appliesTo: 'MENTEE' },
   });
   assert.equal(parseRuleInput({ effect: 'MAYBE', attribute: 'city', operator: 'IN', value: ['x'] }).code, 'invalid_effect');
   assert.equal(parseRuleInput({ effect: 'ALLOW', attribute: 'email', operator: 'IN', value: ['x'] }).code, 'invalid_attribute');
@@ -95,4 +95,42 @@ test('the dry-run count is the evaluator over the roster', () => {
   ];
   assert.equal(countAdmitted('RULES', rules, roster), 1);
   assert.equal(countAdmitted('OPEN', rules, roster), 3);
+});
+
+// #3423 — rules target a side. A rule without `appliesTo` (every rule written
+// before the column) judges mentees only; mentors are judged only by MENTOR
+// and BOTH rules, and a scope with none of those leaves every mentor eligible.
+test('appliesTo: mentee rules never judge a mentor; a mentor rule does; BOTH judges both', () => {
+  const istanbul = rule('ALLOW', 'city', 'IN', ['Istanbul']);
+  const seniors = rule('ALLOW', 'attr:level', 'GTE', '4', 0, { appliesTo: 'MENTOR' });
+  const noBerlin = rule('DENY', 'city', 'EQUALS', 'Berlin', 10, { appliesTo: 'BOTH' });
+
+  // A mentee rule alone: mentees judged as before, mentors untouched.
+  assert.equal(evaluateEligibility('RULES', [istanbul], { city: 'Ankara' }).ok, false);
+  assert.deepEqual(evaluateEligibility('RULES', [istanbul], { city: 'Ankara' }, 'MENTOR'), { ok: true, reason: 'open' });
+
+  // A mentor rule: decides mentors, and is invisible to mentees.
+  assert.equal(evaluateEligibility('RULES', [istanbul, seniors], { 'attr:level': '5' }, 'MENTOR').ok, true);
+  assert.equal(evaluateEligibility('RULES', [istanbul, seniors], { 'attr:level': '2' }, 'MENTOR').reason, 'no_matching_rule');
+  assert.equal(evaluateEligibility('RULES', [istanbul, seniors], { city: 'Istanbul', 'attr:level': '1' }).ok, true);
+
+  // BOTH reaches either side, and only an inactive mentor rule = no mentor rule.
+  assert.equal(evaluateEligibility('RULES', [istanbul, noBerlin], { city: 'Berlin' }, 'MENTOR').reason, 'denied');
+  assert.equal(evaluateEligibility('RULES', [istanbul, noBerlin], { city: 'Berlin' }).reason, 'denied');
+  assert.deepEqual(evaluateEligibility('RULES', [{ ...seniors, active: false }], {}, 'MENTOR'), { ok: true, reason: 'open' });
+  // OPEN stays open for everybody.
+  assert.equal(evaluateEligibility('OPEN', [seniors], {}, 'MENTOR').ok, true);
+
+  // The dry run counts per side the same way.
+  const mentors = [{ 'attr:level': '5' }, { 'attr:level': '2' }];
+  assert.equal(countAdmitted('RULES', [istanbul], mentors, 'MENTOR'), 2);
+  assert.equal(countAdmitted('RULES', [istanbul, seniors], mentors, 'MENTOR'), 1);
+});
+
+test('appliesTo at write time: defaulted to MENTEE, whitelisted', () => {
+  const base = { effect: 'ALLOW', attribute: 'city', operator: 'EQUALS', value: 'Berlin' };
+  assert.equal(parseRuleInput(base).rule.appliesTo, 'MENTEE');
+  assert.equal(parseRuleInput({ ...base, appliesTo: 'MENTOR' }).rule.appliesTo, 'MENTOR');
+  assert.equal(parseRuleInput({ ...base, appliesTo: 'BOTH' }).rule.appliesTo, 'BOTH');
+  assert.deepEqual(parseRuleInput({ ...base, appliesTo: 'ADMIN' }), { ok: false, code: 'invalid_target' });
 });

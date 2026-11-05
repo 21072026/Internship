@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { resolveOrgId } from '@/lib/orgScope';
 import { matchRuleSetDraftSchema } from '@/lib/matching/ruleSetSchema';
 import { loadMentees, loadMentorPool } from '@/lib/matching/pool';
 import { simulateRuleSet } from '@/lib/matching/simulate';
@@ -65,7 +66,8 @@ export async function POST(request: Request) {
       menteeIds = rows.map((r) => r.id);
     }
 
-    const [mentees, mentors] = await Promise.all([loadMentees(tenant, menteeIds), loadMentorPool(tenant)]);
+    // Only the mentors the mentor rules admit (#3423), for the cohort's programme when one is named.
+    const [mentees, mentors] = await Promise.all([loadMentees(tenant, menteeIds), loadMentorPool(tenant, { orgId: resolveOrgId(session), programId: body.cohortId ?? null })]);
     if (body.menteeId && mentees.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const { results, summary } = simulateRuleSet(

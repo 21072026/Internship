@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Ageing and funnel reports for a program admin (#1577):** `GET /api/admin/analytics/aging` and `/funnel` open to a PROGRAM_ADMIN with `listing: true` and AND `programRelationWhere(grants)` into their one relation `where` (the funnel's transfer-chain lookups included), the same always-on filter as the overview. The funnel's mentor-capacity list stays empty for the tier — a mentor's load spans every pairing. Other readers unchanged; the remaining analytics sub-routes and the AI narrative still answer 403. Pinned in `e2e/program-scoped-admin.spec.ts` (@smoke).",
+  "notes": {
+    "en": ["Program admins can now open the stage-ageing and funnel reports for their own programmes."],
+    "tr": ["Program yöneticileri artık kendi programları için aşama bekleme ve dönüşüm hunisi raporlarını açabiliyor."],
+    "de": ["Programm-Admins können jetzt die Berichte zu Verweildauer und Trichter für ihre eigenen Programme öffnen."]
+  }
+}

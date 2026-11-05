@@ -11,6 +11,8 @@ import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { relationProgramWhere, resolveProgramFilter } from '@/lib/programFilter';
 import { shellCapabilities } from '@/lib/shellCapabilities';
+import { programRelationWhere } from '@/lib/programScopeRule';
+import type { Prisma } from '@prisma/client';
 
 // GET — hiring-funnel aging & SLA.
 // - stageAging: average/median time actually SPENT in each stage, computed from
@@ -31,9 +33,12 @@ import { shellCapabilities } from '@/lib/shellCapabilities';
 //   board/candidate-detail reason gate honors it. A pre-existing StatusChange
 //   with no reasonCode groups under UNSPECIFIED_REASON ("Unspecified" in the UI).
 export async function GET(request: Request) {
-  const gate = await requirePermission('analytics.read', { request });
+  // A list read (#1577): a PROGRAM_ADMIN with grants passes, and every
+  // relation below is ANDed with them (programRelationWhere) — an always-on
+  // programme filter. Other tiers get `grants` undefined: unchanged.
+  const gate = await requirePermission('analytics.read', { request, listing: true });
   if ('error' in gate) return gate.error;
-  const { session } = gate;
+  const { session, grants } = gate;
 
   return await withTenantScope(session, async () => {
   // Optional date-range window (?from=YYYY-MM-DD&to=YYYY-MM-DD): only stage
@@ -66,7 +71,12 @@ export async function GET(request: Request) {
   const program = await resolveProgramFilter(searchParams.get('program'), tenant);
   if ('error' in program) return program.error;
   const relations = await prisma.mentorshipRelation.findMany({
-    where: withinTenant({ ...relationProgramWhere(program.filter) }, tenant),
+    where: withinTenant<Prisma.MentorshipRelationWhereInput>(
+      grants
+        ? { AND: [relationProgramWhere(program.filter), programRelationWhere(grants) as Prisma.MentorshipRelationWhereInput] }
+        : { ...relationProgramWhere(program.filter) },
+      tenant,
+    ),
     select: {
       id: true,
       status: true,

@@ -34,7 +34,7 @@ async function gate(request: Request, permission: Permission, programId: string 
   return { session: pre.session, orgId };
 }
 
-const ruleSelect = { id: true, programId: true, effect: true, attribute: true, operator: true, value: true, priority: true, active: true, createdAt: true } as const;
+const ruleSelect = { id: true, programId: true, appliesTo: true, effect: true, attribute: true, operator: true, value: true, priority: true, active: true, createdAt: true } as const;
 
 function programIdOf(request: Request): string | null {
   return new URL(request.url).searchParams.get('programId') || null;

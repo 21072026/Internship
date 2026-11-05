@@ -20,6 +20,8 @@ import { shellCapabilities } from '@/lib/shellCapabilities';
 import { COMPLIANCE_RELATION_SELECT, INTERNED_WHERE, complianceRows } from '@/lib/weeklyReportComplianceQuery';
 import { cohortComparison, mentorWorkload, sourceConversion, type AnalyticsScope } from '@/lib/analyticsReports';
 import { slaCompliance } from '@/lib/slaQueue';
+import { loadInvitationFunnel } from '@/lib/invitationFunnel';
+import { funnelRate } from '@/lib/invitationFunnelRule';
 import type { Prisma } from '@prisma/client';
 import { attributeLabel } from '@/lib/orgAttributesRule';
 import { attributedLeadWhere } from '@/lib/leadAttribution';
@@ -207,6 +209,19 @@ const LOADERS: Record<string, (ctx: LoaderContext) => Promise<Row[]>> = {
       missing: compliance.missing.length,
       late: compliance.late.length,
       rate: compliance.rate === null ? null : Math.round(compliance.rate * 100),
+    }));
+  },
+
+  async 'invitation-funnel'(ctx) {
+    const { tenant } = await scopeOf(ctx);
+    const roles = getDictionary(ctx.locale).reports.role as Record<string, string>;
+    return (await loadInvitationFunnel(tenant)).byRole.map((r) => ({
+      role: roles[r.role] ?? r.role,
+      sent: r.sent,
+      opened: r.opened,
+      registered: r.registered,
+      activated: r.activated,
+      activation: funnelRate(r.activated, r.sent),
     }));
   },
 };

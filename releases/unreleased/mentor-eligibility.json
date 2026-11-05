@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Programme eligibility for mentors (#3423):** `ProgramEligibilityRule.appliesTo` (`MENTEE` default · `MENTOR` · `BOTH`, additive) lets a rule judge mentors. Mentees keep #1945's meaning; mentors are judged only by MENTOR/BOTH rules and stay eligible when a scope has none, so a mentee rule set never empties the mentor pool. `evaluateEligibility`/`countAdmitted`/`isEligible`/`eligibleUserIds` take the role; `loadMentorPool(tenant, { orgId, programId })` drops mentors the rules do not admit from mentor-suggest, the simulation, match rounds and round diagnostics; `POST /api/mentorship` and the group routes refuse such a mentor with `403 not_eligible` (`side: 'mentor'`). SSO JIT never holds a mentor. The builder offers the target and the dry run counts mentors separately.",
+  "notes": {
+    "en": ["Programme eligibility rules can now apply to mentors too — for example, only senior staff mentor in a programme."],
+    "tr": ["Programa uygunluk kuralları artık mentorlar için de tanımlanabilir — örneğin bir programda yalnızca kıdemli çalışanlar mentorluk yapsın."],
+    "de": ["Zulassungsregeln für Programme können jetzt auch für Mentoren gelten – zum Beispiel, dass nur erfahrene Mitarbeitende in einem Programm mentorieren."]
+  }
+}
