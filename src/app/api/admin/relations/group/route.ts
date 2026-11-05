@@ -14,7 +14,7 @@ import { AlreadyMentoredError, alreadyMentoredBody } from '@/lib/activeMentorshi
 import { announceNewRelation, createGuardedRelation } from '@/lib/relationCreate';
 import { addSeat } from '@/lib/relationParticipants';
 import { checkGroupMembers, GROUP_MAX_MENTEES } from '@/lib/relationShapes';
-import { assertNotMentored, assertSeatableMentee, assertSeatableMentor, GroupRefusal } from '@/lib/groupRelations';
+import { assertEligibleMentor, assertNotMentored, assertSeatableMentee, assertSeatableMentor, GroupRefusal } from '@/lib/groupRelations';
 import { scheduleCreateData } from '@/lib/relationSchedule';
 import { relationScheduleDefaults } from '@/lib/relationScheduleDefaults';
 import { getLocale } from '@/i18n/server';
@@ -56,6 +56,7 @@ export async function POST(request: Request) {
 
       try {
         assertSeatableMentor(mentor, mentorId);
+        await assertEligibleMentor(mentor!);
         for (const id of menteeIds) await assertSeatableMentee(byId.get(id), id);
       } catch (e) {
         if (e instanceof GroupRefusal) return NextResponse.json({ error: 'Refused', code: e.code, ...e.detail }, { status: e.status });

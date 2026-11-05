@@ -12,6 +12,7 @@ import type { MatchMentee, MatchMentor } from './dimensions';
 import { selfSelectedCounts } from '@/lib/selfMatchSeats';
 import { normalizeThemes } from './semantic';
 import { notBenched } from '@/lib/participantState';
+import { eligibleUserIds } from '@/lib/eligibility';
 import { withCustomAnswers, type CustomAnswerDb } from './customAnswers';
 import { withAttributeValues, type AttributeValueDb } from './attributeValues';
 
@@ -56,10 +57,15 @@ export function mentorPoolWhere(tenant: TenantWhere) {
   return withinTenant({ role: { in: ['MENTOR' as const, 'ADMIN' as const] }, isActive: true, ...notBenched() }, tenant);
 }
 
-/** Every active mentor (and admin who mentors) of the tenant, with their load. */
-export async function loadMentorPool(tenant: TenantWhere): Promise<PoolMentor[]> {
+/**
+ * Every active mentor (and admin who mentors) of the tenant, with their load.
+ * With `eligibility`, only those the scope's mentor rules admit (#3423) — the
+ * same evaluator POST /api/mentorship asks; no mentor rule = every mentor.
+ */
+export async function loadMentorPool(tenant: TenantWhere, eligibility?: { orgId: string | null; programId?: string | null }): Promise<PoolMentor[]> {
+  const admitted = eligibility ? await eligibleMentorIds(tenant, eligibility.orgId, eligibility.programId ?? null) : null;
   const rows = await prisma.user.findMany({
-    where: mentorPoolWhere(tenant),
+    where: admitted ? { AND: [mentorPoolWhere(tenant), { id: { in: admitted } }] } : mentorPoolWhere(tenant),
     select: {
       ...personSelect,
       mentorCapacity: true,
@@ -74,6 +80,14 @@ export async function loadMentorPool(tenant: TenantWhere): Promise<PoolMentor[]>
     tenant,
     rows.map(({ _count, ...m }) => ({ ...withThemes(m), activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(m.id) ?? 0 })),
   );
+}
+
+/** The pool's ids the mentor rules admit; null when every mentor stands (no query for the rest). */
+async function eligibleMentorIds(tenant: TenantWhere, orgId: string | null, programId: string | null): Promise<string[] | null> {
+  if (!orgId) return null;
+  const ids = (await prisma.user.findMany({ where: mentorPoolWhere(tenant), select: { id: true } })).map((u) => u.id);
+  const admitted = await eligibleUserIds(orgId, programId, ids, 'MENTOR');
+  return admitted.length === ids.length ? null : admitted;
 }
 
 /**

@@ -345,7 +345,16 @@ export async function POST(request: Request) {
     const eligibility = await isEligible({ id: menteeId, orgId: mentee.orgId });
     if (!eligibility.ok) {
       return NextResponse.json(
-        { error: 'This mentee is not eligible for the programme', code: 'not_eligible', reason: eligibility.reason, ruleId: eligibility.ruleId ?? null },
+        { error: 'This mentee is not eligible for the programme', code: 'not_eligible', side: 'mentee', reason: eligibility.reason, ruleId: eligibility.ruleId ?? null },
+        { status: 403 },
+      );
+    }
+    // …and the mentor, by the rules that target mentors (#3423). No such rule
+    // = every mentor stands, so an org that never wrote one sees no change.
+    const mentorEligibility = await isEligible({ id: mentorId, orgId: mentee.orgId }, null, 'MENTOR');
+    if (!mentorEligibility.ok) {
+      return NextResponse.json(
+        { error: 'This mentor is not eligible for the programme', code: 'not_eligible', side: 'mentor', reason: mentorEligibility.reason, ruleId: mentorEligibility.ruleId ?? null },
         { status: 403 },
       );
     }

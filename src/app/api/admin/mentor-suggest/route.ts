@@ -147,7 +147,8 @@ export async function POST(request: Request) {
   // skill graph, i.e. the adjacency-weighted overlap of #1821.
   const [menteeRow] = await loadMentees(tenant, [mentee.id]);
   if (!menteeRow) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  const pool = await loadMentorPool(tenant);
+  // A mentor the programme's mentor rules do not admit is never suggested (#3423).
+  const pool = await loadMentorPool(tenant, { orgId });
   const idsOf = await skillIdsByUser(pool.map((m) => m.id));
   const mentors = pool.map((m) => ({ ...m, skillIds: idsOf.get(m.id) ?? [] }));
 
