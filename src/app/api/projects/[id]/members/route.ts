@@ -6,15 +6,17 @@ import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { projectInCallerTenant } from '@/lib/projectAccess';
-import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { canManageProjectTeam, memberAddRefusal, nonManagerStatus } from '@/lib/projectTeamRule';
+import { loadTeamConnections, loadTeamProject, loadTeamTarget } from '@/lib/projectTeamAccess';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { createOrGetProjectConversation, removeProjectConversationParticipant } from '@/lib/conversations';
 import { notificationLink } from '@/lib/notificationLink';
 
-// Person-level project membership management (#617): add/remove OWNERs and
-// MENTORs. Only an admin or a current OWNER may change the list, and the
-// last OWNER can never be removed (no ownerless projects).
+// Person-level project membership management (#617): add/remove OWNERs,
+// MENTORs and MENTEE contributors. Only an admin or a current OWNER — a mentee
+// owner included (#2272) — may change the list, and the last OWNER can never
+// be removed (no ownerless projects).
 
 const addSchema = z.object({
   userId: z.string().min(1),
@@ -23,29 +25,14 @@ const addSchema = z.object({
 });
 const removeSchema = z.object({ userId: z.string().min(1) });
 
-async function loadContext(id: string) {
-  const project = await prisma.project.findUnique({
-    where: { id },
-    select: { id: true, name: true, ownerUserId: true, members: { select: { userId: true, role: true } } },
-  });
-  return project;
-}
-
-// Same test as `isProjectOwner()` (lib/projectAccess.ts), spelled out against
-// the already-loaded context instead of re-querying: an admin, an OWNER member,
-// or the legacy `ownerUserId` pointer. That last arm is not decoration — a
-// project whose OWNER member row was never backfilled (the demo set seeds
-// `ownerUserId` alone, and neither topic-deploy.sh nor demo-refresh.sh runs
-// backfill-project-members.mjs) still has a real owner, and /projects/[id]
-// derives `isLead` from exactly that pointer. Leaving it out rendered the
-// members panel for an owner whose every request to it answered 403.
-function canManageMembers(
-  user: { id: string; role: string },
-  project: { ownerUserId: string | null; members: { userId: string; role: string }[] }
-) {
-  if (user.role === 'ADMIN') return true;
-  if (project.ownerUserId && project.ownerUserId === user.id) return true;
-  return project.members.some((m) => m.userId === user.id && m.role === 'OWNER');
+// Who manages the roster and whom they may seat is ONE pure rule
+// (`src/lib/projectTeamRule.ts`, #2272): `canManageProjectTeam()` and
+// `memberAddRefusal()`. This route only loads the facts and answers. A caller
+// who does not manage the team is refused by `nonManagerStatus()`.
+function refuseNonManager(userId: string, project: { ownerUserId: string | null; members: { userId: string; role: string }[] }) {
+  return nonManagerStatus(userId, project) === 403
+    ? NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    : NextResponse.json({ error: 'Not found' }, { status: 404 });
 }
 
 // GET — this project's roster, for the people who manage it. The guard used to
@@ -60,9 +47,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const { id } = await params;
     // Another tenant's project answers like a missing one (#2622).
     if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const project = await loadContext(id);
+    const project = await loadTeamProject(id);
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (!canManageMembers(session.user, project)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!canManageProjectTeam(session.user, project)) return refuseNonManager(session.user.id, project);
     const members = await prisma.projectMember.findMany({
       where: { projectId: id },
       orderBy: { addedAt: 'asc' },
@@ -72,7 +59,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   });
 }
 
-// POST — add (or re-role) a member. Target must be an active MENTOR or ADMIN.
+// POST — add (or re-role) a member, within the actor's addable set (#2272).
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -82,29 +69,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     // Another tenant's project answers like a missing one (#2622).
     if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const project = await loadContext(id);
+    const project = await loadTeamProject(id);
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (!canManageMembers(session.user, project)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    // A MENTEE owner does not add people directly (#2270). `canManageMembers`
-    // is role-blind, so opening self-service creation would otherwise let the
-    // lowest-privilege role add any active mentee in the tenant — with no
-    // relation check, a notification and a seat in the project group chat each
-    // time. They grow their team through the join-request flow instead
-    // ([id]/join-requests), which the applicant starts — but only once the
-    // project is public, since a private one answers `not_public` to every
-    // request. A mentee-created project starts private and only an admin can
-    // publish it, so the message has to name that step: pointing them at join
-    // requests alone described a flow they could not reach.
-    if (session.user.role === 'MENTEE') {
-      return NextResponse.json(
-        {
-          error:
-            'Approve a join request to add someone to your project — ask an admin to publish it to the showcase, or to add someone for you while it is private',
-          code: 'mentee_owner_invite',
-        },
-        { status: 403 }
-      );
-    }
+    if (!canManageProjectTeam(session.user, project)) return refuseNonManager(session.user.id, project);
 
     const parsed = addSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
@@ -112,31 +79,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Functional role only applies to mentee members; ignore it for owners/mentors.
     const functionalRole = role === 'MENTEE' ? parsed.data.functionalRole ?? null : null;
 
-    // Only a user of the caller's own tenant can join (#2622): by id alone, a
-    // person of another tenant could be put on this project's team.
-    const target = await prisma.user.findFirst({
-      where: withinTenant({ id: userId }, await tenantWhere(session)),
-      select: { id: true, role: true, isActive: true },
-    });
-    if (!target || !target.isActive) {
-      return NextResponse.json({ error: 'Member must be an active user' }, { status: 400 });
-    }
-    // Structural role must match who the person is: mentees join as MENTEE
-    // (contributors), mentors/admins as OWNER or MENTOR.
-    if (role === 'MENTEE') {
-      if (target.role !== 'MENTEE') {
-        return NextResponse.json({ error: 'Only a mentee can be added as a mentee member' }, { status: 400 });
-      }
-    } else if (target.role !== 'MENTOR' && target.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'An owner or mentor member must be an active mentor or admin' }, { status: 400 });
-    }
-
-    if (session.user.role === 'MENTOR' && role === 'MENTEE') {
-      const relation = await prisma.mentorshipRelation.findFirst({
-        where: { mentorId: session.user.id, menteeId: userId },
-        select: { id: true },
-      });
-      if (!relation) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // Whom this actor may seat, and as what (#2272): an admin anyone active in
+    // the tenant, a mentor any mentor/admin plus their own mentees, a mentee
+    // owner only their own mentor(s) and those mentors' other mentees. The
+    // target is read inside the caller's tenant (#2622), so another tenant's
+    // person is a missing one — and so is anyone outside the actor's set.
+    const target = await loadTeamTarget(session, userId);
+    const connections = await loadTeamConnections(session);
+    const refusal = memberAddRefusal(session.user, target, role, connections);
+    if (refusal || !target) {
+      return refusal?.code === 'wrong_seat'
+        ? NextResponse.json(
+            { error: 'A mentee joins as a mentee member; an owner or mentor member must be a mentor or admin', code: 'wrong_seat' },
+            { status: 400 }
+          )
+        : NextResponse.json({ error: 'Not found', code: 'not_addable' }, { status: 404 });
     }
 
     // Demoting the last OWNER to a non-owner role would leave the project ownerless.
@@ -170,9 +127,9 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
     const { id } = await params;
     // Another tenant's project answers like a missing one (#2622).
     if (!(await projectInCallerTenant(session, id))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const project = await loadContext(id);
+    const project = await loadTeamProject(id);
     if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (!canManageMembers(session.user, project)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (!canManageProjectTeam(session.user, project)) return refuseNonManager(session.user.id, project);
 
     const parsed = removeSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });

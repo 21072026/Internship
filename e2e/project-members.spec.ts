@@ -123,7 +123,9 @@ test('project members: mentor can only list and add their own mentees', async ({
     const otherAdd = await mentorPage.request.post(`/api/projects/${projectId}/members`, {
       data: { userId: otherMentee.id, role: 'MENTEE' },
     });
-    expect(otherAdd.status()).toBe(403);
+    // Another mentor's mentee is outside this mentor's set: the 404 an
+    // unknown id gets, never a 403 that confirms the person (#2272).
+    expect(otherAdd.status()).toBe(404);
 
     const adminAdd = await adminPage.request.post(`/api/projects/${projectId}/members`, {
       data: { userId: otherMentee.id, role: 'MENTEE' },
