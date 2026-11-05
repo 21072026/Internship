@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Notification router, migration batch 5 (#1711):** five more mails in `src/services/emailService.ts` leave through `notifyEvent(…, { channels: ['email'], email: { … } })` with their copy unchanged — the dormant first-contact check-in (`dormant.checkIn.first` / `.final`, keyed `dormant:<relation>:<n>` like its chat card), the weekly mentor digest (`digest.mentorWeekly`), the daily activity digest to mentors and admins (`digest.activity`) and the overdue to-do mail (`digest.overdueTodos`). The three `digest.*` events are new catalogue entries (category `digest`, group `digests`, e-mail only) with EN/TR/DE templates. Every caller already gated its mail on the event's own category and group, so no recipient gains or loses a mail. `check:notify` baseline: `emailService.ts` 45 → 40."
+}

@@ -37,6 +37,7 @@ import {
 } from '@/services/emailService';
 import { startFakeSmtp, type FakeSmtp } from './helpers/fakeSmtp';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
+import { drainNotificationMail } from './helpers/notificationMail';
 
 // The mail safety net (#2970, docs/outbound-approval.md § The safety net) on
 // top of the outbound approval inbox (#2960).
@@ -268,6 +269,9 @@ test.describe('mail safety net', () => {
     await run('sendDueSurveyReminders', () => sendDueSurveyReminders(new Date(), { orgIds: [orgId] }));
     await run('sendEvaluationReminders', () => sendEvaluationReminders(new Date(), { orgIds: [orgId] }));
     expect(errors).toEqual([]);
+    // Routed mail (#1711) reaches sendEmail() only when its notification.email
+    // job runs; run them here so the net below covers those mails too.
+    await drainNotificationMail(Object.values(ids));
 
     // THE NET. Nothing on the queue and nothing SENT for anybody on the lead
     // side; not a byte reached the fake relay for them.
