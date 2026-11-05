@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
-import { requirePermission } from '@/lib/authz';
+import { z } from 'zod';
+import { programWriteGate } from '@/lib/programWriteGate';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId } from '@/lib/orgScope';
 import { requireCapability } from '@/lib/capabilityGate';
 import { enforceQuota } from '@/lib/quota';
 import { quotaError } from '@/lib/quotaRule';
@@ -26,7 +25,8 @@ import { announceSettingCopies, copyProgramSettingsTx } from '@/lib/settingsWrit
 // widened its author's reach would be a way around that. So a PROGRAM_ADMIN can
 // start the next intake but needs an org admin to be given it.
 //
-// The org is the session's; another org's programme reads as 404.
+// The org is the programme's, verified to be the caller's tenant; another org's
+// programme — or, for a PROGRAM_ADMIN, one outside its grants — reads as 404.
 
 const schema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -35,10 +35,12 @@ const schema = z.object({
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const orgId = resolveOrgId(await getServerSession(authOptions));
-  const gate = await requirePermission('program.write', { request, subject: { orgId, cohortId: id } });
-  if ('error' in gate) return gate.error;
-  const { session, actor } = gate;
+  // The source must be in the caller's tenant and, for a PROGRAM_ADMIN, inside
+  // a grant; anything else is a 404 (#3576, src/lib/programWriteGate.ts).
+  const g = await programWriteGate(request, await getServerSession(authOptions), id);
+  if ('error' in g) return g.error;
+  const { session, actor, program: source } = g;
+  const orgId = source.orgId ?? actor.orgId;
   if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
   const gated = await requireCapability(orgId, 'mentorship');
   if (gated) return gated;
@@ -47,9 +49,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
 
   return withTenantScope(session, async () => {
-    const source = await prisma.cohort.findFirst({ where: { id, orgId }, select: { id: true, name: true, eligibilityMode: true } });
-    if (!source) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-
     // A clone is a new programme: the plan's programme band (#1752) applies.
     const programs = await enforceQuota(orgId, 'PROGRAMS');
     if (!programs.allowed) return NextResponse.json(quotaError(programs), { status: 403 });
