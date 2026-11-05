@@ -1,4 +1,4 @@
-// The ONE gate for writing a programme (Cohort) by id (#3576). Server-only.
+// The ONE gate for reaching a programme (Cohort) by id (#3576, #3582). Server-only.
 //
 // `requirePermission('program.write')` with no subject only checks the tier, so
 // a route that then wrote `prisma.cohort.update({ where: { id } })` let an
@@ -13,11 +13,11 @@
 //      does not exist in this tenant) and, for a PROGRAM_ADMIN, one outside its
 //      grants — a 403 there would confirm the id. The refusal is still written
 //      by requirePermission (`authz.capability_denied`). A caller whose tier
-//      never writes programmes keeps the plain 403 it always got.
+//      never holds the permission keeps the plain 403 it always got.
 
 import { NextResponse } from 'next/server';
 import type { Session } from 'next-auth';
-import { actorFromSession, requirePermission, type Actor } from '@/lib/authz';
+import { actorFromSession, requirePermission, type Actor, type Permission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
@@ -25,8 +25,11 @@ export interface WritableProgram {
   id: string;
   orgId: string | null;
   name: string;
+  term: string | null;
   eligibilityMode: string;
 }
+
+export type ProgramPermission = Extract<Permission, 'program.read' | 'program.write'>;
 
 const notFound = () => NextResponse.json({ error: 'Not found' }, { status: 404 });
 
@@ -34,19 +37,24 @@ const notFound = () => NextResponse.json({ error: 'Not found' }, { status: 404 }
  * `session` is the route's own `getServerSession(authOptions)` — read there so
  * the route visibly authenticates its caller (check:route-auth).
  */
-export async function programWriteGate(
+export function programWriteGate(request: Request, session: Session | null, programId: string) {
+  return programGate(request, session, programId, 'program.write');
+}
+
+export async function programGate(
   request: Request,
   session: Session | null,
   programId: string,
+  permission: ProgramPermission,
 ): Promise<{ session: Session; actor: Actor; program: WritableProgram } | { error: NextResponse }> {
   const live = await actorFromSession(session);
   const program = session
     ? await prisma.cohort.findFirst({
         where: withinTenant({ id: programId }, await tenantWhere(session)),
-        select: { id: true, orgId: true, name: true, eligibilityMode: true },
+        select: { id: true, orgId: true, name: true, term: true, eligibilityMode: true },
       })
     : null;
-  const gate = await requirePermission('program.write', {
+  const gate = await requirePermission(permission, {
     request,
     subject: { orgId: program?.orgId ?? live?.orgId ?? null, cohortId: programId },
   });
