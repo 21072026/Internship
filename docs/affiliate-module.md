@@ -194,9 +194,9 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   field is optional and the page falls back field by field (visitor's locale →
   English → the rest), so a programme can launch in one language. Stored values are
   compared in a fixed key order, so an unchanged save writes nothing; a change is
-  audited (`affiliate.landing.update`) with the locales and which contact fields are
-  set, never the texts. The wording is the organisation's data — the code carries
-  only generic labels.
+  audited (`affiliate.landing.update`) with the names of the parts that changed,
+  never a value (#3535). The wording — and the page's look, `theme` (§ The page's
+  look) — is the organisation's data; the code carries only generic labels.
 - **Partners** (`src/lib/affiliatePartners.ts`, `/api/admin/affiliate/partners`) —
   the list with customer counts and PENDING / APPROVED / PAID totals summed in SQL,
   a new partner (referral code: letters, digits, `-`, `_`, unique per organisation
@@ -261,9 +261,85 @@ The table is **built from the plan on every render** (`commissionTableRows()`),
 never typed, so the page cannot promise what the engine does not pay; the
 percent phase is one sentence that says what the engine does — from the first
 payment of customer no. N on, every customer's payment earns the rate, each
-within its own window. Colours and mark follow the host's brand.
+within its own window. Without a theme of its own (below), colours and mark
+follow the host's brand.
 `src/lib/affiliatePublicPage.ts` loads it; `e2e/affiliate-public-page.spec.ts`
 pins it.
+
+### The page's look (#3535)
+
+An organisation can make `/partner` and `/partner/apply` look like its own site.
+The look is **data**, like the copy — `landing.theme` in the same JSON column,
+edited under *Look of the page* on `/admin/affiliates/settings` next to a live
+preview, saved by the same `PUT …/settings/landing` through `saveLanding()` — and
+never code: no organisation's colour, font, logo or picture is in this
+repository. `theme: null` (the default) is the page exactly as above.
+
+What a theme may hold is deliberately narrow (`parseTheme()` in
+`src/lib/affiliateLandingRule.ts`, unit-tested):
+
+- **Six colours**, `#rrggbb` only (`primary`, `secondary`, `heading`, `text`,
+  `background`, `surface`) — no names, functions, variables or anything else a
+  stylesheet would read. **Contrast is judged on save (WCAG AA)**, and only for
+  pairs the page renders: body text 4.5:1 on the page and on the cards; headings
+  3:1 (they are large text); the hero's and a `band` call to action's gradient
+  must carry *some* text colour (3:1 for the hero's large text, 4.5:1 for the
+  band's body text). Text on a fill is never chosen by hand: `onFill()` picks
+  white, else black. Themed buttons are rendered as large text (19px bold), so
+  a brand's saturated button colour can keep its white label at 3:1. Small
+  accents fall back to the heading colour where the primary is too light
+  (`themePalette()`: `accentText`, `accentLarge`). A refusal is
+  `theme.colors.<key>` `contrast`, on the colour to change.
+- **Two fonts** from `FONT_KEYS`, self-hosted by `next/font`
+  (`src/lib/partnerThemeFonts.ts`): fetched at build time, served from
+  `/_next/static`, so the visitor's browser never calls a font CDN (CSP
+  `font-src 'self'`). Adding a font is a line in both files.
+- **Named variants** (`THEME_OPTIONS`): hero alignment and height, the scrim over
+  a hero picture/video (`brand` tint, `dark`, `none` — with no scrim the text
+  carries a shadow; a picture cannot be measured, the preview shows the result),
+  centred logo, corners, card style, a band in the heading colour behind the
+  steps, a `band` or `plain` closing call, and the entrance effect.
+- **Media by id, never by address.** The logo (image), the hero and the
+  showcase beside the closing call (image or video) are rows of
+  `AffiliateLandingAsset` (tenant model), uploaded by
+  `POST /api/admin/affiliate/settings/landing/assets` (`affiliate.write`):
+  PNG/JPEG/WebP ≤ 5 MB or MP4/WebM ≤ 15 MB, bytes checked against the declared
+  type (`contentMatchesType`, #888; no SVG — it can carry script; at most 30 per
+  org). The theme stores the id; the save checks each one is this org's and of a
+  kind the slot takes (`theme.media.<slot>` `invalid`). They are served by
+  `GET /api/public/partner-media/<id>` — public, because the page is and because
+  the editor previews an upload before the save; `nosniff`, a sandboxing CSP,
+  `immutable`, and single byte ranges (Safari plays no video without them).
+  Uploads no saved theme points at are swept by the next save after 24 hours.
+- **Motion.** The entrance effect (`fade`, `rise`, `zoom`;
+  `src/components/partnerTheme/Reveal.tsx` + `.pt-reveal` in `globals.css`) is
+  armed only after hydration and only without `prefers-reduced-motion: reduce`;
+  the server renders every section visible. A video plays muted, looped and
+  inline, never under reduced motion, and always has a pause button (WCAG
+  2.2.2; `ThemeVideo.tsx`).
+
+Rendering: `src/app/partner/ThemedPartnerPage.tsx` — the same sections, words,
+doors and test ids as the standard page — and the editor's
+`ThemePreview.tsx` both draw through `themeLook()`
+(`src/lib/partnerThemeLook.ts`). Every colour is an inline style, never a
+Tailwind colour class, so the flat dark-mode overrides cannot repaint part of a
+palette that was checked as one set: **a themed page looks the same in dark
+mode** (`color-scheme: light`). The application form keeps its fields in the
+app's own dark mode, so there the theme's page colours apply in light mode
+only; its logo sits on the theme's gradient, where a logo made for the hero
+stays visible.
+
+**Not the org's WHITE_LABEL branding.** `brandColor` and the brand mark need
+the ENTERPRISE WHITE_LABEL feature, which only a super admin can switch on; the
+partner page is the programme's own marketing page, edited by the programme's
+admin with its copy, so its look does not depend on that feature. Without a
+logo in the theme the host's brand mark is still shown.
+
+The audit row of a landing save (`affiliate.landing.update`) names the parts
+that changed and never a value: `{ changed: ['copy.de', 'phone', 'stats',
+'theme.colors', 'theme.media', …] }` (`changedLandingFields()`); an unchanged
+save writes nothing. `e2e/affiliate-landing-theme.spec.ts` pins uploads,
+refusals, the drawn page and reduced motion.
 
 ### The figure cards (#3364)
 

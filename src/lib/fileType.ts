@@ -12,7 +12,7 @@
  */
 
 /** Families a signature can identify. Several MIME types map to one family. */
-type Family = 'pdf' | 'zip' | 'ole2' | 'png' | 'jpeg' | 'gif' | 'webp';
+type Family = 'pdf' | 'zip' | 'ole2' | 'png' | 'jpeg' | 'gif' | 'webp' | 'mp4' | 'webm';
 
 function startsWith(buf: Uint8Array, bytes: number[], offset = 0): boolean {
   if (buf.length < offset + bytes.length) return false;
@@ -26,6 +26,9 @@ export function sniffFamily(buf: Uint8Array): Family | null {
   if (startsWith(buf, [0x47, 0x49, 0x46, 0x38])) return 'gif'; // GIF8
   if (startsWith(buf, [0x52, 0x49, 0x46, 0x46]) && startsWith(buf, [0x57, 0x45, 0x42, 0x50], 8)) return 'webp';
   if (startsWith(buf, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])) return 'ole2'; // legacy .doc
+  // ISO base media: a box size, then "ftyp" at offset 4 (the partner page's theme video, #3535).
+  if (startsWith(buf, [0x66, 0x74, 0x79, 0x70], 4)) return 'mp4';
+  if (startsWith(buf, [0x1a, 0x45, 0xdf, 0xa3])) return 'webm'; // EBML header
   // PK\x03\x04. Also PK\x05\x06 / PK\x07\x08 for empty and spanned archives —
   // not valid Office documents, but accepting them here only means the ZIP
   // family check passes and the file fails to open later, which is the same
@@ -53,6 +56,8 @@ const EXPECTED: Record<string, Family[]> = {
   'image/jpg': ['jpeg'],
   'image/gif': ['gif'],
   'image/webp': ['webp'],
+  'video/mp4': ['mp4'],
+  'video/webm': ['webm'],
 };
 
 /**

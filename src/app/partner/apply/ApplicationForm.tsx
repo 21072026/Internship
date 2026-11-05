@@ -14,7 +14,8 @@ import { AFFILIATE_HEARD_FROM, APPLICATION_LIMITS, type ApplicationField } from 
 // the server names and carries the honeypot and the render time the route's
 // anti-spam reads. No password field: nobody gets an account from this form.
 
-export function ApplicationForm({ accent }: { accent: string }) {
+// `ink` is the text colour on the accent when a theme picked the accent (#3535); absent, the button keeps its own.
+export function ApplicationForm({ accent, ink }: { accent: string; ink?: string }) {
   const t = useT();
   const L = t.affiliateApply;
   const locale = useLocale();
@@ -103,7 +104,7 @@ export function ApplicationForm({ accent }: { accent: string }) {
       {state === 'closed' && <p className="text-sm text-red-600" role="alert">{L.closed}</p>}
       {state === 'limited' && <p className="text-sm text-red-600" role="alert">{L.limited}</p>}
 
-      <Button type="submit" disabled={state === 'sending'} className="w-full" style={{ backgroundColor: accent }} data-testid="affiliate-apply-submit">
+      <Button type="submit" disabled={state === 'sending'} className="w-full" style={{ backgroundColor: accent, ...(ink ? { color: ink } : {}) }} data-testid="affiliate-apply-submit">
         {L.submit}
       </Button>
     </form>

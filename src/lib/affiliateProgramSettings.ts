@@ -27,7 +27,8 @@ import { enqueue } from '@/lib/jobs/queue';
 import { PLAN_RESYNC_MAX_ATTEMPTS } from '@/lib/affiliatePlanResync';
 import { parseResyncState, queuedResync, type PlanResyncState } from '@/lib/affiliatePlanResyncRule';
 import { parseReferralUrl, type ReferralUrlIssue } from '@/lib/affiliateReferralRule';
-import { canonicalLanding, parseLanding, readStoredLanding, type Landing, type LandingIssue } from '@/lib/affiliateLandingRule';
+import { canonicalLanding, changedLandingFields, parseLanding, readStoredLanding, type Landing, type LandingIssue } from '@/lib/affiliateLandingRule';
+import { sweepLandingAssets, themeMediaIssues } from '@/lib/affiliateLandingAssets';
 
 /**
  * The currencies a programme may run in. EUR only in the first release; every
@@ -191,23 +192,24 @@ export async function saveLanding(
   const value = landing as unknown as Prisma.InputJsonValue;
   try {
     return await prisma.$transaction(async (tx) => {
+      // The theme's media (#3535) must be this org's own uploads, of a kind the slot takes.
+      const mediaIssues = await themeMediaIssues(orgId, landing.theme, tx);
+      if (mediaIssues.length > 0) return { ok: false as const, issues: mediaIssues };
       const current = await tx.affiliateProgramSettings.findUnique({ where: { orgId }, select: { landing: true } });
-      if (current && canonicalLanding(readStoredLanding(current.landing)) === canonicalLanding(landing)) {
+      const before = readStoredLanding(current?.landing);
+      if (current && canonicalLanding(before) === canonicalLanding(landing)) {
         return { ok: true as const, landing, changed: false };
       }
       if (current) await tx.affiliateProgramSettings.update({ where: { orgId }, data: { landing: value } });
       else await tx.affiliateProgramSettings.create({ data: { orgId, landing: value } });
+      await sweepLandingAssets(tx, orgId, landing.theme);
       await tx.auditLog.create({
         data: {
           orgId,
           actorId,
           action: 'affiliate.landing.update',
-          detail: JSON.stringify({
-            locales: Object.keys(landing.copy),
-            phone: landing.phone !== null,
-            email: landing.email !== null,
-            productSignupUrl: landing.productSignupUrl !== null,
-          }),
+          // Which parts changed, never their values (copy, phone and e-mail are the org's; colours and ids say nothing).
+          detail: JSON.stringify({ changed: changedLandingFields(before, landing) }),
         },
       });
       return { ok: true as const, landing, changed: true };
