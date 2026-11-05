@@ -3618,6 +3618,9 @@ export async function sendTrialReminderEmail({
   await notifyEvent(userId, 'trial.endingSoon', { company: companyName, days: String(threshold) }, {
     channels: ['email'],
     orgId: orgId ?? null,
+    // One reminder per (trial end, threshold): a second tick — another replica,
+    // a retried job — is absorbed by the ledger instead of queuing a twin.
+    dedupeKey: `trial:${trialEndsAt.toISOString().slice(0, 10)}:${threshold}`,
     email: {
       category: 'stage-deadline',
       locale,
