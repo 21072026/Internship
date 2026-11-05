@@ -190,3 +190,43 @@ test("DELETE /api/status-changes/<A's entry> as B's admin: 404 and the row survi
   expect(res.status(), 'a cross-tenant delete must read as not found').toBe(404);
   expect(await prisma.statusChange.findUnique({ where: { id: rows.A.statusChange.id } })).not.toBeNull();
 });
+
+// ── The duplicate scan's result cache (#1434) ──────────────────────────────────
+// /api/admin/duplicates reuses its last result per org while the org's mentees
+// are unchanged (src/lib/duplicateScanCache.ts). Each tenant gets a twin of its
+// own mentee, both admins scan twice (the second call is the cached one), and a
+// result may only ever carry the caller's own pair.
+test('GET /api/admin/duplicates as each admin, twice: own pair only, cached or not', async ({ browser }) => {
+  const twins = await Promise.all(
+    [tenants.orgA, tenants.orgB].map((t) =>
+      prisma.user.create({
+        data: {
+          email: `iso-twin.${t.label.toLowerCase()}.${Date.now()}@example.test`,
+          password: '!x',
+          role: 'MENTEE',
+          fullName: t.mentee.fullName,
+          skills: [],
+          orgId: t.org.id,
+        },
+        select: { id: true },
+      }),
+    ),
+  );
+  try {
+    for (const [self, other, twin, otherTwin] of [
+      ['A', tenants.orgB, twins[0], twins[1]],
+      ['B', tenants.orgA, twins[1], twins[0]],
+    ] as const) {
+      const request = await requestAs(browser, self, 'admin');
+      for (const round of ['scan', 'cached']) {
+        const res = await request.get('/api/admin/duplicates');
+        expect(res.status(), `${self} ${round}`).toBe(200);
+        const body = await res.text();
+        expect.soft(body.includes(twin.id), `${self} ${round}: its own twin pair is missing`).toBe(true);
+        absent(body, [otherTwin.id, other.mentee.id], `/api/admin/duplicates ${self} ${round}`);
+      }
+    }
+  } finally {
+    await prisma.user.deleteMany({ where: { id: { in: twins.map((t) => t.id) } } });
+  }
+});

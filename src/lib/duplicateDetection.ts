@@ -395,8 +395,11 @@ const scanCache = ((globalThis as { __duplicateScanCache?: ReturnType<typeof mak
 
 export async function scanDuplicatePairs(orgId: string | null, cap = 200): Promise<DuplicatePair[]> {
   const where = { role: 'MENTEE' as const, orgId };
-  const stats = await prisma.user.aggregate({ where, _count: { _all: true }, _max: { updatedAt: true } });
-  const fingerprint = scanFingerprint(stats._count._all, stats._max.updatedAt, cap);
+  const groups = await prisma.user.groupBy({ by: ['isActive'], where, _count: { _all: true }, _max: { updatedAt: true } });
+  const fingerprint = scanFingerprint(
+    groups.map((g) => ({ isActive: g.isActive, count: g._count._all, latestUpdatedAt: g._max.updatedAt })),
+    cap,
+  );
   const orgKey = orgId ?? '\u0000none';
   const cached = scanCache.get(orgKey, fingerprint, Date.now());
   if (cached) return cached;
