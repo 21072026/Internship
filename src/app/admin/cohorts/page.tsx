@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
-import { Pencil, Route, ShieldCheck, Trash2 } from 'lucide-react';
+import { Copy, Pencil, Route, ShieldCheck, Trash2 } from 'lucide-react';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
@@ -14,6 +14,7 @@ import { parseGateBody, type GateInfo } from '@/lib/upgradePrompt';
 import { outcomeStageKeysFrom } from '@/lib/pipeline';
 import { useResolvedStages } from '@/lib/pipelineStagesClient';
 import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
+import { nextTerm, suggestCloneName } from '@/lib/programCloneRule';
 
 interface Cohort {
   id: string;
@@ -32,6 +33,11 @@ export default function AdminCohortsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+  // The clone dialog (#1643): the source, and the name/term the new programme gets.
+  const [cloning, setCloning] = useState<{ id: string; name: string } | null>(null);
+  const [cloneName, setCloneName] = useState('');
+  const [cloneTerm, setCloneTerm] = useState('');
+  const [notice, setNotice] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/cohorts');
@@ -76,6 +82,38 @@ export default function AdminCohortsPage() {
 
   const remove = (c: Cohort) => setPendingDelete({ id: c.id, name: c.name });
 
+  const startClone = (c: Cohort) => {
+    setCloning({ id: c.id, name: c.name });
+    setCloneName(suggestCloneName(c.name, t.cohorts.cloneNext));
+    setCloneTerm(nextTerm(c.term));
+    setNotice(null);
+  };
+
+  const confirmClone = async () => {
+    if (!cloning || saving || !cloneName.trim()) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/cohorts/${cloning.id}/clone`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: cloneName.trim(), term: cloneTerm.trim() || null }),
+      });
+      if (res.ok) {
+        const body = await res.json();
+        setGate(null);
+        setNotice({ tone: 'ok', text: t.cohorts.cloned.replace('{name}', body.cohort?.name ?? cloneName.trim()) });
+        await load();
+      } else {
+        const body = await res.json().catch(() => null);
+        const g = parseGateBody(body);
+        if (g) setGate(g);
+        else setNotice({ tone: 'error', text: t.cohorts.cloneFailed });
+      }
+    } finally {
+      setSaving(false);
+      setCloning(null);
+    }
+  };
+
   const confirmRemove = async () => {
     if (!pendingDelete || saving) return;
     setSaving(true);
@@ -111,6 +149,11 @@ export default function AdminCohortsPage() {
         </Link>
       </div>
       {gate && <UpgradePrompt gate={gate} viewer="admin" className="mb-6" />}
+      {notice && (
+        <p role="status" data-testid="cohort-clone-notice" className={`mb-4 text-sm ${notice.tone === 'ok' ? 'text-green-700 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+          {notice.text}
+        </p>
+      )}
 
       <Card className="mb-6 max-w-xl">
         <CardHeader><CardTitle>{t.cohorts.newCohort}</CardTitle></CardHeader>
@@ -169,6 +212,7 @@ export default function AdminCohortsPage() {
                       <td className="py-2 text-right whitespace-nowrap">
                         <Link href={`/admin/cohorts/eligibility?programId=${encodeURIComponent(c.id)}`} aria-label={t.eligibility.link} title={t.eligibility.link} data-testid={`cohort-eligibility-${c.id}`} className="text-gray-400 hover:text-blue-600 mr-3"><ShieldCheck className="h-4 w-4 inline" /></Link>
                         <Link href={`/admin/programs/${c.id}/journey`} aria-label={t.programJourney.journeyLink} title={t.programJourney.journeyLink} data-testid={`cohort-journey-${c.id}`} className="text-gray-400 hover:text-blue-600 mr-3"><Route className="h-4 w-4 inline" /></Link>
+                        <button onClick={() => startClone(c)} disabled={saving} aria-label={t.cohorts.clone} title={t.cohorts.clone} data-testid={`cohort-clone-${c.id}`} className="text-gray-400 hover:text-blue-600 mr-3"><Copy className="h-4 w-4 inline" /></button>
                         <button onClick={() => rename(c)} disabled={saving} aria-label={t.common.edit} className="text-gray-400 hover:text-blue-600 mr-3"><Pencil className="h-4 w-4 inline" /></button>
                         <button onClick={() => remove(c)} disabled={saving} aria-label={t.common.delete} className="text-gray-400 hover:text-red-600"><Trash2 className="h-4 w-4 inline" /></button>
                       </td>
@@ -181,6 +225,23 @@ export default function AdminCohortsPage() {
         )}
       </Card>
     </div>
+    <ConfirmDialog
+      open={cloning !== null}
+      title={cloning ? t.cohorts.cloneTitle.replace('{name}', cloning.name) : ''}
+      message={
+        <div className="space-y-3 text-left" data-testid="cohort-clone-dialog">
+          <p className="text-sm text-gray-600 dark:text-gray-300">{t.cohorts.cloneHint}</p>
+          <Input label={t.cohorts.name} value={cloneName} maxLength={120} onChange={(e) => setCloneName(e.target.value)} data-testid="cohort-clone-name" required />
+          <Input label={t.cohorts.term} value={cloneTerm} maxLength={60} onChange={(e) => setCloneTerm(e.target.value)} data-testid="cohort-clone-term" />
+        </div>
+      }
+      cancelLabel={t.common.cancel}
+      confirmLabel={t.cohorts.cloneConfirm}
+      loading={saving}
+      confirmDisabled={!cloneName.trim()}
+      onConfirm={confirmClone}
+      onCancel={() => setCloning(null)}
+    />
     <ConfirmDialog
       open={pendingDelete !== null}
       message={pendingDelete ? t.cohorts.confirmDelete.replace('{name}', pendingDelete.name) : ''}

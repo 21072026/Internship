@@ -115,6 +115,17 @@ replayed last click is "already answered". Only the invitation's own person can
 answer it. A survey with any free-text, number, date or multi-select question
 is not answered in chat: the card links to the survey page.
 
+**The pairing DM and the dormant check-in** (#1946): when a pair is created
+(`announceNewRelation()`, in a vertical with `mentorship`), each side who linked
+a chat identity gets one card in their own language
+(`introducePairInChat()`, `src/lib/chat/pairingInChat.ts`). The mentee's card
+has a **Book a session** button for that relation (`meeting.book`). The
+mentor's card carries the mentee's top three skills, which the app's mentee
+page already shows; nothing else of either profile travels. The pairing mail's
+own opt-out withholds the card. The "still interested?" check-in
+(docs/dormant-first-contacts.md) goes on chat **instead of** the mail, from the
+same claimed nudge, so a person's two-message cap counts both channels together.
+
 **Commands** (#1956): `/interncrm status|book|log|help` on Slack (the slash
 command's Request URL is the interaction endpoint itself) and the same words
 typed to the Teams bot (its messaging endpoint; a leading @mention is stripped).

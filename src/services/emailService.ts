@@ -116,6 +116,7 @@ import { resolveSlaDayRule, resolveStageEscalations } from '@/lib/stageSla';
 import { claimEscalation, escalationRecipients, openBreach, resolveBreaches } from '@/lib/slaBreach';
 import { SLA_LEVEL_MENTOR, daysOverdue, escalationDue, mentorAlreadyTold } from '@/lib/slaLadderRule';
 import { notifyEvent } from '@/lib/notifications/router';
+import { deliverCheckInOnChat } from '@/lib/chat/dormantInChat';
 import { meetingChatCard } from '@/lib/meetingChatCard';
 import { sameTenant } from '@/lib/orgScope';
 import { brandAssetPath } from '@/lib/brandRule';
@@ -4989,8 +4990,9 @@ export async function sendWeeklyReportReminders(now = new Date(), options: { rel
  * morning.
  *
  * No in-app notification: the entire premise is a person who does not sign in.
- * The mail is the only channel that can reach them, and a bell item nobody will
- * ever look at is not a second attempt.
+ * The mail is the channel that can reach them — or chat, where they linked one
+ * (#1946): then the same claimed nudge goes there instead of the mail, never
+ * as well. A bell item nobody will ever look at is not a second attempt.
  */
 // No DORMANT_FIRST_NUDGE_DAYS here: the first nudge's timing is DORMANT_GRACE_DAYS
 // in lib/dormantFirstContact.ts, spent before the flag is even stamped. Two
@@ -5129,12 +5131,22 @@ export async function sendDormantCheckIns(now = new Date()) {
     spentByMentee.set(relation.mentee.id, spent + 1);
     lastNudgeByMentee.set(relation.mentee.id, now);
 
+    // "Final" is the person's last nudge, not the relation's.
+    const isFinal = spent + 1 >= DORMANT_MAX_NUDGES;
+    // CHAT IS A CHANNEL, NOT A THIRD NUDGE (#1946): the nudge just claimed is
+    // delivered as a chat card INSTEAD of this mail when the mentee linked a
+    // chat identity; the mail below only goes when the card did not. One
+    // claim, one message, whichever channel — the two-ever cap above is the
+    // one counter for both.
+    if (await deliverCheckInOnChat(relation.mentee.id, isFinal, `dormant:${relation.id}:${count + 1}`)) {
+      sent += 1;
+      continue;
+    }
+
     const locale = isLocale(relation.mentee.preferredLanguage ?? undefined)
       ? (relation.mentee.preferredLanguage as Locale)
       : defaultLocale;
     const copy = (await dictionaryOf(locale, relation.orgId)).dormantCheckIn;
-    // "Final" is the person's last nudge, not the relation's.
-    const isFinal = spent + 1 >= DORMANT_MAX_NUDGES;
     const brand = await emailBrand(relation.orgId);
     const base = await origins.urlFor(relation.mentee.orgId);
     await sendEmail({
