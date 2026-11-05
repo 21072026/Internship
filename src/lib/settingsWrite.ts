@@ -25,10 +25,12 @@
 // write is what keeps each layer single, and these two functions must stay the
 // only writers of Setting rows (npm run check:settings-accessor).
 
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { emit } from '@/lib/events/emit';
 import { redactedDiff, type FieldChange } from '@/lib/events/diff';
 import {
+  SETTING_DEFAULTS,
   isGlobalSettingKey,
   noteSettingsWritten,
   settingAllowsScope,
@@ -140,4 +142,65 @@ export function writeSetting(
  */
 export function revertSetting(key: SettingKey, orgId?: string | null, opts: SettingWriteOptions = {}): Promise<SettingWriteResult> {
   return apply(key, null, orgId, opts);
+}
+
+/**
+ * Copy one programme's own rows into another programme of the same org (#1643,
+ * the clone for the next intake), inside the CALLER's transaction — the clone
+ * is one transaction, so its settings cannot be a second one. Same rules as
+ * apply(): a key that has no programme scope (any more) is skipped rather than
+ * written, a value is stored as it was, and each row gets its `SettingChange`.
+ * The target is a programme the caller has just created, so it holds no rows
+ * and every copy is a create. Returns what to announce; the caller passes it to
+ * announceSettingCopies() AFTER the commit, so no event names a row that a
+ * rollback took back.
+ */
+export async function copyProgramSettingsTx(
+  tx: Prisma.TransactionClient,
+  orgId: string,
+  fromProgramId: string,
+  toProgramId: string,
+  actor: SettingActor | null,
+): Promise<NonNullable<SettingWriteResult>[]> {
+  const rows = await tx.setting.findMany({
+    where: { orgId, programId: fromProgramId },
+    select: { key: true, value: true },
+    orderBy: [{ key: 'asc' }, { updatedAt: 'desc' }],
+  });
+  const seen = new Set<string>();
+  const out: NonNullable<SettingWriteResult>[] = [];
+  for (const row of rows) {
+    if (seen.has(row.key)) continue; // a stray duplicate: the newest wins, as reads do
+    seen.add(row.key);
+    if (!(row.key in SETTING_DEFAULTS)) continue;
+    const key = row.key as SettingKey;
+    if (!settingAllowsScope(key, 'program') || isGlobalSettingKey(key)) continue;
+    const [change] = redactedDiff({ [key]: null }, { [key]: row.value }, settingDiffSpec(key));
+    if (!change) continue;
+    await tx.setting.create({ data: { orgId, programId: toProgramId, key, value: row.value } });
+    await tx.settingChange.create({
+      data: {
+        orgId,
+        programId: toProgramId,
+        key,
+        oldValue: null,
+        newValue: change.to === null ? null : String(change.to),
+        actorId: actor?.id ?? null,
+      },
+    });
+    out.push({ change, scope: 'program', orgId, programId: toProgramId });
+  }
+  return out;
+}
+
+/** After the clone committed: the cache note and one `setting.changed` per copied row. */
+export async function announceSettingCopies(copies: readonly NonNullable<SettingWriteResult>[], actor: SettingActor | null): Promise<void> {
+  noteSettingsWritten();
+  for (const c of copies) {
+    await emit(
+      'setting.changed',
+      { key: c.change.field as SettingKey, scope: c.scope, programId: c.programId, changes: [c.change] },
+      { orgId: c.orgId, actor: actor ? { id: actor.id, type: 'user' } : { type: 'system' } },
+    );
+  }
 }
