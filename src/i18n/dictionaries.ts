@@ -3729,6 +3729,7 @@ const en = {
     backHome: 'Back to the home page',
   },
   auth: {
+    passwordMismatch: 'New passwords do not match',
     adminSeatUnavailable: 'This organisation has no free administrator seat right now. Ask the person who invited you to free one up, then use the invitation again.',
     ssoTitle: 'Sign in with SSO',
     ssoSubtitle: 'Enter your organization code to continue to your identity provider.',
@@ -15619,6 +15620,7 @@ const tr: Dict = {
     backHome: 'Ana sayfaya dön',
   },
   auth: {
+    passwordMismatch: 'Yeni parolalar eşleşmiyor',
     adminSeatUnavailable: 'Bu kuruluşta şu anda boş yönetici koltuğu yok. Sizi davet eden kişiden bir koltuk açmasını isteyin, sonra daveti yeniden kullanın.',
     ssoTitle: 'SSO ile giriş yap',
     ssoSubtitle: 'Kimlik sağlayıcınıza devam etmek için kuruluş kodunuzu girin.',
@@ -27362,6 +27364,7 @@ const de: Dict = {
     backHome: 'Zurück zur Startseite',
   },
   auth: {
+    passwordMismatch: 'Die neuen Passwörter stimmen nicht überein',
     adminSeatUnavailable: 'Diese Organisation hat derzeit keinen freien Admin-Platz. Bitten Sie die einladende Person, einen freizugeben, und nutzen Sie die Einladung dann erneut.',
     ssoTitle: 'Mit SSO anmelden',
     ssoSubtitle: 'Geben Sie den Code Ihrer Organisation ein, um zu Ihrem Identitätsanbieter weiterzugehen.',
