@@ -2,7 +2,7 @@
 
 <!-- GENERATED FILE — do not edit by hand.
      Regenerate with: npm run check:licenses -- --write
-     license-inventory-signature: 074ade56d6b1fd92 -->
+     license-inventory-signature: 97923b1a39da7c4d -->
 
 > Not legal advice. This is the machine-checked inventory a procurement
 > questionnaire asks for, and the input to a lawyer’s review — not a
@@ -18,11 +18,11 @@ commercial grant impossible. Both questions are checked separately, per
 package, by `npm run check:licenses` on every pull request.
 
 **Scope**: the production dependency tree read from `package-lock.json`
-— 287 packages over 304 installation paths, the same set
+— 291 packages over 308 installation paths, the same set
 described by that build’s CycloneDX SBOM at `/sbom.cdx.json` (both read this
 one source, so the two documents cannot disagree).
 
-**Development dependencies** (368 packages) are not listed here and do not
+**Development dependencies** (371 packages) are not listed here and do not
 gate the build: nothing imports them at runtime, so no licence obligation
 attaches to them through this application. Worth stating plainly rather than
 waving through, though — the container image does physically contain them,
@@ -35,7 +35,7 @@ generation — so the exclusion changes no answer today.
 
 | Verdict | Packages | What it means |
 |---|---:|---|
-| ok | 270 | Permissive. No obligation beyond keeping the copyright notice. |
+| ok | 274 | Permissive. No obligation beyond keeping the copyright notice. |
 | ok · attribution | 1 | Permissive with an explicit attribution requirement (usually a data set rather than code). Satisfied by this inventory plus the notice shipped inside the package. |
 | ok · weak copyleft | 15 | File- or library-level copyleft (LGPL, MPL, EPL). Compatible with both the AGPL distribution and the commercial grant as long as the package is shipped unmodified and its own source stays available. Modifying one of these in place is what would change the answer. |
 | ok · allowlisted | 1 | The declared string is not a resolvable SPDX expression, and the real licence was established by hand. Every entry carries its reason in scripts/license-policy.mjs. |
@@ -48,12 +48,12 @@ licence being granted on top of it.
 
 | Declared licence | Packages | Verdict |
 |---|---:|---|
-| `MIT` | 188 | ok |
+| `MIT` | 191 | ok |
 | `Apache-2.0` | 31 | ok |
 | `ISC` | 30 | ok |
 | `LGPL-3.0-or-later` | 10 | ok · weak copyleft |
 | `BSD-2-Clause` | 8 | ok |
-| `BSD-3-Clause` | 4 | ok |
+| `BSD-3-Clause` | 5 | ok |
 | `Apache-2.0 AND LGPL-3.0-or-later` | 3 | ok · weak copyleft |
 | `Unlicense` | 2 | ok |
 | `(MIT AND Zlib)` | 1 | ok |
@@ -88,7 +88,7 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `@anthropic-ai/sdk` | 0.137.0 | `MIT` | ok |
 | `@babel/runtime` | 7.29.2 | `MIT` | ok |
 | `@emnapi/runtime` | 1.11.3 | `MIT` | ok |
-| `@hookform/resolvers` | 3.10.0 | `MIT` | ok |
+| `@hookform/resolvers` | 5.9.2 | `MIT` | ok |
 | `@img/colour` | 1.1.0 | `MIT` | ok |
 | `@img/sharp-darwin-arm64` | 0.35.5 | `Apache-2.0` | ok |
 | `@img/sharp-darwin-x64` | 0.35.5 | `Apache-2.0` | ok |
@@ -151,6 +151,7 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `@scarf/scarf` | 1.4.0 | `Apache-2.0` | ok |
 | `@selderee/plugin-htmlparser2` | 0.12.0 | `MIT` | ok |
 | `@stablelib/base64` | 1.0.1 | `MIT` | ok |
+| `@standard-schema/utils` | 0.3.0 | `MIT` | ok |
 | `@swc/helpers` | 0.5.15 | `Apache-2.0` | ok |
 | `@tsconfig/svelte` | 1.0.13 | `MIT` | ok |
 | `@types/css-font-loading-module` | 0.0.7 | `MIT` | ok |
@@ -184,6 +185,7 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `@zone-eu/mailsplit` | 5.4.16, 5.4.29 | `(MIT OR EUPL-1.1+)` | ok |
 | `adler-32` | 1.3.1 | `Apache-2.0` | ok |
 | `agent-base` | 7.1.4 | `MIT` | ok |
+| `ajv` | 8.20.0 | `MIT` | ok |
 | `ansi-regex` | 5.0.1 | `MIT` | ok |
 | `ansi-styles` | 4.3.0 | `MIT` | ok |
 | `argparse` | 1.0.10 | `MIT` | ok |
@@ -236,10 +238,10 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `entities` | 4.5.0, 7.0.1 | `BSD-2-Clause` | ok |
 | `escape-html` | 1.0.3 | `MIT` | ok |
 | `fast-sha256` | 1.3.0 | `Unlicense` | ok |
+| `fast-uri` | 3.1.9 | `BSD-3-Clause` | ok |
 | `fflate` | 0.4.9 | `MIT` | ok |
 | `find-up` | 4.1.0 | `MIT` | ok |
 | `frac` | 1.1.2 | `Apache-2.0` | ok |
-| `fsevents` | 2.3.3 | `MIT` | ok |
 | `get-caller-file` | 2.0.5 | `ISC` | ok |
 | `he` | 1.2.0 | `MIT` | ok |
 | `html-to-text` | 10.0.1 | `MIT` | ok |
@@ -256,6 +258,7 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `isarray` | 1.0.0 | `MIT` | ok |
 | `jose` | 4.15.9 | `MIT` | ok |
 | `json-schema-to-ts` | 3.1.1 | `MIT` | ok |
+| `json-schema-traverse` | 1.0.0 | `MIT` | ok |
 | `jszip` | 3.10.1 | `(MIT OR GPL-3.0-or-later)` | ok |
 | `jwa` | 2.0.1 | `MIT` | ok |
 | `jws` | 4.0.1 | `MIT` | ok |
@@ -317,6 +320,7 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `readable-stream` | 2.3.8 | `MIT` | ok |
 | `real-require` | 0.2.0, 1.0.0 | `MIT` | ok |
 | `require-directory` | 2.1.1 | `MIT` | ok |
+| `require-from-string` | 2.0.2 | `MIT` | ok |
 | `require-main-filename` | 2.0.0 | `ISC` | ok |
 | `robust-predicates` | 3.0.3 | `Unlicense` | ok |
 | `rrdom` | 2.1.7 | `MIT` | ok |
@@ -371,7 +375,7 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `yallist` | 4.0.0 | `ISC` | ok |
 | `yargs` | 15.4.1 | `MIT` | ok |
 | `yargs-parser` | 18.1.3 | `ISC` | ok |
-| `zod` | 3.25.76 | `MIT` | ok |
+| `zod` | 4.6.7 | `MIT` | ok |
 
 ## How this file is produced and kept honest
 

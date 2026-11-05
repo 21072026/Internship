@@ -28,7 +28,7 @@ import { resolvePipelineStages } from '@/lib/pipelineStages';
 // cannot buffer an arbitrary payload (1.5 MB of text per sheet).
 const sheetText = z.string().max(1_500_000).optional();
 const mappingFor = (sheet: (typeof SHEETS)[number]) =>
-  z.record(z.enum(SHEET_FIELDS[sheet].map((f) => f.field) as [string, ...string[]]), z.string().max(200)).optional();
+  z.partialRecord(z.enum(SHEET_FIELDS[sheet].map((f) => f.field) as [string, ...string[]]), z.string().max(200)).optional();
 
 const bodySchema = z
   .object({

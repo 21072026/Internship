@@ -14,6 +14,7 @@ import {
   type InvitationStatus,
 } from '@/lib/invitationStatus';
 import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
+import { InvitationFunnelCard } from '@/components/admin/InvitationFunnelCard';
 
 // The invitation status board (#2071).
 //
@@ -216,6 +217,11 @@ export default function AdminInvitationsPage() {
           </Link>
         </div>
       </div>
+
+      {/* The funnel (#1921) follows the board's date range only: the other
+          filters narrow a list, the funnel answers "of what we sent, how many
+          joined". */}
+      <InvitationFunnelCard from={from} to={to} />
 
       {/* Per-status counts. Each one doubles as the status filter — the number
           an admin is looking at is the thing they want to click. */}

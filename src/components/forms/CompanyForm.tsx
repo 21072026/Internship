@@ -46,7 +46,7 @@ function buildCompanySchema(t: ClientDictionary) {
    * reports the union's own "Invalid input" instead of the message that says
    * what is actually wrong.
    */
-  const boundedFormat = (max: number, format: z.ZodType<string, z.ZodTypeDef, string>) =>
+  const boundedFormat = (max: number, format: z.ZodType<string, string>) =>
     optionalText.pipe(z.string().max(max, tooLong(max))).pipe(format.or(z.literal('')));
   return z.object({
     name: z
@@ -90,7 +90,7 @@ export function CompanyForm({ defaultValues, onSubmit, onCancel, isEditing, comp
     handleSubmit,
     setValue,
     formState: { errors },
-  } = useForm<CompanyFormData>({
+  } = useForm<z.input<CompanySchema>, unknown, CompanyFormData>({
     resolver: zodResolver(companySchema),
     defaultValues: defaultValues || {},
   });
