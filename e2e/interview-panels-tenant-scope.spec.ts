@@ -41,7 +41,7 @@ test('interview panels: another org\'s panel and people read as missing to an ad
 
     const ctx = await playwrightRequest.newContext({ baseURL: test.info().project.use.baseURL });
     const signed = await signInViaApi(ctx, aAdmin, PASSWORD);
-    expect(signed.ok, signed.error).toBe(true);
+    expect(signed.ok, `sign-in failed: ${signed.error}`).toBe(true);
 
     // The list: A's own panel (negative control), never B's.
     const list = await ctx.get('/api/interview-panels');
