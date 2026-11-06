@@ -1,4 +1,4 @@
-import { test, expect, type APIRequestContext } from '@playwright/test';
+import { test, expect, type APIRequestContext, type BrowserContext, type Page } from '@playwright/test';
 import { randomBytes } from 'node:crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInAndSettle, signInViaApi, gotoSettled } from './helpers/auth';
@@ -18,6 +18,23 @@ const PW = 'Promotion123!';
 async function sessionEmail(request: APIRequestContext): Promise<string | null> {
   const s = await (await request.get('/api/auth/session')).json();
   return s?.user?.email ?? null;
+}
+
+const REMEMBER_COOKIES = ['internship.remember-token', '__Secure-internship.remember-token'];
+async function rememberCookie(context: BrowserContext): Promise<string | undefined> {
+  return (await context.cookies()).find((c) => REMEMBER_COOKIES.includes(c.name))?.value;
+}
+
+/** The sign-in form with "keep me signed in" ticked — a trusted device (#1495). */
+async function signInRemembered(page: Page, email: string, pw: string) {
+  await gotoSettled(page, '/auth/signin');
+  await page.fill('input[type="email"], input[name="email"]', email);
+  await page.fill('input[type="password"]', pw);
+  await page.getByTestId('remember-me').check();
+  await page.click('button[type="submit"]');
+  await page.waitForURL((u) => !u.pathname.startsWith('/auth'), { timeout: 20_000 });
+  await page.waitForLoadState('load');
+  await page.waitForLoadState('networkidle').catch(() => {});
 }
 
 async function setup(label: string) {
@@ -50,10 +67,13 @@ test('a mentor application approval asks first, applies the choice atomically an
       data: { orgId: f.org.id, fullName: 'Promo Mentee app', email: f.menteeEmail, motivation: 'I want to give back.', status: 'PENDING' },
     });
 
-    // The applicant is signed in with their MENTEE session.
+    // The applicant is signed in with their MENTEE session, on a remembered device.
     const menteeContext = await browser.newContext();
-    expect((await signInViaApi(menteeContext.request, f.menteeEmail, PW)).ok).toBe(true);
+    const menteePage = await menteeContext.newPage();
+    await signInRemembered(menteePage, f.menteeEmail, PW);
+    await expect.poll(() => rememberCookie(menteeContext), { timeout: 10_000 }).toBeTruthy();
     expect(await sessionEmail(menteeContext.request)).toBe(f.menteeEmail);
+    expect((await menteeContext.request.get('/api/profile')).status()).toBe(200);
 
     const adminContext = await browser.newContext();
     expect((await signInViaApi(adminContext.request, f.adminEmail, PW)).ok).toBe(true);
@@ -83,11 +103,19 @@ test('a mentor application approval asks first, applies the choice atomically an
     expect(promoted.role).toBe('MENTOR');
     expect(promoted.sessionsValidFrom).not.toBeNull();
 
-    // The old MENTEE session is gone; the next sign-in carries the new role.
+    // The old MENTEE JWT is refused (sessionsValidFrom), with the device still
+    // trusted — promotion rotates the claims, it is not a sign-out (#1506).
     await expect.poll(() => sessionEmail(menteeContext.request)).toBeNull();
-    expect((await signInViaApi(menteeContext.request, f.menteeEmail, PW)).ok).toBe(true);
+    expect((await menteeContext.request.get('/api/profile')).status()).toBe(401);
+    expect(await rememberCookie(menteeContext)).toBeTruthy();
+
+    // The remembered device re-mints a session without a password, and that
+    // session carries the new role.
+    await gotoSettled(menteePage, '/auth/resume?next=%2Fmentor');
+    await menteePage.waitForURL((u) => u.pathname.startsWith('/mentor'), { timeout: 20_000 });
     const fresh = await (await menteeContext.request.get('/api/auth/session')).json();
-    expect(fresh.user.role).toBe('MENTOR');
+    expect([fresh.user.email, fresh.user.role]).toEqual([f.menteeEmail, 'MENTOR']);
+    expect((await menteeContext.request.get('/api/profile')).status()).toBe(200);
 
     // The audit row names the choice.
     const audit = await prisma.activityLog.findFirst({ where: { action: 'mentor_application.decided', targetId: application.id }, orderBy: { createdAt: 'desc' } });
