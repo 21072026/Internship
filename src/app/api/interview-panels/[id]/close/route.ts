@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import { emit } from '@/lib/events/emit';
@@ -26,8 +27,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   return await withTenantScope(session, async () => {
     const { id } = await params;
-    const panel = await prisma.interviewPanel.findUnique({
-      where: { id },
+    // Inside the caller's tenant only (#3588): the middleware that would
+    // narrow this lookup is off in every deployment, and `assertSameOrg()` is a
+    // no-op with the flag off too. Another org's panel reads as missing.
+    const panel = await prisma.interviewPanel.findFirst({
+      where: withinTenant({ id }, await tenantWhere(session)),
       select: {
         id: true, closedAt: true, subjectId: true,
         members: { select: { userId: true } },
