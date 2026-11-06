@@ -5939,10 +5939,14 @@ model SsoLoginGrant {
 // SHA-256 of the bearer value, lives 60 s, is bound to the host it was minted
 // for, and is spent by one conditional UPDATE (spendGrant, #2548). User-keyed
 // with no orgId, like every other sign-in grant: it is an auth artefact, read
-// before any tenant context exists.
+// before any tenant context exists. Bound to the minting browser by a nonce.
 model ChatLoginGrant {
   id         String   @id @default(cuid())
   tokenHash  String   @unique @db.VarChar(64)
+  // sha256 of the nonce /sso put in the tab's partitioned cookie: /session
+  // spends the grant only for the browser that holds it (login-CSRF guard).
+  // An empty default (a row from before the guard) never matches a nonce.
+  nonceHash  String   @default("") @db.VarChar(64)
   userId     String
   identityId String
   host       String   @db.VarChar(255)

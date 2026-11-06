@@ -5,8 +5,8 @@ import { authOptions, redeemChatLoginGrant } from '@/lib/auth';
 import { platformFromSlug } from '@/lib/chat/config';
 import { withRequestScope } from '@/lib/requestContext';
 import { hostnameOf } from '@/lib/servedHosts';
-import { isTeamsSsoEnabled } from '@/lib/chat/teamsSso';
-import { EMBED_SESSION_MAX_AGE_S, embedSetCookie, secureCookies } from '@/lib/embedSession';
+import { fromServedOrigin, isTeamsSsoEnabled } from '@/lib/chat/teamsSso';
+import { EMBED_SESSION_MAX_AGE_S, embedSetCookie, readSsoNonce, secureCookies, ssoNonceSetCookie } from '@/lib/embedSession';
 import { roleHome } from '@/lib/roleHome';
 
 // POST — the Teams tab redeems its grant for the embed session (#1954,
@@ -23,6 +23,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
     if (platformFromSlug((await params).platform) !== 'TEAMS' || !isTeamsSsoEnabled()) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
+    // Login CSRF (#1954): only our own page, and only with /sso's nonce (below).
+    if (!fromServedOrigin(request)) return NextResponse.json({ error: 'Forbidden', code: 'cross_origin' }, { status: 403 });
     let body: { grant?: unknown; totp?: unknown };
     try {
       body = (await request.json()) as typeof body;
@@ -36,6 +38,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
       user = await redeemChatLoginGrant(body.grant, typeof body.totp === 'string' ? body.totp : undefined, {
         headers: Object.fromEntries(request.headers.entries()),
         host,
+        nonce: readSsoNonce(request.headers.get('cookie'), secureCookies()),
       });
     } catch (e) {
       const message = e instanceof Error ? e.message : '';
@@ -53,6 +56,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
     const value = await encode({ token, secret: process.env.NEXTAUTH_SECRET as string, maxAge: EMBED_SESSION_MAX_AGE_S });
     const res = NextResponse.json({ ok: true, home: roleHome(user.role) });
     res.headers.append('set-cookie', embedSetCookie(value, secureCookies()));
+    // The nonce is spent with the grant.
+    res.headers.append('set-cookie', ssoNonceSetCookie('', secureCookies(), 0));
     return res;
   });
 }

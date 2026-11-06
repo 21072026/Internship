@@ -117,6 +117,24 @@ The grant is spent the same way as every other grant, through `spendGrant()`
 `{ id, used: false, expiresAt: { gt: now } }`. Of two concurrent redemptions, exactly one sees
 `count === 1`.
 
+### Login CSRF
+
+The grant is a bearer value, and the `/session` route has no NextAuth CSRF token. Without a
+guard, an attacker could mint a grant for **their own** account and make a victim's browser POST
+it, signing the victim into the attacker's account. Two guards close this, and `@smoke` tests
+cover both:
+
+- **Origin.** `/sso` and `/session` refuse any request whose `Origin`, or failing that its
+  `Referer`, is not on a served host. A missing header is refused too. The answer is `403
+  cross_origin`, sent before the body is read. The Teams tab is our own origin inside the iframe,
+  so its fetches pass.
+- **A nonce bound to the minting browser.** `/sso` mints a single-use nonce next to the grant,
+  stores only its sha256 on the row (`nonceHash`), and sends the nonce only in a partitioned
+  cookie: `embed-sso-nonce`, `HttpOnly; Secure; SameSite=None; Partitioned`, 60 s, path
+  `/api/integrations/chat`. `/session` spends the grant only when the same browser presents that
+  cookie, compared in constant time. A missing or wrong nonce is `401` and the grant stays unspent.
+  The nonce cookie is cleared together with the spend.
+
 ### Step 3: the `chat` provider, the same refusals as every other door
 
 Once the grant is read, the provider applies the same checks as `magic`, in the same order and

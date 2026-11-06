@@ -6,13 +6,15 @@ import { platformFromSlug } from '@/lib/chat/config';
 import { withRequestScope } from '@/lib/requestContext';
 import { hostnameOf } from '@/lib/servedHosts';
 import { verifyTeamsSsoToken } from '@/lib/chat/teamsSsoToken';
-import { isTeamsSsoEnabled, resolveTeamsLogin } from '@/lib/chat/teamsSso';
+import { fromServedOrigin, isTeamsSsoEnabled, resolveTeamsLogin } from '@/lib/chat/teamsSso';
+import { secureCookies, ssoNonceSetCookie } from '@/lib/embedSession';
 
 // POST — the Teams tab trades its Entra token for a single-use grant (#1954,
 // docs/teams-tab-sso.md). 404 unless Teams SSO is configured, before the body
 // is read. Every refusal is the same opaque 401; only a reason code is logged,
 // never the token. An unknown or unconfirmed member is `{ link: true }` — no
-// grant, no account.
+// grant, no account. Only a request from a served origin is heard, and the
+// grant is bound to a nonce kept in this browser's partitioned cookie.
 const UNAUTHORIZED = () => NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 const PER_IP = { limit: 20, windowMs: 60_000 };
 const PER_TENANT = { limit: 120, windowMs: 60_000 };
@@ -22,6 +24,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
     if (platformFromSlug((await params).platform) !== 'TEAMS' || !isTeamsSsoEnabled()) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
+    // Login CSRF (#1954): only our own page may ask, from a served host.
+    if (!fromServedOrigin(request)) return NextResponse.json({ error: 'Forbidden', code: 'cross_origin' }, { status: 403 });
     if (!rateLimit(`teams-sso-ip:${clientIp(request)}`, PER_IP).ok) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } });
     }
@@ -52,6 +56,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ pla
       return UNAUTHORIZED();
     }
     if (resolved.kind === 'link') return NextResponse.json({ link: true });
-    return NextResponse.json({ grant: resolved.grant });
+    // The grant goes in the body; its nonce only into this browser's partitioned cookie.
+    const res = NextResponse.json({ grant: resolved.grant });
+    res.headers.append('set-cookie', ssoNonceSetCookie(resolved.nonce, secureCookies()));
+    return res;
   });
 }

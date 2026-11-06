@@ -1,6 +1,7 @@
 import { NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
+import { timingSafeEqual } from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { rateLimit, clearRateLimit } from '@/lib/rateLimit';
@@ -315,10 +316,14 @@ async function requireSecondFactor(
 export async function redeemChatLoginGrant(
   raw: string,
   totp: string | undefined,
-  req: { headers: Record<string, string>; host: string },
+  req: { headers: Record<string, string>; host: string; nonce: string | null },
 ) {
   const grant = await prisma.chatLoginGrant.findUnique({ where: { tokenHash: hashGrant(raw) } });
   if (!grant || grant.used || grant.expiresAt <= new Date() || grant.host !== req.host) throw new Error('Invalid or expired grant');
+  // Login CSRF: only the browser that /sso gave the nonce to may spend the grant.
+  if (!req.nonce || grant.nonceHash.length !== 64 || !timingSafeEqual(Buffer.from(hashGrant(req.nonce)), Buffer.from(grant.nonceHash))) {
+    throw new Error('Invalid or expired grant');
+  }
   // The identity it was minted from must still be confirmed, in an enabled workspace.
   const identity = await prisma.chatIdentity.findUnique({
     where: { id: grant.identityId },

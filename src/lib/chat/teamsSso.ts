@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'crypto';
+import { hostnameOf, servedHosts } from '@/lib/servedHosts';
 import { prisma } from '@/lib/prisma';
 import { isEmbedSessionEnabled } from '@/lib/embedSession';
 
@@ -16,8 +17,26 @@ export function isTeamsSsoEnabled(env: Record<string, string | undefined> = proc
 
 export const hashGrant = (raw: string) => createHash('sha256').update(raw).digest('hex');
 
+/**
+ * Was this request sent by one of our own pages? (#1954, login-CSRF guard.)
+ * The Teams tab is our own origin inside the iframe, so a browser POST from it
+ * carries an Origin (or at least a Referer) on a served host; anything else —
+ * no header, another site — is refused before the body is read.
+ */
+export function fromServedOrigin(request: Request): boolean {
+  const raw = request.headers.get('origin') ?? request.headers.get('referer');
+  if (!raw || raw === 'null') return false;
+  let host: string | null;
+  try {
+    host = hostnameOf(new URL(raw).host);
+  } catch {
+    return false;
+  }
+  return !!host && servedHosts().has(host);
+}
+
 export type TeamsLoginResolution =
-  | { kind: 'grant'; grant: string }
+  | { kind: 'grant'; grant: string; nonce: string }
   | { kind: 'link' }
   | { kind: 'unknown_tenant' };
 
@@ -35,14 +54,16 @@ export async function resolveTeamsLogin(tid: string, oid: string, host: string):
   // Confirmed by the person themselves (#1937), and of the workspace's org.
   if (!identity?.verifiedAt || !identity.user || (ws.orgId && identity.user.orgId !== ws.orgId)) return { kind: 'link' };
   const grant = randomBytes(32).toString('base64url');
+  const nonce = randomBytes(32).toString('base64url');
   await prisma.chatLoginGrant.create({
     data: {
       tokenHash: hashGrant(grant),
+      nonceHash: hashGrant(nonce),
       userId: identity.user.id,
       identityId: identity.id,
       host: host.slice(0, 255),
       expiresAt: new Date(Date.now() + CHAT_LOGIN_GRANT_TTL_MS),
     },
   });
-  return { kind: 'grant', grant };
+  return { kind: 'grant', grant, nonce };
 }

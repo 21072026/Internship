@@ -77,3 +77,28 @@ export function injectedCookieHeader(cookieHeader: string | null, secure: boolea
   if (!embed) return null;
   return [...pairs, `${sessionCookieName(secure)}=${embed}`].join('; ');
 }
+
+// The sign-in nonce (#1954, login-CSRF guard): /sso puts a single-use value in
+// this partitioned cookie next to the grant it mints, and /session spends the
+// grant only when the same browser presents it. A grant minted for somebody's
+// own account therefore cannot be posted into another person's browser to sign
+// them in as that account: their browser does not hold the nonce.
+export const SSO_NONCE_COOKIES = ['embed-sso-nonce', '__Secure-embed-sso-nonce'] as const;
+const NONCE_PATH = '/api/integrations/chat';
+
+export function ssoNonceCookieName(secure: boolean): string {
+  return secure ? SSO_NONCE_COOKIES[1] : SSO_NONCE_COOKIES[0];
+}
+
+export function ssoNonceSetCookie(value: string, secure: boolean, maxAge = 60): string {
+  return `${ssoNonceCookieName(secure)}=${value}; Path=${NONCE_PATH}; HttpOnly; Secure; SameSite=None; Partitioned; Max-Age=${maxAge}`;
+}
+
+/** The nonce a request carries, or null. */
+export function readSsoNonce(cookieHeader: string | null, secure: boolean): string | null {
+  if (!cookieHeader) return null;
+  const name = `${ssoNonceCookieName(secure)}=`;
+  const pair = cookieHeader.split(/;\s*/).find((p) => p.startsWith(name));
+  const value = pair?.slice(name.length);
+  return value && /^[A-Za-z0-9_-]{16,128}$/.test(value) ? value : null;
+}

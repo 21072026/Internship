@@ -24,14 +24,23 @@ async function setup(playwright: { request: { newContext: (o?: object) => Promis
   await prisma.user.update({ where: { id: user.id }, data: { emailVerified: true, isActive: true } });
   const ws = await prisma.chatWorkspace.create({ data: { orgId: org.id, platform: 'TEAMS', externalId: tid, name: 'Acme Teams', scope: 'bot', installedById: user.id } });
   const identity = await prisma.chatIdentity.create({ data: { orgId: org.id, workspaceId: ws.id, userId: user.id, externalUserId: oid, verifiedAt: new Date() } });
-  const api = await playwright.request.newContext({ baseURL });
+  // Our own page's origin, as the tab's fetch would carry it.
+  const origin = new URL(baseURL ?? 'http://localhost:3000').origin;
+  const api = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { origin } });
   const mock = await playwright.request.newContext();
   const now = Math.floor(Date.now() / 1000);
   const claims = (over: Record<string, unknown> = {}) => ({ aud: CLIENT, iss: `https://login.microsoftonline.com/${tid}/v2.0`, tid, oid, iat: now, nbf: now - 10, exp: now + 600, ...over });
   const sign = async (c: Record<string, unknown>, opts: Record<string, unknown> = {}) =>
     (await (await mock.post(`http://127.0.0.1:${E2E_BOTFRAMEWORK_MOCK_PORT}/__sign`, { data: { claims: c, ...opts } })).json()).token as string;
   const sso = (token: string) => api.post('/api/integrations/chat/teams/sso', { data: { token }, timeout: 60_000 });
-  const session = (grant: string) => api.post('/api/integrations/chat/teams/session', { data: { grant }, timeout: 60_000 });
+  // A grant and the nonce cookie /sso gave this browser, as the tab would hold them.
+  const ssoGrant = async (token: string) => {
+    const res = await sso(token);
+    const nonce = res.headersArray().find((h) => h.name.toLowerCase() === 'set-cookie' && h.value.startsWith('embed-sso-nonce='))?.value.split(';')[0] ?? '';
+    return { grant: ((await res.json()) as { grant: string }).grant, nonce };
+  };
+  const session = (grant: string, nonce = '', headers: Record<string, string> = {}) =>
+    api.post('/api/integrations/chat/teams/session', { data: { grant }, headers: { ...(nonce ? { cookie: nonce } : {}), ...headers }, timeout: 60_000 });
   const grants = () => prisma.chatLoginGrant.count({ where: { userId: user.id } });
   const cleanup = async () => {
     await api.dispose();
@@ -42,7 +51,16 @@ async function setup(playwright: { request: { newContext: (o?: object) => Promis
     await cleanupByEmail(email);
     await prisma.organization.delete({ where: { id: org.id } });
   };
-  return { stamp, tid, oid, user, identity, api, claims, sign, sso, session, grants, cleanup };
+  // Another browser: a fresh context with no cookie jar, so only the nonce passed here is sent.
+  const elsewhere = async (grant: string, nonce = '') => {
+    const ctx = await playwright.request.newContext({ baseURL, extraHTTPHeaders: { origin } });
+    try {
+      return (await ctx.post('/api/integrations/chat/teams/session', { data: { grant }, headers: nonce ? { cookie: nonce } : {}, timeout: 60_000 })).status();
+    } finally {
+      await ctx.dispose();
+    }
+  };
+  return { stamp, tid, oid, user, identity, api, claims, sign, sso, ssoGrant, session, elsewhere, grants, cleanup };
 }
 
 const embedCookie = (setCookie: string[]) => setCookie.find((c) => c.startsWith('embed-session='));
@@ -69,19 +87,20 @@ test('refusals: wrong tid, wrong aud, expired, foreign key, unknown member, reus
     expect(await prisma.user.count()).toBe(users);
     expect(await s.grants()).toBe(0);
 
-    // A good token: one grant, spent once.
-    const ok = (await (await s.sso(await s.sign(s.claims()))).json()) as { grant: string };
+    // A good token: one grant, bound to this browser's nonce, spent once.
+    const ok = await s.ssoGrant(await s.sign(s.claims()));
     expect(typeof ok.grant).toBe('string');
-    const first = await s.session(ok.grant);
+    expect(ok.nonce).toMatch(/^embed-sso-nonce=/);
+    const first = await s.session(ok.grant, ok.nonce);
     expect(first.status()).toBe(200);
-    expect((await s.session(ok.grant)).status()).toBe(401);
+    expect((await s.session(ok.grant, ok.nonce)).status()).toBe(401);
     // Only the hash is stored.
     expect(await prisma.chatLoginGrant.count({ where: { tokenHash: ok.grant } })).toBe(0);
 
     // An enrolled authenticator is not bypassed: 2FA_REQUIRED, the grant left unspent.
     await prisma.user.update({ where: { id: s.user.id }, data: { twoFactorEnabled: true, twoFactorSecret: 'JBSWY3DPEHPK3PXP' } });
-    const twoFa = (await (await s.sso(await s.sign(s.claims()))).json()) as { grant: string };
-    const asked = await s.session(twoFa.grant);
+    const twoFa = await s.ssoGrant(await s.sign(s.claims()));
+    const asked = await s.session(twoFa.grant, twoFa.nonce);
     expect(asked.status()).toBe(401);
     expect(await asked.json()).toMatchObject({ code: '2FA_REQUIRED' });
     expect(await prisma.chatLoginGrant.count({ where: { userId: s.user.id, used: false } })).toBe(1);
@@ -89,9 +108,9 @@ test('refusals: wrong tid, wrong aud, expired, foreign key, unknown member, reus
     await prisma.user.update({ where: { id: s.user.id }, data: { twoFactorEnabled: false, twoFactorSecret: null } });
 
     // Inactive: the grant is minted, but redeeming it is refused and leaves it unspent.
-    const again = (await (await s.sso(await s.sign(s.claims()))).json()) as { grant: string };
+    const again = await s.ssoGrant(await s.sign(s.claims()));
     await prisma.user.update({ where: { id: s.user.id }, data: { isActive: false } });
-    const refused = await s.session(again.grant);
+    const refused = await s.session(again.grant, again.nonce);
     expect(refused.status()).toBe(401);
     expect(embedCookie(refused.headersArray().filter((h) => h.name.toLowerCase() === 'set-cookie').map((h) => h.value))).toBeUndefined();
     expect(await prisma.chatLoginGrant.count({ where: { userId: s.user.id, used: false } })).toBe(1);
@@ -104,8 +123,8 @@ test('a signed-in tab: its own Partitioned cookie, eight hours, revoked with eve
   test.setTimeout(120_000);
   const s = await setup(playwright, baseURL);
   try {
-    const { grant } = (await (await s.sso(await s.sign(s.claims()))).json()) as { grant: string };
-    const res = await s.session(grant);
+    const { grant, nonce } = await s.ssoGrant(await s.sign(s.claims()));
+    const res = await s.session(grant, nonce);
     expect(res.status()).toBe(200);
     const setCookies = res.headersArray().filter((h) => h.name.toLowerCase() === 'set-cookie').map((h) => h.value);
     const cookie = embedCookie(setCookies)!;
@@ -131,6 +150,28 @@ test('a signed-in tab: its own Partitioned cookie, eight hours, revoked with eve
     const after = (await (await viewer.get('/api/auth/session')).json()) as { user?: unknown } | null;
     expect(after?.user).toBeUndefined();
     await viewer.dispose();
+  } finally {
+    await s.cleanup();
+  }
+});
+
+test('login CSRF: a foreign origin is refused; a grant without its nonce is never spent', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  test.setTimeout(120_000);
+  const s = await setup(playwright, baseURL);
+  try {
+    const token = await s.sign(s.claims());
+    // Another site's page: 403 before anything is read.
+    expect((await s.api.post('/api/integrations/chat/teams/sso', { data: { token }, headers: { origin: 'https://evil.example' } })).status()).toBe(403);
+    expect((await s.session('x', '', { origin: 'https://evil.example' })).status()).toBe(403);
+    expect(await s.grants()).toBe(0);
+
+    // The right grant, but not this browser's nonce: refused, and still unspent.
+    const { grant, nonce } = await s.ssoGrant(token);
+    expect(await s.elsewhere(grant)).toBe(401);
+    expect(await s.elsewhere(grant, 'embed-sso-nonce=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')).toBe(401);
+    expect(await prisma.chatLoginGrant.count({ where: { userId: s.user.id, used: false } })).toBe(1);
+    // With its own nonce it works.
+    expect(await s.elsewhere(grant, nonce)).toBe(200);
   } finally {
     await s.cleanup();
   }
