@@ -55,6 +55,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (templateId) {
       const created = await instantiateAgenda({
         relationId: source.relationId,
+        relationOrgId: source.relation.orgId,
         templateId,
         meetingId: meetingId ?? null,
         createdById: session.user.id,

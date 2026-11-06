@@ -1,5 +1,8 @@
 import { defaultLocale, type Locale } from '@/i18n/config';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { orgWhere, withinTenant } from '@/lib/tenantFilter';
+import { defaultOrgId } from '@/lib/defaultOrg';
 
 // Session agendas (#1841): the trilingual resolver for the guided-conversation
 // library (AgendaTemplate / AgendaTemplateItem) and the per-session instance
@@ -60,8 +63,29 @@ export function serializeAgendaTemplate(
   };
 }
 
+/**
+ * The ONE way to reach a library template from a session (#3592): the
+ * template must belong to the relation's own org, and the org is a term of
+ * the WHERE — never a check in JS after an id-only read. A NULL org on either
+ * side is the default org's (src/lib/tenantFilter.ts), never "every org": a
+ * legacy NULL template is the default org's library, and a NULL-org relation
+ * reads only the default org's. Archived guides are not offered again. Another
+ * org's id and a retired one both come back null — the caller answers 404.
+ */
+export async function agendaTemplateWhere(
+  templateId: string,
+  relationOrgId: string | null
+): Promise<Prisma.AgendaTemplateWhereInput> {
+  return withinTenant<Prisma.AgendaTemplateWhereInput>(
+    { id: templateId, archivedAt: null },
+    await orgWhere(relationOrgId ?? (await defaultOrgId()))
+  );
+}
+
 export interface InstantiateAgendaInput {
   relationId: string;
+  /** The relation's org: the template must be in it (`agendaTemplateWhere`). */
+  relationOrgId: string | null;
   templateId: string;
   /** The session this agenda is for; null when the meeting is not scheduled yet. */
   meetingId?: string | null;
@@ -80,11 +104,11 @@ export interface InstantiateAgendaInput {
  * it keep resolving.
  */
 export async function instantiateAgenda(input: InstantiateAgendaInput, locale: Locale = defaultLocale) {
-  const template = await prisma.agendaTemplate.findUnique({
-    where: { id: input.templateId },
+  const template = await prisma.agendaTemplate.findFirst({
+    where: await agendaTemplateWhere(input.templateId, input.relationOrgId),
     include: { items: { orderBy: { order: 'asc' } } },
   });
-  if (!template || template.archivedAt) return null;
+  if (!template) return null;
 
   const [agenda] = await prisma.$transaction([
     prisma.sessionAgenda.create({

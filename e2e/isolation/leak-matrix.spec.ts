@@ -73,6 +73,13 @@ const MATRIX: Case[] = [
     markers: (_t, r) => [r.evaluationTemplate.id, r.evaluationTemplate.name],
   },
   {
+    // The guided-conversation library (#3592).
+    name: 'GET /api/admin/agenda-templates',
+    actor: 'admin',
+    path: () => '/api/admin/agenda-templates',
+    markers: (_t, r) => [r.agendaTemplate.id, r.agendaTemplate.title],
+  },
+  {
     // Takes the org as a parameter, so the probe asks for the OTHER tenant's
     // org id outright — the IDOR shape, not just an unfiltered list.
     name: 'GET /api/admin/document-requirements?orgId=<target>',
@@ -89,6 +96,8 @@ const MATRIX: Case[] = [
   // ── MENTOR reads ──
   { name: 'GET /api/mentorship', actor: 'mentor', path: () => '/api/mentorship?pageSize=100', markers: (t) => [t.relation.id] },
   { name: 'GET /api/interview-panels', actor: 'mentor', path: () => '/api/interview-panels', markers: (_t, r) => [r.panel.id] },
+  // The guide picker a mentor reads (#3592).
+  { name: 'GET /api/agendas/templates', actor: 'mentor', path: () => '/api/agendas/templates', markers: (_t, r) => [r.agendaTemplate.id, r.agendaTemplate.title] },
 
   // ── COMPANY reads ──
   { name: 'GET /api/mentorship', actor: 'companyUser', path: () => '/api/mentorship?pageSize=100', markers: (t) => [t.relation.id] },
@@ -242,4 +251,14 @@ test("PATCH and DELETE /api/cohorts/<A's cohort> as B's admin: 404 and the cohor
   expect(clone.status(), 'a cross-tenant clone must read as not found').toBe(404);
   const after = await prisma.cohort.findUnique({ where: { id: rows.A.cohort.id } });
   expect(after?.name).toBe(before.name);
+});
+
+test("POST /api/agendas with A's guide on B's own relation as B's mentor: 404 and nothing is created (#3592)", async ({ browser }) => {
+  const request = await requestAs(browser, 'B', 'mentor');
+  const res = await request.post('/api/agendas', {
+    data: { relationId: tenants.orgB.relation.id, templateId: rows.A.agendaTemplate.id },
+  });
+  expect(res.status(), "another tenant's guide must read as not found").toBe(404);
+  absent(await res.text(), [rows.A.agendaTemplate.title], "POST /api/agendas with A's guide (B → A)");
+  expect(await prisma.sessionAgenda.count({ where: { templateId: rows.A.agendaTemplate.id } })).toBe(0);
 });
