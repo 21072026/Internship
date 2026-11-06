@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Introductions from the talent pool (#1394):** `POST /api/company/outreach` takes `via: 'TALENT_POOL'`, so a company can ask to be introduced to a pool candidate without shortlisting them first. The request is stored as `CandidateOutreach.source = 'TALENT_POOL'` (additive column, default `SHORTLIST`) and decided by the candidate's mentor, or the org's admins when there is none. The door is gated on the server by the talent-pool seat, the `TALENT_POOL_SEARCH` entitlement and pool membership (`talentPoolVisibleWhere()`, shared with the search); anyone outside the pool gets `404 not_in_pool`. It has a per-company limit of 20 per day, and every request and decision writes an `AuditLog` row. No contact detail reaches the company before approval, which a `@smoke` spec asserts on the response shapes. **Security:** the talent-pool search is now scoped to the caller's org explicitly; where `MT_ENFORCE_ISOLATION` was off, it listed every org's opted-in candidates.",
+  "notes": {
+    "en": ["Companies can now ask to be introduced to a candidate straight from the talent pool. The programme team approves each request before anything reaches the candidate."],
+    "tr": ["Şirketler artık yetenek havuzundaki bir adayla doğrudan tanıştırılmayı isteyebiliyor. Adaya bir şey ulaşmadan önce her talebi program ekibi onaylıyor."],
+    "de": ["Unternehmen können jetzt direkt aus dem Talent-Pool um eine Vorstellung bitten. Das Programmteam gibt jede Anfrage frei, bevor etwas bei der Kandidatin oder dem Kandidaten ankommt."]
+  }
+}

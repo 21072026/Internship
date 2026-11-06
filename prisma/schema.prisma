@@ -3366,6 +3366,10 @@ model CandidateOutreach {
   applicationId  String?
   /// PENDING | APPROVED | DECLINED | REVOKED
   status         String    @default("PENDING") @db.VarChar(16)
+  /// Where the request came from (#1394): SHORTLIST (the company shortlisted the
+  /// candidate) | TALENT_POOL (an introduction asked from the talent-pool search).
+  /// A constant default, so every older row reads as the shortlist request it was.
+  source         String    @default("SHORTLIST") @db.VarChar(16)
   requestedById  String
   decidedById    String?
   decidedAt      DateTime?

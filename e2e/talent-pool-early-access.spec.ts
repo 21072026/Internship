@@ -66,6 +66,13 @@ test('early-access window hides newly-hireable candidates from non-premium subsc
     data: { relationId: oldRel.id, fromStatus: 'JOB_SEEKING_500', toStatus: 'HIREABLE_600', changedById: mentor.id, createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
   });
 
+  // One tenant for everyone (#1394): the pool is scoped to the caller's org,
+  // as every real account has one.
+  const org = await prisma.organization.create({ data: { name: `EA Org ${stamp}`, slug: `ea-${stamp}` } });
+  await prisma.company.updateMany({ where: { id: { in: [basicCo.id, premiumCo.id] } }, data: { orgId: org.id } });
+  await prisma.user.updateMany({ where: { email: { in: [basicEmail, premiumEmail, mentorEmail, recentEmail, oldEmail] } }, data: { orgId: org.id } });
+  await prisma.mentorshipRelation.updateMany({ where: { id: { in: [recentRel.id, oldRel.id] } }, data: { orgId: org.id } });
+
   const query = `/api/company/talent-pool?q=${encodeURIComponent(position)}`;
   const basicCtx = await browser.newContext();
   const premiumCtx = await browser.newContext();
@@ -101,5 +108,6 @@ test('early-access window hides newly-hireable candidates from non-premium subsc
     await prisma.companyEntitlement.deleteMany({ where: { companyId: { in: [basicCo.id, premiumCo.id] } } });
     await prisma.company.delete({ where: { id: basicCo.id } }).catch(() => {});
     await prisma.company.delete({ where: { id: premiumCo.id } }).catch(() => {});
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
   }
 });

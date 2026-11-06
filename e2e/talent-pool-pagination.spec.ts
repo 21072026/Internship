@@ -58,6 +58,11 @@ test('a skill held only outside the old 60-row window is still found', async ({ 
     });
   }
 
+  // One tenant for everyone (#1394): the pool is scoped to the caller's org.
+  const org = await prisma.organization.create({ data: { name: `TP Pager Org ${stamp}`, slug: `tp-page-${stamp}` } });
+  await prisma.company.update({ where: { id: company.id }, data: { orgId: org.id } });
+  await prisma.user.updateMany({ where: { email: { in: [companyEmail, ...emails] } }, data: { orgId: org.id } });
+
   try {
     await page.goto('/auth/signin');
     await page.fill('input[type="email"], input[name="email"]', companyEmail);
@@ -116,5 +121,6 @@ test('a skill held only outside the old 60-row window is still found', async ({ 
     await cleanupByEmail(companyEmail);
     await prisma.companyEntitlement.deleteMany({ where: { companyId: company.id } });
     await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
   }
 });
