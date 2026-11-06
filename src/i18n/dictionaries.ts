@@ -1432,6 +1432,18 @@ const en = {
     toPlacement: 'Started looking for a job — move into the placement funnel',
     movedToPlacement: 'Moved into the placement funnel.',
   },
+  // A promotion to MENTOR and the person's own open mentee relations (#1506).
+  promotionRelations: {
+    title: 'This person is still a mentee in open relations',
+    hint: 'Choose what happens to them before the promotion. Nothing is deleted.',
+    relationLine: 'Mentored by {mentor} · {stage}',
+    coaching: 'Coaching',
+    options: {
+      COACHING: 'Turn them into coaching — out of the hiring funnel and the placement numbers, history kept',
+      END: 'End them — closed as "goals changed", history kept',
+      KEEP: 'Leave them as they are — the person is a mentor and a candidate at once',
+    },
+  },
   dropoff: {
     reasons: {
       CANDIDATE_WITHDREW: 'Candidate withdrew',
@@ -13439,6 +13451,18 @@ const tr: Dict = {
     toPlacement: 'İş aramaya başladı — yerleştirme hattına al',
     movedToPlacement: 'Yerleştirme hattına alındı.',
   },
+  // A promotion to MENTOR and the person's own open mentee relations (#1506).
+  promotionRelations: {
+    title: 'Bu kişi hâlâ açık ilişkilerde mentee',
+    hint: 'Terfiden önce bu ilişkilere ne olacağını seç. Hiçbir şey silinmez.',
+    relationLine: 'Mentoru {mentor} · {stage}',
+    coaching: 'Koçluk',
+    options: {
+      COACHING: 'Koçluğa çevir — işe alım hattından ve yerleştirme sayılarından çıkar, geçmiş durur',
+      END: 'Kapat — "hedefleri değişti" olarak kapanır, geçmiş durur',
+      KEEP: 'Dokunma — kişi hem mentor hem aday olarak kalır',
+    },
+  },
   dropoff: {
     reasons: {
       CANDIDATE_WITHDREW: 'Aday vazgeçti',
@@ -25233,6 +25257,18 @@ const de: Dict = {
     coachingNote: 'Eine Coaching-Beziehung ist nicht im Einstellungstrichter und hat daher keine Pipeline-Phase.',
     toPlacement: 'Sucht jetzt eine Stelle — in den Vermittlungstrichter aufnehmen',
     movedToPlacement: 'In den Vermittlungstrichter aufgenommen.',
+  },
+  // A promotion to MENTOR and the person's own open mentee relations (#1506).
+  promotionRelations: {
+    title: 'Diese Person ist noch Mentee in offenen Beziehungen',
+    hint: 'Wähle vor der Beförderung, was mit ihnen geschieht. Nichts wird gelöscht.',
+    relationLine: 'Mentor: {mentor} · {stage}',
+    coaching: 'Coaching',
+    options: {
+      COACHING: 'In Coaching umwandeln — raus aus dem Einstellungstrichter und den Vermittlungszahlen, Verlauf bleibt',
+      END: 'Beenden — geschlossen als „Ziele geändert“, Verlauf bleibt',
+      KEEP: 'So lassen — die Person ist zugleich Mentor und Kandidat',
+    },
   },
   dropoff: {
     reasons: {
