@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
 import { ARTIFACT_VISIBILITIES, canReadArtifact, toArtifactDto } from '@/lib/ai/artifacts';
 
@@ -18,7 +19,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   return withTenantScope(session, async () => {
     const a = await prisma.aiArtifact.findUnique({ where: { id } });
-    if (!a) return notFound();
+    // Another org's artefact is missing for everyone (#3588) — before the
+    // 403/404 split below, whose admin branch would otherwise confirm the id.
+    if (!a || !(await inCallerTenant(a.orgId, session.user.orgId))) return notFound();
     const viewer = { id: session.user.id, role: session.user.role, orgId: session.user.orgId ?? null };
     if (!(await canReadArtifact(viewer, a))) {
       // Saying "forbidden" only to someone already related to the subject: a
