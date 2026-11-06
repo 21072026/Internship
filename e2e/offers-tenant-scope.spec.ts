@@ -47,7 +47,7 @@ test('offers: another org\'s offer, relation and company read as missing to an a
 
     const ctx = await playwrightRequest.newContext({ baseURL: test.info().project.use.baseURL });
     const signed = await signInViaApi(ctx, aAdmin, PASSWORD);
-    expect(signed.ok, signed.error).toBe(true);
+    expect(signed.ok, `sign-in failed: ${signed.error}`).toBe(true);
 
     // Negative control: the admin's own offer opens.
     expect((await ctx.get(`/api/offers/${aOffer.id}`)).status()).toBe(200);
