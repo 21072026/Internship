@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
+import { drainNotificationMail } from './helpers/notificationMail';
 import {
   __testable,
   checkRequisitionMatches,
@@ -188,6 +189,8 @@ test.describe('admin digests and summaries describe one org', () => {
 
   test('an org without mentorship gets no mentee-activity digest, only its overdue to-dos', async () => {
     await sendDailyActivityDigests();
+    // The digests leave through the notification.email job (#1711).
+    await drainNotificationMail(Object.values(ids));
     // At least one: a parallel spec's full /api/cron run may send another.
     expect((await logsTo(emails.intAdmin, 'activity-digest')).length).toBeGreaterThanOrEqual(1);
     expect((await logsTo(emails.intMentor, 'activity-digest')).length).toBeGreaterThanOrEqual(1);
@@ -203,6 +206,7 @@ test.describe('admin digests and summaries describe one org', () => {
 
   test('the weekly mentoring summary is not sent to a sales rep', async () => {
     await sendWeeklyMentorDigests();
+    await drainNotificationMail(Object.values(ids));
     expect((await logsTo(emails.intMentor, 'mentor-digest')).length).toBeGreaterThanOrEqual(1);
     expect(await logsTo(emails.mktRep, 'mentor-digest')).toHaveLength(0);
   });

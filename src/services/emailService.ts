@@ -5146,14 +5146,20 @@ export async function sendDormantCheckIns(now = new Date()) {
     const copy = (await dictionaryOf(locale, relation.orgId)).dormantCheckIn;
     const brand = await emailBrand(relation.orgId);
     const base = await origins.urlFor(relation.mentee.orgId);
-    await sendEmail({
-      to: relation.mentee.email,
-      fromName: brand.name,
-      category: 'dormant-check-in',
-      userId: relation.mentee.id,
-      locale: relation.mentee.preferredLanguage,
-      subject: copy.subject,
-      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.heading)}<p>${copy.greeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${isFinal ? copy.finalBody : copy.firstBody}</p><p style="color:#666;font-size:13px;">${copy.hint}</p>${ctaBlock(brand, `${base}/portal`, copy.cta)}</div>`,
+    // Through the router (#1711), the copy built here sent as-is. The key is the
+    // chat card's (`dormant:<relation>:<n>`): one claimed nudge, one delivery
+    // per channel, so a rerun of this tick cannot queue the mail twice.
+    await notifyEvent(relation.mentee.id, isFinal ? 'dormant.checkIn.final' : 'dormant.checkIn.first', {}, {
+      channels: ['email'],
+      orgId: relation.mentee.orgId ?? relation.orgId ?? null,
+      dedupeKey: `dormant:${relation.id}:${count + 1}`,
+      email: {
+        category: 'dormant-check-in',
+        locale: relation.mentee.preferredLanguage,
+        fromName: brand.name,
+        subject: copy.subject,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.heading)}<p>${copy.greeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${isFinal ? copy.finalBody : copy.firstBody}</p><p style="color:#666;font-size:13px;">${copy.hint}</p>${ctaBlock(brand, `${base}/portal`, copy.cta)}</div>`,
+      },
     })
       .then(() => { sent += 1; })
       .catch((error) => logger.error('Dormant check-in email failed', { relationId: relation.id, error: String(error) }));
@@ -5767,24 +5773,25 @@ export async function sendWeeklyMentorDigests() {
     try {
       const base = await origins.urlFor(m.orgId);
       const brand = await brandOf(m.orgId);
-      await sendEmail({
-        category: 'mentor-digest',
-        userId: m.id,
-        orgId: m.orgId,
+      await notifyEvent(m.id, 'digest.mentorWeekly', {}, {
+        channels: ['email'],
+        orgId: m.orgId ?? null,
         dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'mentor-weekly', userId: m.id, day: utcDayKey(new Date()) }),
-        to: m.email,
-        locale: mLocale,
-        subject: D.subject,
-        html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          ${worldHeading(brand, esc(D.heading), `<h2 style="color:#2563eb;">${esc(D.heading)}</h2>`)}
-          <p>${esc(D.greeting.replace('{name}', m.fullName))}</p>
-          <ul>
-            ${countLine(D.stale, stale)}
-            ${countLine(D.upcoming, upcoming)}
-            ${countLine(D.newApplications, newApplications)}
-          </ul>
-          <a href="${base}/mentor" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(D.cta)}</a>
-        </div>`,
+        email: {
+          category: 'mentor-digest',
+          locale: mLocale,
+          subject: D.subject,
+          html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            ${worldHeading(brand, esc(D.heading), `<h2 style="color:#2563eb;">${esc(D.heading)}</h2>`)}
+            <p>${esc(D.greeting.replace('{name}', m.fullName))}</p>
+            <ul>
+              ${countLine(D.stale, stale)}
+              ${countLine(D.upcoming, upcoming)}
+              ${countLine(D.newApplications, newApplications)}
+            </ul>
+            <a href="${base}/mentor" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(D.cta)}</a>
+          </div>`,
+        },
       });
       sent++;
     } catch (e) {
@@ -5938,20 +5945,21 @@ async function sendOverdueTodoMail(
   const block = await overdueTodoBlock(reach, locale, u.id, undefined, false);
   if (!block) return false;
   const A = (await emailDictionary(locale, u.orgId)).notifications.activityDigestEmail;
-  await sendEmail({
-    category: 'activity-digest',
-    userId: u.id,
-    orgId: u.orgId,
+  await notifyEvent(u.id, 'digest.overdueTodos', {}, {
+    channels: ['email'],
+    orgId: u.orgId ?? null,
     dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'activity-todo', userId: u.id, day: utcDayKey(new Date()) }),
-    to: u.email,
-    locale: u.preferredLanguage,
-    subject: A.todoSubject,
-    html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
-      ${worldHeading(brand, esc(A.todoSubject), `<h2 style="color:#2563eb;">${esc(A.todoSubject)}</h2>`)}
-      <p>${esc(A.todoGreeting.replace('{name}', u.fullName))}</p>
-      ${block}
-      <p style="margin-top:16px;"><a href="${base}/todos" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.todoCta)}</a></p>
-    </div>`,
+    email: {
+      category: 'activity-digest',
+      locale: u.preferredLanguage,
+      subject: A.todoSubject,
+      html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+        ${worldHeading(brand, esc(A.todoSubject), `<h2 style="color:#2563eb;">${esc(A.todoSubject)}</h2>`)}
+        <p>${esc(A.todoGreeting.replace('{name}', u.fullName))}</p>
+        ${block}
+        <p style="margin-top:16px;"><a href="${base}/todos" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.todoCta)}</a></p>
+      </div>`,
+    },
   });
   return true;
 }
@@ -6014,22 +6022,23 @@ export async function sendDailyActivityDigests() {
     try {
       const base = await origins.urlFor(m.orgId);
       const brand = await brandOf(m.orgId);
-      await sendEmail({
-        category: 'activity-digest',
-        userId: m.id,
-        orgId: m.orgId,
+      await notifyEvent(m.id, 'digest.activity', {}, {
+        channels: ['email'],
+        orgId: m.orgId ?? null,
         dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'activity-mentor', userId: m.id, day: utcDayKey(new Date()) }),
-        to: m.email,
-        locale: mLocale,
-        subject: A.subject,
-        html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
-          ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
-          <p>${esc(A.greetingMentor.replace('{name}', m.fullName))}</p>
-          ${activityDigestTable(items, mLocale, A)}
-          ${overdue}
-          <p style="margin-top:16px;"><a href="${base}/mentor/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
-          <p style="color:#9ca3af;font-size:12px;">${esc(A.trackingNote)}</p>
-        </div>`,
+        email: {
+          category: 'activity-digest',
+          locale: mLocale,
+          subject: A.subject,
+          html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+            ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
+            <p>${esc(A.greetingMentor.replace('{name}', m.fullName))}</p>
+            ${activityDigestTable(items, mLocale, A)}
+            ${overdue}
+            <p style="margin-top:16px;"><a href="${base}/mentor/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
+            <p style="color:#9ca3af;font-size:12px;">${esc(A.trackingNote)}</p>
+          </div>`,
+        },
       });
       sent++;
     } catch (e) {
@@ -6092,21 +6101,22 @@ export async function sendDailyActivityDigests() {
       const overdue = await overdueTodoBlock({ assignee: { is: todoPeople } }, aLocale, a.id, A);
       try {
         const base = await origins.urlFor(a.orgId);
-        await sendEmail({
-          category: 'activity-digest',
-          userId: a.id,
-          orgId: a.orgId,
+        await notifyEvent(a.id, 'digest.activity', {}, {
+          channels: ['email'],
+          orgId: a.orgId ?? null,
           dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'activity-admin', userId: a.id, day: utcDayKey(new Date()) }),
-          to: a.email,
-          locale: aLocale,
-          subject: A.subjectAll,
-          html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
-            ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
-            <p>${esc(A.greetingAdmin.replace('{name}', a.fullName))}</p>
-            ${activityDigestTable(items, aLocale, A)}
-            ${overdue}
-            <p style="margin-top:16px;"><a href="${base}/admin/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
-          </div>`,
+          email: {
+            category: 'activity-digest',
+            locale: aLocale,
+            subject: A.subjectAll,
+            html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+              ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
+              <p>${esc(A.greetingAdmin.replace('{name}', a.fullName))}</p>
+              ${activityDigestTable(items, aLocale, A)}
+              ${overdue}
+              <p style="margin-top:16px;"><a href="${base}/admin/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
+            </div>`,
+          },
         });
         sent++;
       } catch (e) {

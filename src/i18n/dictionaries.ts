@@ -1417,6 +1417,21 @@ const en = {
     deleteEntry: 'Delete entry',
     nextAction: 'Next action',
   },
+  // Whose outcome a hire is (#1507, the UI of #1503).
+  employmentAttribution: {
+    dialogTitle: 'Moving to "{stage}" — how was the job found?',
+    dialogHint: 'Only a job found through the programme counts as a placement in the numbers.',
+    options: { THROUGH_US: 'Through us (the programme)', SELF_FOUND: 'Found it on their own', ALREADY_EMPLOYED: 'Was already employed' },
+    confirm: 'Move',
+    cancel: 'Cancel',
+  },
+  // Coaching vs. placement relations (#1507).
+  relationKind: {
+    coachingBadge: 'Coaching',
+    coachingNote: 'A coaching relation is not in the hiring funnel, so it has no pipeline stage.',
+    toPlacement: 'Started looking for a job — move into the placement funnel',
+    movedToPlacement: 'Moved into the placement funnel.',
+  },
   dropoff: {
     reasons: {
       CANDIDATE_WITHDREW: 'Candidate withdrew',
@@ -4844,6 +4859,9 @@ const en = {
       'mentorship.matched.mentor': 'You’re paired with {name} ({skills}). Say hello to get started.',
       'dormant.checkIn.first': 'Are you still interested? A short reply in the app is enough — we’d love to hear from you.',
       'dormant.checkIn.final': 'This is our last check-in: nobody will write again unless you do. If you’re still interested, a short reply in the app is enough.',
+      'digest.mentorWeekly': 'Your weekly summary is ready.',
+      'digest.activity': 'Your daily activity summary is ready.',
+      'digest.overdueTodos': 'Some to-dos are overdue.',
       'meeting.logPrompt': '“{title}” took place and is in the log. Add what was discussed — right here.',
       'interview_request.declined': 'Your interview request was declined. Reason: {reasonCode}',
       'interview_request.scheduled': 'Interview for {title} is scheduled: {when}.',
@@ -13414,6 +13432,21 @@ const tr: Dict = {
     deleteEntry: 'Kaydı sil',
     nextAction: 'Sonraki aksiyon',
   },
+  // Whose outcome a hire is (#1507, the UI of #1503).
+  employmentAttribution: {
+    dialogTitle: '"{stage}" aşamasına geçiş — iş nasıl bulundu?',
+    dialogHint: 'Sayılarda yalnızca program aracılığıyla bulunan iş yerleştirme sayılır.',
+    options: { THROUGH_US: 'Bizim aracılığımızla (program)', SELF_FOUND: 'Kendi buldu', ALREADY_EMPLOYED: 'Zaten çalışıyordu' },
+    confirm: 'Taşı',
+    cancel: 'Vazgeç',
+  },
+  // Coaching vs. placement relations (#1507).
+  relationKind: {
+    coachingBadge: 'Koçluk',
+    coachingNote: 'Koçluk ilişkisi işe alım hattında değildir, bu yüzden pipeline aşaması yoktur.',
+    toPlacement: 'İş aramaya başladı — yerleştirme hattına al',
+    movedToPlacement: 'Yerleştirme hattına alındı.',
+  },
   dropoff: {
     reasons: {
       CANDIDATE_WITHDREW: 'Aday vazgeçti',
@@ -16749,6 +16782,9 @@ const tr: Dict = {
       'mentorship.matched.mentor': '{name} ile eşleştin ({skills}). Başlamak için bir merhaba de.',
       'dormant.checkIn.first': 'Hâlâ ilgileniyor musun? Uygulamada kısa bir yanıt yeterli — senden haber almak isteriz.',
       'dormant.checkIn.final': 'Bu son yoklamamız: sen yazmadıkça kimse tekrar yazmayacak. Hâlâ ilgileniyorsan uygulamada kısa bir yanıt yeterli.',
+      'digest.mentorWeekly': 'Haftalık özetin hazır.',
+      'digest.activity': 'Günlük etkinlik özetin hazır.',
+      'digest.overdueTodos': 'Süresi geçmiş yapılacakların var.',
       'meeting.logPrompt': '“{title}” gerçekleşti ve kayda geçti. Görüşülenleri doğrudan buradan ekleyebilirsin.',
       'interview_request.declined': 'Mülakat talebiniz reddedildi. Gerekçe: {reasonCode}',
       'interview_request.scheduled': '{title} mülakatı planlandı: {when}.',
@@ -25199,6 +25235,21 @@ const de: Dict = {
     deleteEntry: 'Eintrag löschen',
     nextAction: 'Nächster Schritt',
   },
+  // Whose outcome a hire is (#1507, the UI of #1503).
+  employmentAttribution: {
+    dialogTitle: 'Wechsel zu „{stage}“ — wie wurde die Stelle gefunden?',
+    dialogHint: 'Nur eine über das Programm gefundene Stelle zählt in den Zahlen als Vermittlung.',
+    options: { THROUGH_US: 'Über uns (das Programm)', SELF_FOUND: 'Selbst gefunden', ALREADY_EMPLOYED: 'War bereits beschäftigt' },
+    confirm: 'Verschieben',
+    cancel: 'Abbrechen',
+  },
+  // Coaching vs. placement relations (#1507).
+  relationKind: {
+    coachingBadge: 'Coaching',
+    coachingNote: 'Eine Coaching-Beziehung ist nicht im Einstellungstrichter und hat daher keine Pipeline-Phase.',
+    toPlacement: 'Sucht jetzt eine Stelle — in den Vermittlungstrichter aufnehmen',
+    movedToPlacement: 'In den Vermittlungstrichter aufgenommen.',
+  },
   dropoff: {
     reasons: {
       CANDIDATE_WITHDREW: 'Kandidat hat abgesagt',
@@ -28536,6 +28587,9 @@ const de: Dict = {
       'mentorship.matched.mentor': 'Du bist jetzt mit {name} gepaart ({skills}). Sag Hallo, um loszulegen.',
       'dormant.checkIn.first': 'Bist du noch interessiert? Eine kurze Antwort in der App genügt – wir freuen uns, von dir zu hören.',
       'dormant.checkIn.final': 'Das ist unser letzter Check-in: Niemand schreibt wieder, solange du nicht schreibst. Wenn du noch interessiert bist, genügt eine kurze Antwort in der App.',
+      'digest.mentorWeekly': 'Deine Wochenübersicht ist da.',
+      'digest.activity': 'Deine tägliche Aktivitätsübersicht ist da.',
+      'digest.overdueTodos': 'Einige Aufgaben sind überfällig.',
       'meeting.logPrompt': '„{title}“ hat stattgefunden und steht im Protokoll. Ergänze direkt hier, was besprochen wurde.',
       'interview_request.declined': 'Deine Interviewanfrage wurde abgelehnt. Grund: {reasonCode}',
       'interview_request.scheduled': 'Das Interview für {title} ist geplant: {when}.',
