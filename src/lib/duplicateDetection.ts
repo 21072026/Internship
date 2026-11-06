@@ -8,6 +8,7 @@
 // ever mutates data. Server-only (imports Prisma); the pure normalizers are
 // exported for unit tests.
 import { prisma } from '@/lib/prisma';
+import { makeScanCache, scanFingerprint } from '@/lib/duplicateScanCache';
 import { transliterate } from '@/lib/transliterate';
 import { PLACEHOLDER_EMAIL_DOMAIN } from '@/lib/menteeAccount';
 
@@ -107,28 +108,51 @@ const SCORE: Record<DuplicateSignal, number> = {
 // or a lone fuzzy-name hit on a short name never qualifies by itself.
 export const DUPLICATE_SCORE_THRESHOLD = 45;
 
-// Compare one input against one existing record. Exported for tests.
-export function matchSignals(input: DuplicateInput, other: CandidateRecord): DuplicateSignal[] {
+// One record's normalized keys. The bulk scan compares each record with many
+// others, and normalizing (transliteration above all) on every comparison was
+// most of its time at 5 000 mentees (#1434) — so the keys are computed once per
+// record and compared here. matchSignals() is the same comparison on records.
+export interface MatchKeys {
+  email: string;
+  phones: string[];
+  name: string;
+  /** Whether the RAW university is present — the university test runs on that, then compares `uni`. */
+  hasUniversity: boolean;
+  uni: string;
+}
+
+export function matchKeysOf(r: DuplicateInput): MatchKeys {
+  return {
+    email: normalizeEmailKey(r.email),
+    phones: [normalizePhoneKey(r.phone), normalizePhoneKey(r.whatsapp)].filter(Boolean),
+    name: normalizeNameKey(r.fullName),
+    hasUniversity: !!r.university,
+    uni: r.university ? normalizeNameKey(r.university) : '',
+  };
+}
+
+// The comparison itself, on precomputed keys. The ONE place a pair is judged.
+export function matchSignalsOnKeys(a: MatchKeys, b: MatchKeys): DuplicateSignal[] {
   const signals: DuplicateSignal[] = [];
-  const emailKey = normalizeEmailKey(input.email);
-  if (emailKey && emailKey === normalizeEmailKey(other.email)) signals.push('email');
+  if (a.email && a.email === b.email) signals.push('email');
 
-  const inputPhones = [normalizePhoneKey(input.phone), normalizePhoneKey(input.whatsapp)].filter(Boolean);
-  const otherPhones = [normalizePhoneKey(other.phone), normalizePhoneKey(other.whatsapp)].filter(Boolean);
-  if (inputPhones.some((p) => otherPhones.includes(p))) signals.push('phone');
+  if (a.phones.some((p) => b.phones.includes(p))) signals.push('phone');
 
-  const nameA = normalizeNameKey(input.fullName);
-  const nameB = normalizeNameKey(other.fullName);
-  if (nameA && nameA === nameB) {
+  if (a.name && a.name === b.name) {
     signals.push('name');
-  } else if (nameA.length >= 6 && nameB.length >= 6 && levenshtein(nameA, nameB, 2) <= 2) {
+  } else if (a.name.length >= 6 && b.name.length >= 6 && levenshtein(a.name, b.name, 2) <= 2) {
     signals.push('nameFuzzy');
   }
 
-  if ((signals.includes('name') || signals.includes('nameFuzzy')) && input.university && other.university) {
-    if (normalizeNameKey(input.university) === normalizeNameKey(other.university)) signals.push('university');
+  if ((signals.includes('name') || signals.includes('nameFuzzy')) && a.hasUniversity && b.hasUniversity) {
+    if (a.uni === b.uni) signals.push('university');
   }
   return signals;
+}
+
+// Compare one input against one existing record. Exported for tests.
+export function matchSignals(input: DuplicateInput, other: CandidateRecord): DuplicateSignal[] {
+  return matchSignalsOnKeys(matchKeysOf(input), matchKeysOf(other));
 }
 
 export function scoreSignals(signals: DuplicateSignal[]): number {
@@ -183,8 +207,9 @@ export async function loadDuplicatePool(orgId: string | null, excludeId?: string
 // 150-row dry run take 2.5 s — loads the pool once and ranks each row here.
 export function rankDuplicates(input: DuplicateInput, pool: CandidateRecord[]): DuplicateMatch[] {
   const matches: DuplicateMatch[] = [];
+  const inputKeys = matchKeysOf(input);
   for (const other of pool) {
-    const signals = matchSignals(input, other);
+    const signals = matchSignalsOnKeys(inputKeys, matchKeysOf(other));
     const score = scoreSignals(signals);
     if (score >= DUPLICATE_SCORE_THRESHOLD) matches.push({ ...other, signals, score });
   }
@@ -218,19 +243,16 @@ export interface DuplicatePair {
 // still decide every pair — only which pairs are handed to them. Lossless by
 // construction, and pinned by e2e/duplicate-blocking.unit.spec.ts against the
 // all-pairs scan.
-function blockingKeys(u: CandidateRecord): { exact: string[]; uni: string | null; name: string } {
+function blockingKeys(k: MatchKeys): { exact: string[]; uni: string | null; name: string } {
   const exact: string[] = [];
-  const email = normalizeEmailKey(u.email);
-  if (email) exact.push(`email:${email}`);
-  for (const phone of new Set([normalizePhoneKey(u.phone), normalizePhoneKey(u.whatsapp)])) {
-    if (phone) exact.push(`phone:${phone}`);
-  }
-  const name = normalizeNameKey(u.fullName);
+  if (k.email) exact.push(`email:${k.email}`);
+  for (const phone of new Set(k.phones)) exact.push(`phone:${phone}`);
+  const name = k.name;
   if (name) exact.push(`name:${name}`);
   // Mirrors matchSignals: the university test runs on the RAW values being
   // present, then compares normalized keys — which may both be '' — so the
   // bucket key is the normalized value whenever the raw one is non-empty.
-  const uni = name.length >= 6 && u.university ? `uni:${normalizeNameKey(u.university)}` : null;
+  const uni = name.length >= 6 && k.hasUniversity ? `uni:${k.uni}` : null;
   return { exact, uni, name };
 }
 
@@ -268,8 +290,10 @@ function* walkDuplicatePairs(users: CandidateRecord[]): Generator<void, FoundPai
     if (bucket) bucket.push(i);
     else map.set(key, [i]);
   };
+  // Every record's keys, once (#1434): blocking and judging both read these.
+  const keys = users.map(matchKeysOf);
   for (let i = 0; i < users.length; i++) {
-    const { exact, uni, name } = blockingKeys(users[i]);
+    const { exact, uni, name } = blockingKeys(keys[i]);
     names[i] = name;
     for (const key of exact) push(exactBuckets, key, i);
     if (uni) {
@@ -293,7 +317,7 @@ function* walkDuplicatePairs(users: CandidateRecord[]): Generator<void, FoundPai
     return true;
   };
   const decide = (i: number, j: number) => {
-    const signals = matchSignals(users[i], users[j]);
+    const signals = matchSignalsOnKeys(keys[i], keys[j]);
     const score = scoreSignals(signals);
     if (score >= DUPLICATE_SCORE_THRESHOLD) found.push({ i, j, signals, score });
   };
@@ -363,11 +387,29 @@ export async function findDuplicatePairsYielding(users: CandidateRecord[], cap =
 // Used to compare every pair in JS — ~n²/2 matchSignals calls on the request
 // thread, which at 1 000 mentees blocked the whole process for seconds (#1436).
 // The blocking in findDuplicatePairs compares only pairs that could qualify.
+// Repeat visits reuse the last result while the org's mentee rows are
+// unchanged (#1434, src/lib/duplicateScanCache.ts): one indexed aggregate
+// instead of a full read and scan. Pinned to globalThis so a dev reload keeps it.
+const scanCache = ((globalThis as { __duplicateScanCache?: ReturnType<typeof makeScanCache<DuplicatePair[]>> })
+  .__duplicateScanCache ??= makeScanCache<DuplicatePair[]>());
+
 export async function scanDuplicatePairs(orgId: string | null, cap = 200): Promise<DuplicatePair[]> {
+  const where = { role: 'MENTEE' as const, orgId };
+  const groups = await prisma.user.groupBy({ by: ['isActive'], where, _count: { _all: true }, _max: { updatedAt: true } });
+  const fingerprint = scanFingerprint(
+    groups.map((g) => ({ isActive: g.isActive, count: g._count._all, latestUpdatedAt: g._max.updatedAt })),
+    cap,
+  );
+  const orgKey = orgId ?? '\u0000none';
+  const cached = scanCache.get(orgKey, fingerprint, Date.now());
+  if (cached) return cached;
+
   const users = await prisma.user.findMany({
-    where: { role: 'MENTEE', orgId },
+    where,
     select: CANDIDATE_SELECT,
     orderBy: { createdAt: 'asc' },
   });
-  return findDuplicatePairsYielding(users, cap);
+  const pairs = await findDuplicatePairsYielding(users, cap);
+  scanCache.set(orgKey, fingerprint, pairs, Date.now());
+  return pairs;
 }
