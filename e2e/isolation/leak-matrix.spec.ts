@@ -177,6 +177,14 @@ test("PUT /api/mentorship/<A's relation> as B's admin: 404 and the row is untouc
   expect(after.nextActionNote).toBe(before.nextActionNote);
 });
 
+test("POST /api/mentorship pairing A's people as B's admin: refused, nothing created (#3588)", async ({ browser }) => {
+  const before = await prisma.mentorshipRelation.count({ where: { menteeId: tenants.orgA.mentee.id } });
+  const request = await requestAs(browser, 'B', 'admin');
+  const res = await request.post('/api/mentorship', { data: { mentorId: tenants.orgA.mentor.id, menteeId: tenants.orgA.mentee.id } });
+  expect(res.status(), 'another tenant\'s people must read as invalid').toBe(400);
+  expect(await prisma.mentorshipRelation.count({ where: { menteeId: tenants.orgA.mentee.id } })).toBe(before);
+});
+
 test("GET /api/mentorship/<A's relation> as B's admin: 404", async ({ browser }) => {
   const request = await requestAs(browser, 'B', 'admin');
   const res = await request.get(`/api/mentorship/${tenants.orgA.relation.id}`);

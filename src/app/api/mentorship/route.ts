@@ -4,6 +4,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { actorFromSession, can, requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { z } from 'zod';
 import { relationScheduleFields, scheduleCreateData } from '@/lib/relationSchedule';
 import { relationScheduleDefaults } from '@/lib/relationScheduleDefaults';
@@ -313,9 +314,13 @@ export async function POST(request: Request) {
     const foreignTarget = await refuseForeignTargets(session, { companyId, projectId });
     if (foreignTarget) return foreignTarget;
 
+    // Both people from the caller's tenant (#3588): the middleware that would
+    // narrow these lookups is off in every deployment, so another org's user was
+    // paired — and the relation filed in their org. A foreign id is "invalid".
+    const tenant = await tenantWhere(session);
     const [mentor, mentee] = await Promise.all([
-      prisma.user.findUnique({ where: { id: mentorId } }),
-      prisma.user.findUnique({ where: { id: menteeId } }),
+      prisma.user.findFirst({ where: withinTenant({ id: mentorId }, tenant) }),
+      prisma.user.findFirst({ where: withinTenant({ id: menteeId }, tenant) }),
     ]);
 
     // Either side may be an admin, a mentor or a mentee (#1141): admins mentor,
