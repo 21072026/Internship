@@ -33,7 +33,7 @@ test('company analytics: an admin counts its own org only', { tag: '@smoke' }, a
 
     const ctx = await playwrightRequest.newContext({ baseURL: test.info().project.use.baseURL });
     const signed = await signInViaApi(ctx, aAdmin, PASSWORD);
-    expect(signed.ok, signed.error).toBe(true);
+    expect(signed.ok, `sign-in failed: ${signed.error}`).toBe(true);
     const res = await ctx.get('/api/company/analytics');
     expect(res.status()).toBe(200);
     const body = await res.json();
