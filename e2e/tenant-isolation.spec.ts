@@ -46,15 +46,15 @@ test('orgScoped isolates one tenant’s relations from another’s', async () =>
   }
 });
 
-test('assertSameOrg blocks cross-tenant access when enforcement is on', () => {
+test('assertSameOrg blocks cross-tenant access (enforcement on)', () => {
   const prev = process.env.MT_ENFORCE_ISOLATION;
   process.env.MT_ENFORCE_ISOLATION = 'true';
   try {
     expect(isIsolationEnforced()).toBe(true);
     // Same tenant → allowed.
-    expect(() => assertSameOrg('org-1', 'org-1')).not.toThrow();
+    expect(() => assertSameOrg('org-1', 'org-1', 'org-default')).not.toThrow();
     // Cross tenant → denied.
-    expect(() => assertSameOrg('org-2', 'org-1')).toThrow(/Cross-tenant/);
+    expect(() => assertSameOrg('org-2', 'org-1', 'org-default')).toThrow(/Cross-tenant/);
     // requireOrg fails closed when no org resolves under enforcement.
     expect(() => requireOrg({ user: {} } as never)).toThrow(/enforced/);
     // Resolves the org when present.
@@ -64,13 +64,15 @@ test('assertSameOrg blocks cross-tenant access when enforcement is on', () => {
   }
 });
 
-test('with enforcement off, helpers are no-ops (single-tenant unchanged)', () => {
+test('with enforcement off, requireOrg is a no-op but assertSameOrg still guards (#3588)', () => {
   const prev = process.env.MT_ENFORCE_ISOLATION;
   delete process.env.MT_ENFORCE_ISOLATION;
   try {
     expect(isIsolationEnforced()).toBe(false);
-    // No throw even across "different" orgs when the flag is off.
-    expect(() => assertSameOrg('org-2', 'org-1')).not.toThrow();
+    // The one-row guard holds with the flag off too (#3588): it used to be a
+    // no-op here, which left every route that leaned on it unguarded.
+    expect(() => assertSameOrg('org-2', 'org-1', 'org-default')).toThrow(/Cross-tenant/);
+    expect(() => assertSameOrg(null, 'org-default', 'org-default')).not.toThrow();
     // requireOrg returns null instead of throwing.
     expect(requireOrg({ user: {} } as never)).toBeNull();
   } finally {

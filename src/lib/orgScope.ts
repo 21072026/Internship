@@ -55,20 +55,31 @@ export function requireOrg(session: Session | null | undefined): string | null {
   return orgId;
 }
 
-// Assert a fetched row belongs to the expected tenant. Use after a lookup by id
-// to prevent cross-tenant access (IDOR) once enforcement is on. No-op when
-// enforcement is off or the expected org is unknown.
-export function assertSameOrg(rowOrgId: string | null | undefined, expectedOrgId: string | null): void {
-  if (!isIsolationEnforced() || !expectedOrgId) return;
-  if (rowOrgId !== expectedOrgId) {
+// Assert a fetched row belongs to the caller's tenant — ALWAYS, whatever
+// MT_ENFORCE_ISOLATION says (#3588). It used to return early with the flag off,
+// which is every deployment, so the routes that leaned on it had no org check
+// at all. It now reads the same rule as `sameTenant()` / `inCallerTenant()`: a
+// NULL org on either side is the default org's (never a wildcard), so a
+// not-yet-backfilled row stays reachable by the default org's people and by no
+// one else, and an org-less session is the default org's too. The caller passes
+// the default org's id (`await defaultOrgId()`) because this file stays free of
+// Prisma. Throws on a mismatch; a route answers that with 404. Prefer scoping
+// the lookup itself (`withinTenant(…, tenantWhere(session))`) — this is the
+// one-row fallback for a row that cannot be found that way.
+export function assertSameOrg(
+  rowOrgId: string | null | undefined,
+  callerOrgId: string | null | undefined,
+  defaultOrgId: string,
+): void {
+  if (!sameTenant(rowOrgId, callerOrgId, defaultOrgId)) {
     throw new Error('Cross-tenant access denied');
   }
 }
 
 // ── The org boundary that holds while the middleware is still dormant (#2542) ─
 //
-// `assertSameOrg` above is a no-op unless MT_ENFORCE_ISOLATION is on, which was
-// right while there was ONE tenant. There are now two products in one database
+// `assertSameOrg` above was a no-op unless MT_ENFORCE_ISOLATION was on (until
+// #3588), which was right while there was ONE tenant. There are now two products in one database
 // (INTERNSHIP and MARKETING, epic #2348), and the flag is not yet safe to flip
 // (docs/tenant-isolation.md — the #2542 audit found 56 cross-tenant reads and
 // writes, most of them on models the middleware cannot scope at all because
