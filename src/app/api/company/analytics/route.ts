@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { hasFeature, entitled } from '@/lib/entitlements';
 import { resolveOrgId } from '@/lib/orgScope';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { recruitingFunnel, recruitingTrend, resolveWindow, sourceBreakdown, timeToFill } from '@/lib/recruitingAnalytics';
 
 // GET — company-scoped analytics: stage distribution, interest summary and
@@ -28,9 +30,15 @@ export async function GET(request: Request) {
   return await withTenantScope(session, async () => {
   const companyId = session.user.role === 'COMPANY' ? session.user.companyId : undefined;
   const params = new URL(request.url).searchParams;
+  // The caller's tenant, written into every query below (#3588): the middleware
+  // that would add it is off in every deployment, so an ADMIN's "all companies"
+  // means all companies of ITS org, never of the installation. An org-less
+  // session is the default org's, never unscoped (src/lib/tenantFilter.ts).
+  const tenant = await tenantWhere(session);
+  const orgId = await settingsOrgOf(session);
   const recruiting = await recruitingReport({
     companyId: companyId ?? null,
-    orgId: resolveOrgId(session),
+    orgId,
     from: params.get('from'),
     to: params.get('to'),
     requisitionId: params.get('requisitionId'),
@@ -39,7 +47,7 @@ export async function GET(request: Request) {
   const canExport = companyId ? await hasFeature(companyId, 'REPORT_EXPORT') : await entitled(resolveOrgId(session), 'REPORT_EXPORT');
 
   const relations = await prisma.mentorshipRelation.findMany({
-    where: companyId ? { companyId } : {},
+    where: withinTenant(companyId ? { companyId } : {}, tenant),
     select: {
       id: true,
       pipelineStatus: true,
@@ -61,6 +69,7 @@ export async function GET(request: Request) {
 
   // Interest signals from the company across their candidates.
   const interests = await prisma.companyInterest.findMany({
+    // Narrowed through the tenant-scoped relations above (menteeIds).
     where: {
       ...(companyId ? { companyId } : {}),
       menteeId: { in: menteeIds },
@@ -107,11 +116,11 @@ export async function GET(request: Request) {
  * not the company's answers 'not_found' (the route's 404), never a 403 that
  * would confirm it exists.
  */
-async function recruitingReport(params: { companyId: string | null; orgId: string | null; from: string | null; to: string | null; requisitionId: string | null }) {
+async function recruitingReport(params: { companyId: string | null; orgId: string; from: string | null; to: string | null; requisitionId: string | null }) {
   const window = resolveWindow({ from: params.from, to: params.to }, new Date());
   const scope = {
     ...(params.companyId ? { companyId: params.companyId } : {}),
-    ...(params.orgId ? { orgId: params.orgId } : {}),
+    orgId: params.orgId,
   };
   if (params.requisitionId) {
     const owned = await prisma.requisition.findFirst({ where: { id: params.requisitionId, ...scope }, select: { id: true } });
@@ -138,7 +147,7 @@ async function recruitingReport(params: { companyId: string | null; orgId: strin
         requisitionCountedAt: inWindow,
         requisitionId: params.requisitionId ?? { not: null },
         ...(params.companyId ? { companyId: params.companyId } : {}),
-        ...(params.orgId ? { orgId: params.orgId } : {}),
+        orgId: params.orgId,
       },
       select: { requisitionId: true, requisitionCountedAt: true },
     }),
