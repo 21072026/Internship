@@ -1,8 +1,25 @@
 # Teams tab and Teams SSO — design (#1954)
 
-**Status: approved 2026-11-05 with decision B. Slice 1 (server side) is implemented: the token
-check, the grant, the embed session, the framing split and the security tests. Slice 2 is the
-Teams SDK hand-off in the tab and the role home rendered inside it.**
+**Status: approved on 2026-11-05 with decision B, and implemented in two slices.**
+
+- **Slice 1 (#3577), server side:** the token check, the nonce-bound grant, the embed session, the
+  framing split and the security tests.
+- **Slice 2, the tab:**
+  - `TeamsTabSignIn` (`@microsoft/teams-js` 2.58.0, MIT) runs `app.initialize()`, then
+    `authentication.getAuthToken()`, then `/sso`, then `/session`. If the account needs it, the
+    tab asks for the authenticator code.
+  - `/embed` sends a signed-in tab to `/embed/home`.
+  - `/embed/home` renders the **same** mentor and mentee dashboard components the shells
+    render, inside the providers their layouts give them.
+  - The shells' 2FA policy gate holds there. A person who must enrol gets the way to
+    `/security-setup` in the browser, because that page is not framable.
+  - Every other role, and a vertical without the mentorship module, gets the way to its home in
+    the browser.
+  - Outside Teams, the SDK is given 5 s before the tab shows the "link your account" screen.
+
+  A known limit: a full page load of a non-`/embed` path inside the frame is refused by that
+  path's `frame-ancestors 'none'`. That is the point of the split. A client-side navigation is a
+  same-origin fetch and still works.
 
 What differs from the original design, and why:
 
