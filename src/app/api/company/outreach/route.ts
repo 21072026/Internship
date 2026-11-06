@@ -14,8 +14,11 @@ import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { findActiveMentorship } from '@/lib/activeMentorship';
 import { outreachQuota } from '@/lib/outreachQuota';
-import { outreachActorWhere, outreachPreconditions } from '@/lib/outreach';
-import { MAX_FIRST_MESSAGE, companyView, requestRefusal } from '@/lib/outreachRule';
+import { outreachActorWhere, outreachPreconditions, talentPoolIntroPreconditions } from '@/lib/outreach';
+import { talentPoolVisibleWhere } from '@/lib/talentPool';
+import { settingsOrgOf } from '@/lib/settingsOrg';
+import { hasFeature } from '@/lib/entitlements';
+import { MAX_FIRST_MESSAGE, OUTREACH_SOURCES, companyView, requestRefusal } from '@/lib/outreachRule';
 
 // Company → candidate message requests (#1840), docs/candidate-outreach.md.
 //
@@ -36,9 +39,15 @@ import { MAX_FIRST_MESSAGE, companyView, requestRefusal } from '@/lib/outreachRu
 const bodySchema = z.object({
   menteeId: z.string().min(1).max(64),
   message: z.string().trim().min(1).max(MAX_FIRST_MESSAGE),
+  // The door (#1394): a shortlisted candidate (the default, #1840) or an
+  // introduction asked from the talent-pool search.
+  via: z.enum(OUTREACH_SOURCES).optional(),
 }).strict();
 
 const RATE_LIMIT = { limit: 30, windowMs: 60 * 60 * 1000 };
+// Introductions from the pool, per COMPANY (every seat of it together): the
+// pool is a list of strangers, so this door is metered harder than a shortlist.
+const POOL_RATE_LIMIT = { limit: 20, windowMs: 24 * 60 * 60 * 1000 };
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -61,6 +70,7 @@ export async function GET() {
         id: true,
         menteeId: true,
         status: true,
+        source: true,
         createdAt: true,
         decidedAt: true,
         firstMessage: true,
@@ -76,6 +86,7 @@ export async function GET() {
       requests: rows.map((r) => ({
         id: r.id,
         status: r.status,
+        source: r.source,
         createdAt: r.createdAt,
         company: r.company.name,
         // The candidate sees the company and the open thread; the deciders also
@@ -107,6 +118,18 @@ export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   const { menteeId, message } = parsed.data;
+  const source = parsed.data.via ?? 'SHORTLIST';
+  if (source === 'TALENT_POOL') {
+    // The pool's own gates (#1394), on top of the outreach ones: the seat that
+    // may search it, the premium entitlement, and a per-company daily meter.
+    const poolSeat = await requireCompanySeat(session, 'talentPool.search');
+    if (poolSeat) return poolSeat;
+    if (!(await hasFeature(companyId, 'TALENT_POOL_SEARCH'))) {
+      return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: 'TALENT_POOL_SEARCH' }, { status: 403 });
+    }
+    const poolLimited = enforceRateLimit(request, 'candidate-outreach-pool', { ...POOL_RATE_LIMIT, subject: companyId });
+    if (poolLimited) return poolLimited;
+  }
 
   return withTenantScope(session, async () => {
     // An unverified employer reaches no candidate (#1865), this channel included.
@@ -114,10 +137,14 @@ export async function POST(request: Request) {
     if (!isCompanyVerified(employer?.verificationStatus)) {
       return NextResponse.json({ error: 'The company is not verified yet', code: COMPANY_NOT_VERIFIED }, { status: 403 });
     }
-    const pre = await outreachPreconditions(orgId, companyId, menteeId);
-    // Not shortlisted answers like an unknown candidate: the company learns
-    // nothing about a person it has not shortlisted.
-    if (!pre.ok && pre.code === 'not_shortlisted') return NextResponse.json({ error: 'Not found', code: 'not_shortlisted' }, { status: 404 });
+    const pre =
+      source === 'TALENT_POOL'
+        ? await talentPoolIntroPreconditions(orgId, menteeId, await talentPoolVisibleWhere({ orgId, settingsOrgId: await settingsOrgOf(session), companyId, admin: false }))
+        : await outreachPreconditions(orgId, companyId, menteeId);
+    // Not shortlisted — or, from the pool, not in the pool this company may
+    // search (another org, no opt-in, consent withdrawn) — answers like an
+    // unknown candidate: the company learns nothing about that person.
+    if (!pre.ok && (pre.code === 'not_shortlisted' || pre.code === 'not_in_pool')) return NextResponse.json({ error: 'Not found', code: pre.code }, { status: 404 });
     if (!pre.ok) return NextResponse.json({ error: 'The candidate is not open to company contact', code: pre.code }, { status: 403 });
 
     const existing = await prisma.candidateOutreach.findUnique({
@@ -134,6 +161,7 @@ export async function POST(request: Request) {
 
     const data = {
       status: 'PENDING',
+      source,
       requestedById: session.user.id,
       firstMessage: message,
       applicationId: pre.applicationId,
@@ -178,6 +206,8 @@ export async function POST(request: Request) {
       targetId: menteeId,
       orgId,
     });
+    // The audit trail (#1394): every request, with its door. Never the message.
+    await prisma.auditLog.create({ data: { actorId: session.user.id, action: 'OUTREACH_REQUESTED', targetId: id, orgId, detail: `source=${source}; mentee=${menteeId}` } });
     return NextResponse.json({ request: { id, status: 'PENDING' } }, { status: 201 });
   });
 }

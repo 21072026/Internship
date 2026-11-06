@@ -29,6 +29,11 @@ export async function POST(request: Request) {
   if (session.user.impersonatorId) {
     return NextResponse.json({ error: 'Not available while impersonating' }, { status: 400 });
   }
+  // Nor from the Teams tab (#1954): its session is eight hours and ends there;
+  // a remembered device would turn it into a 90-day credential.
+  if (session.user.embed) {
+    return NextResponse.json({ error: 'Not available in the Teams tab' }, { status: 400 });
+  }
 
   // Signing in again in a browser that is already remembered replaces its
   // device rather than adding a second one: the old cookie is about to be
