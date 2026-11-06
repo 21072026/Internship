@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import { canSeeCompensation, compensationSelect, isDeclineReasonCode, isOfferStatus, letterSelect } from '@/lib/offers';
@@ -129,17 +130,12 @@ export async function GET(request: Request) {
     const relationId = sp.get('relationId') || undefined;
 
     const orgId = resolveOrgId(session);
-    // No hand-written orgId filter here since #1559: `Offer` is registered in
-    // orgContext's TENANT_MODELS, so the central middleware injects the bound
-    // tenant into this `where` itself. What stood here was
-    // `isIsolationEnforced() ? orgScoped(…, orgId) : …` — gated on the very flag
-    // the middleware is gated on, from the same `resolveOrgId(session)`, so it
-    // narrowed the query exactly when and how the middleware already does.
-    // Leaving it would mean two sources of truth for one filter; the one that
-    // cannot be forgotten wins. Flag off, the deployment is single-tenant and
-    // nothing scopes — including a legacy row whose orgId was never backfilled,
-    // which must not vanish from the only screen listing it.
-    const where: Prisma.OfferWhereInput = admin ? adminFilters(sp) : {};
+    // The admin list is narrowed to the caller's tenant by hand (#3588): the
+    // middleware that would inject it is off in every deployment, so leaving it
+    // out listed every org's offers. `tenantWhere` keeps the default org's
+    // never-backfilled NULL rows visible. MENTEE/COMPANY are narrowed by their
+    // own relation / company below.
+    const where: Prisma.OfferWhereInput = admin ? withinTenant(adminFilters(sp), await tenantWhere(session)) : {};
     if (relationId) where.relationId = relationId;
 
     if (!admin) {
@@ -237,13 +233,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid compensation', code: compensationProblem }, { status: 400 });
     }
 
-    const relation = await prisma.mentorshipRelation.findUnique({
-      where: { id: relationId },
+    // Another org's relation or company reads as not found (#3588): the
+    // middleware that would scope these lookups is off in every deployment.
+    const tenant = await tenantWhere(session);
+    const relation = await prisma.mentorshipRelation.findFirst({
+      where: withinTenant({ id: relationId }, tenant),
       select: { id: true, orgId: true, companyId: true },
     });
     if (!relation) return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
 
     const effectiveCompanyId = companyId !== undefined ? companyId : relation.companyId;
+    if (companyId) {
+      const company = await prisma.company.findFirst({ where: withinTenant({ id: companyId }, tenant), select: { id: true } });
+      if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 });
+    }
     const validation = await validateOfferRequisition(requisitionId, relation.orgId, effectiveCompanyId);
     if (!validation.ok) {
       return NextResponse.json(
