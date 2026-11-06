@@ -63,6 +63,31 @@ test('a mentee reads their own activity summary, with an honest no-consent state
     expect(spoofed.status()).toBe(200);
     expect((await spoofed.json()).activity.menteeId).toBe(mentee.id);
 
+    // #1909 — a date range, like every other audience's report. The goal was
+    // completed today: a 2020 window holds none of it, a window ending today
+    // (date-only `to` = the whole day, #1501) holds it, and an inverted range
+    // falls back to the default seven days instead of an error.
+    const today = new Date().toISOString().slice(0, 10);
+    const old = await (await page.request.get('/api/portal/insights?from=2020-01-01&to=2020-03-31')).json();
+    expect([old.days, old.from.slice(0, 10), old.activity.goalsCompleted]).toEqual([null, '2020-01-01', 0]);
+    const ranged = await (await page.request.get(`/api/portal/insights?from=2020-01-01&to=${today}`)).json();
+    expect([ranged.days, ranged.activity.goalsCompleted]).toEqual([null, 1]);
+    const inverted = await page.request.get(`/api/portal/insights?from=${today}&to=2020-01-01`);
+    expect(inverted.status()).toBe(200);
+    expect((await inverted.json()).days).toBe(7);
+
+    // The screen: the range form drives the same window, and the export and
+    // print are there with no plan in between (free core).
+    await page.getByTestId('portal-insights-from').fill('2020-01-01');
+    await page.getByTestId('portal-insights-to').fill(today);
+    await page.getByTestId('portal-insights-apply').click();
+    await page.waitForURL((u) => u.searchParams.get('from') === '2020-01-01');
+    await settleStreamedSuspense(page);
+    await expect(page.getByTestId('portal-insights-from')).toHaveValue('2020-01-01');
+    await expect(page.getByTestId('portal-insights-print')).toBeVisible();
+    const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('portal-insights-export').click()]);
+    expect(download.suggestedFilename()).toBe(`my-activity-2020-01-01-${today}.xlsx`);
+
     // Granting the consent turns the tracking block on — same page, no plan and
     // no upgrade step in between.
     await prisma.userConsent.create({
