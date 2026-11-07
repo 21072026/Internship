@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Partners ask about a row through support (#3353):** the partner portal gets a Support page (`/affiliate/support`, the existing support thread as `SupportChat`) and an \"Ask\" link on every commission and customer row. The message carries `SupportMessage.recordRef` (nullable, expand-only); `POST /api/support` accepts it only for the sender's own partner row (`ownRecord()`, else `404 record_not_found`), and the admin support inbox shows the row it is about. A question changes no amount.",
-  "notes": {
-    "en": ["Partners can ask a question about a commission or a customer straight from the partner portal; the admin sees which row it is about."],
-    "tr": ["Partnerler bir komisyon ya da müşteri hakkında doğrudan partner portalından soru sorabiliyor; admin hangi kayıtla ilgili olduğunu görüyor."],
-    "de": ["Partner können direkt im Partnerportal eine Frage zu einer Provision oder einem Kunden stellen; der Admin sieht, um welchen Eintrag es geht."]
-  }
-}

@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Settings fit a phone again (e2e-full red on `main`):** the stage-SLA rows gained a third number input (#1722) that squeezed the stage name to 50px at 360px — below `sm` the name now takes its own line and the inputs wrap under it (`w-20`, right-aligned under their column headings, since \"Eskalieren nach\" did not fit `w-16`); and the mail tabs gained a third tab (#1692) that pushed the super admin's mail card 35px past the screen — the tab strip now wraps. `e2e/mobile-layout-coverage.spec.ts` now also audits `/admin/agreements`, `/admin/billing` and `/admin/sla`, which were added to the sidebar without an entry.",
-  "notes": {
-    "en": ["Settings no longer run off the edge of a phone screen."],
-    "tr": ["Ayarlar artık telefon ekranından taşmıyor."],
-    "de": ["Die Einstellungen laufen auf dem Handy nicht mehr über den Bildschirmrand."]
-  }
-}

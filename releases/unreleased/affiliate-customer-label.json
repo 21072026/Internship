@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Customer label for partners (#3352):** `AffiliateCustomer.partnerLabel` (nullable, ≤ 80 characters, expand-only) is a name an admin writes from the Payments screen (`PATCH /api/admin/affiliate/customers/[id]`, `affiliate.write`, audited as `affiliate.customer.label`). The partner portal shows it next to the customer's reference on the customers, commissions and payout pages, and the admin's commissions and payouts screens show it too. `externalRef` stays the matching key for account events and API payments; nothing fills the label automatically.",
-  "notes": {
-    "en": ["Admins can give a customer a label (such as a company name) that the partner sees next to the customer reference in the partner portal."],
-    "tr": ["Yöneticiler bir müşteriye, partnerin portalda müşteri referansının yanında göreceği bir etiket (ör. firma adı) verebilir."],
-    "de": ["Admins können einem Kunden eine Bezeichnung (z. B. einen Firmennamen) geben, die der Partner im Partnerportal neben der Kundenreferenz sieht."]
-  }
-}

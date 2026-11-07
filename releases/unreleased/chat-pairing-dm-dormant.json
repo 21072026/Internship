@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Pairing DM and dormant check-ins in chat (#1946):** a new pair's two sides each get one Slack/Teams card in their own language (`introducePairInChat()` from `announceNewRelation()`): the mentee with Book a session, the mentor with the mentee's top three skills. The pairing mail's opt-out applies. The \"still interested?\" check-in goes as a chat card INSTEAD of the mail for a linked mentee, from the same claimed `dormantNudgeCount` nudge, falling back to the mail when the card cannot be posted. Mail + chat together stay at two per person (`e2e/chat-dormant-cap.spec.ts`). No stage moves, the single writer of `dormantSince` is unchanged, and there is no schema change.",
-  "notes": {
-    "en": ["New pairs get a short introduction in Slack or Microsoft Teams — the mentee can book a first session right from it."],
-    "tr": ["Yeni eşleşen çiftler Slack veya Microsoft Teams'te kısa bir tanışma mesajı alıyor; mentee ilk görüşmesini doğrudan oradan ayarlayabiliyor."],
-    "de": ["Neue Paare erhalten in Slack oder Microsoft Teams eine kurze Vorstellung – der Mentee kann direkt dort einen ersten Termin buchen."]
-  }
-}

@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Programme filter reaches the export and the narrative (#1652 follow-up):** the analytics Excel export and the \"what changed\" paragraph now take the screen's `?program=`. The export's registry sheets (Funnel, Mentors, …) narrow through a new optional `ReportContext.relation`, applied wherever a loader already filtered relations by segment (`menteeIn`), so subscriptions and the registry route are unchanged; the narrative's facts — and so its cache key — are the filtered figures. A foreign programme id is a 404 on both. Pinned in `e2e/program-analytics-filter.spec.ts`.",
-  "notes": {
-    "en": ["The Excel export and the “what changed” summary on the analytics page now follow the selected programme too."],
-    "tr": ["Analitik sayfasındaki Excel dışa aktarımı ve “ne değişti” özeti artık seçili programı da izliyor."],
-    "de": ["Der Excel-Export und die „Was hat sich geändert“-Zusammenfassung auf der Analyseseite folgen jetzt ebenfalls dem gewählten Programm."]
-  }
-}

@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Public demo refresh runs the pre-push expand phases:** `infra/server/demo-refresh.sh` (preview deploy's demo job and the scheduled demo reset) pushed the schema without the expand phases prod and topic envs run first, so a demo database left on an older schema died on `Cannot drop index 'Setting_orgId_key_key': needed in a foreign key constraint` (#1619). It now runs the same five expand/backfill steps before its `db push`."
-}

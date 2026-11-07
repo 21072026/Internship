@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**The app inside a Microsoft Teams tab (#1954, slice 2):** `/embed` signs the tab in on its own through `@microsoft/teams-js` (`TeamsTabSignIn`: `getAuthToken()` → `/sso` → `/session`, asking for the authenticator code when the account has one) and `/embed/home` renders the same mentor and mentee dashboards the shells render, inside their providers. The shells' 2FA policy gate holds; other roles get the way to their home in the browser. Outside Teams or unlinked: the \"link your account\" screen, never an account. New dependency `@microsoft/teams-js` 2.58.0 (MIT); licence inventory regenerated.",
-  "notes": {
-    "en": ["Mentors and mentees can open their dashboard right inside a Microsoft Teams tab, signed in with their linked Microsoft account."],
-    "tr": ["Mentorlar ve mentee'ler, bağlı Microsoft hesaplarıyla oturum açarak panolarını doğrudan bir Microsoft Teams sekmesinde açabilir."],
-    "de": ["Mentoren und Mentees können ihr Dashboard direkt in einem Microsoft-Teams-Tab öffnen – angemeldet mit ihrem verknüpften Microsoft-Konto."]
-  }
-}
