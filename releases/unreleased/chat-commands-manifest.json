@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Chat commands and generated app manifests (#1956):** `/interncrm status|book|log|help` on Slack and the same words typed to the Teams bot run as `command.<name>` through the one verified interaction dispatcher (`parseSlackCommand` / `parseTeamsCommand`): `status` from the app's own `scopeForRole(…, 'relation')`, `book` = `meeting.book`, `log` = recent auto-logged sessions with \"Add notes\". `src/lib/chat/chatApp.json` is the one source for the commands, the Slack bot scopes and `scripts/chat-manifest.mjs`, which writes `apps/chat/{teams,slack}/manifest.json`; `npm run check:chat-manifest` (CI) validates and diffs them. No schema change.",
-  "notes": {
-    "en": ["Type status, book or log in Slack or Microsoft Teams to see where you stand, book a session or add session notes."],
-    "tr": ["Slack veya Microsoft Teams'te status, book ya da log yazarak durumunu görebilir, görüşme ayarlayabilir veya görüşme notu ekleyebilirsin."],
-    "de": ["Gib in Slack oder Microsoft Teams status, book oder log ein, um deinen Stand zu sehen, einen Termin zu buchen oder Notizen zu ergänzen."]
-  }
-}

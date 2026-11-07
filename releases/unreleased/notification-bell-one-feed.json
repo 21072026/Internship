@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**The notification bell fetches once per page (#3573):** `ResponsiveShell` mounts two bells (mobile bar + desktop strip), and each one fetched on mount, polled every 60 s and re-fetched on every realtime signal, so every signed-in page asked `/api/notifications` twice and a new row raised its browser notification twice. One shared feed now serves both (`src/components/notificationFeed.ts`): concurrent loads share a request, a realtime `tick` within 10 s of a load is coalesced with it, and the feed forgets its rows when the last bell unmounts. The bell reads the new `GET /api/notifications?view=bell` (rows + unread count; no server-rendered `display`, no total, no type list). The default shape is unchanged for the native app and `/notifications`. Measured on admin pages at 5 000 candidates: two calls at 500–750 ms → one at 130–200 ms.",
-  "notes": {
-    "en": ["Pages load a little faster, and a new notification no longer pops up twice in the browser."],
-    "tr": ["Sayfalar biraz daha hızlı yükleniyor; yeni bir bildirim tarayıcıda artık iki kez açılmıyor."],
-    "de": ["Seiten laden etwas schneller, und eine neue Benachrichtigung erscheint im Browser nicht mehr doppelt."]
-  }
-}

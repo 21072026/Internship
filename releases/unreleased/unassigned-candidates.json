@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Unassigned candidates (#1440):** the candidate stage filter offers \"Unassigned\" — `GET /api/candidates?status=unassigned` lists active candidates with no ACTIVE relation (a finished pairing counts as unassigned), oldest registration first (`?sort=oldest|newest` overrides), composed with every other filter and the export. The rule is `src/lib/unassignedCandidates.ts`. The admin dashboard says its stage bars count pairings, not people, and links the unassigned queue with its count.",
-  "notes": {
-    "en": ["See who is still waiting: candidates without a mentor have their own filter, oldest first, and the dashboard links straight to them."],
-    "tr": ["Kim hâlâ bekliyor, görün: mentörü olmayan adayların artık kendi süzgeci var, en uzun bekleyen önce; dashboard doğrudan onlara bağlantı veriyor."],
-    "de": ["Sehen Sie, wer noch wartet: Kandidat:innen ohne Mentor:in haben jetzt einen eigenen Filter, die Längstwartenden zuerst, und das Dashboard verlinkt direkt dorthin."]
-  }
-}

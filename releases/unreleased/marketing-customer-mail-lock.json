@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Customer-mail lock for the marketing product:** while it is in its test phase, no lead, customer or contact of a MARKETING organization receives any mail, system mail included. Only the org's own staff (ADMIN/MENTOR) still get theirs. The lock is on by default with no in-app switch; only `MARKETING_CUSTOMER_MAIL_ENABLED=1` on the server opens it. It is checked at all three doors: `sendEmail()` before the approval hold, `sendPrepared()` for approved drafts, and the queue drain for already-queued mail. It fails closed, and every blocked mail is recorded SKIPPED with its reason. Rule in `src/lib/customerMailLockRule.ts`, lookups in `src/lib/customerMailLock.ts`; documented in `docs/mail-queue.md` § The customer-mail lock.",
-  "notes": {
-    "en": ["Safety lock for the marketing product's test phase: leads and customers receive no e-mail at all — only your own team does."],
-    "tr": ["Marketing ürününün test dönemi için güvenlik kilidi: lead'lere ve müşterilere hiçbir e-posta gitmez — yalnızca kendi ekibiniz alır."],
-    "de": ["Sicherheitssperre für die Testphase des Marketing-Produkts: Leads und Kunden erhalten keinerlei E-Mail — nur Ihr eigenes Team."]
-  }
-}

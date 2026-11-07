@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Time to hire starts at funnel entry (#1505):** journeys in the funnel, forecast and deal-value routes and the mentor's average days to hired start at `funnelStartedAt()` (`src/lib/placement.ts`, `funnelEnteredAt ?? startDate`) instead of the pairing's `startDate`, so a coaching pair that later entered the funnel no longer carries its coaching months. Rows without a stamp read exactly as before. Unit-tested in `scripts/test/placement-kind.test.mjs`.",
-  "notes": {
-    "en": ["Time to hire now counts from the day someone entered the hiring pipeline, not from the day the mentoring began."],
-    "tr": ["İşe alım süresi artık mentorluğun başladığı günden değil, kişinin işe alım hattına girdiği günden sayılıyor."],
-    "de": ["Die Zeit bis zur Einstellung zählt jetzt ab dem Eintritt in die Einstellungspipeline, nicht ab Beginn des Mentorings."]
-  }
-}

@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Notification router, migration batch 4 (#1711):** five deadline-family mails in `src/services/emailService.ts` leave through `notifyEvent(…, { channels: ['email'], email: { … } })` with their copy unchanged — the stage-deadline breach mail (`deadline.stagePassed`) and the SLA escalation (`deadline.slaEscalated`), each keyed exactly like its bell (`sla-breach:<id>:<rung>`), the next-action reminder (`deadline.nextActionDue`), the weekly missing-document reminder (`missing_document.self` / `.mentor`) and the trial-ending reminder (`trial.endingSoon`; `sendTrialReminderEmail` no longer takes a `to`, `userId` is required). Every one of them was already gated by its caller on the same category the event carries, so no recipient gains or loses a mail. `check:notify` baseline: `emailService.ts` 52 → 47."
-}

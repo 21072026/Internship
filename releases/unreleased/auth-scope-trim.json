@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**The sign-in pages ship two dictionary namespaces fewer (#2707):** the `auth` i18n scope had picked up `account` (one shared key on the reset page, now `auth.passwordMismatch`) and `mentor` (a role literal in the demo-account type, now a type import from `src/lib/demoMode.ts`). `/auth/signin` is one of the three paths of the weekly stress test. `scripts/test/i18n-auth-scope.test.mjs` fails if either namespace returns."
-}
