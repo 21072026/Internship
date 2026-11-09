@@ -143,6 +143,7 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   'retention-reminder': { exempt: false, trigger: 'other', why: 'a cron-driven data-protection re-consent ask, not triggered by the person' },
   // ── held: automated mail about the funnel ─────────────────────────────────
   'stage-deadline': { exempt: false, trigger: 'deadline', why: 'trial and stage deadline reminders' },
+  'affiliate-window-ending': { exempt: false, trigger: 'deadline', why: 'a partner told that a customer\'s commission window ends soon (#3556)' },
   'interaction-reminder': { exempt: false, trigger: 'deadline', why: 'an automated nudge' },
   'weekly-report': { exempt: false, trigger: 'deadline', why: 'an automated nudge' },
   'document-reminder': { exempt: false, trigger: 'deadline', why: 'an automated nudge' },

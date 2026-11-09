@@ -45,6 +45,7 @@ const OWN_ORG: Record<string, JobName> = {
   'program-journey': 'programJourney.run',
   surveys: 'surveys.campaigns',
   'report-subscriptions': 'reports.subscriptions',
+  'affiliate-window-notices': 'affiliate.windowNotices',
 };
 
 export const ENQUEUEABLE_KEYS: readonly string[] = [...Object.keys(PLATFORM), ...Object.keys(OWN_ORG)].sort();
