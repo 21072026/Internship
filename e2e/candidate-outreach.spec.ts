@@ -133,7 +133,8 @@ test.describe('candidate outreach', () => {
     await signInAndSettle(admin, adminEmail, PW, '/admin');
     expect((await admin.request.patch(`/api/company/outreach/${qid}`, { data: { action: 'decline' } })).status()).toBe(200);
     const declined = (await (await company.request.get('/api/company/outreach')).json()).requests.find((r: { id: string }) => r.id === qid);
-    expect(declined).toEqual({ id: qid, menteeId: quiet.id, status: 'DECLINED', createdAt: expect.any(String), decidedAt: expect.any(String), menteeName: 'Quiet Candidate' });
+    // `source` since #3587 (#1394): a request made without `via` is a SHORTLIST one.
+    expect(declined).toEqual({ id: qid, menteeId: quiet.id, status: 'DECLINED', source: 'SHORTLIST', createdAt: expect.any(String), decidedAt: expect.any(String), menteeName: 'Quiet Candidate' });
     expect(await prisma.message.count({ where: { body: 'Hi Quiet' } })).toBe(0);
 
     // Quota: with a limit of 1 (one approval this month already), the next request is refused with limit + used.
