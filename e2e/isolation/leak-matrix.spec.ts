@@ -82,6 +82,9 @@ const MATRIX: Case[] = [
   },
   { name: 'GET /api/invite', actor: 'admin', path: () => '/api/invite', markers: (t) => [t.invitation.id, t.invitation.email] },
   { name: 'GET /api/interview-panels', actor: 'admin', path: () => '/api/interview-panels', markers: (_t, r) => [r.panel.id, r.panel.title] },
+  // Offers (#3588): the admin list, and one offer by id — the by-id row asks
+  // for the TARGET tenant's offer, so the probe is the IDOR shape too.
+  { name: 'GET /api/offers', actor: 'admin', path: () => '/api/offers?pageSize=100', markers: (t) => [t.offer.id, t.offer.position] },
   { name: 'GET /api/requisitions', actor: 'admin', path: () => '/api/requisitions?pageSize=50', markers: (_t, r) => [r.requisition.id, r.requisition.title] },
   { name: 'GET /api/users', actor: 'admin', path: () => '/api/users', markers: (t) => [t.mentor.email, t.companyUser.email] },
   { name: 'GET /api/tags', actor: 'admin', path: () => '/api/tags', markers: (t) => [t.tag.id, t.tag.name] },
@@ -175,6 +178,15 @@ test("PUT /api/mentorship/<A's relation> as B's admin: 404 and the row is untouc
   expect(after.updatedAt.getTime()).toBe(before.updatedAt.getTime());
   expect(after.expectedMeetingIntervalWeeks).toBe(before.expectedMeetingIntervalWeeks);
   expect(after.nextActionNote).toBe(before.nextActionNote);
+});
+
+test("GET and PATCH /api/offers/<A's offer> as B's admin: 404 and the row is untouched (#3588)", async ({ browser }) => {
+  const request = await requestAs(browser, 'B', 'admin');
+  expect((await request.get(`/api/offers/${tenants.orgA.offer.id}`)).status(), 'a cross-tenant read must read as not found').toBe(404);
+  const patch = await request.patch(`/api/offers/${tenants.orgA.offer.id}`, { data: { position: 'iso cross-tenant offer' } });
+  expect(patch.status(), 'a cross-tenant write must read as not found').toBe(404);
+  const after = await prisma.offer.findUniqueOrThrow({ where: { id: tenants.orgA.offer.id } });
+  expect(after.position).toBe(tenants.orgA.offer.position);
 });
 
 test("GET /api/mentorship/<A's relation> as B's admin: 404", async ({ browser }) => {
