@@ -254,10 +254,13 @@ export type I18nScopeId = keyof typeof SCOPE_NAMESPACES;
 // Every scope must actually be mounted, or its pages would render with the
 // shell alone: `home` in src/app/page.tsx, every other scope in its
 // directory's layout.tsx.
+// Every regex metacharacter, backslash included (a scope id is a directory name).
+const escapeRegExp = (s) => s.replace(/[\\^$.*+?()[\]{}|/]/g, '\\$&');
+
 function coverageProblems(roots) {
   const problems = [];
   const mounted = (file, id) =>
-    fs.existsSync(file) && new RegExp(`<I18nScope\\s+scope=["']${id.replace(/[()/]/g, '\\$&')}["']`).test(fs.readFileSync(file, 'utf8'));
+    fs.existsSync(file) && new RegExp(`<I18nScope\\s+scope=["']${escapeRegExp(id)}["']`).test(fs.readFileSync(file, 'utf8'));
   if (!mounted(path.join(APP, 'page.tsx'), 'home')) problems.push('src/app/page.tsx does not render <I18nScope scope="home">');
   for (const r of roots) {
     if (!mounted(r.layout, r.id)) problems.push(`${path.relative(ROOT, r.layout)} does not render <I18nScope scope="${r.id}">`);
