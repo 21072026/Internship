@@ -246,7 +246,9 @@ test('an invalid state transition is rejected with 400', async ({ page }) => {
 test('a mentee cannot read another mentee\'s offer', async ({ page }) => {
   const s = await seedScenario('idor');
   const otherMenteeEmail = uniqueEmail('idorother');
-  const otherMentee = await seedUser(otherMenteeEmail, s.pw, 'MENTEE', 'Other Mentee');
+  // Same org on purpose: this is the IDOR check inside a tenant (403); another
+  // org's offer reads as 404 since #3598 (offers-tenant-scope.spec.ts).
+  const otherMentee = await seedUser(otherMenteeEmail, s.pw, 'MENTEE', 'Other Mentee', { orgId: s.org.id });
   try {
     const offer = await prisma.offer.create({
       data: { orgId: s.org.id, relationId: s.relation.id, companyId: s.company.id, status: 'SENT', position: 'Data Analyst', sentAt: new Date(), createdById: s.admin.id },
@@ -299,7 +301,7 @@ test('an unauthorized/other role never receives compensationNote in the response
   const s = await seedScenario('comp');
   const companyEmail = uniqueEmail('compuser');
   const companyUser = await prisma.user.create({
-    data: { email: companyEmail, password: await bcrypt.hash(s.pw, 10), role: 'COMPANY', fullName: 'Comp Observer', companyId: s.company.id, skills: [] },
+    data: { email: companyEmail, password: await bcrypt.hash(s.pw, 10), role: 'COMPANY', fullName: 'Comp Observer', companyId: s.company.id, orgId: s.org.id, skills: [] },
   });
   try {
     const offer = await prisma.offer.create({
