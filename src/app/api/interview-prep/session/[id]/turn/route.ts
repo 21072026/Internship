@@ -28,7 +28,7 @@ function practiceUnavailable(reason: string) {
 // as a PRIVATE AiArtifact the mentee may share with their mentor. When the
 // provider is unavailable nothing is stored — the answer stays in the box.
 
-const schema = z.object({ answer: z.string().trim().min(1).max(PRACTICE_ANSWER_MAX) }).strict();
+const schema = z.strictObject({ answer: z.string().trim().min(1).max(PRACTICE_ANSWER_MAX) });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);

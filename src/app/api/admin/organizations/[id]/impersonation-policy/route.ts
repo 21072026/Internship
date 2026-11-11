@@ -42,7 +42,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   return NextResponse.json({ policy: effectivePolicy(g.org.impersonationPolicy) });
 }
 
-const schema = z.object({ policy: z.string() }).strict();
+const schema = z.strictObject({ policy: z.string() });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

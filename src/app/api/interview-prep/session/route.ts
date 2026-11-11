@@ -47,7 +47,7 @@ export async function GET() {
   });
 }
 
-const schema = z.object({ requisitionId: z.string().min(1).optional() }).strict();
+const schema = z.strictObject({ requisitionId: z.string().min(1).optional() });
 
 // POST — start a session: the interviewer's opening question. A session in
 // progress is returned as it is rather than started twice.

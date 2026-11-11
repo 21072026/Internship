@@ -20,12 +20,10 @@ import { canChangeInvoiceState, isInvoiceState } from '@/lib/placementRule';
 // It never touches the stamp itself — placedAt, attribution, reversal are the
 // subscriber's (src/lib/placementLedger.ts).
 
-const patchSchema = z
-  .object({
-    invoiceState: z.string().refine(isInvoiceState, 'unknown invoiceState'),
-    invoiceRef: z.string().trim().max(64).nullable().optional(),
-  })
-  .strict();
+const patchSchema = z.strictObject({
+  invoiceState: z.string().refine(isInvoiceState, 'unknown invoiceState'),
+  invoiceRef: z.string().trim().max(64).nullable().optional(),
+});
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requirePermission('org.settings.write', { request });

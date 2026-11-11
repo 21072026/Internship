@@ -14,15 +14,13 @@ import { parseEndDate } from '@/lib/relationSchedule';
 // (user.write), the caller's tenant only, at most BENCH_BATCH_MAX people in
 // one call. One activity entry per person (`user.benched` / `user.unbenched`).
 
-const schema = z
-  .object({
-    userIds: z.array(z.string().min(1).max(64)).min(1).max(BENCH_BATCH_MAX).optional(),
-    cohortId: z.string().min(1).max(64).optional(),
-    benched: z.boolean(),
-    reason: z.string().max(TEXT_LIMITS.benchReason).optional(),
-    reEngageAt: z.string().max(40).refine((v) => parseEndDate(v) !== null, 'invalid date').optional(),
-  })
-  .strict()
+const schema = z.strictObject({
+  userIds: z.array(z.string().min(1).max(64)).min(1).max(BENCH_BATCH_MAX).optional(),
+  cohortId: z.string().min(1).max(64).optional(),
+  benched: z.boolean(),
+  reason: z.string().max(TEXT_LIMITS.benchReason).optional(),
+  reEngageAt: z.string().max(40).refine((v) => parseEndDate(v) !== null, 'invalid date').optional(),
+})
   .refine((b) => !!b.userIds !== !!b.cohortId, 'Send userIds or cohortId, not both');
 
 export async function POST(request: Request) {

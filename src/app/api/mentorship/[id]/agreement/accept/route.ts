@@ -13,7 +13,7 @@ import { acceptAgreement, AgreementWriteError } from '@/lib/mentoringAgreement';
 // is refused (403) even though they can read the relation — an acceptance
 // somebody else clicked is worthless as evidence. A superseded version is 409.
 // Idempotent: a second POST returns the first row, `acceptedAt` unchanged.
-const schema = z.object({ version: z.string().min(1).max(32) }).strict();
+const schema = z.strictObject({ version: z.string().min(1).max(32) });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);

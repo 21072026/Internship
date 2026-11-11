@@ -18,17 +18,15 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 // notification, and the activity log gets the item name, never the notes or
 // the reference's details.
 
-const schema = z
-  .object({
-    item: z.enum(SCREENING_ITEMS).optional(),
-    done: z.boolean().optional(),
-    interviewAt: z.string().datetime().nullable().optional(),
-    interviewNotes: z.string().max(TEXT_LIMITS.mentorScreeningInterviewNotes).nullable().optional(),
-    referenceName: z.string().max(TEXT_LIMITS.mentorScreeningReference).nullable().optional(),
-    referenceContact: z.string().max(TEXT_LIMITS.mentorScreeningReference).nullable().optional(),
-    referenceOutcome: z.string().max(TEXT_LIMITS.mentorScreeningReferenceOutcome).nullable().optional(),
-  })
-  .strict()
+const schema = z.strictObject({
+  item: z.enum(SCREENING_ITEMS).optional(),
+  done: z.boolean().optional(),
+  interviewAt: z.string().datetime().nullable().optional(),
+  interviewNotes: z.string().max(TEXT_LIMITS.mentorScreeningInterviewNotes).nullable().optional(),
+  referenceName: z.string().max(TEXT_LIMITS.mentorScreeningReference).nullable().optional(),
+  referenceContact: z.string().max(TEXT_LIMITS.mentorScreeningReference).nullable().optional(),
+  referenceOutcome: z.string().max(TEXT_LIMITS.mentorScreeningReferenceOutcome).nullable().optional(),
+})
   .refine((v) => (v.item === undefined) === (v.done === undefined), { message: 'item_and_done_together' });
 
 const blankToNull = (v: string | null | undefined) => (v === undefined ? undefined : v?.trim() ? v.trim() : null);

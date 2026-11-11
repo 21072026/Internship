@@ -16,13 +16,13 @@ export const SCREENING_LIMITS = { questions: 8, label: 200, options: 10, option:
 const QUESTION_ID = /^[A-Za-z0-9_-]{1,64}$/;
 const label = z.string().trim().min(1).max(SCREENING_LIMITS.label);
 
-export const screeningQuestionSchema = z.object({
+export const screeningQuestionSchema = z.strictObject({
   id: z.string().regex(QUESTION_ID),
   type: z.enum(SCREENING_QUESTION_TYPES),
-  label: z.object({ en: label, tr: label, de: label }).strict(),
+  label: z.strictObject({ en: label, tr: label, de: label }),
   options: z.array(z.string().trim().min(1).max(SCREENING_LIMITS.option)).max(SCREENING_LIMITS.options).optional(),
   required: z.boolean(),
-}).strict().refine((q) => q.type !== 'SELECT' || (q.options?.length ?? 0) >= 2, { message: 'A choice question needs at least two options' });
+}).refine((q) => q.type !== 'SELECT' || (q.options?.length ?? 0) >= 2, { message: 'A choice question needs at least two options' });
 
 export const screeningQuestionsSchema = z
   .array(screeningQuestionSchema)

@@ -36,14 +36,12 @@ import { threadAiRefusal } from '@/lib/threadAiResponses';
 // set, previous session and log is answered from the stored copy (1-day TTL)
 // with no provider call and no quota; `regenerate` asks again.
 
-const schema = z
-  .object({
-    agendaId: z.string().min(1),
-    /** The guide to adapt when the agenda is free-form; ignored when the agenda has its own. */
-    templateId: z.string().min(1).optional(),
-    regenerate: z.boolean().optional(),
-  })
-  .strict();
+const schema = z.strictObject({
+  agendaId: z.string().min(1),
+  /** The guide to adapt when the agenda is free-form; ignored when the agenda has its own. */
+  templateId: z.string().min(1).optional(),
+  regenerate: z.boolean().optional(),
+});
 
 export async function POST(request: Request) {
   return withRequestScope(request, () => handlePost(request));

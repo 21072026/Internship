@@ -52,10 +52,10 @@ export async function GET(request: Request) {
   });
 }
 
-const schema = z.object({
+const schema = z.strictObject({
   menteeId: z.string().min(1).max(64),
   message: z.string().max(TEXT_LIMITS.mentorOfferMessage).optional(),
-}).strict();
+});
 
 export async function POST(request: Request) {
   const g = await guard(request, 'program.write');

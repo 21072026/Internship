@@ -13,7 +13,7 @@ import { FeedbackNotAllowed, ownMeetingFeedback, recordMeetingFeedback } from '@
 // writes: mail scanners prefetch links. POST records the token's rating (and
 // an optional note), and is idempotent: a second click updates the same row.
 
-const bodySchema = z.object({ note: z.string().trim().max(2000).nullable().optional() }).strict();
+const bodySchema = z.strictObject({ note: z.string().trim().max(2000).nullable().optional() });
 
 async function resolve(request: Request, rawToken: string) {
   const limited = enforceRateLimit(request, 'meeting-feedback-token', { limit: 60, windowMs: 10 * 60 * 1000 });

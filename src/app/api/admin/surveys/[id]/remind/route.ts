@@ -12,7 +12,7 @@ import { requirePermission } from '@/lib/authz';
 // reminder, and a click racing the cron sends one mail. On an ANONYMOUS survey
 // only the whole-survey form exists: its invitation ids are never handed out,
 // so naming one is refused rather than guessed at.
-const bodySchema = z.object({ invitationIds: z.array(z.string().min(1).max(64)).min(1).max(200).optional() }).strict();
+const bodySchema = z.strictObject({ invitationIds: z.array(z.string().min(1).max(64)).min(1).max(200).optional() });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requirePermission('content.write', { request });

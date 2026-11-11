@@ -13,7 +13,7 @@ import { moveApplicationStage } from '@/lib/applicationStage';
 import { stageTransaction } from '@/lib/applicationStageEvents';
 import { CONSENTING_POOL_WHERE } from '@/lib/requisitionMatchRule';
 
-const bodySchema = z.object({ menteeId: z.string().trim().min(1).max(64) }).strict();
+const bodySchema = z.strictObject({ menteeId: z.string().trim().min(1).max(64) });
 
 /** A role that is no longer hiring takes no new shortlist entries. */
 const CLOSED_STATUSES = ['FILLED', 'CANCELLED'];

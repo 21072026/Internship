@@ -45,11 +45,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
   });
 }
 
-const bodySchema = z.object({
+const bodySchema = z.strictObject({
   step: z.number().int().min(1).max(10),
   decision: z.enum(REVIEW_DECISIONS),
   note: z.string().trim().max(2000).optional(),
-}).strict();
+});
 
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const limited = enforceRateLimit(request, 'document-review', { limit: 20, windowMs: 10 * 60 * 1000 });

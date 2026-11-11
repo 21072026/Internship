@@ -23,12 +23,12 @@ import { stageTransaction } from '@/lib/applicationStageEvents';
 // route config — `next build` refuses any other export field.
 const BULK_STAGE_MAX_IDS = 50;
 
-const bodySchema = z.object({
+const bodySchema = z.strictObject({
   ids: z.array(z.string().trim().min(1).max(64)).min(1).max(BULK_STAGE_MAX_IDS),
   toStage: z.string().trim().min(1).max(32),
   note: z.string().trim().max(1000).optional(),
   dispositionCode: z.string().trim().max(32).optional(),
-}).strict();
+});
 
 const ACTING_ROLES = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY'];
 

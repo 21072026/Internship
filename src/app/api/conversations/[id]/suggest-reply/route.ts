@@ -23,7 +23,7 @@ import { REPLY_TONES, replyLocale } from '@/lib/threadAiRules';
 // group room), in one of three tones. Same gate and consent as the catch-up,
 // cached per tone on the thread's last message. Free, never plan-gated.
 
-const schema = z.object({ tone: z.enum(REPLY_TONES), regenerate: z.boolean().optional() }).strict();
+const schema = z.strictObject({ tone: z.enum(REPLY_TONES), regenerate: z.boolean().optional() });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withRequestScope(request, () => handlePost(request, params));

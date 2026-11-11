@@ -11,7 +11,7 @@ import { checklistGuidanceKey, setGuidanceDismissed } from '@/lib/guidance';
 // The row written is always (session user, `checklist:<their own role>`). There
 // is no userId, no key and no role in the body: an ADMIN cannot dismiss anybody
 // else's checklist, because the handler has no way to name another user.
-const bodySchema = z.object({ dismissed: z.boolean().optional() }).strict();
+const bodySchema = z.strictObject({ dismissed: z.boolean().optional() });
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);

@@ -16,7 +16,7 @@ import { enrichMentorProfile, type MentorProfileProposal } from '@/lib/ai/author
 // URL is fetched, no LinkedIn profile scraped. Returns a proposal; the mentor
 // accepts each field into the form and nothing is saved until they save.
 
-const schema = z.object({ text: z.string().trim().min(20).max(12_000) }).strict();
+const schema = z.strictObject({ text: z.string().trim().min(20).max(12_000) });
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
