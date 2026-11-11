@@ -8,6 +8,7 @@ import { markOrphanApplicants, orphanApplicantWhere } from '@/lib/orphanApplican
 import { skillTermsWhere } from '@/lib/skillFilter';
 import { resolveOrgId } from '@/lib/orgScope';
 import { programMenteeWhere, programRelationWhere } from '@/lib/programScopeRule';
+import { candidateSort, isUnassignedFilter, unassignedMenteeWhere } from '@/lib/unassignedCandidates';
 
 export async function GET(request: Request) {
   try {
@@ -79,7 +80,10 @@ export async function GET(request: Request) {
       relSome.mentorId = session.user.id;
       relSome.status = 'ACTIVE';
     }
-    if (pipelineStatus) relSome.pipelineStatus = pipelineStatus;
+    // `unassigned` (#1440) is not a stage: it is "no ACTIVE relation", a
+    // conjunct of its own below (src/lib/unassignedCandidates.ts).
+    const unassignedOnly = isUnassignedFilter(pipelineStatus);
+    if (pipelineStatus && !unassignedOnly) relSome.pipelineStatus = pipelineStatus;
     if (company) relSome.company = { name: company };
     if (project) relSome.project = { name: { contains: project } };
     if (cohortId) relSome.cohortId = cohortId;
@@ -158,7 +162,14 @@ export async function GET(request: Request) {
     const tenant = await tenantWhere(session);
     const skillWhere = skillList.length ? await skillTermsWhere(resolveOrgId(session), skillList) : null;
     const programScope = grants ? [programMenteeWhere(grants)] : [];
-    const base = { AND: [where, ...(orphanOnly ? [orphanApplicantWhere()] : []), ...programScope] };
+    const base = {
+      AND: [
+        where,
+        ...(orphanOnly ? [orphanApplicantWhere()] : []),
+        ...(unassignedOnly ? [unassignedMenteeWhere()] : []),
+        ...programScope,
+      ],
+    };
     const query = withinTenant(skillWhere ? { AND: [base, skillWhere] } : base, tenant);
 
     // One branch: every filter, the skill terms included, is SQL (#1820), so the
@@ -167,7 +178,9 @@ export async function GET(request: Request) {
     const raw = await prisma.user.findMany({
       where: query,
       select,
-      orderBy: { createdAt: 'desc' },
+      // Newest first, except the unassigned queue, which reads longest-waiting
+      // first (#1440); `?sort=oldest|newest` overrides either.
+      orderBy: { createdAt: candidateSort(searchParams.get('sort'), pipelineStatus) === 'oldest' ? 'asc' : 'desc' },
       ...(all ? {} : { skip: (page - 1) * pageSize, take: pageSize }),
     });
     const candidates = raw.map(normalize);

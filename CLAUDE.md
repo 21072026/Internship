@@ -70,7 +70,8 @@ deployed env instead.
 After switching branches, run `npx prisma generate` so the client matches the schema —
 a stale client causes schema-drift 500s (the smoke test will catch these).
 The **full suite** also runs on a schedule, 4× a day at 03/09/15/21 UTC
-(`.github/workflows/e2e-full.yml`, 4-way sharded, GitHub-hosted). A drift gate skips the
+(`.github/workflows/e2e-full.yml`, 4-way sharded, GitHub-hosted; one shared `Build app for E2E`
+job like the PR gate, #3509). A drift gate skips the
 scheduled firing when the commit already has a **green** run (#2374 — it used to accept the
 last *completed* run of any conclusion, so one red run masked itself green 4× a day forever;
 a red commit is now re-tested until it passes or a new commit lands), and the skip path says
@@ -358,7 +359,7 @@ marketing names redirect there, and their apex now serves **mail only**.
   `.ns` / `'ns…'`) on `npm install` (postinstall), `npm run dev` and `npm run build` — it is
   **gitignored, never committed**, so parallel PRs cannot conflict on it or leave it stale.
   `npm run check:i18n-scopes` (CI) fails on an unmounted scope. A new
-  top-level directory therefore needs a layout with its `<I18nScope>`. Never trim by path in the
+  top-level directory therefore needs a layout with its `<I18nScope>`. `admin` is split one level deeper (#3599, `NESTED` in the script): `scope="admin"` is only its chrome (layout/error/loading), every `src/app/admin/<section>/layout.tsx` mounts `scope="admin/<section>"` and the dashboard page mounts `admin/index` — so a new admin section needs that layout too (the check names it). A file whose namespace-looking strings are something else (nav keys, permission names) may say `// i18n-scopes: no-dictionary`; the scan refuses that line on a file that reads the dictionary. Never trim by path in the
   root layout — it survives client navigations, so a trimmed root dict outlives its page. Server
   components are unaffected (`getServerDictionary()` is still the whole dictionary). A namespace
   picked dynamically (`t[name]`) is invisible to the scan: write `t.ns` or `'ns.key'`.

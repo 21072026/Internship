@@ -89,6 +89,46 @@ same slice (`segmentBy`, `segment` in its `params`) and the scheduled send honou
 - **Degrades, never fails.** An unknown or non-segmentable `segmentBy` returns the
   unsliced report with `segmentIgnored`.
 
+## The invitation funnel (#1921)
+
+`/admin/invitations` shows, and `GET /api/admin/invitations/funnel?from=&to=` returns, how
+many of the invitations sent in a period were **opened → registered → signed in**, in
+total and per role — **counts and rates only**, never a list of invitees or of the staff who
+invited them. The registry report `invitation-funnel` is the same
+numbers per role over every invitation ever sent, under the usual privacy floor.
+
+- Every step is an **in-app event**, and nothing new is stored for it: `openedAt` (the
+  first visit of the invitation's register link; no IP, user agent or device),
+  `registeredAt` / `used` (an account was created) and `User.lastLoginAt` on that account
+  (registration sends the invitee to the sign-in page, so this is the first real sign-in).
+  No mail pixel, no tracking link. Newsletter opens and clicks wait for a legal decision on
+  #1921 and are not part of this.
+- "Signed in" has no column on the invitation. It is read from the account with the
+  invitation's address **in the invitation's org**, which pins the world (`docs/worlds.md`):
+  the same person's account in the other product never counts.
+- The stages are **cumulative** (a registration whose best-effort open stamp is missing still
+  counts as opened), and a **revoked** invitation nobody used leaves the funnel; it is
+  reported as a separate count. The rule is `src/lib/invitationFunnelRule.ts`, unit-tested in
+  `scripts/test/invitation-funnel.test.mjs`.
+
+## Announcement reach (#1921)
+
+`/admin/announcements` shows, per sent announcement, the recipients, how many were e-mailed
+and how many **read it in the app**; the registry report `announcement-reach` carries the same
+row per announcement. The read signal is #1721's: the `read` flag on the bell rows a broadcast
+wrote (`Notification.announcementId`). No mail pixel, no per-person list.
+
+The read count is **withheld** (the response says why, `readWithheld`) in two cases, both in
+`src/lib/announcementReachRule.ts`:
+
+- **Fewer than 5 recipients** (`ANNOUNCEMENT_READ_FLOOR`, the registry's privacy floor): "1 of 1
+  read" is one person's behaviour, not a total.
+- **Sent before the org's notification retention cutoff** (`notificationRetentionDays`, read
+  through `src/lib/notificationRetentionWindow.ts`, the same resolver the nightly sweep uses): the
+  sweep deletes bell rows read and unread alike, so the count would shrink into a wrong one.
+
+Recipients and e-mailed are columns on the announcement itself and are always shown.
+
 ## Deliberately deferred
 
 Both are **decided against for this year**, not overlooked.

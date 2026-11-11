@@ -10,6 +10,7 @@ import {
   isSeatRole,
   leavesNoOwner,
   seatLimitReached,
+  seatMaySeeCandidate,
 } from '../../src/lib/companySeats.ts';
 
 test('the action table is the issue\'s, role by role', () => {
@@ -57,4 +58,15 @@ test('a null quota is unlimited; a number is a hard cap', () => {
   assert.equal(seatLimitReached({ quota: 3, used: 2 }), false);
   assert.equal(seatLimitReached({ quota: 3, used: 3 }), true);
   assert.equal(seatLimitReached({ quota: 0, used: 0 }), true);
+});
+
+test('who may be told about a candidate (#1944): every seat but an INTERVIEWER off the panel', () => {
+  for (const role of ['OWNER', 'RECRUITER', 'HIRING_MANAGER']) {
+    assert.equal(seatMaySeeCandidate(role, false), true, role);
+  }
+  assert.equal(seatMaySeeCandidate('INTERVIEWER', false), false);
+  assert.equal(seatMaySeeCandidate('INTERVIEWER', true), true);
+  // An unknown stored role reads as the weakest seat, never the strongest.
+  assert.equal(seatMaySeeCandidate('ROOT', false), false);
+  assert.equal(seatMaySeeCandidate(null, false), false);
 });

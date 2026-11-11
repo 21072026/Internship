@@ -30,7 +30,7 @@ export async function GET(request: Request, { params }: Ctx) {
 
     return withTenantScope(session, async () => {
       const tenant = await tenantWhere(session);
-      const round = await prisma.matchRound.findFirst({ where: withinTenant({ id }, tenant), select: { id: true, stats: true } });
+      const round = await prisma.matchRound.findFirst({ where: withinTenant({ id }, tenant), select: { id: true, stats: true, orgId: true, cohortId: true } });
       if (!round) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
       const proposals = await prisma.matchProposal.findMany({
@@ -42,7 +42,7 @@ export async function GET(request: Request, { params }: Ctx) {
         unmatchedIds.length
           ? prisma.user.findMany({ where: withinTenant({ id: { in: unmatchedIds } }, tenant), select: { id: true, skills: true } })
           : Promise.resolve([]),
-        loadMentorPool(tenant),
+        loadMentorPool(tenant, { orgId: round.orgId, programId: round.cohortId }),
       ]);
       const seats = new Map<string, number>();
       for (const p of proposals) {

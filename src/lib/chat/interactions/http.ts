@@ -6,7 +6,8 @@ import { verifySlackSignature } from '@/lib/chat/slackSignature';
 import { verifyBotFrameworkRequest } from '@/lib/chat/botFrameworkAuth';
 import { assertPublicHttpsUrl } from '@/lib/ssrfGuard';
 import { slackBlocks, teamsAdaptiveCard } from '@/lib/chat/card';
-import { dispatchInteraction, parseSlackInteraction, parseTeamsInteraction, isSlackResponseUrl, type ChatReply } from './index';
+import { chatClientFor } from '@/lib/chat/client';
+import { dispatchInteraction, parseSlackInteraction, parseSlackCommand, parseTeamsInteraction, parseTeamsCommand, isSlackResponseUrl, type ChatReply } from './index';
 
 // The HTTP half of the chat interaction endpoint (#1948). Both platforms, in
 // the order the issue pins and nothing in between:
@@ -92,7 +93,8 @@ export async function slackInteraction(request: Request): Promise<NextResponse> 
   const sigKey = createHash('sha256').update(signature).digest('hex').slice(0, 32);
   if (!rateLimit(`chat-interaction-sig:${sigKey}`, { limit: 1, windowMs: SLACK_REPLAY_WINDOW_MS }).ok) return UNAUTHORIZED();
 
-  const env = parseSlackInteraction(rawBody);
+  // A button (`payload`) or our slash command (#1956) — both the same envelope.
+  const env = parseSlackInteraction(rawBody) ?? parseSlackCommand(rawBody);
   // Not an interaction we take (a view submission, a shortcut, …): Slack wants a 200.
   if (!env) return NextResponse.json({ ok: true, ignored: true });
   if (memberLimited('slack', env.teamId, env.externalUserId)) {
@@ -120,6 +122,37 @@ export async function teamsVerifiedInteraction(activity: unknown): Promise<NextR
     return NextResponse.json({ statusCode: 200, type: 'application/vnd.microsoft.card.adaptive', value: teamsAdaptiveCard(outcome.reply.text, null, outcome.reply.buttons, outcome.reply.input) });
   }
   return NextResponse.json({ statusCode: 200, type: 'application/vnd.microsoft.activity.message', value: outcome.reply.text });
+}
+
+/**
+ * A verified message typed to the Teams bot (#1956): `status`, `book`, … run
+ * through the same dispatcher as a card button, and the answer is posted back
+ * into that conversation after the 200 — the Bot Framework does not read a
+ * reply from the response of a message activity. The caller checked the JWT,
+ * which is bound to this activity's serviceUrl; the Teams client checks the
+ * host again before posting.
+ */
+export async function teamsVerifiedCommand(activity: unknown): Promise<NextResponse> {
+  const env = parseTeamsCommand(activity);
+  if (!env?.conversationRef) return NextResponse.json({ ok: true, ignored: true });
+  if (memberLimited('teams', env.teamId, env.externalUserId)) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': '60' } });
+  }
+  const ref = env.conversationRef;
+  after(async () => {
+    const outcome = await dispatchInteraction('TEAMS', env);
+    try {
+      await chatClientFor('TEAMS').postMessage({
+        token: '',
+        target: { id: ref.conversation.id, conversationRef: ref },
+        text: outcome.reply.text,
+        buttons: outcome.reply.buttons,
+      });
+    } catch (e) {
+      logger.warning('teams command reply failed', { error: String(e) });
+    }
+  });
+  return NextResponse.json({ ok: true });
 }
 
 export async function teamsInteraction(request: Request): Promise<NextResponse> {

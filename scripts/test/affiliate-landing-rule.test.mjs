@@ -19,6 +19,7 @@ import {
   statCards,
   needsLiveStats,
   STAT_LIVE_MIN_PARTNERS,
+  legalLinks,
 } from '../../src/lib/affiliateLandingRule.ts';
 
 const fields = (r) => (r.ok ? [] : r.issues.map((i) => `${i.field}:${i.code}`));
@@ -410,4 +411,20 @@ test('an unchanged theme in another key order is not a change; the audit names f
   }).landing;
   assert.deepEqual(changedLandingFields(a, c), ['copy.de', 'phone', 'theme.colors', 'theme.fonts', 'theme.layout', 'theme.animation', 'theme.media']);
   for (const f of changedLandingFields(a, c)) assert.doesNotMatch(f, /#|B|1234/);
+});
+
+test('legal links (#3363): https only, and an empty one falls back to this host\'s own page', () => {
+  const ok = parseLanding({ imprintUrl: ' https://acme.example/imprint ', privacyUrl: '', termsUrl: null });
+  assert.equal(ok.ok, true);
+  assert.deepEqual([ok.landing.imprintUrl, ok.landing.privacyUrl, ok.landing.termsUrl], ['https://acme.example/imprint', null, null]);
+  assert.deepEqual(legalLinks(ok.landing), {
+    imprintUrl: { href: 'https://acme.example/imprint', external: true },
+    privacyUrl: { href: '/privacy', external: false },
+    termsUrl: { href: '/terms', external: false },
+  });
+  assert.deepEqual(fields(parseLanding({ termsUrl: 'http://acme.example/agb', privacyUrl: 'javascript:alert(1)' })).sort(), ['privacyUrl:not_https', 'termsUrl:not_https']);
+  // A link is part of the change comparison.
+  assert.notEqual(canonicalLanding(ok.landing), canonicalLanding(EMPTY_LANDING));
+  // …and the audit names the link, never the address.
+  assert.deepEqual(changedLandingFields(EMPTY_LANDING, ok.landing), ['imprintUrl']);
 });

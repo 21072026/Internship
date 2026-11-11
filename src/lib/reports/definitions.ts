@@ -169,6 +169,46 @@ export const REPORT_DEFINITIONS: readonly ReportDefinition[] = [
       { key: 'rate', labelKey: 'col.rate', type: 'percent' },
     ],
   },
+  // The invitation funnel (#1921): per role, every invitation ever sent in the
+  // org. The stages and what "signed in" means are src/lib/invitationFunnelRule.ts
+  // — the same numbers the invitation board's funnel card shows. Not segmentable:
+  // most invitees have no account, so no attribute to slice by.
+  {
+    key: 'invitation-funnel',
+    titleKey: 'invitationFunnel.title',
+    descriptionKey: 'invitationFunnel.description',
+    aggregate: true,
+    sizeColumn: 'sent',
+    labelColumn: 'role',
+    columns: [
+      { key: 'role', labelKey: 'col.role', type: 'string' },
+      { key: 'sent', labelKey: 'col.sent', type: 'number' },
+      { key: 'opened', labelKey: 'col.opened', type: 'number' },
+      { key: 'registered', labelKey: 'col.registered', type: 'number' },
+      { key: 'activated', labelKey: 'col.activated', type: 'number' },
+      { key: 'activation', labelKey: 'col.activation', type: 'percent' },
+    ],
+  },
+  // Announcement reach (#1921): one row per sent announcement, newest first —
+  // recipients, e-mailed, and read in the app. Row-level: a row is an
+  // announcement, not a group of people. The read count is withheld (empty)
+  // below the floor and once the retention sweep has thinned the bell rows;
+  // the rule is src/lib/announcementReachRule.ts, the same the history shows.
+  {
+    key: 'announcement-reach',
+    titleKey: 'announcementReach.title',
+    descriptionKey: 'announcementReach.description',
+    aggregate: false,
+    columns: [
+      { key: 'sentAt', labelKey: 'col.sentAt', type: 'date' },
+      { key: 'announcement', labelKey: 'col.announcement', type: 'string' },
+      { key: 'audience', labelKey: 'col.audience', type: 'string' },
+      { key: 'recipients', labelKey: 'col.recipients', type: 'number' },
+      { key: 'emailed', labelKey: 'col.emailed', type: 'number' },
+      { key: 'read', labelKey: 'col.read', type: 'number' },
+      { key: 'readRate', labelKey: 'col.readRate', type: 'percent' },
+    ],
+  },
 ];
 
 export function getReportDefinition(key: string): ReportDefinition | null {

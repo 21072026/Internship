@@ -5,9 +5,10 @@ import { Reveal } from '@/components/partnerTheme/Reveal';
 import { ThemeVideo } from '@/components/partnerTheme/ThemeVideo';
 import type { Dictionary } from '@/i18n/dictionaries';
 import type { Locale } from '@/i18n/config';
-import type { LandingCopy, LandingTheme } from '@/lib/affiliateLandingRule';
+import type { Landing, LandingCopy, LandingTheme, LegalLinkKey } from '@/lib/affiliateLandingRule';
 import { themeFontFamily } from '@/lib/partnerThemeFonts';
 import { LARGE_BUTTON, TEXT_SHADOW, themeLook, type ThemeMedia } from '@/lib/partnerThemeLook';
+import { PartnerFooter } from './PartnerFooter';
 
 // /partner with the organisation's own look (#3535). The same sections, words,
 // doors and test ids as the standard page in page.tsx — only how they look comes
@@ -32,6 +33,10 @@ export interface PartnerPageView {
   percentLine: string | null;
   applyHref: string;
   portalHref: string;
+  /** The footer's legal links (#3363): the organisation's own pages, else this host's. */
+  legal: Pick<Landing, LegalLinkKey>;
+  /** Whether the programme has a contract, linked as /partner/terms. */
+  hasContract: boolean;
 }
 
 export function ThemedPartnerPage({ view, theme, media }: { view: PartnerPageView; theme: LandingTheme; media: ThemeMedia }) {
@@ -249,13 +254,7 @@ export function ThemedPartnerPage({ view, theme, media }: { view: PartnerPageVie
         </Reveal>
       </main>
 
-      <footer className="py-8 text-sm" style={{ borderTop: `1px solid ${p.text}26` }}>
-        <nav className="mx-auto flex max-w-5xl flex-wrap justify-center gap-6 px-4" aria-label={L.legalLabel}>
-          <Link href="/imprint" className="hover:underline">{L.imprint}</Link>
-          <Link href="/privacy" className="hover:underline">{L.privacy}</Link>
-          <Link href="/terms" className="hover:underline">{L.terms}</Link>
-        </nav>
-      </footer>
+      <PartnerFooter landing={view.legal} hasContract={view.hasContract} labels={L} className="py-8 text-sm" style={{ borderTop: `1px solid ${p.text}26` }} />
     </div>
   );
 }

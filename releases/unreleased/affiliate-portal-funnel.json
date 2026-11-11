@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Partner funnel in the affiliate portal (#3543):** the portal home shows the partner's funnel — tracked-link clicks → registrations (split into free period · left without paying) → paying → active / passive, each step as a share of the step before — for this month, the last 12 calendar months or all time (`?period=`), and a \"N / target paying customers\" indicator towards the plan's `switchAtCustomer` that reads \"applies since <date>\" once reached and is hidden when the plan has no threshold. The customer list gets a status badge and a status filter. One shared server aggregate, `src/lib/affiliateFunnel.ts` (`partnerFunnels()`, `partnerThresholds()`, pure rule in `src/lib/affiliateFunnelRule.ts`), is what the admin funnel (#3544) reads too; the threshold uses the commission engine's own `evaluatePartner()` ordinal. `partnerCustomerStatusCounts()` takes an optional `registeredFrom`, and a sibling `partnerCustomerStatuses()` returns the per-customer list the counts fold.",
+  "notes": {
+    "en": ["Partners now see their funnel — clicks, registrations, paying and active customers — and how many paying customers are left until the percent commission starts."],
+    "tr": ["Partnerler artık hunilerini (tıklama, kayıt, ödeme yapan ve aktif müşteri) ve yüzde komisyonun başlamasına kaç ödeme yapan müşteri kaldığını görüyor."],
+    "de": ["Partner sehen jetzt ihren Funnel – Klicks, Registrierungen, zahlende und aktive Kunden – und wie viele zahlende Kunden bis zur Prozentprovision noch fehlen."]
+  }
+}

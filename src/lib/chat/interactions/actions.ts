@@ -16,6 +16,12 @@ import { submitSurveyResponse, SurveyAnswerInvalid, SurveyConflict, surveyAccept
 import { mintInvitationReminderToken, surveyInviteUrl } from '@/lib/surveyTokens';
 import { pickLocalized } from '@/lib/surveySchema';
 import { actorFromSession, can } from '@/lib/authz';
+import { andScope, scopeForRole } from '@/lib/authzScope';
+import { orgScoped } from '@/lib/orgScope';
+import { resolvePipelineStages } from '@/lib/pipelineStages';
+import { pipelineLabel } from '@/lib/pipeline';
+import { COMMAND_NAMES } from '@/lib/chat/commands';
+import type { Prisma } from '@prisma/client';
 import { interactionAccess, updateInteraction } from '@/lib/interactionWrite';
 import { updateInteractionSchema } from '@/lib/interactionSchema';
 import { answerableInChat, choicesFor, decodeState, encodeState, type FlowState } from '@/lib/chat/surveyFlow';
@@ -101,7 +107,9 @@ const whenFor = (user: ChatActor, at: Date) => formatInTimeZone(at, user.timeZon
  * windows, within the booking rules), on the CLICKER's clock, as buttons.
  * Read-only, so a rerun is harmless.
  */
-registerChatAction('meeting.book', async ({ user, value }) => {
+registerChatAction('meeting.book', async ({ user, value }) => bookReply(user, value));
+
+async function bookReply(user: ChatActor, value: string | null) {
   const t = getDictionary(user.locale).chatInteraction;
   const relationId = value && SAFE_ID.test(value) ? value : await activeRelationOf(user);
   if (!relationId) return { text: t.unavailable };
@@ -118,7 +126,7 @@ registerChatAction('meeting.book', async ({ user, value }) => {
       value: `${relationId}|${s.startISO}`,
     })),
   };
-});
+}
 
 /**
  * `meeting.book.pick` — a MeetingRequest at the picked time, through the
@@ -393,4 +401,76 @@ registerChatAction('interaction.note.save', async ({ user, value, input }) => {
   if (!row) return { text: t.unavailable };
   await updateInteraction(row.id, parsed.data);
   return { text: interpolate(t.noteSaved, { subject: noteSubject(row) }), replaceOriginal: true };
+});
+
+// ── Commands (#1956) ────────────────────────────────────────────────────────
+//
+// `/interncrm <name>` on Slack, `<name>` typed to the Teams bot. Each is a
+// registered action like a button, so the dispatcher has already resolved the
+// verified person; none asks a rule of its own:
+//   status — the relations the app's own scope (scopeForRole, the rule behind
+//            GET /api/mentorship) lets this person see, ACTIVE only: a mentee
+//            sees their own stage, a mentor their pairs, an admin a count;
+//   book   — the `meeting.book` answer, suggestedTimesFor() included;
+//   log    — the person's recent auto-logged sessions with "Add notes", the
+//            `interaction.note` action, which asks interactionAccess() again.
+// All three only read, so a platform retry is harmless.
+
+registerChatAction('command.help', async ({ user }) => {
+  const t = getDictionary(user.locale).chatInteraction;
+  return { text: `${t.commandHelp}\n${COMMAND_NAMES.filter((n) => n !== 'help').map((n) => `• ${n} — ${t[`command_${n}` as 'command_status']}`).join('\n')}` };
+});
+
+registerChatAction('command.status', async ({ user }) => {
+  const t = getDictionary(user.locale).chatInteraction;
+  const session = await sessionFor(user);
+  const scope = await scopeForRole(session.user, 'relation');
+  if (!scope) return { text: t.unavailable };
+  const where = andScope<Prisma.MentorshipRelationWhereInput>(orgScoped<Prisma.MentorshipRelationWhereInput>(scope, user.orgId), { status: 'ACTIVE' });
+  const stages = await resolvePipelineStages(user.orgId, user.locale);
+  const label = (key: string) => stages.find((s) => s.key === key)?.label || pipelineLabel(key, user.locale);
+  if (user.role === 'MENTEE') {
+    const own = await prisma.mentorshipRelation.findFirst({ where, select: { pipelineStatus: true }, orderBy: { startDate: 'desc' } });
+    return { text: own ? interpolate(t.statusOwn, { stage: label(own.pipelineStatus) }) : t.statusNone };
+  }
+  if (user.role === 'MENTOR') {
+    const rows = await prisma.mentorshipRelation.findMany({
+      where,
+      select: { pipelineStatus: true, mentee: { select: { fullName: true } } },
+      orderBy: { startDate: 'desc' },
+      take: 10,
+    });
+    if (rows.length === 0) return { text: t.statusNone };
+    const lines = rows.map((r) => `• ${interpolate(t.statusLine, { name: r.mentee.fullName, stage: label(r.pipelineStatus) })}`);
+    return { text: `${interpolate(t.statusPairs, { count: String(rows.length) })}\n${lines.join('\n')}` };
+  }
+  const count = await prisma.mentorshipRelation.count({ where });
+  return { text: `${interpolate(t.statusCount, { count: String(count) })}\n${await appOriginForOrg(user.orgId)}` };
+});
+
+registerChatAction('command.book', async ({ user }) => {
+  const t = getDictionary(user.locale).chatInteraction;
+  if (!(await activeRelationOf(user))) return { text: t.bookNotYours };
+  return bookReply(user, null);
+});
+
+registerChatAction('command.log', async ({ user }) => {
+  const t = getDictionary(user.locale).chatInteraction;
+  if (user.role !== 'MENTOR') return { text: t.logNotYours };
+  const rows = await prisma.interactionLog.findMany({
+    where: {
+      autoLogged: true,
+      date: { gte: new Date(Date.now() - 14 * 86_400_000) },
+      relation: { is: { mentorId: user.id, orgId: user.orgId } },
+    },
+    select: { id: true, subject: true, type: true, date: true },
+    orderBy: { date: 'desc' },
+    take: 3,
+  });
+  if (rows.length === 0) return { text: t.logNone };
+  const labels = getDictionary(user.locale).chatCard;
+  return {
+    text: `${t.logHeader}\n${rows.map((r) => `• ${noteSubject(r)} (${whenFor(user, r.date)})`).join('\n')}`,
+    buttons: rows.map((r) => ({ label: `${labels.addNotes}: ${noteSubject(r)}`, actionId: 'interaction.note', value: r.id })),
+  };
 });

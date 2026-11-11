@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**A mentee owner manages their own team and weekly meeting (#2272):** who manages a project's team and whom they may seat is one pure rule, `src/lib/projectTeamRule.ts` (`canManageProjectTeam`, `addableSeats`, `memberAddRefusal`, `canWriteProjectSeries`). A MENTEE owner may now add their own ACTIVE mentor(s) and those mentors' other mentees (`mentee_owner_invite` is gone); a mentor keeps \"any mentor/admin plus own mentees\". Anyone outside the set — an unconnected org member, another tenant's person, an unknown id — answers the same `404 not_addable`; a non-manager who is not on the team gets 404 instead of 403. New mentee-safe picker `GET /api/projects/[id]/members/candidates`, filtered by the same rule. `POST/PUT/DELETE /api/meeting-series` admit a MENTEE for their own project's series; a relation's standing 1:1 stays the mentor's.",
+  "notes": {
+    "en": ["Mentees who own a project can now add their mentor and fellow mentees to the team, and set up the project's weekly meeting themselves."],
+    "tr": ["Proje sahibi mentiler artık mentorlarını ve aynı mentordaki diğer mentileri ekibe ekleyebilir, projenin haftalık toplantısını kendileri kurabilir."],
+    "de": ["Mentees, denen ein Projekt gehört, können jetzt ihren Mentor und andere Mentees ins Team holen und das wöchentliche Projektmeeting selbst einrichten."]
+  }
+}

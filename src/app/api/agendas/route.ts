@@ -108,18 +108,13 @@ export async function POST(request: Request) {
     }
 
     if (templateId) {
-      // The library is the tenant's: a template of another tenant — or a
-      // retired one — is not offered, so it answers like a missing one.
-      const template = await prisma.agendaTemplate.findUnique({
-        where: { id: templateId },
-        select: { id: true, orgId: true, archivedAt: true },
-      });
-      if (!template || template.archivedAt || (template.orgId !== null && template.orgId !== rel.orgId && rel.orgId !== null)) {
-        return NextResponse.json({ error: 'Template not found' }, { status: 404 });
-      }
+      // The library is the relation's org's (#3592): another org's guide, a
+      // retired one and a missing id all answer the same 404 — the org is in
+      // the WHERE of `instantiateAgenda`, not checked after the read.
       const created = await instantiateAgenda({
         relationId: rel.id,
-        templateId: template.id,
+        relationOrgId: rel.orgId,
+        templateId,
         meetingId: meetingId ?? null,
         createdById: session.user.id,
       });

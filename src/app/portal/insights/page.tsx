@@ -6,8 +6,9 @@ import { getServerDictionary } from '@/i18n/server';
 import { Card } from '@/components/ui/Card';
 import { formatDuration, getOwnMenteeActivity } from '@/lib/activityReport';
 import { hasConsent } from '@/lib/consent';
-
-const ALLOWED_DAYS = [1, 7, 30];
+import { insightsWindowFrom } from '@/lib/portalInsightsQuery';
+import { PORTAL_INSIGHTS_DAYS, ymd } from '@/lib/portalInsightsWindow';
+import { PortalInsightsExport } from '@/components/PortalInsightsExport';
 
 // The mentee's own view of the activity report that already exists about them
 // (#1915). We collect this data with their consent and show it to their mentor
@@ -22,22 +23,41 @@ const ALLOWED_DAYS = [1, 7, 30];
 export default async function PortalInsightsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ days?: string }>;
+  searchParams: Promise<{ days?: string; from?: string; to?: string }>;
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/auth/signin');
   const { t } = await getServerDictionary();
   const p = t.portalInsights;
 
+  // A preset (`?days=`) or a date range (`?from=&to=`, #1909) — the same parse
+  // as the API route, so the export covers exactly the period on screen.
   const sp = await searchParams;
-  const days = ALLOWED_DAYS.includes(Number(sp.days)) ? Number(sp.days) : 7;
-  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const period = insightsWindowFrom({ get: (name) => sp[name as keyof typeof sp] ?? null });
 
   // Same three calls the API route makes, server-side, so the first paint needs
   // no client fetch. The subject is the session's own id — the page, like the
   // route, takes no mentee id.
-  const activity = await getOwnMenteeActivity(session.user.id, since);
+  const activity = await getOwnMenteeActivity(session.user.id, period.from, period.to);
   const trackingConsent = await hasConsent(session.user.id, 'ACTIVITY_TRACKING');
+
+  // The export is the numbers on this screen, nothing more: the tracking rows
+  // only when tracking is on, the same as the cards below.
+  const exportRows: (string | number)[][] = [
+    [p.exportPeriod, `${ymd(period.from)} – ${ymd(period.to)}`],
+    [p.metrics.goalsDone, activity?.goalsCompleted ?? 0],
+    [p.metrics.goalsOpen, activity?.goalsOpen ?? 0],
+    [p.metrics.meetings, activity?.meetings ?? 0],
+    [p.metrics.interactions, activity?.interactions ?? 0],
+    [p.metrics.pipeline, activity?.pipelineChanges ?? 0],
+    [p.metrics.messages, `${activity?.messagesSent ?? 0}/${activity?.messagesReceived ?? 0}`],
+    ...(trackingConsent && activity
+      ? [
+          [p.metrics.timeOnSite, formatDuration(activity.timeOnSiteSec)],
+          [p.metrics.pages, activity.pageViews],
+        ]
+      : []),
+  ];
 
   return (
     <div data-testid="portal-insights">
@@ -46,13 +66,14 @@ export default async function PortalInsightsPage({
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{p.title}</h1>
           <p className="text-gray-500 mt-1">{p.subtitle}</p>
         </div>
-        <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-700 p-1 self-start">
-          {ALLOWED_DAYS.map((d) => (
+        <div className="flex flex-col gap-2 self-start sm:items-end no-print">
+        <div className="flex items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-700 p-1 self-start sm:self-end">
+          {PORTAL_INSIGHTS_DAYS.map((d) => (
             <Link
               key={d}
               href={`/portal/insights?days=${d}`}
               className={`px-3 py-1.5 rounded-md text-sm ${
-                days === d
+                period.days === d
                   ? 'bg-blue-600 text-white'
                   : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
               }`}
@@ -60,6 +81,27 @@ export default async function PortalInsightsPage({
               {(p.range as Record<string, string>)[`d${d}`]}
             </Link>
           ))}
+        </div>
+        <form method="get" action="/portal/insights" className="flex flex-wrap items-end gap-2" data-testid="portal-insights-range">
+          <label className="text-xs text-gray-500">
+            {p.rangeFrom}
+            <input type="date" name="from" defaultValue={ymd(period.from)} className="mt-0.5 block rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1 text-sm text-gray-900 dark:text-gray-100" data-testid="portal-insights-from" />
+          </label>
+          <label className="text-xs text-gray-500">
+            {p.rangeTo}
+            <input type="date" name="to" defaultValue={ymd(period.to)} className="mt-0.5 block rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-2 py-1 text-sm text-gray-900 dark:text-gray-100" data-testid="portal-insights-to" />
+          </label>
+          <button type="submit" className="rounded-md bg-blue-600 px-3 py-1.5 text-sm text-white hover:bg-blue-700" data-testid="portal-insights-apply">
+            {p.rangeApply}
+          </button>
+        </form>
+        <PortalInsightsExport
+          filename={`my-activity-${ymd(period.from)}-${ymd(period.to)}`}
+          columns={[p.exportMetric, p.exportValue]}
+          rows={exportRows}
+          exportLabel={p.exportXlsx}
+          printLabel={p.print}
+        />
         </div>
       </div>
 

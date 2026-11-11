@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ANNOUNCEMENT_READ_FLOOR } from '@/lib/announcementReachRule';
 import { ImagePlus, X, Pencil, Trash2 } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
@@ -57,7 +58,10 @@ interface AnnouncementRecord {
   status: 'SCHEDULED' | 'SENDING' | 'SENT' | 'CANCELED';
   scheduledAt: string | null;
   delivered: number;
-  read: number;
+  /** Null when withheld (#1921): a small audience, or rows the retention sweep thinned. */
+  read: number | null;
+  readRate: number | null;
+  readWithheld: 'not_sent' | 'small_audience' | 'pruned' | null;
 }
 
 export default function AdminAnnouncementsPage() {
@@ -591,12 +595,21 @@ export default function AdminAnnouncementsPage() {
                     {a.sentByName && <span>{t.announcements.sentBy.replace('{name}', a.sentByName)}</span>}
                     {a.status === 'SENT' && <span>{t.announcements.recipients.replace('{n}', String(a.recipientCount))}</span>}
                     {a.emailedCount > 0 && <span>{t.announcements.emailedCount.replace('{n}', String(a.emailedCount))}</span>}
-                    {a.status === 'SENT' && a.delivered > 0 && (
+                    {a.status === 'SENT' && a.read !== null && a.readRate !== null && (
                       <span data-testid={`announcement-read-${a.id}`}>
                         {t.announcements.readStats
                           .replace('{r}', String(a.read))
                           .replace('{d}', String(a.delivered))
-                          .replace('{p}', String(Math.round((a.read / a.delivered) * 100)))}
+                          .replace('{p}', String(a.readRate))}
+                      </span>
+                    )}
+                    {/* Withheld, not hidden (#1921): a small audience would name
+                        people, and a pruned count would be wrong. */}
+                    {a.status === 'SENT' && (a.readWithheld === 'small_audience' || a.readWithheld === 'pruned') && (
+                      <span data-testid={`announcement-read-withheld-${a.id}`}>
+                        {a.readWithheld === 'small_audience'
+                          ? t.announcements.readWithheldSmall.replace('{n}', String(ANNOUNCEMENT_READ_FLOOR))
+                          : t.announcements.readWithheldPruned}
                       </span>
                     )}
                     {a.status === 'SCHEDULED' && (

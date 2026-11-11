@@ -14,6 +14,7 @@ import { formatMinorAmount } from '@/lib/money';
 import { formatDate } from '@/lib/relativeTime';
 import { interpolate } from '@/lib/notificationText';
 import { AffiliateTabs } from '../AffiliateTabs';
+import { CustomerName } from '@/components/affiliate/CustomerName';
 
 // Commissions (docs/affiliate-module.md, #3116): by status, oldest due first;
 // approve / reject / back to pending in bulk; and the drift list — frozen rows
@@ -33,6 +34,7 @@ interface Row {
   planVersion: number;
   partner: { code: string; displayName: string };
   customerRef: string;
+  customerLabel: string | null;
   payment: { amountMinor: number; externalPaymentRef: string };
 }
 interface Data {
@@ -220,7 +222,7 @@ function AffiliateCommissions() {
                     )}
                     <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.dueAt, locale, { timeZone: 'UTC' })}</td>
                     <td className="px-4 py-2">{r.partner.displayName}</td>
-                    <td className="px-4 py-2 font-mono">{r.customerRef}</td>
+                    <td className="px-4 py-2"><CustomerName label={r.customerLabel} reference={r.customerRef} /></td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">{money(r.payment.amountMinor)}</td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">
                       {money(r.amountMinor)} <Badge>{L[`kind${r.kind}`]}</Badge>

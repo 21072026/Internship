@@ -21,6 +21,8 @@ import { shellCapabilities } from '@/lib/shellCapabilities';
 import { getPlan } from '@/lib/plans';
 import { FirstRunPanel } from '@/components/FirstRunPanel';
 import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
+import { UNASSIGNED_FILTER, unassignedMenteeWhere } from '@/lib/unassignedCandidates';
+import { I18nScope } from '@/i18n/scope';
 
 // Bound to the caller's org (#2356): this is a server component, so its Prisma
 // reads do not pass through an API route's `withTenantScope` — without binding
@@ -45,7 +47,7 @@ async function getStats(session: Session | null) {
     ? (grantRelationTerms(grants).length ? { mentorships: { some: rel } } : NOBODY)
     : {}) as Prisma.CompanyWhereInput;
   return withTenantScope(session, async () => {
-  const [menteeCount, mentorCount, companyCount, activeRelations, recentRelations, recentCandidates, pipelineGroups, overdueCount, totalRelations] =
+  const [menteeCount, mentorCount, companyCount, activeRelations, recentRelations, recentCandidates, pipelineGroups, overdueCount, totalRelations, unassignedCount] =
     await Promise.all([
       prisma.user.count({ where: withinTenant<Prisma.UserWhereInput>({ AND: [{ role: 'MENTEE' }, mentees] }, tenant) }),
       prisma.user.count({ where: withinTenant<Prisma.UserWhereInput>({ AND: [{ role: 'MENTOR' }, mentors] }, tenant) }),
@@ -89,6 +91,11 @@ async function getStats(session: Session | null) {
       // Any relation, in any state (#1751): zero means a brand-new tenant,
       // which gets the first-run panel instead of empty lists.
       prisma.mentorshipRelation.count({ where: withinTenant<Prisma.MentorshipRelationWhereInput>(rel, tenant) }),
+      // The admin's queue (#1440): active candidates with no ACTIVE relation —
+      // the same set as /admin/candidates?status=unassigned, which it links to.
+      prisma.user.count({
+        where: withinTenant<Prisma.UserWhereInput>({ AND: [{ role: 'MENTEE', isActive: true }, unassignedMenteeWhere(), mentees] }, tenant),
+      }),
     ]);
 
   const pipelineCounts = Object.fromEntries(
@@ -105,12 +112,13 @@ async function getStats(session: Session | null) {
     pipelineCounts,
     overdueCount,
     totalRelations,
+    unassignedCount,
     programScoped: grants !== null,
   };
   });
 }
 
-export default async function AdminDashboard() {
+async function AdminDashboard() {
   const session = await getServerSession(authOptions);
   const stats = await getStats(session);
   const { locale, t } = await getServerDictionary();
@@ -247,6 +255,26 @@ export default async function AdminDashboard() {
                   </Link>
                 );
               })}
+              {/* What the bars count (#1440): pairings, not people — so the gap
+                  to the mentee total is explained, and the people in it are
+                  one click away. */}
+              <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-2 mt-2 text-xs text-gray-500">
+                <span data-testid="dashboard-pipeline-note">
+                  {t.dashboard.pipelineCountsNote.replace(
+                    '{n}',
+                    String(Object.values(stats.pipelineCounts).reduce((a, b) => a + b, 0)),
+                  )}
+                </span>
+                {stats.unassignedCount > 0 && (
+                  <Link
+                    href={`/admin/candidates?status=${UNASSIGNED_FILTER}`}
+                    data-testid="dashboard-unassigned"
+                    className="font-medium text-blue-600 hover:underline"
+                  >
+                    {t.dashboard.unassignedLink.replace('{n}', String(stats.unassignedCount))}
+                  </Link>
+                )}
+              </div>
             </div>
           );
         })()}
@@ -367,5 +395,15 @@ export default async function AdminDashboard() {
         </Link>
       </div>
     </div>
+  );
+}
+
+// The dashboard's own dictionary namespaces (#3599): the admin layout ships only
+// its chrome, and this page has no directory of its own to put a layout in.
+export default function ScopedAdminDashboard() {
+  return (
+    <I18nScope scope="admin/index">
+      <AdminDashboard />
+    </I18nScope>
   );
 }

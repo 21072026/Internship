@@ -5,6 +5,7 @@ import { notFound, redirect } from 'next/navigation';
 import { Phone, Mail } from 'lucide-react';
 import { getServerDictionary } from '@/i18n/server';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
+import { PartnerFooter } from './PartnerFooter';
 import { hostBrand } from '@/lib/hostBrand';
 import { brandAssetPath } from '@/lib/brandRule';
 import { formatMinorPrice } from '@/lib/money';
@@ -113,6 +114,8 @@ export default async function PartnerProgrammePage({ searchParams }: { searchPar
           percentLine,
           applyHref: APPLY_HREF,
           portalHref: PORTAL_HREF,
+          legal: programme.landing,
+          hasContract: programme.contract !== null,
         }}
       />
     );
@@ -260,13 +263,7 @@ export default async function PartnerProgrammePage({ searchParams }: { searchPar
         </section>
       </main>
 
-      <footer className="border-t border-gray-200 py-8 text-sm text-gray-600 dark:border-gray-800 dark:text-gray-400">
-        <nav className="mx-auto flex max-w-5xl flex-wrap justify-center gap-6 px-4" aria-label={L.legalLabel}>
-          <Link href="/imprint" className="hover:underline">{L.imprint}</Link>
-          <Link href="/privacy" className="hover:underline">{L.privacy}</Link>
-          <Link href="/terms" className="hover:underline">{L.terms}</Link>
-        </nav>
-      </footer>
+      <PartnerFooter landing={programme.landing} hasContract={programme.contract !== null} labels={L} />
     </div>
   );
 }

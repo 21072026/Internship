@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Partner page legal footer and public partner terms (#3363):** the programme page, the application form and the new `/partner/terms` share one footer whose Imprint / Privacy / Terms links are the organisation's own https pages when set in the landing settings (`imprintUrl`, `privacyUrl`, `termsUrl`), else this host's own pages. `/partner/terms` shows the current partner contract read-only, signed out (404 without one). With a contract, the application form requires accepting its current version, stored on `AffiliateApplication.contractVersion` (nullable, expand-only).",
+  "notes": {
+    "en": ["The partner programme page links your own imprint, privacy and terms pages, and applicants can read and accept the partner terms before applying."],
+    "tr": ["Partner programı sayfası kendi künye, gizlilik ve şartlar sayfalarınıza bağlanıyor; başvuranlar partner sözleşmesini başvurmadan önce okuyup kabul edebiliyor."],
+    "de": ["Die Partnerprogramm-Seite verlinkt Ihre eigenen Seiten für Impressum, Datenschutz und AGB, und Bewerber können den Partnervertrag vor der Bewerbung lesen und akzeptieren."]
+  }
+}

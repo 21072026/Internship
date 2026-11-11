@@ -7,10 +7,11 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { hostBrand } from '@/lib/hostBrand';
 import { requestHostHeader } from '@/lib/publicHostOrg';
 import { affiliateProgrammeForHost } from '@/lib/affiliatePublicPage';
-import { readStoredLanding, themePalette, onFill, CONTRAST_TEXT } from '@/lib/affiliateLandingRule';
+import { legalLinks, readStoredLanding, themePalette, onFill, CONTRAST_TEXT } from '@/lib/affiliateLandingRule';
 import { themeMediaFor } from '@/lib/affiliateLandingAssets';
 import { themeFontFamily } from '@/lib/partnerThemeFonts';
 import { ApplicationForm } from './ApplicationForm';
+import { PartnerFooter } from '../PartnerFooter';
 
 // The public partner application (docs/affiliate-module.md, #3361): what the
 // "become a partner" buttons of /partner open. Exists wherever the host serves a
@@ -29,11 +30,12 @@ export default async function PartnerApplyPage() {
   if (!programme) notFound();
   const { t, locale } = await getServerDictionary();
   const brand = await hostBrand();
+  const landing = readStoredLanding(programme.landing);
   // The programme's own look (#3535), when it has one: its fonts, logo and main
   // colour. Its page and text colours apply in light mode only — the form's
   // fields are the app's own and follow dark mode, so a dark page keeps them
   // readable rather than painting light-on-light.
-  const theme = readStoredLanding(programme.landing).theme;
+  const theme = landing.theme;
   const p = theme ? themePalette(theme) : null;
   const logo = theme ? (await themeMediaFor(programme.orgId, theme)).logo : undefined;
   const accent = p ? p.primary : brand.themeColor;
@@ -65,8 +67,16 @@ export default async function PartnerApplyPage() {
           <h1 className="text-3xl font-bold" style={theme ? { fontFamily: themeFontFamily(theme.headingFont) } : undefined}>{t.affiliateApply.title}</h1>
           <p className={p ? 'dark:text-gray-400' : 'text-gray-600 dark:text-gray-400'}>{t.affiliateApply.intro}</p>
         </div>
-        <ApplicationForm accent={accent} ink={p ? (onFill([p.primary], CONTRAST_TEXT) ?? undefined) : undefined} />
+        <ApplicationForm
+          accent={accent}
+          ink={p ? (onFill([p.primary], CONTRAST_TEXT) ?? undefined) : undefined}
+          privacy={legalLinks(landing).privacyUrl}
+          contractVersion={programme.contract?.version ?? null}
+        />
       </main>
+      <div className="mt-10">
+        <PartnerFooter landing={landing} hasContract={programme.contract !== null} labels={t.affiliateLanding} />
+      </div>
     </div>
   );
 }

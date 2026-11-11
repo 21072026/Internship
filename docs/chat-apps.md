@@ -115,6 +115,45 @@ replayed last click is "already answered". Only the invitation's own person can
 answer it. A survey with any free-text, number, date or multi-select question
 is not answered in chat: the card links to the survey page.
 
+**The pairing DM and the dormant check-in** (#1946): when a pair is created
+(`announceNewRelation()`, in a vertical with `mentorship`), each side who linked
+a chat identity gets one card in their own language
+(`introducePairInChat()`, `src/lib/chat/pairingInChat.ts`). The mentee's card
+has a **Book a session** button for that relation (`meeting.book`). The
+mentor's card carries the mentee's top three skills, which the app's mentee
+page already shows; nothing else of either profile travels. The pairing mail's
+own opt-out withholds the card. The "still interested?" check-in
+(docs/dormant-first-contacts.md) goes on chat **instead of** the mail, from the
+same claimed nudge, so a person's two-message cap counts both channels together.
+
+**Commands** (#1956): `/interncrm status|book|log|help` on Slack (the slash
+command's Request URL is the interaction endpoint itself) and the same words
+typed to the Teams bot (its messaging endpoint; a leading @mention is stripped).
+Each becomes an envelope whose action is `command.<name>` and runs through the
+SAME dispatcher as a card button — signature, replay window, rate limit, the
+verified ChatIdentity, `runWithOrg` — so an unlinked member gets the link
+prompt and nothing else. `status` reads the relations the app's own
+`scopeForRole(…, 'relation')` allows (a mentee their stage, a mentor their
+pairs, an admin a count); `book` is the `meeting.book` answer
+(`suggestedTimesFor()`); `log` lists the mentor's recent auto-logged sessions
+with "Add notes" (`interaction.note`). Slack is acknowledged at once and
+answered on `response_url`; Teams is answered by posting into the activity's
+conversation after the 200. The list lives in ONE file,
+`src/lib/chat/chatApp.json`, which the dispatcher, the Slack install's scopes
+and the manifest generator all read.
+
+**The app manifests are generated** (#1956): `npm run gen:chat-manifest` writes
+`apps/chat/teams/manifest.json` (v1.17) and `apps/chat/slack/manifest.json` from
+`chatApp.json`, for the default base URL; `npm run check:chat-manifest` (CI)
+regenerates them, checks the schema limits a reviewer rejects first, and fails
+when the committed copies are stale. A deployment's package is the same
+generator with its own environment —
+`CHAT_MANIFEST_BASE_URL=<origin> TEAMS_APP_ID=<guid> node scripts/chat-manifest.mjs --out <dir>`.
+The Teams package also needs `color.png` (192×192) and `outline.png` (32×32,
+white on transparent) next to the manifest, zipped together; those are not in
+the repo. No `staticTabs` yet: the `/embed` tab is #1954, and the generator
+gains the entry with it.
+
 **Notes from the post-meeting card** (#1953): when a relation meeting that took
 place is auto-logged with the placeholder note (`src/lib/meetingAutoLog.ts`,
 either path — the end click or the sweep), its mentor gets one chat card
@@ -363,6 +402,8 @@ no listing at all, so treat submission as a later, separate decision.
 | Publisher identity | app owner details | **Microsoft Partner Center account + publisher verification** |
 | Scope / permission justification | one sentence per scope; reviewers do push back on `users:read.email` | permissions declared in the manifest |
 | Screenshots + short/long description | required | required |
+| Manifest | `apps/chat/slack/manifest.json` (generated) | `apps/chat/teams/manifest.json` + two icons, zipped (generated) |
+| Commands described | `/interncrm` usage hint in the manifest | `commandLists` in the manifest |
 | Working **uninstall** that revokes and deletes | required | required |
 | Localisation | the listing is EN, but the app must not break in TR/DE | same |
 | Accessibility | — | reviewed |

@@ -119,8 +119,10 @@ export async function POST(request: Request) {
       // just warns the admin up front about the mentor they're pre-linking.
       let warnings: string[] = [];
       if (mentorId) {
-        const mentor = await prisma.user.findUnique({
-          where: { id: mentorId },
+        // The pre-linked people come from the caller's tenant (#3588); another
+        // org's id is refused like an inactive one, and nothing of it is read back.
+        const mentor = await prisma.user.findFirst({
+          where: withinTenant({ id: mentorId }, await tenantWhere(session)),
           select: { role: true, isActive: true, mentorCapacity: true, acceptingMentees: true },
         });
         if (!mentor?.isActive || (mentor.role !== 'MENTOR' && mentor.role !== 'ADMIN')) {
@@ -142,7 +144,7 @@ export async function POST(request: Request) {
               : [];
       }
       if (menteeId) {
-        const mentee = await prisma.user.findUnique({ where: { id: menteeId }, select: { role: true, isActive: true } });
+        const mentee = await prisma.user.findFirst({ where: withinTenant({ id: menteeId }, await tenantWhere(session)), select: { role: true, isActive: true } });
         if (!mentee?.isActive || mentee.role !== 'MENTEE') {
           return NextResponse.json({ error: 'The chosen mentee is not an active mentee' }, { status: 400 });
         }

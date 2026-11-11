@@ -7,6 +7,8 @@
 // never written anywhere as a person. `actionId` must be a registered action
 // to do anything; `value` is an opaque string the handler validates itself.
 
+import { commandActionId, SLASH_COMMAND } from '@/lib/chat/commands';
+
 export interface InteractionEnvelope {
   /** Slack team_id / Teams tenant id. */
   teamId: string;
@@ -23,6 +25,12 @@ export interface InteractionEnvelope {
   responseUrl: string | null;
   /** Teams only: the activity id, so one activity is answered once. */
   activityId: string | null;
+  /**
+   * Teams commands only (#1956): where the reply goes — the activity's own
+   * connector URL and conversation, checked again by the Teams client against
+   * Microsoft's hosts before anything is posted there.
+   */
+  conversationRef?: { serviceUrl: string; conversation: { id: string } } | null;
 }
 
 const SAFE_ID = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -77,6 +85,62 @@ export function parseSlackInteraction(rawBody: string): InteractionEnvelope | nu
   const v = value(action?.value);
   if (action?.value !== undefined && v === null) return null;
   return { teamId, externalUserId, actionId, value: v, input: null, responseUrl, activityId: null };
+}
+
+/**
+ * A Slack slash command (#1956): the same form encoding, but flat fields
+ * (`command`, `text`, `team_id`, `user_id`, `response_url`) rather than a
+ * `payload`. Only OUR command is taken; its first word picks `command.<name>`
+ * (an unknown one is `command.help`). Nothing else of the text is read.
+ */
+export function parseSlackCommand(rawBody: string): InteractionEnvelope | null {
+  const form = new URLSearchParams(rawBody);
+  if (form.has('payload') || form.get('command') !== SLASH_COMMAND) return null;
+  const teamId = id(form.get('team_id'));
+  const externalUserId = id(form.get('user_id'));
+  if (!teamId || !externalUserId) return null;
+  return {
+    teamId,
+    externalUserId,
+    actionId: commandActionId(form.get('text')),
+    value: null,
+    input: null,
+    responseUrl: form.get('response_url'),
+    activityId: null,
+  };
+}
+
+/**
+ * A message typed to the Teams bot (#1956): `status`, `book`, `log`, `help`
+ * (a leading @mention is stripped). The reply is posted back to the
+ * activity's conversation, so its reference rides along.
+ */
+export function parseTeamsCommand(activity: unknown): InteractionEnvelope | null {
+  const a = activity as {
+    type?: unknown;
+    id?: unknown;
+    text?: unknown;
+    serviceUrl?: unknown;
+    from?: { aadObjectId?: unknown };
+    channelData?: { tenant?: { id?: unknown } };
+    conversation?: { id?: unknown; tenantId?: unknown };
+  } | null;
+  if (!a || a.type !== 'message' || typeof a.text !== 'string' || a.text.length > MAX_VALUE) return null;
+  const teamId = id(a.channelData?.tenant?.id ?? a.conversation?.tenantId);
+  const externalUserId = id(a.from?.aadObjectId);
+  const conversationId = str(a.conversation?.id);
+  const serviceUrl = str(a.serviceUrl);
+  if (!teamId || !externalUserId || !conversationId || !serviceUrl || conversationId.length > 512) return null;
+  return {
+    teamId,
+    externalUserId,
+    actionId: commandActionId(a.text),
+    value: null,
+    input: null,
+    responseUrl: null,
+    activityId: id(a.id),
+    conversationRef: { serviceUrl, conversation: { id: conversationId } },
+  };
 }
 
 /**

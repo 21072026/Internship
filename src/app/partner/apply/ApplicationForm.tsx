@@ -14,14 +14,27 @@ import { AFFILIATE_HEARD_FROM, APPLICATION_LIMITS, type ApplicationField } from 
 // the server names and carries the honeypot and the render time the route's
 // anti-spam reads. No password field: nobody gets an account from this form.
 
-// `ink` is the text colour on the accent when a theme picked the accent (#3535); absent, the button keeps its own.
-export function ApplicationForm({ accent, ink }: { accent: string; ink?: string }) {
+export function ApplicationForm({
+  accent,
+  privacy,
+  contractVersion,
+  ink,
+}: {
+  accent: string;
+  /** The organisation's privacy page, or this host's (#3363). */
+  privacy: { href: string; external: boolean };
+  /** The partner contract's current version; null when the programme has none. */
+  contractVersion: number | null;
+  /** The text colour on the accent when a theme picked the accent (#3535); absent, the button keeps its own. */
+  ink?: string;
+}) {
   const t = useT();
   const L = t.affiliateApply;
   const locale = useLocale();
   const renderedAt = useRef(Date.now());
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', company: '', phone: '', heardFrom: '', heardFromOther: '' });
   const [consent, setConsent] = useState(false);
+  const [contract, setContract] = useState(false);
   const [website, setWebsite] = useState(''); // honeypot
   const [invalid, setInvalid] = useState<Set<ApplicationField>>(new Set());
   const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error' | 'closed' | 'limited'>('idle');
@@ -37,7 +50,7 @@ export function ApplicationForm({ accent, ink }: { accent: string; ink?: string 
       const res = await fetch('/api/partner/apply', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, consent, website, renderedAt: renderedAt.current, locale }),
+        body: JSON.stringify({ ...form, consent, contractVersion: contract ? contractVersion : null, website, renderedAt: renderedAt.current, locale }),
       });
       if (res.ok) return setState('sent');
       const body = await res.json().catch(() => ({}));
@@ -92,12 +105,38 @@ export function ApplicationForm({ accent, ink }: { accent: string; ink?: string 
         <input type="checkbox" className="mt-1" checked={consent} onChange={(e) => setConsent(e.target.checked)} aria-invalid={invalid.has('consent')} data-testid="affiliate-apply-consent" />
         <span>
           {L.consent}{' '}
-          <Link href="/privacy" className="underline">
-            {L.consentLink}
-          </Link>
+          {privacy.external ? (
+            <a href={privacy.href} rel="noopener" target="_blank" className="underline">
+              {L.consentLink}
+            </a>
+          ) : (
+            <Link href={privacy.href} className="underline">
+              {L.consentLink}
+            </Link>
+          )}
         </span>
       </label>
       {invalid.has('consent') && <p className="text-sm text-red-600">{L.errors.consent}</p>}
+      {contractVersion !== null && (
+        <>
+          <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input type="checkbox" className="mt-1" checked={contract} onChange={(e) => setContract(e.target.checked)} aria-invalid={invalid.has('contract')} data-testid="affiliate-apply-contract" />
+            <span>
+              {L.contractConsent.split('{link}').map((part, i) => (
+                <span key={i}>
+                  {i > 0 && (
+                    <Link href="/partner/terms" target="_blank" className="underline" data-testid="affiliate-apply-contract-link">
+                      {L.contractLink}
+                    </Link>
+                  )}
+                  {part.replace('{n}', String(contractVersion))}
+                </span>
+              ))}
+            </span>
+          </label>
+          {invalid.has('contract') && <p className="text-sm text-red-600">{L.errors.contract}</p>}
+        </>
+      )}
       <p className="text-xs text-gray-500 dark:text-gray-400">{L.nextSteps}</p>
 
       {state === 'error' && <p className="text-sm text-red-600" role="alert">{L.failed}</p>}

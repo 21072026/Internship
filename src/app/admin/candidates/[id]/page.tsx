@@ -29,6 +29,8 @@ import { CandidateEraseDangerZone } from '@/components/CandidateEraseDangerZone'
 import { AddInteractionForm } from '@/components/AddInteractionForm';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
+import { EmploymentAttributionDialog, useNeedsAttribution } from '@/components/EmploymentAttributionDialog';
+import type { EmploymentAttribution } from '@/lib/placementKind';
 import { OfferManagementPanel } from '@/components/OfferManagementPanel';
 import { CandidateHiringPanel } from '@/components/CandidateHiringPanel';
 import { RelationTimeline } from '@/components/RelationTimeline';
@@ -56,6 +58,9 @@ interface Relation {
   id: string;
   status: string;
   pipelineStatus: string;
+  /** PLACEMENT (in the hiring funnel) | COACHING (#1503); absent reads as PLACEMENT. */
+  kind?: string | null;
+  employmentAttribution?: string | null;
   startDate: string;
   completedAt: string | null;
   /** How the pairing ended, when COMPLETED is not the honest answer (#1801). */
@@ -150,13 +155,18 @@ export default function AdminMenteeDetailPage() {
   // is a negative/off-path stage — the caller gates that via DropoffReasonDialog
   // before invoking this, see requestStageChange below.
   const changeStage = useCallback(
-    async (relationId: string, pipelineStatus: string, reasonCode?: string, reasonNote?: string) => {
+    async (relationId: string, pipelineStatus: string, reasonCode?: string, reasonNote?: string, employmentAttribution?: EmploymentAttribution) => {
       setSaving(true);
       try {
         const res = await fetch(`/api/mentorship/${relationId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pipelineStatus, ...(reasonCode ? { reasonCode, reasonNote } : {}) }),
+          body: JSON.stringify({
+            pipelineStatus,
+            ...(reasonCode ? { reasonCode, reasonNote } : {}),
+            // Whose hire it is (#1507), asked by EmploymentAttributionDialog.
+            ...(employmentAttribution ? { employmentAttribution } : {}),
+          }),
         });
         if (!res.ok) {
           // A gated stage (#1590): say what is missing instead of "save failed".
@@ -254,13 +264,50 @@ export default function AdminMenteeDetailPage() {
   >(null);
   const isNegativeStage = useCallback((key: string) => stages.find((s) => s.key === key)?.isOffPath ?? false, [stages]);
 
-  const requestStageChange = (relationId: string, toStatus: string) => {
+  // A move into a hire stage asks whose outcome it is first (#1507): the
+  // answer decides whether it counts as a placement.
+  const needsAttribution = useNeedsAttribution();
+  const [pendingHire, setPendingHire] = useState<{ relationId: string; toStatus: string } | null>(null);
+
+  const requestStageChange = (relationId: string, toStatus: string, kind?: string | null) => {
     if (isNegativeStage(toStatus)) {
       setPendingMove({ kind: 'live', relationId, toStatus });
+    } else if (needsAttribution(toStatus, kind)) {
+      setPendingHire({ relationId, toStatus });
     } else {
       changeStage(relationId, toStatus);
     }
   };
+
+  const confirmPendingHire = (attribution: EmploymentAttribution) => {
+    if (!pendingHire) return;
+    changeStage(pendingHire.relationId, pendingHire.toStatus, undefined, undefined, attribution);
+    setPendingHire(null);
+  };
+
+  // A coaching pair that starts looking for a job (#1507). The server refuses
+  // a kind change from anyone but an ADMIN (kind_admin_only); this page is the
+  // admin's.
+  const moveToPlacement = useCallback(
+    async (relationId: string) => {
+      setSaving(true);
+      try {
+        const res = await fetch(`/api/mentorship/${relationId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: 'PLACEMENT' }),
+        });
+        if (!res.ok) throw new Error();
+        await load();
+        toast(t.relationKind.movedToPlacement);
+      } catch {
+        toast(t.candidateDetail.saveError, 'error');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [load, toast, t]
+  );
 
   const requestHistoryAdd = (relationId: string) => {
     if (isNegativeStage(histTo)) {
@@ -383,7 +430,10 @@ export default function AdminMenteeDetailPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {rel && <Badge variant="info">{label(rel.pipelineStatus)}</Badge>}
+            {rel && rel.kind === 'COACHING' && (
+              <Badge variant="default" data-testid="relation-kind-coaching">{t.relationKind.coachingBadge}</Badge>
+            )}
+            {rel && rel.kind !== 'COACHING' && <Badge variant="info">{label(rel.pipelineStatus)}</Badge>}
             {activeRelationId && <RelationHealthBadge health={health[activeRelationId]} testId="relation-health" />}
             {/* Message / view-as shortcuts, right where the profile is read (#51). */}
             <UserQuickActions userId={user.id} role={user.role} />
@@ -481,14 +531,32 @@ export default function AdminMenteeDetailPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg">
-                <Select
-                  label={t.candidateDetail.stage}
-                  data-testid="stage-select"
-                  options={stages.map((s) => ({ value: s.key, label: s.label }))}
-                  value={rel.pipelineStatus}
-                  disabled={saving}
-                  onChange={(e) => requestStageChange(rel.id, e.target.value)}
-                />
+                {/* A coaching pair has no place in the hiring funnel (#1507): no
+                    stage to pick, one way into the funnel instead. */}
+                {rel.kind === 'COACHING' ? (
+                  <div className="sm:col-span-2" data-testid="relation-coaching">
+                    <p className="text-sm text-gray-600 dark:text-gray-300">{t.relationKind.coachingNote}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                      loading={saving}
+                      onClick={() => moveToPlacement(rel.id)}
+                      data-testid="relation-to-placement"
+                    >
+                      {t.relationKind.toPlacement}
+                    </Button>
+                  </div>
+                ) : (
+                  <Select
+                    label={t.candidateDetail.stage}
+                    data-testid="stage-select"
+                    options={stages.map((s) => ({ value: s.key, label: s.label }))}
+                    value={rel.pipelineStatus}
+                    disabled={saving}
+                    onChange={(e) => requestStageChange(rel.id, e.target.value, rel.kind)}
+                  />
+                )}
                 <Select
                   label={t.candidateDetail.project}
                   options={[{ value: '', label: t.candidateDetail.noProject }, ...projects.map((p) => ({ value: p.id, label: p.name }))]}
@@ -651,7 +719,7 @@ export default function AdminMenteeDetailPage() {
             companyName={rel.company?.name}
             pipelineStatus={rel.pipelineStatus}
             stages={stages}
-            onMoveToStage={(stageKey) => changeStage(rel.id, stageKey)}
+            onMoveToStage={(stageKey) => requestStageChange(rel.id, stageKey, rel.kind)}
           />
         )}
         {/* The hiring side (#1398): companies, roles, applications and interview
@@ -692,6 +760,13 @@ export default function AdminMenteeDetailPage() {
         loading={saving || histBusy}
         onConfirm={confirmPendingMove}
         onCancel={() => setPendingMove(null)}
+      />
+      <EmploymentAttributionDialog
+        open={!!pendingHire}
+        stageLabel={pendingHire ? label(pendingHire.toStatus) : ''}
+        loading={saving}
+        onConfirm={confirmPendingHire}
+        onCancel={() => setPendingHire(null)}
       />
     </div>
   );

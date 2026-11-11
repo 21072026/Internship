@@ -445,12 +445,19 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkImport: 'Bulk import people',
         importModeMentees: 'People (leads)',
       },
+      // A promotion to rep and the person's own open lead records (#1506).
+      promotionRelations: {
+        title: 'This person is still a lead in open records',
+        relationLine: 'Owned by {mentor} · {stage}',
+        options: { KEEP: 'Leave them as they are — the person is a rep and a lead at once' },
+      },
       // The report registry (#1903): the mentorship-only reports are refused for
       // a tenant without `mentorship`, but the column labels are shared.
       reports: {
         mentorWorkload: { title: 'Rep workload', description: 'Active deals per rep and how many reached the final stage.' },
         weeklyReportCompliance: { description: 'Owed, handed-in, missing and late weekly reports per person this term.' },
         col: { mentor: 'Rep', intern: 'Person' },
+        role: { MENTOR: 'Sales rep', MENTEE: 'Lead' },
       },
       analytics: {
         subtitle: 'Funnel, rep workload and activity insights',
@@ -1570,12 +1577,19 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkImport: 'Toplu kişi içe aktar',
         importModeMentees: 'Kişiler (lead)',
       },
+      // A promotion to rep and the person's own open lead records (#1506).
+      promotionRelations: {
+        title: 'Bu kişi hâlâ açık kayıtlarda müşteri adayı',
+        relationLine: 'Sorumlusu {mentor} · {stage}',
+        options: { KEEP: 'Dokunma — kişi hem temsilci hem müşteri adayı olarak kalır' },
+      },
       // Rapor kaydı (#1903): mentorluk raporları `mentorship` yeteneği olmayan
       // kiracıya kapalı, ama sütun etiketleri ortak.
       reports: {
         mentorWorkload: { title: 'Temsilci iş yükü', description: 'Temsilci başına aktif fırsatlar ve kaçının son aşamaya ulaştığı.' },
         weeklyReportCompliance: { description: 'Bu dönem kişi başına beklenen, teslim edilen, eksik ve geç haftalık raporlar.' },
         col: { mentor: 'Temsilci', intern: 'Kişi' },
+        role: { MENTOR: 'Satış temsilcisi', MENTEE: 'Müşteri adayı' },
       },
       analytics: {
         subtitle: 'Satış hunisi, temsilci iş yükü ve etkinlik içgörüleri',
@@ -2589,12 +2603,19 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkImport: 'Personen im Stapel importieren',
         importModeMentees: 'Personen (Leads)',
       },
+      // A promotion to rep and the person's own open lead records (#1506).
+      promotionRelations: {
+        title: 'Diese Person ist noch Lead in offenen Datensätzen',
+        relationLine: 'Betreut von {mentor} · {stage}',
+        options: { KEEP: 'So lassen — die Person ist zugleich Vertriebler und Lead' },
+      },
       // The report registry (#1903): the mentorship-only reports are refused for
       // a tenant without `mentorship`, but the column labels are shared.
       reports: {
         mentorWorkload: { title: 'Vertriebler-Auslastung', description: 'Aktive Deals je Vertriebler und wie viele die letzte Phase erreicht haben.' },
         weeklyReportCompliance: { description: 'Fällige, abgegebene, fehlende und verspätete Wochenberichte je Person im laufenden Zeitraum.' },
         col: { mentor: 'Vertriebler', intern: 'Person' },
+        role: { MENTOR: 'Vertriebler', MENTEE: 'Lead' },
       },
       analytics: {
         subtitle: 'Funnel, Auslastung der Vertriebsmitarbeiter und Aktivitäts-Insights',

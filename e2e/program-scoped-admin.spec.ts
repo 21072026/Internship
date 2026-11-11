@@ -11,8 +11,8 @@ import { signInViaApi } from './helpers/auth';
  *   • opening or writing a cohort-B relation is a 403, not a silent no-op;
  *   • moving its own relation into cohort B (out of its reach) is refused;
  *   • the candidate and user lists and the /admin dashboard narrow the same
- *     way, and so does the analytics overview; bulk edit (`user.write`, not in
- *     the tier) and the other analytics routes stay a 403;
+ *     way, and so do the analytics overview, aging and funnel; bulk edit
+ *     (`user.write`, not in the tier) and the other analytics routes stay a 403;
  *   • with zero grants the list is empty, and an ORG_ADMIN still reads all three.
  * The builders themselves are unit-tested in
  * scripts/test/authz-scope-program-admin.test.mjs.
@@ -119,7 +119,27 @@ test('program admin: reads and writes only its granted cohort; cohort-less relat
     const orgStats = await (await ctxOrg.get('/api/admin/analytics')).json();
     expect(orgStats.totalRelations).toBe(3);
     expect(orgStats.programs.map((p: { id: string }) => p.id).sort()).toEqual([cohortA.id, cohortB.id].sort());
-    expect((await ctxProg.get('/api/admin/analytics/funnel')).status()).toBe(403);
+    // Aging and funnel narrow the same way (an always-on programme filter):
+    // the waiting list holds cohort A's candidate only, and mentor capacity —
+    // a mentor's load across every pairing — is withheld from the tier.
+    const progAging = await ctxProg.get('/api/admin/analytics/aging');
+    expect(progAging.status()).toBe(200);
+    expect(((await progAging.json()).oldestStuck as { menteeId: string }[]).map((r) => r.menteeId)).toEqual([menteeA.id]);
+    const orgAging = await (await ctxOrg.get('/api/admin/analytics/aging')).json();
+    expect((orgAging.oldestStuck as { menteeId: string }[]).map((r) => r.menteeId).sort()).toEqual([menteeA.id, menteeB.id, menteeN.id].sort());
+    const progFunnel = await ctxProg.get('/api/admin/analytics/funnel');
+    expect(progFunnel.status()).toBe(200);
+    expect((await progFunnel.json()).capacity).toEqual([]);
+    expect(((await (await ctxOrg.get('/api/admin/analytics/funnel')).json()).capacity as { id: string }[]).some((m) => m.id === mentor.id)).toBe(true);
+    // The routes without their own narrowing yet stay refused.
+    expect((await ctxProg.get('/api/admin/analytics/forecast')).status()).toBe(403);
+    // Duplicate detection reads every candidate of the org, so it has no grant
+    // narrowing and asks without `listing`: refused (`unscoped_subject`). Merge
+    // asks `user.merge`, which the tier does not hold. The pre-flight check
+    // (MENTOR or `user.read`) refuses the tier the same way.
+    expect((await ctxProg.get('/api/admin/duplicates')).status()).toBe(403);
+    expect((await ctxProg.post('/api/admin/duplicates/merge', { data: { keepId: menteeA.id, mergeId: menteeB.id } })).status()).toBe(403);
+    expect((await ctxProg.post('/api/admin/duplicates/check', { data: { email: 'nobody@example.test' } })).status()).toBe(403);
     expect((await ctxProg.get('/api/admin/analytics/narrative')).status()).toBe(403);
 
     // The org admin is unaffected.

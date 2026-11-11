@@ -20,6 +20,11 @@ import { shellCapabilities } from '@/lib/shellCapabilities';
 import { COMPLIANCE_RELATION_SELECT, INTERNED_WHERE, complianceRows } from '@/lib/weeklyReportComplianceQuery';
 import { cohortComparison, mentorWorkload, sourceConversion, type AnalyticsScope } from '@/lib/analyticsReports';
 import { slaCompliance } from '@/lib/slaQueue';
+import { loadInvitationFunnel } from '@/lib/invitationFunnel';
+import { funnelRate } from '@/lib/invitationFunnelRule';
+import { announcementReach } from '@/lib/announcementReach';
+import { announcementSentAt } from '@/lib/announcementReachRule';
+import { resolveAnnouncementText } from '@/lib/announcementText';
 import type { Prisma } from '@prisma/client';
 import { attributeLabel } from '@/lib/orgAttributesRule';
 import { attributedLeadWhere } from '@/lib/leadAttribution';
@@ -209,7 +214,48 @@ const LOADERS: Record<string, (ctx: LoaderContext) => Promise<Row[]>> = {
       rate: compliance.rate === null ? null : Math.round(compliance.rate * 100),
     }));
   },
+
+  async 'invitation-funnel'(ctx) {
+    const { tenant } = await scopeOf(ctx);
+    const roles = getDictionary(ctx.locale).reports.role as Record<string, string>;
+    return (await loadInvitationFunnel(tenant)).byRole.map((r) => ({
+      role: roles[r.role] ?? r.role,
+      sent: r.sent,
+      opened: r.opened,
+      registered: r.registered,
+      activated: r.activated,
+      activation: funnelRate(r.activated, r.sent),
+    }));
+  },
+
+  async 'announcement-reach'(ctx) {
+    const { tenant } = await scopeOf(ctx);
+    const rows = await prisma.announcement.findMany({
+      where: withinTenant({ status: 'SENT' as const }, tenant),
+      orderBy: { createdAt: 'desc' },
+      take: ANNOUNCEMENT_REACH_ROWS,
+      select: { id: true, status: true, scheduledAt: true, createdAt: true, text: true, translations: true, targeted: true, recipientCount: true, emailedCount: true },
+    });
+    const reach = await announcementReach(rows, ctx.orgId);
+    const A = getDictionary(ctx.locale).reports.announcementReach;
+    return rows.map((a) => {
+      const text = resolveAnnouncementText(a, ctx.locale).replace(/\s+/g, ' ').trim();
+      const r = reach.get(a.id);
+      return {
+        sentAt: announcementSentAt(a).toISOString().slice(0, 10),
+        announcement: text.length > 80 ? `${text.slice(0, 79)}…` : text,
+        audience: a.targeted ? A.targeted : A.everyone,
+        recipients: a.recipientCount,
+        emailed: a.emailedCount,
+        read: r?.read ?? null,
+        readRate: r?.rate ?? null,
+      };
+    });
+  },
 };
+
+/** The announcement history a report carries: the most recent ones, not the archive. */
+const ANNOUNCEMENT_REACH_ROWS = 200;
 
 export interface LoadedSegment {
   /** The attribute's key and its label in the reader's language. */

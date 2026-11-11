@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Coaching relations and hire attribution in the UI (#1507):** a COACHING relation shows a badge in the admin candidate list and no stage control on the admin candidate page, the mentor's mentee page and the mentee portal (no journey strip); the admin moves it into the placement funnel with one button (`kind: 'PLACEMENT'`, server-enforced `kind_admin_only`). A move into a hire stage asks the employment attribution first (`EmploymentAttributionDialog`, `useNeedsAttribution()`), on the candidate page, the mentor page and the offer panel's move; the write stays on the shared stage path, so stage gates still apply. No schema change.",
+  "notes": {
+    "en": ["Coaching relations are now marked and no longer show a pipeline stage, and moving someone to Hired asks how the job was found — only jobs found through the programme count as placements."],
+    "tr": ["Koçluk ilişkileri artık işaretli ve pipeline aşaması göstermiyor; birini İşe alındı aşamasına taşırken işin nasıl bulunduğu soruluyor — yalnızca program aracılığıyla bulunan işler yerleştirme sayılıyor."],
+    "de": ["Coaching-Beziehungen sind jetzt gekennzeichnet und zeigen keine Pipeline-Phase mehr, und beim Verschieben auf „Eingestellt“ wird gefragt, wie die Stelle gefunden wurde – nur über das Programm gefundene Stellen zählen als Vermittlung."]
+  }
+}

@@ -135,6 +135,14 @@
     "methods": ["POST"],
     "why": "The Teams bot's messaging endpoint (#3322). The Bot Framework has no session; every request carries its RS256 JWT, verified against the Bot Framework's published keys (issuer, our TEAMS_APP_ID as audience, expiry, and the activity's own serviceUrl) — anything else is 401 and changes nothing. The only effect is switching a tenant's Teams workspace off and clearing its tokens on installationUpdate/remove; Slack is 404 here."
   },
+  "src/app/api/integrations/chat/[platform]/session/route.ts": {
+    "methods": ["POST"],
+    "why": "The Teams tab redeems a ChatLoginGrant for its embed session (#1954, docs/teams-tab-sso.md). There is no session yet - this IS the sign-in door. 404 unless CHAT_APPS_ENABLED and TEAMS_SSO_CLIENT_ID are set. The grant is a hashed, 60-second, host-bound bearer value minted only after an Entra token verified; redeemChatLoginGrant() applies the magic link's refusals (inactive/unverified/pending, enforced SSO, archived tenant, world/host, an enrolled 2FA code before the spend) and spends it by one conditional UPDATE."
+  },
+  "src/app/api/integrations/chat/[platform]/sso/route.ts": {
+    "methods": ["POST"],
+    "why": "The Teams tab trades its Entra token for a grant (#1954). There is no session yet. 404 unless Teams SSO is configured; the token is verified against Entra's published keys (RS256, our client id as audience, an issuer naming the token's own tid, a registered enabled TEAMS workspace, expiry) and never logged. Only a person-confirmed ChatIdentity gets a grant; anyone else gets { link: true } and nothing is created. Rate limited per IP and per tenant."
+  },
   "src/app/api/integrations/chat/[platform]/uninstall/route.ts": {
     "methods": ["POST"],
     "why": "Slack's app_uninstalled / tokens_revoked event (#1935). Slack has no session; the caller is authenticated by Slack's HMAC signature over the raw body with SLACK_SIGNING_SECRET and a timestamp within 5 minutes — an unsigned or stale request is 401 and changes nothing. The only effect is switching that Slack team's workspace off and clearing its sealed tokens."

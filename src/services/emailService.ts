@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import type { PrerenderedEmail } from '@/lib/notifications/adapters/types';
 import type { Transporter } from 'nodemailer';
 import type Mail from 'nodemailer/lib/mailer';
 import addressparser from 'nodemailer/lib/addressparser';
@@ -116,6 +117,7 @@ import { resolveSlaDayRule, resolveStageEscalations } from '@/lib/stageSla';
 import { claimEscalation, escalationRecipients, openBreach, resolveBreaches } from '@/lib/slaBreach';
 import { SLA_LEVEL_MENTOR, daysOverdue, escalationDue, mentorAlreadyTold } from '@/lib/slaLadderRule';
 import { notifyEvent } from '@/lib/notifications/router';
+import { deliverCheckInOnChat } from '@/lib/chat/dormantInChat';
 import { meetingChatCard } from '@/lib/meetingChatCard';
 import { sameTenant } from '@/lib/orgScope';
 import { brandAssetPath } from '@/lib/brandRule';
@@ -3518,8 +3520,11 @@ function formatOfferDate(d: Date | null | undefined, locale: Locale): string | n
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(d);
 }
 
-export async function sendOfferSentEmail({
-  to,
+// RENDER, NOT SEND (#1944): the offer mails are handed to the notification
+// router as a PrerenderedEmail (`notifyEvent(…, { email })`), which sends them
+// byte-for-byte once it has said yes — so the offer events gain the ledger, the
+// channel matrix, quiet hours and chat without a word of the mail changing.
+export async function renderOfferSentEmail({
   fullName,
   position,
   companyName,
@@ -3529,7 +3534,6 @@ export async function sendOfferSentEmail({
   orgId,
   userId,
 }: {
-  to: string;
   fullName: string;
   position: string;
   companyName?: string | null;
@@ -3538,7 +3542,7 @@ export async function sendOfferSentEmail({
   locale?: string | null;
   orgId?: string | null;
   userId?: string | null;
-}) {
+}): Promise<PrerenderedEmail> {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
@@ -3546,11 +3550,9 @@ export async function sendOfferSentEmail({
   const M = (await emailDictionary(loc, orgId)).offerEmail;
   const start = formatOfferDate(startDate, loc);
   const expires = formatOfferDate(expiresAt, loc);
-  await sendEmail({
-    to,
-    userId,
+  return {
     category: 'offer',
-    locale,
+    locale: locale ?? null,
     fromName: brand.name,
     subject: M.sent.subject.replace('{position}', position),
     html: `
@@ -3563,12 +3565,12 @@ export async function sendOfferSentEmail({
         ${ctaBlock(brand, `${base}/portal`, M.sent.cta)}
       </div>
     `,
-  });
+  };
 }
 
 // The trial reminder mail (#2415, copy from #2412, story #2392).
 //
-// Lives here rather than in the job for the reason `sendOfferSentEmail` does:
+// Lives here rather than in the job for the reason `renderOfferSentEmail` does:
 // the org brand header, the CTA block, `esc()` and `appUrl()` are this module's,
 // and a second copy of them in src/lib/jobs would drift. The job keeps the
 // DECISION (who, when, which threshold, and both preference gates); this
@@ -3587,7 +3589,6 @@ export async function sendOfferSentEmail({
 // stage-deadline nudge ("this record needs you before a date"), and somebody who
 // muted one meant to mute both. No new category, no new preference key.
 export async function sendTrialReminderEmail({
-  to,
   fullName,
   companyName,
   trialEndsAt,
@@ -3597,7 +3598,6 @@ export async function sendTrialReminderEmail({
   orgId,
   userId,
 }: {
-  to: string;
   fullName: string;
   /** The account the trial belongs to. A proper noun — never translated. */
   companyName: string;
@@ -3607,7 +3607,7 @@ export async function sendTrialReminderEmail({
   link: string;
   locale?: string | null;
   orgId?: string | null;
-  userId?: string | null;
+  userId: string;
 }) {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
@@ -3616,14 +3616,19 @@ export async function sendTrialReminderEmail({
   const M = getDictionary(loc).trials;
   const subject = threshold >= 7 ? M.subject7 : threshold >= 3 ? M.subject3 : M.subject0;
   const endsOn = new Intl.DateTimeFormat(dateLocale(loc), { dateStyle: 'medium', timeZone: 'UTC' }).format(trialEndsAt);
-  await sendEmail({
-    to,
-    userId,
-    category: 'stage-deadline',
-    locale,
-    fromName: brand.name,
-    subject: subject.replace('{company}', companyName),
-    html: `
+  // Through the router (#1711): the copy built here, sent as-is.
+  await notifyEvent(userId, 'trial.endingSoon', { company: companyName, days: String(threshold) }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    // One reminder per (trial end, threshold): a second tick — another replica,
+    // a retried job — is absorbed by the ledger instead of queuing a twin.
+    dedupeKey: `trial:${trialEndsAt.toISOString().slice(0, 10)}:${threshold}`,
+    email: {
+      category: 'stage-deadline',
+      locale,
+      fromName: brand.name,
+      subject: subject.replace('{company}', companyName),
+      html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         ${brandHeader(brand, esc(M.heading))}
         <p>${esc(M.greeting.replace('{name}', fullName))}</p>
@@ -3632,11 +3637,11 @@ export async function sendTrialReminderEmail({
         ${ctaBlock(brand, `${base}${link}`, esc(M.cta))}
       </div>
     `,
+    },
   });
 }
 
-export async function sendOfferDecisionEmail({
-  to,
+export async function renderOfferDecisionEmail({
   fullName,
   menteeName,
   position,
@@ -3645,7 +3650,6 @@ export async function sendOfferDecisionEmail({
   orgId,
   userId,
 }: {
-  to: string;
   fullName: string;
   menteeName: string;
   position: string;
@@ -3653,17 +3657,15 @@ export async function sendOfferDecisionEmail({
   locale?: string | null;
   orgId?: string | null;
   userId?: string | null;
-}) {
+}): Promise<PrerenderedEmail> {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const M = (await emailDictionary(resolveLocale(locale), orgId)).offerEmail;
   const copy = outcome === 'ACCEPTED' ? M.accepted : outcome === 'DECLINED' ? M.declined : M.expired;
-  await sendEmail({
-    to,
-    userId,
+  return {
     category: 'offer',
-    locale,
+    locale: locale ?? null,
     fromName: brand.name,
     subject: copy.subject.replace('{mentee}', menteeName),
     html: `
@@ -3674,7 +3676,7 @@ export async function sendOfferDecisionEmail({
         ${ctaBlock(brand, `${base}/admin/candidates`, M.cta)}
       </div>
     `,
-  });
+  };
 }
 
 // Account role converted by an admin (#1252). Deliberately NOT gated on
@@ -4625,16 +4627,25 @@ export async function checkStageDeadlineReminders() {
             const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
             // Say which day mode produced the date, so a mentor questioning it can see why (#1638).
             const dayNote = (await dayRuleOf(rel)).mode === 'business' ? `<p style="color:#6b7280;font-size:13px;">${esc(emailText.businessDays)}</p>` : '';
-            await brandOf(rel.orgId).then((brand) => sendEmail({
-              category: 'stage-deadline',
-              userId: rel.mentorId,
-              // The record's org — the same one that picks the bell's link above.
-              orgId: rel.orgId,
-              locale: rel.mentor.preferredLanguage,
-              to: rel.mentor.email,
-              subject,
-              html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>${dayNote}`,
-            })).catch((error) => {
+            // Through the router (#1711), the same event and key as the bell above:
+            // the mail is the copy built here, sent as-is, once per breach rung.
+            await brandOf(rel.orgId).then((brand) => notifyEvent(
+              rel.mentor,
+              'deadline.stagePassed',
+              { menteeName: rel.mentee.fullName, relationId: rel.id },
+              {
+                channels: ['email'],
+                // The record's org — the same one that picks the bell's link above.
+                orgId: rel.orgId,
+                dedupeKey: `sla-breach:${opened.id}:1`,
+                email: {
+                  category: 'stage-deadline',
+                  locale: rel.mentor.preferredLanguage,
+                  subject,
+                  html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>${dayNote}`,
+                },
+              },
+            )).catch((error) => {
               console.error('checkStageDeadlineReminders email failed:', { relationId: rel.id, mentorId: rel.mentorId, error });
             });
           }
@@ -4678,15 +4689,23 @@ export async function checkStageDeadlineReminders() {
         .replace('{mentee}', `<strong>${esc(rel.mentee.fullName)}</strong>`)
         .replace('{mentor}', esc(rel.mentor.fullName))
         .replace('{days}', String(days));
-      await brandOf(rel.orgId).then((brand) => sendEmail({
-        category: 'stage-deadline',
-        userId: admin.id,
-        orgId: rel.orgId,
-        locale: admin.preferredLanguage,
-        to: admin.email,
-        subject,
-        html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
-      })).catch((error) => {
+      // Through the router (#1711), the same event and key as the bell above.
+      await brandOf(rel.orgId).then((brand) => notifyEvent(
+        admin,
+        'deadline.slaEscalated',
+        { menteeName: rel.mentee.fullName, mentorName: rel.mentor.fullName, days: String(days), relationId: rel.id, menteeId: rel.menteeId },
+        {
+          channels: ['email'],
+          orgId: rel.orgId,
+          dedupeKey: `sla-breach:${breach.id}:${breach.level + 1}`,
+          email: {
+            category: 'stage-deadline',
+            locale: admin.preferredLanguage,
+            subject,
+            html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
+          },
+        },
+      )).catch((error) => {
         console.error('SLA escalation email failed:', { relationId: rel.id, adminId: admin.id, error });
       });
     }
@@ -4820,18 +4839,20 @@ export async function checkNextActionReminders(now = new Date()) {
         const base = await origins.urlFor(owner.orgId);
         const brand = await brandOf(owner.orgId);
         const subject = text.subject.replace('{name}', name);
-        await sendEmail({
-          category: 'stage-deadline',
-          userId: owner.id,
+        // Through the router (#1711): the copy built here, sent as-is.
+        await notifyEvent(owner.id, 'deadline.nextActionDue', { name, relationId: rel.id, menteeId: rel.menteeId }, {
+          channels: ['email'],
           orgId: owner.orgId,
-          locale: owner.preferredLanguage,
-          to: owner.email,
-          subject,
-          html: `${worldHeading(brand, esc(subject), '')}<p>${esc(text.greeting.replace('{owner}', owner.fullName))}</p><p>${esc(text.body.replace('{name}', name))}</p>${noteHtml}${
-            brand.vertical === DEFAULT_VERTICAL
-              ? `<p><a href="${base}${link}">${esc(text.cta)}</a></p>`
-              : ctaBlock(brand, `${base}${link}`, esc(text.cta))
-          }`,
+          email: {
+            category: 'stage-deadline',
+            locale: owner.preferredLanguage,
+            subject,
+            html: `${worldHeading(brand, esc(subject), '')}<p>${esc(text.greeting.replace('{owner}', owner.fullName))}</p><p>${esc(text.body.replace('{name}', name))}</p>${noteHtml}${
+              brand.vertical === DEFAULT_VERTICAL
+                ? `<p><a href="${base}${link}">${esc(text.cta)}</a></p>`
+                : ctaBlock(brand, `${base}${link}`, esc(text.cta))
+            }`,
+          },
         });
       } catch (error) {
         failures += 1;
@@ -4966,8 +4987,9 @@ export async function sendWeeklyReportReminders(now = new Date(), options: { rel
  * morning.
  *
  * No in-app notification: the entire premise is a person who does not sign in.
- * The mail is the only channel that can reach them, and a bell item nobody will
- * ever look at is not a second attempt.
+ * The mail is the channel that can reach them — or chat, where they linked one
+ * (#1946): then the same claimed nudge goes there instead of the mail, never
+ * as well. A bell item nobody will ever look at is not a second attempt.
  */
 // No DORMANT_FIRST_NUDGE_DAYS here: the first nudge's timing is DORMANT_GRACE_DAYS
 // in lib/dormantFirstContact.ts, spent before the flag is even stamped. Two
@@ -5106,22 +5128,38 @@ export async function sendDormantCheckIns(now = new Date()) {
     spentByMentee.set(relation.mentee.id, spent + 1);
     lastNudgeByMentee.set(relation.mentee.id, now);
 
+    // "Final" is the person's last nudge, not the relation's.
+    const isFinal = spent + 1 >= DORMANT_MAX_NUDGES;
+    // CHAT IS A CHANNEL, NOT A THIRD NUDGE (#1946): the nudge just claimed is
+    // delivered as a chat card INSTEAD of this mail when the mentee linked a
+    // chat identity; the mail below only goes when the card did not. One
+    // claim, one message, whichever channel — the two-ever cap above is the
+    // one counter for both.
+    if (await deliverCheckInOnChat(relation.mentee.id, isFinal, `dormant:${relation.id}:${count + 1}`)) {
+      sent += 1;
+      continue;
+    }
+
     const locale = isLocale(relation.mentee.preferredLanguage ?? undefined)
       ? (relation.mentee.preferredLanguage as Locale)
       : defaultLocale;
     const copy = (await dictionaryOf(locale, relation.orgId)).dormantCheckIn;
-    // "Final" is the person's last nudge, not the relation's.
-    const isFinal = spent + 1 >= DORMANT_MAX_NUDGES;
     const brand = await emailBrand(relation.orgId);
     const base = await origins.urlFor(relation.mentee.orgId);
-    await sendEmail({
-      to: relation.mentee.email,
-      fromName: brand.name,
-      category: 'dormant-check-in',
-      userId: relation.mentee.id,
-      locale: relation.mentee.preferredLanguage,
-      subject: copy.subject,
-      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.heading)}<p>${copy.greeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${isFinal ? copy.finalBody : copy.firstBody}</p><p style="color:#666;font-size:13px;">${copy.hint}</p>${ctaBlock(brand, `${base}/portal`, copy.cta)}</div>`,
+    // Through the router (#1711), the copy built here sent as-is. The key is the
+    // chat card's (`dormant:<relation>:<n>`): one claimed nudge, one delivery
+    // per channel, so a rerun of this tick cannot queue the mail twice.
+    await notifyEvent(relation.mentee.id, isFinal ? 'dormant.checkIn.final' : 'dormant.checkIn.first', {}, {
+      channels: ['email'],
+      orgId: relation.mentee.orgId ?? relation.orgId ?? null,
+      dedupeKey: `dormant:${relation.id}:${count + 1}`,
+      email: {
+        category: 'dormant-check-in',
+        locale: relation.mentee.preferredLanguage,
+        fromName: brand.name,
+        subject: copy.subject,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.heading)}<p>${copy.greeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${isFinal ? copy.finalBody : copy.firstBody}</p><p style="color:#666;font-size:13px;">${copy.hint}</p>${ctaBlock(brand, `${base}/portal`, copy.cta)}</div>`,
+      },
     })
       .then(() => { sent += 1; })
       .catch((error) => logger.error('Dormant check-in email failed', { relationId: relation.id, error: String(error) }));
@@ -5735,24 +5773,25 @@ export async function sendWeeklyMentorDigests() {
     try {
       const base = await origins.urlFor(m.orgId);
       const brand = await brandOf(m.orgId);
-      await sendEmail({
-        category: 'mentor-digest',
-        userId: m.id,
-        orgId: m.orgId,
+      await notifyEvent(m.id, 'digest.mentorWeekly', {}, {
+        channels: ['email'],
+        orgId: m.orgId ?? null,
         dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'mentor-weekly', userId: m.id, day: utcDayKey(new Date()) }),
-        to: m.email,
-        locale: mLocale,
-        subject: D.subject,
-        html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          ${worldHeading(brand, esc(D.heading), `<h2 style="color:#2563eb;">${esc(D.heading)}</h2>`)}
-          <p>${esc(D.greeting.replace('{name}', m.fullName))}</p>
-          <ul>
-            ${countLine(D.stale, stale)}
-            ${countLine(D.upcoming, upcoming)}
-            ${countLine(D.newApplications, newApplications)}
-          </ul>
-          <a href="${base}/mentor" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(D.cta)}</a>
-        </div>`,
+        email: {
+          category: 'mentor-digest',
+          locale: mLocale,
+          subject: D.subject,
+          html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            ${worldHeading(brand, esc(D.heading), `<h2 style="color:#2563eb;">${esc(D.heading)}</h2>`)}
+            <p>${esc(D.greeting.replace('{name}', m.fullName))}</p>
+            <ul>
+              ${countLine(D.stale, stale)}
+              ${countLine(D.upcoming, upcoming)}
+              ${countLine(D.newApplications, newApplications)}
+            </ul>
+            <a href="${base}/mentor" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(D.cta)}</a>
+          </div>`,
+        },
       });
       sent++;
     } catch (e) {
@@ -5906,20 +5945,21 @@ async function sendOverdueTodoMail(
   const block = await overdueTodoBlock(reach, locale, u.id, undefined, false);
   if (!block) return false;
   const A = (await emailDictionary(locale, u.orgId)).notifications.activityDigestEmail;
-  await sendEmail({
-    category: 'activity-digest',
-    userId: u.id,
-    orgId: u.orgId,
+  await notifyEvent(u.id, 'digest.overdueTodos', {}, {
+    channels: ['email'],
+    orgId: u.orgId ?? null,
     dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'activity-todo', userId: u.id, day: utcDayKey(new Date()) }),
-    to: u.email,
-    locale: u.preferredLanguage,
-    subject: A.todoSubject,
-    html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
-      ${worldHeading(brand, esc(A.todoSubject), `<h2 style="color:#2563eb;">${esc(A.todoSubject)}</h2>`)}
-      <p>${esc(A.todoGreeting.replace('{name}', u.fullName))}</p>
-      ${block}
-      <p style="margin-top:16px;"><a href="${base}/todos" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.todoCta)}</a></p>
-    </div>`,
+    email: {
+      category: 'activity-digest',
+      locale: u.preferredLanguage,
+      subject: A.todoSubject,
+      html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+        ${worldHeading(brand, esc(A.todoSubject), `<h2 style="color:#2563eb;">${esc(A.todoSubject)}</h2>`)}
+        <p>${esc(A.todoGreeting.replace('{name}', u.fullName))}</p>
+        ${block}
+        <p style="margin-top:16px;"><a href="${base}/todos" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.todoCta)}</a></p>
+      </div>`,
+    },
   });
   return true;
 }
@@ -5982,22 +6022,23 @@ export async function sendDailyActivityDigests() {
     try {
       const base = await origins.urlFor(m.orgId);
       const brand = await brandOf(m.orgId);
-      await sendEmail({
-        category: 'activity-digest',
-        userId: m.id,
-        orgId: m.orgId,
+      await notifyEvent(m.id, 'digest.activity', {}, {
+        channels: ['email'],
+        orgId: m.orgId ?? null,
         dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'activity-mentor', userId: m.id, day: utcDayKey(new Date()) }),
-        to: m.email,
-        locale: mLocale,
-        subject: A.subject,
-        html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
-          ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
-          <p>${esc(A.greetingMentor.replace('{name}', m.fullName))}</p>
-          ${activityDigestTable(items, mLocale, A)}
-          ${overdue}
-          <p style="margin-top:16px;"><a href="${base}/mentor/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
-          <p style="color:#9ca3af;font-size:12px;">${esc(A.trackingNote)}</p>
-        </div>`,
+        email: {
+          category: 'activity-digest',
+          locale: mLocale,
+          subject: A.subject,
+          html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+            ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
+            <p>${esc(A.greetingMentor.replace('{name}', m.fullName))}</p>
+            ${activityDigestTable(items, mLocale, A)}
+            ${overdue}
+            <p style="margin-top:16px;"><a href="${base}/mentor/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
+            <p style="color:#9ca3af;font-size:12px;">${esc(A.trackingNote)}</p>
+          </div>`,
+        },
       });
       sent++;
     } catch (e) {
@@ -6060,21 +6101,22 @@ export async function sendDailyActivityDigests() {
       const overdue = await overdueTodoBlock({ assignee: { is: todoPeople } }, aLocale, a.id, A);
       try {
         const base = await origins.urlFor(a.orgId);
-        await sendEmail({
-          category: 'activity-digest',
-          userId: a.id,
-          orgId: a.orgId,
+        await notifyEvent(a.id, 'digest.activity', {}, {
+          channels: ['email'],
+          orgId: a.orgId ?? null,
           dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'activity-admin', userId: a.id, day: utcDayKey(new Date()) }),
-          to: a.email,
-          locale: aLocale,
-          subject: A.subjectAll,
-          html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
-            ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
-            <p>${esc(A.greetingAdmin.replace('{name}', a.fullName))}</p>
-            ${activityDigestTable(items, aLocale, A)}
-            ${overdue}
-            <p style="margin-top:16px;"><a href="${base}/admin/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
-          </div>`,
+          email: {
+            category: 'activity-digest',
+            locale: aLocale,
+            subject: A.subjectAll,
+            html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+              ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
+              <p>${esc(A.greetingAdmin.replace('{name}', a.fullName))}</p>
+              ${activityDigestTable(items, aLocale, A)}
+              ${overdue}
+              <p style="margin-top:16px;"><a href="${base}/admin/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
+            </div>`,
+          },
         });
         sent++;
       } catch (e) {
@@ -6626,13 +6668,15 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
             try {
               const brand = await emailBrand(recipient.orgId);
               const base = await origins.urlFor(recipient.orgId);
-              await sendEmail({
-                category: 'document-reminder',
-                userId: recipient.id,
-                locale: recipient.preferredLanguage,
-                to: recipient.email,
-                fromName: brand.name,
+              // Through the router (#1711), the same event as the bell above; the
+              // weekly claim row already made this send once per week.
+              const mail = {
+                channels: ['email'] as const,
                 orgId: recipient.orgId,
+                email: {
+                category: 'document-reminder',
+                locale: recipient.preferredLanguage,
+                fromName: brand.name,
                 subject: t.reminderSubject.replace('{requirement}', label),
                 html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
                   ${brandHeader(brand, t.reminderHeading)}
@@ -6640,7 +6684,10 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
                   <p>${esc(t.reminderBody.replace('{requirement}', label).replace('{mentee}', mentee.fullName))}</p>
                   ${ctaBlock(brand, `${base}${link}`, t.reminderCta)}
                 </div>`,
-              });
+                },
+              };
+              if (isMentee) await notifyEvent(recipient.id, 'missing_document.self', { requirement: label }, mail);
+              else await notifyEvent(recipient.id, 'missing_document.mentor', { mentee: mentee.fullName, requirement: label, relationId: recipient.relationId ?? undefined }, mail);
               emailed++;
             } catch (error) {
               console.error('Missing document reminder email failed:', { menteeId: mentee.id, recipientId: recipient.id, requirementId: requirement.id, error });

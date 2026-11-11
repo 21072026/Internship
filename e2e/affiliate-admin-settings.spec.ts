@@ -350,6 +350,35 @@ test('payouts: all or nothing under the lock, only APPROVED rows of that partner
 });
 
 
+// #3351: a partner without payout details can still be paid — the transfer
+// happens outside the CRM — but the screen makes the admin confirm it first.
+test('a payout to a partner without payout details is confirmed first', async ({ playwright, baseURL, page }) => {
+  const owner = await as(playwright, baseURL, emails[0]);
+  const bare = await prisma.affiliatePartner.create({ data: { orgId, code: 'noiban-1', displayName: 'No Details Partner' } });
+  await recordAffiliatePayment({ orgId, partnerId: bare.id, customerExternalRef: 'c-noiban', amountMinor: 800, currency: 'EUR', receivedAt: new Date('2026-03-12T00:00:00Z'), externalPaymentRef: 'inv-noiban', source: 'MANUAL' });
+  const commission = await prisma.affiliateCommission.findFirstOrThrow({ where: { orgId, partnerId: bare.id } });
+  await owner.post('/api/admin/affiliate/commissions/transition', { headers: host, data: { ids: [commission.id], transition: 'APPROVE' } });
+
+  await page.context().setExtraHTTPHeaders(host);
+  await signInAndSettle(page, emails[0], PW, '/admin');
+  await gotoSettled(page, '/admin/affiliates/payouts');
+  await page.getByTestId('affiliate-payout-partner').selectOption(bare.id);
+  await expect(page.getByTestId('affiliate-payout-sum')).toBeVisible();
+
+  // Cancel: nothing is written.
+  await page.getByTestId('affiliate-payout-save').click();
+  const dialog = page.getByTestId('confirm-dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  expect((await prisma.affiliateCommission.findUniqueOrThrow({ where: { id: commission.id } })).status).toBe('APPROVED');
+
+  // Confirm: the payout is recorded as usual.
+  await page.getByTestId('affiliate-payout-save').click();
+  await dialog.getByRole('button', { name: 'Record anyway' }).click();
+  await expect.poll(async () => (await prisma.affiliateCommission.findUniqueOrThrow({ where: { id: commission.id } })).status).toBe('PAID');
+});
+
 // #3176: the refusal clears as the address is fixed, so the example link comes back
 // before the next save. A screen nicety, not a boundary: no @smoke tag.
 test('the referral address error clears while it is being fixed', async ({ page }) => {

@@ -24,6 +24,8 @@ import {
   type LandingLocale,
   type LandingParagraphField,
   type LandingTextField,
+  LEGAL_LINKS,
+  type LegalLinkKey,
   type LandingTheme,
 } from '@/lib/affiliateLandingRule';
 import type { ThemeMedia } from '@/lib/partnerThemeLook';
@@ -62,6 +64,12 @@ export function LandingSettings({ initial, initialMedia, readOnly, localeLabel }
   const [phone, setPhone] = useState(initial.phone ?? '');
   const [email, setEmail] = useState(initial.email ?? '');
   const [signupUrl, setSignupUrl] = useState(initial.productSignupUrl ?? '');
+  // The organisation's own legal pages (#3363); empty = this host's own.
+  const [legal, setLegal] = useState<Record<LegalLinkKey, string>>({
+    imprintUrl: initial.imprintUrl ?? '',
+    privacyUrl: initial.privacyUrl ?? '',
+    termsUrl: initial.termsUrl ?? '',
+  });
   // The figure cards (#3364): an absent key is shown as `hidden`.
   const [stats, setStats] = useState<Partial<Record<LandingStatKey, LandingStat>>>(initial.stats ?? {});
   // The page's look (#3535): null = the standard look.
@@ -86,7 +94,7 @@ export function LandingSettings({ initial, initialMedia, readOnly, localeLabel }
       const res = await fetch('/api/admin/affiliate/settings/landing', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ landing: { copy, phone, email, productSignupUrl: signupUrl, stats, theme } }),
+        body: JSON.stringify({ landing: { copy, phone, email, productSignupUrl: signupUrl, ...legal, stats, theme } }),
       });
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -96,6 +104,7 @@ export function LandingSettings({ initial, initialMedia, readOnly, localeLabel }
         setPhone(saved.phone ?? '');
         setEmail(saved.email ?? '');
         setSignupUrl(saved.productSignupUrl ?? '');
+        setLegal({ imprintUrl: saved.imprintUrl ?? '', privacyUrl: saved.privacyUrl ?? '', termsUrl: saved.termsUrl ?? '' });
         setStats(saved.stats ?? {});
         setTheme(saved.theme ?? null);
       } else if (body.code === 'invalid_landing') {
@@ -241,6 +250,24 @@ export function LandingSettings({ initial, initialMedia, readOnly, localeLabel }
             onChange={(e) => setSignupUrl(e.target.value)}
             data-testid="affiliate-landing-signup-url"
           />
+        </div>
+
+        <div className="space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800" data-testid="affiliate-landing-legal">
+          <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">{L.legal.title}</h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400">{L.legal.hint}</p>
+          {LEGAL_LINKS.map(({ key }) => (
+            <Input
+              key={key}
+              label={L.legal[key]}
+              type="url"
+              inputMode="url"
+              placeholder="https://"
+              value={legal[key]}
+              error={err(key)}
+              onChange={(e) => setLegal({ ...legal, [key]: e.target.value })}
+              data-testid={`affiliate-landing-${key}`}
+            />
+          ))}
         </div>
 
         <div className="space-y-3 border-t border-gray-200 pt-4 dark:border-gray-800" data-testid="affiliate-landing-stats">

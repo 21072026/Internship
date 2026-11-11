@@ -24,6 +24,7 @@ import { clipSkillLabel } from '@/lib/skills';
 import { useAnalyticsEntitlements } from '@/lib/analyticsEntitlementsClient';
 import { shownEmail } from '@/lib/leadEmail';
 import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
+import { UNASSIGNED_FILTER, isUnassignedFilter } from '@/lib/unassignedCandidates';
 
 interface Candidate {
   id: string;
@@ -51,6 +52,8 @@ interface Candidate {
   tags?: { tag: TagOption }[];
   menteeRelations: {
     pipelineStatus?: string;
+    /** COACHING pairs are badged (#1507); absent reads as PLACEMENT. */
+    kind?: string | null;
     mentor: { id: string; fullName: string };
     company: { id: string; name: string } | null;
   }[];
@@ -336,7 +339,7 @@ export default function CandidatesPage() {
         <p className="text-gray-500 mt-1">{t.candidates.subtitle}</p>
         {statusFilter && (
           <div data-testid="candidates-status-filter-chip" className="mt-3 inline-flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-full px-3 py-1 text-sm text-blue-700">
-            {label(statusFilter)}
+            {isUnassignedFilter(statusFilter) ? t.candidates.unassigned : label(statusFilter)}
             <button
               type="button"
               onClick={() => {
@@ -447,7 +450,13 @@ export default function CandidatesPage() {
           <Select
             data-testid="candidates-stage-filter"
             aria-label={t.candidates.allStages}
-            options={[{ value: '', label: t.candidates.allStages }, ...stages.map((s) => ({ value: s.key, label: s.label }))]}
+            // "Unassigned" (#1440) sits right after "all stages": it is the
+            // admin's queue — no ACTIVE relation, oldest registration first.
+            options={[
+              { value: '', label: t.candidates.allStages },
+              { value: UNASSIGNED_FILTER, label: t.candidates.unassigned },
+              ...stages.map((s) => ({ value: s.key, label: s.label })),
+            ]}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           />
@@ -742,6 +751,9 @@ export default function CandidatesPage() {
                     <Badge data-testid="candidate-mobile-stage" variant={activeRelation?.pipelineStatus ? 'info' : 'warning'} className="max-w-full text-center whitespace-normal break-words">
                       {activeRelation?.pipelineStatus ? label(activeRelation.pipelineStatus) : t.candidates.unassigned}
                     </Badge>
+                    {activeRelation?.kind === 'COACHING' && (
+                      <Badge variant="default" data-testid={`candidate-mobile-coaching-${candidate.id}`}>{t.relationKind.coachingBadge}</Badge>
+                    )}
                     {candidate.orphan && (
                       <Badge variant="warning" data-testid={`candidate-mobile-orphan-${candidate.id}`} className="max-w-full whitespace-normal break-words">
                         {t.candidates.orphanBadge}
@@ -819,6 +831,10 @@ export default function CandidatesPage() {
                       <Badge variant="success">{t.candidates.assigned}</Badge>
                     ) : (
                       <Badge variant="warning">{t.candidates.unassigned}</Badge>
+                    )}
+                    {/* A coaching pair is outside the hiring funnel (#1507). */}
+                    {activeRelation?.kind === 'COACHING' && (
+                      <Badge variant="default" data-testid={`candidate-coaching-${candidate.id}`}>{t.relationKind.coachingBadge}</Badge>
                     )}
                     {/* Why this row is not a real candidate (#1780). */}
                     {candidate.orphan && (

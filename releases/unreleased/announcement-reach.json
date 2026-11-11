@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Announcement reach (#1921, slice 2):** the announcement history withholds the read count below 5 recipients and for announcements older than the org's notification retention cutoff (`readWithheld`: `small_audience` | `pruned`), and adds `readRate`; the report registry gains `announcement-reach` (one row per sent announcement: recipients, e-mailed, read, read rate). The rule is `src/lib/announcementReachRule.ts`; the retention window resolver moved to `src/lib/notificationRetentionWindow.ts`, shared with the sweep. No schema change.",
+  "notes": {
+    "en": ["Announcement reach is now a report too, and read counts are only shown where they are a real total: from 5 recipients, and while the in-app copies are still kept."],
+    "tr": ["Duyuru erişimi artık bir rapor olarak da var; okunma sayıları yalnızca gerçek bir toplam olduklarında gösteriliyor: 5 alıcıdan itibaren ve uygulama içi kopyalar saklandığı sürece."],
+    "de": ["Die Reichweite von Ankündigungen gibt es jetzt auch als Bericht, und Lesezahlen erscheinen nur, wo sie eine echte Summe sind: ab 5 Empfängern und solange die App-Kopien aufbewahrt werden."]
+  }
+}

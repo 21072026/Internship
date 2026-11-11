@@ -126,7 +126,8 @@ project — an ordinary `npm run test:e2e` and the CI smoke gate never pay for a
   server that does not enforce is worse than not testing it.
 
 **Where it runs.** `e2e-full.yml` has an `isolation` job beside the four shards: same
-4×/day cadence, same drift gate, and its JSON report is named
+4×/day cadence, same drift gate, the same shared build (one `Build app for E2E` job with
+full git history hands `.next` to the shards and to this job, #3509), and its JSON report is named
 `e2e-json-shard-isolation` so a red isolation run reaches the same Turkish summary email
 (`E2E_EXPECTED_REPORTS` counts it as the fifth report, so a job that crashes before
 writing one is caught too). Since #1568 it is **also on every PR**: the `Playwright
@@ -333,6 +334,24 @@ BASE_URL=https://preview.interncrm.com npm run test:stress
 | `STRESS_MAX_P95_MS` | `2000` | Fail if p95 latency exceeds this |
 | `STRESS_MIN_RPS` | `0` (off) | Fail if throughput drops below this |
 | `STRESS_SUMMARY_FILE` | — | If set, writes a JSON summary (used by the alert email) |
+
+### Admin screens at scale: `scripts/seed-scale.mjs` (#1434)
+
+The demo set has 8 candidates; a real programme has thousands. To see how the admin screens hold up,
+seed a **local** database with a programme of 5 000 and open them as its admin:
+
+```bash
+npx prisma db push && node scripts/seed-scale.mjs      # SCALE_MENTEES / SCALE_MENTORS / SCALE_RELATION_EVERY
+npm run build && npx next start                        # measure a production build, not next dev
+# sign in as admin.scale@scale.example.test / ScalePass123!
+```
+
+It writes into its own organisation (`scale-local`), so the default org and the demo set are untouched,
+and a re-run only tops the numbers up. It refuses any `DATABASE_URL` whose host is not `localhost` or
+`127.0.0.1` (`isLocalOnlyTarget()` in `prisma/demoTarget.mjs`, unit-tested in
+`scripts/test/demo-target.test.mjs`). There is no force flag and no database-name exception, and the
+seeder is deliberately in no deploy or CI step. The names come from small lists on purpose, so the
+duplicate scan meets a worst case: about 17 people per name, plus numbered near-twins.
 
 ## Nightly automation (the cron)
 

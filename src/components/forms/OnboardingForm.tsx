@@ -52,17 +52,17 @@ export function OnboardingForm() {
   const [skills, setSkills] = useState<string[]>([]);
   const [skillsError, setSkillsError] = useState('');
 
-  const step1Form = useForm<Step1Data>({
+  const step1Form = useForm<z.input<typeof step1Schema>, unknown, Step1Data>({
     resolver: zodResolver(step1Schema),
     defaultValues: allData,
   });
 
-  const step2Form = useForm<Step2Data>({
+  const step2Form = useForm<z.input<typeof step2Schema>, unknown, Step2Data>({
     resolver: zodResolver(step2Schema),
     defaultValues: allData,
   });
 
-  const step3Form = useForm<Step3Data>({
+  const step3Form = useForm<z.input<typeof step3Schema>, unknown, Step3Data>({
     resolver: zodResolver(step3Schema),
     defaultValues: allData,
   });

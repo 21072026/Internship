@@ -18,6 +18,8 @@ export interface CommissionRow {
   planVersion: number;
   partner: { id: string; code: string; displayName: string };
   customerRef: string;
+  /** The admin-written label the partner sees (#3352); null when none. */
+  customerLabel: string | null;
   payment: { amountMinor: number; externalPaymentRef: string };
   paidAt: string | null;
 }
@@ -49,7 +51,7 @@ export async function listCommissions(
         planVersion: true,
         paidAt: true,
         partner: { select: { id: true, code: true, displayName: true } },
-        customer: { select: { externalRef: true } },
+        customer: { select: { externalRef: true, partnerLabel: true } },
         payment: { select: { amountMinor: true, externalPaymentRef: true } },
       },
     }),
@@ -74,6 +76,7 @@ export async function listCommissions(
       planVersion: r.planVersion,
       partner: r.partner,
       customerRef: r.customer.externalRef,
+      customerLabel: r.customer.partnerLabel,
       payment: r.payment,
       paidAt: r.paidAt?.toISOString() ?? null,
     })),
@@ -102,7 +105,7 @@ export async function approvedForPayout(orgId: string, partnerId: string, max: n
         amountMinor: true,
         currency: true,
         dueAt: true,
-        customer: { select: { externalRef: true } },
+        customer: { select: { externalRef: true, partnerLabel: true } },
         payment: { select: { externalPaymentRef: true } },
       },
     }),
@@ -115,6 +118,7 @@ export async function approvedForPayout(orgId: string, partnerId: string, max: n
       currency: r.currency,
       dueAt: r.dueAt.toISOString(),
       customerRef: r.customer.externalRef,
+      customerLabel: r.customer.partnerLabel,
       payment: { externalPaymentRef: r.payment.externalPaymentRef },
     })),
     totalCount: all._count._all,

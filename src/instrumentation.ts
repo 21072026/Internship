@@ -22,6 +22,7 @@
 import type { Instrumentation } from 'next';
 import { captureError } from './lib/errorTracking';
 import { isValidRequestId, REQUEST_ID_HEADER } from './lib/requestId';
+import { installZodV3Messages } from './lib/zodV3Messages';
 
 // The role shell a route belongs to — every shell's layout gates on the role,
 // so the path prefix is the role of whoever could render it (impersonation and
@@ -52,6 +53,9 @@ export const onRequestError: Instrumentation.onRequestError = async (error, requ
 };
 
 export function register() {
+  // Before anything parses: zod's default messages keep their zod 3 wording
+  // (#3558). Edge-safe, so it runs in both runtimes.
+  installZodV3Messages();
   if (process.env.NEXT_RUNTIME !== 'nodejs') return;
 
   startMailBridge();

@@ -53,7 +53,9 @@ const categorySchema = z
   .max(40)
   .regex(/^[A-Z0-9_]+$/, 'uppercase key');
 
-const createSchema = z
+// The object before its cross-field refine: zod 4 keeps refinements on the
+// object itself, so the PATCH shape is derived from this, not from createSchema.
+const costShape = z
   .object({
     cohortId: z.string().min(1).max(60).nullable().optional(),
     category: categorySchema,
@@ -64,13 +66,15 @@ const createSchema = z
     periodEnd: dateSchema,
     note: z.string().trim().max(2000).nullable().optional(),
   })
-  .strict()
+  .strict();
+
+const createSchema = costShape
   .refine((value) => toUtcDate(value.periodStart) <= toUtcDate(value.periodEnd), {
     message: 'periodStart must not be after periodEnd',
     path: ['periodEnd'],
   });
 
-const patchSchema = createSchema.innerType().partial().extend({ id: z.string().min(1).max(60) }).strict();
+const patchSchema = costShape.partial().extend({ id: z.string().min(1).max(60) }).strict();
 
 const deleteSchema = z.object({ id: z.string().min(1).max(60) }).strict();
 

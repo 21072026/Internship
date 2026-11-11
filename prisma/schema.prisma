@@ -397,6 +397,7 @@ model Organization {
   affiliateCommissions    AffiliateCommission[]
   affiliatePayouts        AffiliatePayout[]
   affiliateAcceptances    AffiliateContractAcceptance[]
+  affiliateClicks         AffiliateClickDaily[]
   requisitionFits         RequisitionFit[]
 
   @@index([archivedAt])
@@ -2476,6 +2477,10 @@ model SupportMessage {
   body      String    @db.Text
   createdAt DateTime  @default(now())
   readAt    DateTime?
+  // The record a message asks about (#3353): `affiliate:commission:<id>` or
+  // `affiliate:customer:<id>`, verified against the sender's own rows when it
+  // is written (src/lib/affiliateRecordRef.ts). Null for an ordinary message.
+  recordRef String?   @db.VarChar(120)
 
   ticket      SupportTicket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
   sender      User                @relation("SupportMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
@@ -2623,6 +2628,11 @@ model MentorshipRequest {
   // The reason is shown to the mentee — it is the one thing they are owed.
   cancelledById      String?
   cancelReason       String?                 @db.Text
+  // The programme (the Cohort row, #1626) the relation this request becomes
+  // belongs to. Written only by the server — today the re-match path, from the
+  // replaced pairing's own programme — and copied onto the new relation by the
+  // decision (src/lib/mentorshipDecision.ts). Additive and nullable.
+  programId          String?
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
 
@@ -2635,11 +2645,14 @@ model MentorshipRequest {
   // SetNull for the same reason: a deleted relation must not delete the record
   // that a re-match was asked for.
   replacesRelation MentorshipRelation? @relation("RematchRequests", fields: [replacesRelationId], references: [id], onDelete: SetNull)
+  // SetNull: deleting a programme leaves the request, just without one.
+  program          Cohort?             @relation("MentorshipRequestProgram", fields: [programId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([menteeId])
   @@index([preferredMentorId])
   @@index([replacesRelationId])
+  @@index([programId])
   @@index([status, expiresAt])
 }
 
@@ -3363,6 +3376,10 @@ model CandidateOutreach {
   applicationId  String?
   /// PENDING | APPROVED | DECLINED | REVOKED
   status         String    @default("PENDING") @db.VarChar(16)
+  /// Where the request came from (#1394): SHORTLIST (the company shortlisted the
+  /// candidate) | TALENT_POOL (an introduction asked from the talent-pool search).
+  /// A constant default, so every older row reads as the shortlist request it was.
+  source         String    @default("SHORTLIST") @db.VarChar(16)
   requestedById  String
   decidedById    String?
   decidedAt      DateTime?
@@ -4261,15 +4278,16 @@ model Cohort {
   // gated when it OR its organisation is in RULES mode.
   eligibilityMode String        @default("OPEN") @db.VarChar(8)
 
-  relations        MentorshipRelation[]
-  programCosts     ProgramCost[]
-  steps            ProgramStep[]
-  events           ProgramEvent[]
-  adminScopeGrants AdminScopeGrant[]
-  settings         Setting[]
-  stageSlas        StageSla[]
-  matchRounds      MatchRound[]
-  eligibilityRules ProgramEligibilityRule[]
+  relations          MentorshipRelation[]
+  programCosts       ProgramCost[]
+  steps              ProgramStep[]
+  events             ProgramEvent[]
+  adminScopeGrants   AdminScopeGrant[]
+  settings           Setting[]
+  stageSlas          StageSla[]
+  matchRounds        MatchRound[]
+  eligibilityRules   ProgramEligibilityRule[]
+  mentorshipRequests MentorshipRequest[]      @relation("MentorshipRequestProgram")
 }
 
 // Programme eligibility (#1945, docs/program-eligibility.md): "a person whose
@@ -4292,6 +4310,9 @@ model ProgramEligibilityRule {
   value       Json
   priority    Int          @default(0)
   active      Boolean      @default(true)
+  // Whom the rule judges (#3423): MENTEE | MENTOR | BOTH. Defaulted, so every
+  // rule written before the column keeps its meaning — it judges mentees.
+  appliesTo   String       @default("MENTEE") @db.VarChar(8)
   createdById String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
@@ -5925,6 +5946,30 @@ model SsoLoginGrant {
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
   expiresAt DateTime
+}
+
+// Teams tab sign-in (#1954, docs/teams-tab-sso.md). Minted by POST
+// /api/integrations/chat/teams/sso once an Entra token verified and resolved to
+// a CONFIRMED ChatIdentity; spent by POST …/teams/session. Holds ONLY the
+// SHA-256 of the bearer value, lives 60 s, is bound to the host it was minted
+// for, and is spent by one conditional UPDATE (spendGrant, #2548). User-keyed
+// with no orgId, like every other sign-in grant: it is an auth artefact, read
+// before any tenant context exists. Bound to the minting browser by a nonce.
+model ChatLoginGrant {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique @db.VarChar(64)
+  // sha256 of the nonce /sso put in the tab's partitioned cookie: /session
+  // spends the grant only for the browser that holds it (login-CSRF guard).
+  // An empty default (a row from before the guard) never matches a nonce.
+  nonceHash  String   @default("") @db.VarChar(64)
+  userId     String
+  identityId String
+  host       String   @db.VarChar(255)
+  used       Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+
+  @@index([userId])
 }
 
 // Magic-link sign-in (#1959): "e-mail me a sign-in link". One row per link
@@ -9333,6 +9378,9 @@ model AffiliateApplication {
   // The consent record: when, and which privacy text — set by the server, never the body.
   consentAt          DateTime
   consentTextVersion String                     @db.VarChar(32)
+  // The partner contract version the applicant ticked "read" for (#3363), checked
+  // against the current one at submit; null when the programme had no contract.
+  contractVersion    Int?
   status             AffiliateApplicationStatus @default(PENDING)
   decidedAt          DateTime?
   decidedById        String?
@@ -9349,34 +9397,43 @@ model AffiliateApplication {
 }
 
 model AffiliateProgramSettings {
-  id              String       @id @default(cuid())
-  orgId           String       @unique
-  org             Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  id               String       @id @default(cuid())
+  orgId            String       @unique
+  org              Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   // The commission plan (src/lib/affiliateCommissionRule.ts, parseCommissionPlan).
   // Organisation data: no default mirrors a real contract. Null until configured;
   // the writer refuses payments without a plan.
-  plan            Json?
+  plan             Json?
   // Bumped on every plan change. A commission records the version it was computed
   // under; one of an older version is never recomputed.
-  planVersion     Int          @default(0)
+  planVersion      Int          @default(0)
   // When the current plan version took effect. Payments RECORDED before it never
   // get a commission created retroactively by the new plan (src/lib/affiliateCommissionSync.ts).
-  planEffectiveAt DateTime?
+  planEffectiveAt  DateTime?
   // The re-evaluation of every partner after a plan change (#3170): the admin's
   // progress report and the queued job's checkpoint, for the plan version it names
   // (src/lib/affiliatePlanResyncRule.ts). Ids and counters only. Null before the
   // first plan change.
-  planResync      Json?
+  planResync       Json?
   // The base URL a partner's referral link is built on (src/lib/affiliateReferralRule.ts):
   // https, the partner's code set as ?ref=. Null: the portal shows the code alone.
-  referralUrl     String?      @db.VarChar(500)
+  referralUrl      String?      @db.VarChar(500)
   // Locale maps ({ en, tr, de }): the public programme page and the partner contract.
-  landing         Json?
-  contract        Json?
+  landing          Json?
+  contract         Json?
   // Bumped on every contract text change; partners re-accept the current version.
-  contractVersion Int          @default(0)
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  contractVersion  Int          @default(0)
+  // A customer's funnel status (src/lib/affiliateCustomerStatusRule.ts, #3542):
+  // the free period after registration in calendar months, and the days without a
+  // payment after which a paying customer counts as passive. Not part of the
+  // commission plan: a change never bumps planVersion.
+  freeMonths       Int          @default(2)
+  passiveAfterDays Int          @default(45)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  // Days before a customer's commission window ends that its partner is told
+  // (#3556, src/lib/affiliateWindowNoticeRule.ts). 0 = off; 0…180.
+  windowNoticeDays Int          @default(30)
 }
 
 // A picture or video the public partner page's theme shows (#3535): the logo,
@@ -9430,22 +9487,36 @@ model AffiliatePartner {
   commissions         AffiliateCommission[]
   payouts             AffiliatePayout[]
   contractAcceptances AffiliateContractAcceptance[]
+  clicks              AffiliateClickDaily[]
 
   @@unique([orgId, code])
   @@index([orgId, status])
 }
 
 model AffiliateCustomer {
-  id          String                @id @default(cuid())
-  orgId       String
-  org         Organization          @relation(fields: [orgId], references: [id])
-  partnerId   String
-  partner     AffiliatePartner      @relation(fields: [partnerId], references: [id])
+  id           String                @id @default(cuid())
+  orgId        String
+  org          Organization          @relation(fields: [orgId], references: [id])
+  partnerId    String
+  partner      AffiliatePartner      @relation(fields: [partnerId], references: [id])
   // The customer's id on the product side. Opaque here; one partner per customer.
-  externalRef String                @db.VarChar(120)
-  createdAt   DateTime              @default(now())
-  payments    AffiliatePayment[]
-  commissions AffiliateCommission[]
+  // Also the matching key of account events and API payments — never a label.
+  externalRef  String                @db.VarChar(120)
+  // What the partner sees next to the reference (#3352): written by an admin
+  // (a trade name, "Acme GmbH"), never filled automatically. Null = none.
+  partnerLabel String?               @db.VarChar(80)
+  createdAt    DateTime              @default(now())
+  // When the account was cancelled or deactivated (a `cancelled`/`deactivated`
+  // account event, src/lib/accountEventIngest.ts); cleared by `reactivated`.
+  // Read by the status rule (src/lib/affiliateCustomerStatusRule.ts, #3542).
+  endedAt      DateTime?
+  payments     AffiliatePayment[]
+  commissions  AffiliateCommission[]
+
+  // When the partner was told this customer's commission window is ending (#3556,
+  // src/lib/affiliateWindowNoticeRule.ts). Claimed with a conditional update
+  // BEFORE the mail leaves, so a re-run never sends twice. Null = not told.
+  windowNoticeSentAt DateTime?
 
   @@unique([orgId, externalRef])
   @@index([partnerId])
@@ -9532,6 +9603,26 @@ model AffiliateContractAcceptance {
 
   @@unique([partnerId, version])
   @@index([orgId])
+}
+
+// One partner's link clicks on one UTC day (#3541, docs/affiliate-module.md §
+// Link clicks): counters only. No IP, user-agent, cookie or visitor key is ever
+// stored — "unique" is decided in the rate-limit store, which forgets the
+// day's hashed visitor keys at the end of that day (src/lib/affiliateClicks.ts).
+model AffiliateClickDaily {
+  id           String           @id @default(cuid())
+  orgId        String
+  org          Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  partnerId    String
+  partner      AffiliatePartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  // Midnight UTC of the day the clicks fell on.
+  day          DateTime         @db.Date
+  clicks       Int              @default(0)
+  uniqueClicks Int              @default(0)
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([partnerId, day])
+  @@index([orgId, day])
 }
 
 // ── Chat apps (#1934, epic #1923) ──────────────────────────────────────────

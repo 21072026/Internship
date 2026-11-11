@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Hiring events reach exactly the people entitled to them (#1944):**\n\n- **Audience in the catalogue:** a notification catalogue entry can now declare its `audience` (roles), and the router skips anyone outside it (`SKIPPED` / `audience`) whatever the call site passed. Every hiring event declares one, and a unit test pins that no internal one admits a MENTEE.\n- **Through the router:** the offer, interview-request decision and panel-outcome sends now go through `notifyEvent()`. The offer mails are handed over pre-rendered (`renderOfferSentEmail` / `renderOfferDecisionEmail`), so their copy is unchanged, and chat joins for anyone with a confirmed chat identity.\n- **New recipients:** the mentee's mentor hears an offer went out (`offer_sent.mentor`). The offering company's seats that may see the candidate hear the answer (`offer_<outcome>.company`); an INTERVIEWER seat counts only when it sits on a panel about them.\n- **Deep links:** company cards open the role's applicant board through the new `requisition` link kind.",
+  "notes": {
+    "en": ["A company now sees in its notifications when a candidate accepts or declines its offer, and a mentor is told when their mentee receives one. Hiring updates also arrive in Slack or Teams for anyone who has linked a chat account."],
+    "tr": ["Şirket, adayın teklifini kabul ya da reddettiğini artık bildirimlerinde görüyor; mentor da mentisine teklif geldiğinde haberdar oluyor. İşe alım bildirimleri sohbet hesabını bağlayan herkese Slack veya Teams üzerinden de ulaşıyor."],
+    "de": ["Unternehmen sehen jetzt in ihren Benachrichtigungen, wenn eine Kandidatin oder ein Kandidat ihr Angebot annimmt oder ablehnt, und Mentor:innen erfahren, wenn ihr Mentee eines erhält. Hiring-Updates kommen außerdem per Slack oder Teams bei allen an, die ein Chat-Konto verknüpft haben."]
+  }
+}

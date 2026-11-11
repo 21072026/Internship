@@ -20,6 +20,7 @@ import {
   evaluateEligibility,
   type EligibilityDecision,
   type EligibilityProfile,
+  type EligibilityRole,
   type EligibilityRuleRow,
 } from '@/lib/eligibilityRule';
 
@@ -28,7 +29,7 @@ export interface EligibilityScope {
   rules: EligibilityRuleRow[];
 }
 
-const ruleSelect = { id: true, effect: true, attribute: true, operator: true, value: true, priority: true, active: true, createdAt: true } as const;
+const ruleSelect = { id: true, appliesTo: true, effect: true, attribute: true, operator: true, value: true, priority: true, active: true, createdAt: true } as const;
 const userFieldSelect = Object.fromEntries(ELIGIBILITY_USER_FIELDS.map((f) => [f, true])) as Record<(typeof ELIGIBILITY_USER_FIELDS)[number], true>;
 
 /** The effective mode and every rule of a scope: org-wide rules plus the programme's own. */
@@ -56,7 +57,7 @@ function attributeKeys(rules: readonly EligibilityRuleRow[]): string[] {
  * Profiles of many users in two queries (users, then attribute values) — the
  * dry run and the matching filter must never be an N+1 over the roster.
  */
-async function loadProfiles(orgId: string, where: { id?: { in: string[] }; role?: 'MENTEE' }, keys: readonly string[]): Promise<Map<string, EligibilityProfile>> {
+async function loadProfiles(orgId: string, where: { id?: { in: string[] }; role?: 'MENTEE' | 'MENTOR' }, keys: readonly string[]): Promise<Map<string, EligibilityProfile>> {
   const users = await prisma.user.findMany({ where: { orgId, ...where }, select: { id: true, ...userFieldSelect } });
   const out = new Map<string, EligibilityProfile>();
   for (const { id, ...fields } of users) out.set(id, { ...fields });
@@ -82,6 +83,7 @@ async function loadProfiles(orgId: string, where: { id?: { in: string[] }; role?
 export async function isEligible(
   subject: { id?: string; orgId: string | null | undefined; profile?: EligibilityProfile },
   programId: string | null = null,
+  role: EligibilityRole = 'MENTEE',
 ): Promise<EligibilityDecision> {
   const scope = await loadEligibilityScope(subject.orgId, programId);
   if (scope.mode === 'OPEN') return { ok: true, reason: 'open' };
@@ -89,28 +91,31 @@ export async function isEligible(
   if (subject.id && subject.orgId) {
     profile = (await loadProfiles(subject.orgId, { id: { in: [subject.id] } }, attributeKeys(scope.rules))).get(subject.id) ?? {};
   }
-  return evaluateEligibility(scope.mode, scope.rules, profile);
+  return evaluateEligibility(scope.mode, scope.rules, profile, role);
 }
 
-/** The subset of `ids` the scope admits, in their order. Two queries at most beyond the scope. */
-export async function eligibleUserIds(orgId: string | null | undefined, programId: string | null, ids: readonly string[]): Promise<string[]> {
+/** The subset of `ids` the scope admits for `role`, in their order. Two queries at most beyond the scope. */
+export async function eligibleUserIds(orgId: string | null | undefined, programId: string | null, ids: readonly string[], role: EligibilityRole = 'MENTEE'): Promise<string[]> {
   const scope = await loadEligibilityScope(orgId, programId);
   if (scope.mode === 'OPEN' || !orgId || ids.length === 0) return [...ids];
+  // No mentor rule: every mentor stands (#3423) — and no profile query.
+  if (role === 'MENTOR' && !scope.rules.some((r) => r.active && (r.appliesTo === 'MENTOR' || r.appliesTo === 'BOTH'))) return [...ids];
   const profiles = await loadProfiles(orgId, { id: { in: [...ids] } }, attributeKeys(scope.rules));
-  return ids.filter((id) => evaluateEligibility(scope.mode, scope.rules, profiles.get(id) ?? {}).ok);
+  return ids.filter((id) => evaluateEligibility(scope.mode, scope.rules, profiles.get(id) ?? {}, role).ok);
 }
 
 /**
  * The builder's dry run: how many of the org's current participants (MENTEE
- * accounts) a DRAFT rule set would admit — before anything is saved. The
- * draft replaces the scope's own rules; for a programme the org-wide rules
- * still apply, exactly as they would after saving.
+ * accounts) — and, since #3423, its mentors (MENTOR accounts) — a DRAFT rule
+ * set would admit, before anything is saved. The draft replaces the scope's
+ * own rules; for a programme the org-wide rules still apply, exactly as they
+ * would after saving. `total`/`admitted` stay the mentee figures.
  */
 export async function previewAdmission(
   orgId: string,
   programId: string | null,
   draft: { mode: string; rules: EligibilityRuleRow[] },
-): Promise<{ total: number; admitted: number }> {
+): Promise<{ total: number; admitted: number; mentors: { total: number; admitted: number } }> {
   let rules = draft.rules;
   let mode = draft.mode;
   if (programId) {
@@ -119,6 +124,11 @@ export async function previewAdmission(
     rules = [...orgWide, ...draft.rules];
     mode = effectiveMode(org?.eligibilityMode, draft.mode);
   }
-  const profiles = await loadProfiles(orgId, { role: 'MENTEE' }, attributeKeys(rules));
-  return { total: profiles.size, admitted: countAdmitted(mode, rules, [...profiles.values()]) };
+  const keys = attributeKeys(rules);
+  const [mentees, mentors] = await Promise.all([loadProfiles(orgId, { role: 'MENTEE' }, keys), loadProfiles(orgId, { role: 'MENTOR' }, keys)]);
+  return {
+    total: mentees.size,
+    admitted: countAdmitted(mode, rules, [...mentees.values()]),
+    mentors: { total: mentors.size, admitted: countAdmitted(mode, rules, [...mentors.values()], 'MENTOR') },
+  };
 }

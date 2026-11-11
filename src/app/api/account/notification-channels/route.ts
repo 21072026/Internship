@@ -85,7 +85,7 @@ const schema = z
   .object({
     // Sparse: a category or channel absent from the body is left as it is;
     // `null` clears an override back to the catalogue default.
-    channels: z.record(z.enum(NOTIFICATION_CATEGORIES), channelRow).optional(),
+    channels: z.partialRecord(z.enum(NOTIFICATION_CATEGORIES), channelRow).optional(),
     quietHours: z
       .object({ start: HHMM, end: HHMM, tz: z.string().max(64).optional() })
       .strict()

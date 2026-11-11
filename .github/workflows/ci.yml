@@ -413,6 +413,12 @@ jobs:
       # production container has no src/ to scan).
       - name: generated API description is complete and honest
         run: npm run check:openapi
+      # The Teams and Slack app manifests (#1956) are generated from
+      # src/lib/chat/chatApp.json — the list the dispatcher reads too. This
+      # regenerates them, checks the fields each platform's schema limits, and
+      # fails when apps/chat/ was not regenerated with a changed command.
+      - name: chat app manifests are generated and current
+        run: npm run check:chat-manifest
       # Manifest hygiene, without a database: every entry well-formed and every
       # `model` a real Prisma model. A typo there would count nothing and pass
       # silently, so it is worth catching in the fast job too.

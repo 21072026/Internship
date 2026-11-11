@@ -95,11 +95,13 @@
     "check:k6": "node scripts/check-k6.mjs",
     "check:e2e-rate-limits": "node scripts/check-e2e-rate-limits.mjs",
     "check:openapi": "node scripts/check-openapi.mjs",
+    "check:chat-manifest": "node scripts/chat-manifest.mjs --check",
     "check:direct-sendmail": "node scripts/check-direct-sendmail.mjs",
     "check:mail-dictionary": "node scripts/check-mail-dictionary.mjs",
     "check:locale-list": "node scripts/check-locale-list.mjs",
     "check:settings-accessor": "node scripts/check-settings-accessor.mjs",
     "gen:openapi": "node scripts/openapi-generate.cjs",
+    "gen:chat-manifest": "node scripts/chat-manifest.mjs",
     "gen:pwa-images": "node --experimental-strip-types scripts/generate-pwa-images.ts",
     "check:audit": "node scripts/check-audit.mjs",
     "check:licenses": "node scripts/check-licenses.mjs",
@@ -130,7 +132,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.137.0",
-    "@hookform/resolvers": "^3.9.0",
+    "@hookform/resolvers": "^5.9.2",
+    "@microsoft/teams-js": "2.58.0",
     "@node-saml/node-saml": "^5.1.0",
     "@prisma/client": "^5.16.1",
     "@rrweb/record": "2.1.7",
@@ -164,7 +167,7 @@
     "tailwind-merge": "^2.4.0",
     "web-push": "^3.6.7",
     "xlsx": "^0.18.5",
-    "zod": "^3.23.8"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

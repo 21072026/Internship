@@ -6,6 +6,39 @@ per recipient and channel, in this order. The rules are pure in
 `e2e/notification-channel-prefs.unit.spec.ts`); the router enforcement is pinned
 in `e2e/notification-router.spec.ts`.
 
+## 0. Is this person in the event's audience? (#1944)
+
+A catalogue entry (`src/lib/notifications/catalog.ts`) may name its `audience`,
+the roles the event is written for. A recipient whose role is not listed is
+recorded `SKIPPED` / `audience` on every channel and told nothing, whatever the
+call site passed. The rule lives with the event, once, so a card that carries a
+candidate's name or an internal decision cannot reach the wrong kind of account
+through a call-site slip. An entry without `audience` is unrestricted (every
+event older than the field). `audienceAllows()` is the pure check;
+`scripts/test/notification-catalog.test.mjs` pins that every hiring event
+declares one and that none of the internal ones admits a MENTEE, and
+`e2e/hiring-notifications.spec.ts` asserts the router's skip.
+
+The hiring loop, as declared there:
+
+| Event | Audience | Who the call site tells |
+|---|---|---|
+| `interview_request.received` | MENTOR, ADMIN | the mentee's active mentor (chat card with Approve/Decline) |
+| `interview_request.approved` | MENTEE, COMPANY | the candidate and every active user of the requesting company |
+| `interview_request.declined` | COMPANY | the requesting company only; the reason code never reaches the candidate |
+| `interview_panel.outcome.*` | COMPANY | the company: the decision only, never a score |
+| `offer_sent.new` / `offer_sent.mentor` | MENTEE / MENTOR | the candidate (with the offer mail) / their active mentor |
+| `offer_<outcome>.admin` | ADMIN | the admin who made the offer (with the decision mail) |
+| `offer_<outcome>.company` | COMPANY | the offering company's seats that may see the candidate: an INTERVIEWER only when it sits on a panel about them (`companyUsersWhoMaySee()`, `seatMaySeeCandidate()`) |
+
+The offer mails are rendered by `renderOfferSentEmail()` /
+`renderOfferDecisionEmail()` and handed to the router as `email`, so they are
+sent unchanged once the router says yes. Because no hiring site pins its
+channels any more, chat joins every one of them for a person with a confirmed
+chat identity. The company-facing cards link with the `requisition` link kind:
+`/company/requisitions/<id>` for the company, `/admin/requisitions/<id>` for an
+admin.
+
 ## 1. Is the event essential?
 
 An event in the `account_security` e-mail group goes out on every channel it

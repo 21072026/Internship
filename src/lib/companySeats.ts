@@ -63,3 +63,14 @@ export function leavesNoOwner(input: { owners: number; targetIsOwner: boolean; n
 export function seatLimitReached(input: { quota: number | null; used: number }): boolean {
   return input.quota != null && input.used >= input.quota;
 }
+
+/**
+ * May this seat be told about one particular candidate (#1944)? Every seat but
+ * INTERVIEWER reads all of its company's candidates; an INTERVIEWER only the
+ * candidates of the panels it sits on — the same line `seatScopedActor()`
+ * draws for the application lists, applied to a notification that names them.
+ */
+export function seatMaySeeCandidate(seatRole: string | null | undefined, sitsOnCandidatePanel: boolean): boolean {
+  if (!isSeatRole(seatRole)) return sitsOnCandidatePanel;
+  return seatRole !== 'INTERVIEWER' || sitsOnCandidatePanel;
+}
