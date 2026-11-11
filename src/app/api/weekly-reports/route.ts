@@ -55,7 +55,7 @@ export async function POST(request: Request) {
   if (session.user.role !== 'MENTEE') return NextResponse.json({ error: 'Only mentees can create weekly reports' }, { status: 403 });
   return withTenantScope(session, async () => {
     const parsed = createSchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     const relation = await weeklyReportRelation(parsed.data.relationId, await tenantWhere(session));
     if (!relation) return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
     if (relation.menteeId !== session.user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

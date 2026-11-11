@@ -43,7 +43,7 @@ export async function POST(request: Request) {
   return await withTenantScope(session, async () => {
     const parsed = schema.safeParse(await request.json());
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     }
     const { relationIds } = parsed.data;
     const variants = normalizeEmailVariants(parsed.data.translations);

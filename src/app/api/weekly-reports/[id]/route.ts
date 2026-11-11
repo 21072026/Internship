@@ -60,7 +60,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if (report.relation.menteeId !== session.user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       if (!['DRAFT', 'CHANGES_REQUESTED'].includes(report.status)) return NextResponse.json({ error: 'This report can no longer be edited', code: 'invalid_transition' }, { status: 409 });
       const parsed = menteeSchema.safeParse(await request.json().catch(() => null));
-      if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+      if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
       const summary = parsed.data.summary === undefined ? report.summary : parsed.data.summary.trim();
       if (parsed.data.status === 'SUBMITTED' && !summary) return NextResponse.json({ error: 'Summary is required before submission', code: 'summary_required' }, { status: 400 });
       const reportUpdate = await prisma.weeklyReport.update({
@@ -88,7 +88,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (session.user.role !== 'MENTOR' || report.relation.mentorId !== session.user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     if (report.status !== 'SUBMITTED') return NextResponse.json({ error: 'Only submitted reports can be reviewed', code: 'invalid_transition' }, { status: 409 });
     const parsed = mentorSchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     const mentorComment = parsed.data.mentorComment?.trim() || null;
     if (parsed.data.status === 'CHANGES_REQUESTED' && !mentorComment) return NextResponse.json({ error: 'A mentor comment is required when requesting changes', code: 'mentor_comment_required' }, { status: 400 });
     const transition = await prisma.weeklyReport.updateMany({

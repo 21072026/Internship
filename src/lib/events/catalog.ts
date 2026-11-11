@@ -82,7 +82,7 @@ export interface EventDefinition {
   subjectType: string;
   /** The payload field carrying the subject's id, when the payload has one. */
   subjectKey?: string;
-  payload: z.ZodTypeAny;
+  payload: z.ZodType;
   visibility: EventVisibility;
   /** One line, receiver-facing. */
   description: string;

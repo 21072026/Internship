@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   const { session } = gate;
   const parsed = schema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   }
   const ids = Array.from(new Set(parsed.data.ids));
   return await withTenantScope(session, async () => {

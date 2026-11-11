@@ -41,7 +41,7 @@ export async function POST(request: Request) {
     if (denied) return denied;
 
     const parsed = schema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     const { mentorId, menteeIds } = parsed.data;
     const shape = checkGroupMembers(mentorId, menteeIds);
     if (shape) return NextResponse.json({ error: 'Not a valid group', code: shape }, { status: 400 });

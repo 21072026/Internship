@@ -17,6 +17,7 @@ import {
   REQUISITION_LIMITS, REQUISITION_STATUSES, closedAtForStatus, normalizeSkills,
   protectedFields, requisitionInputSchema, validateRequisitionOwner,
 } from '@/lib/requisitions';
+import { z } from 'zod';
 
 async function authScope(
   request: Request,
@@ -106,7 +107,7 @@ export async function POST(request: Request) {
     const protectedList = protectedFields(body);
     if (protectedList.length) return NextResponse.json({ error: 'These requisition fields cannot be changed', fields: protectedList, code: 'protected_fields' }, { status: 403 });
     const parsed = requisitionInputSchema.safeParse(body);
-    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', code: 'validation_failed', details: parsed.error.flatten() }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', code: 'validation_failed', details: z.flattenError(parsed.error) }, { status: 400 });
     const data = parsed.data;
     if (data.filled > data.openings) return NextResponse.json({ error: 'Filled cannot exceed openings', code: 'filled_exceeds_openings' }, { status: 409 });
     const companyId = scope.session.user.role === 'COMPANY' ? scope.session.user.companyId! : data.companyId;

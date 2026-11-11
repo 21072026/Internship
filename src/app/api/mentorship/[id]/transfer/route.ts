@@ -41,7 +41,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const body: unknown = await request.json().catch(() => ({}));
       const parsed = transferSchema.safeParse(body);
       if (!parsed.success) {
-        return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+        return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
       }
       // Each refusal carries its own code so the dialog can say which field is
       // wrong instead of one generic line — the #2283 lesson: a refusal the

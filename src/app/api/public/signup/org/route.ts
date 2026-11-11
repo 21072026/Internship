@@ -80,7 +80,7 @@ export async function POST(request: Request) {
 
     const parsed = signupSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     }
     if ((await hostVertical()) !== DEFAULT_VERTICAL) {
       return NextResponse.json(
