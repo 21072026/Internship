@@ -9430,6 +9430,9 @@ model AffiliateProgramSettings {
   passiveAfterDays Int          @default(45)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
+  // Days before a customer's commission window ends that its partner is told
+  // (#3556, src/lib/affiliateWindowNoticeRule.ts). 0 = off; 0…180.
+  windowNoticeDays Int          @default(30)
 }
 
 model AffiliatePartner {
@@ -9487,6 +9490,11 @@ model AffiliateCustomer {
   endedAt      DateTime?
   payments     AffiliatePayment[]
   commissions  AffiliateCommission[]
+
+  // When the partner was told this customer's commission window is ending (#3556,
+  // src/lib/affiliateWindowNoticeRule.ts). Claimed with a conditional update
+  // BEFORE the mail leaves, so a re-run never sends twice. Null = not told.
+  windowNoticeSentAt DateTime?
 
   @@unique([orgId, externalRef])
   @@index([partnerId])

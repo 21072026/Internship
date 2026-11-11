@@ -670,6 +670,51 @@ an optional transaction (`recordAffiliatePayment(input, tx)`): the feed's batch
 dry run passes its own, which is rolled back with everything else. Refunds and
 cancellations are not handled yet (#3475).
 
+## Window notice (#3556)
+
+A partner hears, once per customer, that the customer's percent window is about to
+end, so it knows when that customer's commissions stop.
+
+- **The date is the engine's.** `customerWindowEndsAt()` in
+  `src/lib/affiliateCommissionRule.ts` (first valid payment + `windowMonths`, clamped
+  to the month's last day) is the one computation; the engine stores it on every
+  commission and the notice reads it from the engine's evaluation. The portal column
+  (#3557) reads the same value.
+- **Who is told** is the pure `dueWindowNotices()` in `src/lib/affiliateWindowNoticeRule.ts`
+  (unit-tested): the plan has a percent phase and a window, the partner has reached
+  the percent phase, the customer has an ordinal (first paid before a termination
+  took effect), and the end lies in `(now, now + windowNoticeDays]`. A window that
+  has already ended is never announced late. Under `STOP_ALL` a termination that
+  ends the earning before the window does drops the notice; under `RUN_OUT` the
+  partner keeps hearing about the customers that keep earning.
+- **The lead time** is `AffiliateProgramSettings.windowNoticeDays` (default 30,
+  0…180, 0 = off): admin settings, `PUT /api/admin/affiliate/settings/window-notice`
+  (`affiliate.write`), audited `affiliate.window_notice.update`. It is not part of the
+  plan, so a change bumps no plan version and re-evaluates nothing.
+- **The job** `affiliate.windowNotices` (daily 05:35 UTC, `src/lib/jobs/affiliateWindowNotices.ts`;
+  by hand `GET /api/cron?job=affiliate-window-notices`, the caller's own org; `&at=`
+  only for a super admin, since a run stamps what it announces)
+  claims each due customer with one conditional update on
+  `AffiliateCustomer.windowNoticeSentAt` (`null` in the WHERE) **before** the mail
+  leaves: a rerun claims nothing and sends nothing. A partner without a portal
+  account, with an erased one, or a suspended partner is skipped without a claim,
+  so it still hears about the customer if that changes before the end. At most 200 partner
+  mails per run; the rest are picked up the next day.
+- **The mail** (`src/lib/affiliateWindowNoticeMail.ts`) is one per partner and run,
+  listing the customers claimed in it: the customer as the portal shows it (its
+  label, else its reference) and the end day, in the partner's language
+  (`emailDictionary`), with a link to `/affiliate/customers` on the org's own host.
+  No amount, nothing about the customer as a person. It goes through
+  `notifyEvent(…, 'affiliate.windowEnding', …)` with the prerendered mail, e-mail
+  only (the portal has no bell), category `affiliate-window-ending` in the
+  `task_reminders` group; under outbound approval it is held like the other
+  deadline reminders.
+- **The first run** needs no backfill: only ends still ahead and within the lead
+  time are announced.
+- **Known limit:** the stamp is per customer, not per date. If the end moves after
+  the notice (a plan change lengthens `windowMonths`, or a back-dated first payment is
+  corrected), the new date is not announced again; the portal column shows it.
+
 ## Migration from a previous system
 
 An admin screen (`/admin/affiliates/migration`, `affiliate.write`) — not a script on

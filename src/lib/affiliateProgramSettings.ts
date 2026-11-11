@@ -2,7 +2,7 @@
 // the referral base URL (#3117), the public programme page's content (#3359) and
 // the customer-status thresholds (#3542).
 // The ONE writer of AffiliateProgramSettings.plan / planVersion / planEffectiveAt /
-// referralUrl / landing / freeMonths / passiveAfterDays.
+// referralUrl / landing / freeMonths / passiveAfterDays / windowNoticeDays.
 // The contract half has its own writer (src/lib/affiliateContract.ts).
 //
 // A plan change:
@@ -35,6 +35,7 @@ import {
   type CustomerStatusSettings,
   type SettingIssue,
 } from '@/lib/affiliateCustomerStatusRule';
+import { parseWindowNoticeDays, readWindowNoticeDays } from '@/lib/affiliateWindowNoticeRule';
 
 /**
  * The currencies a programme may run in. EUR only in the first release; every
@@ -266,11 +267,44 @@ export async function saveCustomerStatusSettings(
   }
 }
 
+/**
+ * Sets how many days before a customer's commission window ends its partner is
+ * told (#3556, src/lib/affiliateWindowNoticeRule.ts); 0 turns the notice off.
+ * Not part of the plan: it changes no commission, so it bumps no plan version
+ * and queues no re-evaluation. An unchanged value writes nothing; a change is
+ * audited with the old and new number.
+ */
+export async function saveWindowNoticeDays(
+  orgId: string,
+  raw: unknown,
+  actorId: string,
+): Promise<{ ok: true; windowNoticeDays: number; changed: boolean } | { ok: false }> {
+  const days = parseWindowNoticeDays(raw);
+  if (days === null) return { ok: false };
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const current = await tx.affiliateProgramSettings.findUnique({ where: { orgId }, select: { windowNoticeDays: true } });
+      const before = current ? readWindowNoticeDays(current.windowNoticeDays) : null;
+      if (before === days) return { ok: true as const, windowNoticeDays: days, changed: false };
+      if (current) await tx.affiliateProgramSettings.update({ where: { orgId }, data: { windowNoticeDays: days } });
+      else await tx.affiliateProgramSettings.create({ data: { orgId, windowNoticeDays: days } });
+      await tx.auditLog.create({
+        data: { orgId, actorId, action: 'affiliate.window_notice.update', detail: JSON.stringify({ from: before, to: days }) },
+      });
+      return { ok: true as const, windowNoticeDays: days, changed: true };
+    });
+  } catch (e) {
+    // Two first saves of one organisation: the loser hits the unique orgId.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new AffiliateSettingsError('conflict');
+    throw e;
+  }
+}
+
 export async function programSettings(orgId: string) {
   const [settings, payments] = await Promise.all([
     prisma.affiliateProgramSettings.findUnique({
       where: { orgId },
-      select: { plan: true, planVersion: true, planEffectiveAt: true, planResync: true, referralUrl: true, landing: true, contract: true, contractVersion: true, freeMonths: true, passiveAfterDays: true, updatedAt: true },
+      select: { plan: true, planVersion: true, planEffectiveAt: true, planResync: true, referralUrl: true, landing: true, contract: true, contractVersion: true, freeMonths: true, passiveAfterDays: true, windowNoticeDays: true, updatedAt: true },
     }),
     prisma.affiliatePayment.count({ where: { orgId } }),
   ]);
@@ -285,6 +319,7 @@ export async function programSettings(orgId: string) {
     contract: settings?.contract ?? null,
     contractVersion: settings?.contractVersion ?? 0,
     customerStatus: storedCustomerStatusSettings(settings),
+    windowNoticeDays: readWindowNoticeDays(settings?.windowNoticeDays),
     currencyLocked: payments > 0,
     currencies: AFFILIATE_CURRENCIES,
   };
