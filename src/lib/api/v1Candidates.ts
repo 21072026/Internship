@@ -17,19 +17,15 @@ const profileFields = {
   skills: z.array(z.string()).max(200).optional(),
 };
 
-export const createCandidateSchema = z
-  .object({
-    ...profileFields,
-    email: z.string().trim().toLowerCase().email().max(TEXT_LIMITS.userEmail),
-    // A name / phone / university look-alike is a 409 unless the caller says it
-    // has checked; an e-mail already in use never is.
-    allowPossibleDuplicate: z.boolean().optional(),
-  })
-  .strict();
+export const createCandidateSchema = z.strictObject({
+  ...profileFields,
+  email: z.string().trim().toLowerCase().email().max(TEXT_LIMITS.userEmail),
+  // A name / phone / university look-alike is a 409 unless the caller says it
+  // has checked; an e-mail already in use never is.
+  allowPossibleDuplicate: z.boolean().optional(),
+});
 
-export const updateCandidateSchema = z
-  .object({ ...profileFields, fullName: profileFields.fullName.optional() })
-  .strict()
+export const updateCandidateSchema = z.strictObject({ ...profileFields, fullName: profileFields.fullName.optional() })
   .refine((body) => Object.keys(body).length > 0, { message: 'at least one field is required' });
 
 /** The parsed skill list, or the 422 that refuses it (the same limits a person editing their profile meets). */

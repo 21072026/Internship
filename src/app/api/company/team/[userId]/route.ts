@@ -17,7 +17,7 @@ import { changeSeatRole, removeTeammate } from '@/lib/companyTeam';
 // refused (`409 last_owner`), and so is removing oneself (`400 not_yourself`).
 // Both writes are audited with the org passed explicitly.
 
-const patchSchema = z.object({ seatRole: z.string().refine(isSeatRole, 'unknown seatRole') }).strict();
+const patchSchema = z.strictObject({ seatRole: z.string().refine(isSeatRole, 'unknown seatRole') });
 const REFUSAL_STATUS = { seat_limit_reached: 403, email_taken: 409, invitation_pending: 409, not_found: 404, last_owner: 409, not_yourself: 400 } as const;
 
 async function ownerScope() {

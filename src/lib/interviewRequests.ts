@@ -3,18 +3,18 @@ import type { Prisma } from '@prisma/client';
 
 export const INTERVIEW_REQUEST_STATUSES = ['PENDING', 'APPROVED', 'DECLINED', 'SCHEDULED', 'CANCELLED'] as const;
 
-export const createInterviewRequestSchema = z.object({
+export const createInterviewRequestSchema = z.strictObject({
   requisitionId: z.string().min(1),
   menteeId: z.string().min(1),
   note: z.string().trim().max(1000).nullable().optional(),
   proposedSlots: z.array(z.string().datetime({ offset: true })).max(5).optional(),
-}).strict();
+});
 
-export const decideInterviewRequestSchema = z.object({
+export const decideInterviewRequestSchema = z.strictObject({
   action: z.enum(['approve', 'decline']),
   declineReasonCode: z.string().trim().max(64).optional(),
   declineNote: z.string().trim().max(1000).nullable().optional(),
-}).strict();
+});
 
 export function interviewActiveKey(requisitionId: string, menteeId: string) {
   return `${requisitionId}:${menteeId}`;
@@ -27,7 +27,7 @@ export const CANCELLABLE_INTERVIEW_STATUSES = ['APPROVED', 'SCHEDULED'] as const
 
 export const MAX_INTERVIEW_GUESTS = 5;
 
-export const scheduleInterviewRequestSchema = z.object({
+export const scheduleInterviewRequestSchema = z.strictObject({
   /** The confirmed instant, zone-qualified. One of the proposed slots unless `override` is set. */
   slot: z.string().datetime({ offset: true }),
   /** The IANA zone the approver picked the slot on — stored on the Meeting, named in every mail. */
@@ -42,11 +42,11 @@ export const scheduleInterviewRequestSchema = z.object({
   createPanel: z.boolean().optional(),
   /** The internal interviewers (ADMIN/MENTOR accounts) who sit on that panel. */
   interviewerIds: z.array(z.string().min(1)).max(10).optional(),
-}).strict();
+});
 
-export const cancelInterviewRequestSchema = z.object({
+export const cancelInterviewRequestSchema = z.strictObject({
   reason: z.string().trim().max(1000).optional(),
-}).strict();
+});
 
 /**
  * Is `slot` one of the company's proposed slots? Compared as instants, so the

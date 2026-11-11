@@ -13,14 +13,12 @@ import { RECORDABLE_ATTENDANCE, recordAttendance, resolveAttendanceTarget, type 
 // mentor's record wins (src/lib/meetingAttendance.ts). LATE_CANCEL cannot be
 // posted: it is derived when a meeting is cancelled late.
 
-const bodySchema = z
-  .object({
-    entries: z
-      .array(z.object({ userId: z.string().min(1).max(64), state: z.enum(RECORDABLE_ATTENDANCE), note: z.string().max(500).optional().nullable() }).strict())
-      .min(1)
-      .max(2),
-  })
-  .strict();
+const bodySchema = z.strictObject({
+  entries: z
+    .array(z.strictObject({ userId: z.string().min(1).max(64), state: z.enum(RECORDABLE_ATTENDANCE), note: z.string().max(500).optional().nullable() }))
+    .min(1)
+    .max(2),
+});
 
 function readId(raw: string): string {
   try {

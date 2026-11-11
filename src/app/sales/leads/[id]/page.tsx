@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { SalesRecordPanels } from '@/components/sales/SalesRecordPanels';
 import { SalesLogInteraction } from '@/components/sales/SalesLogInteraction';
+import { contentLang } from '@/lib/contentLanguage';
 
 // One of the rep's own records (#2580): who the lead is, the account behind it,
 // its stage, the follow-up, trial-end and estimated-value (#2422) editors, what happened last and a
@@ -168,7 +169,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
                     <span className="text-gray-500">{date(i.date)}</span>
                   </div>
                   {i.subject && <p className="mt-1 font-medium text-gray-900 dark:text-gray-100">{i.subject}</p>}
-                  <p className="mt-0.5 line-clamp-2 text-gray-600">{i.notes}</p>
+                  <p lang={contentLang(i.notes)} className="mt-0.5 line-clamp-2 text-gray-600">{i.notes}</p>
                 </li>
               ))}
             </ul>

@@ -15,12 +15,10 @@ import { COHORT_PASS_MAX_MENTORS } from '@/lib/matching/assign';
 // guarded updateMany on the status it expects, so a round that was published
 // (or discarded) in between answers 409, never a silent overwrite. A PUBLISHED
 // round is terminal: no edit, no discard — 409. Another tenant's round is 404.
-const patchSchema = z
-  .object({
-    name: z.string().trim().min(1).max(ROUND_NAME_MAX).optional(),
-    status: z.enum(['DRAFT', 'REVIEW']).optional(),
-  })
-  .strict()
+const patchSchema = z.strictObject({
+  name: z.string().trim().min(1).max(ROUND_NAME_MAX).optional(),
+  status: z.enum(['DRAFT', 'REVIEW']).optional(),
+})
   .refine((v) => v.name !== undefined || v.status !== undefined, { message: 'nothing to change' });
 
 type Ctx = { params: Promise<{ id: string }> };

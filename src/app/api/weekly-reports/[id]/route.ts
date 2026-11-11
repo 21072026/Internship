@@ -13,16 +13,16 @@ import { canReadWeeklyReports } from '@/lib/weeklyReports';
 import { notify } from '@/lib/notify';
 import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
 
-const menteeSchema = z.object({
+const menteeSchema = z.strictObject({
   summary: z.string().max(TEXT_LIMITS.weeklyReportSummary).optional(),
   hoursSpent: z.number().int().min(0).max(168).nullable().optional(),
   blockers: z.string().max(TEXT_LIMITS.weeklyReportBlockers).nullable().optional(),
   status: z.literal('SUBMITTED').optional(),
-}).strict();
-const mentorSchema = z.object({
+});
+const mentorSchema = z.strictObject({
   status: z.enum(['APPROVED', 'CHANGES_REQUESTED']),
   mentorComment: z.string().max(TEXT_LIMITS.weeklyReportMentorComment).nullable().optional(),
-}).strict();
+});
 
 // Inside the caller's org only (#3588): `canReadWeeklyReports()` lets any ADMIN
 // through, and the middleware that would narrow this lookup is off in every

@@ -235,18 +235,16 @@ export async function POST(request: Request) {
   return NextResponse.json({ slot }, { status: 201 });
 }
 
-const patchSchema = z
-  .object({
-    id: z.string().min(1),
-    weekday: z.number().int().min(0).max(6).optional(),
-    // null turns a one-off back into a weekly slot.
-    date: z.string().regex(DATE).nullable().optional(),
-    startTime: z.string().regex(TIME).optional(),
-    endTime: z.string().regex(TIME).optional(),
-    note: z.string().trim().max(120).nullable().optional(),
-    slotMinutes: z.number().int().min(15).max(240).nullable().optional(),
-  })
-  .strict();
+const patchSchema = z.strictObject({
+  id: z.string().min(1),
+  weekday: z.number().int().min(0).max(6).optional(),
+  // null turns a one-off back into a weekly slot.
+  date: z.string().regex(DATE).nullable().optional(),
+  startTime: z.string().regex(TIME).optional(),
+  endTime: z.string().regex(TIME).optional(),
+  note: z.string().trim().max(120).nullable().optional(),
+  slotMinutes: z.number().int().min(15).max(240).nullable().optional(),
+});
 
 // PATCH — change a slot in place (#2001): its day, its times, its date, its
 // note. Deleting and retyping it was the only way, and a busy volunteer does

@@ -68,8 +68,8 @@ export type NudgeEventTrigger = (typeof NUDGE_EVENT_TRIGGERS)[number];
 export const STAGE_EVENTS = ['pipeline.stage_change', 'pipeline.stage.changed', 'application.stage_changed'] as const;
 
 export const triggerSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('event'), event: z.enum(NUDGE_EVENT_TRIGGERS) }).strict(),
-  z.object({ kind: z.literal('scan') }).strict(),
+  z.strictObject({ kind: z.literal('event'), event: z.enum(NUDGE_EVENT_TRIGGERS) }),
+  z.strictObject({ kind: z.literal('scan') }),
 ]);
 export type NudgeTrigger = z.infer<typeof triggerSchema>;
 
@@ -97,18 +97,18 @@ const key = z.string().trim().min(1).max(191);
 const days = z.number().int().min(0).max(3650);
 
 export const segmentConditionSchema = z.discriminatedUnion('field', [
-  z.object({ field: z.literal('role'), op: z.literal('eq'), value: z.enum(NUDGE_ROLES) }).strict(),
-  z.object({ field: z.literal('stage'), op: z.enum(['in', 'notIn']), value: z.array(key).min(1).max(50) }).strict(),
-  z.object({ field: z.literal('daysInStage'), op: z.enum(['gte', 'lte']), value: days }).strict(),
-  z.object({ field: z.literal('daysSinceLastInteraction'), op: z.literal('gte'), value: days }).strict(),
-  z.object({ field: z.literal('cohort'), op: z.literal('in'), value: z.array(key).min(1).max(50) }).strict(),
-  z.object({ field: z.literal('tag'), op: z.enum(['has', 'notHas']), value: key }).strict(),
-  z.object({ field: z.literal('hasNoMentor'), op: z.literal('eq'), value: z.boolean() }).strict(),
+  z.strictObject({ field: z.literal('role'), op: z.literal('eq'), value: z.enum(NUDGE_ROLES) }),
+  z.strictObject({ field: z.literal('stage'), op: z.enum(['in', 'notIn']), value: z.array(key).min(1).max(50) }),
+  z.strictObject({ field: z.literal('daysInStage'), op: z.enum(['gte', 'lte']), value: days }),
+  z.strictObject({ field: z.literal('daysSinceLastInteraction'), op: z.literal('gte'), value: days }),
+  z.strictObject({ field: z.literal('cohort'), op: z.literal('in'), value: z.array(key).min(1).max(50) }),
+  z.strictObject({ field: z.literal('tag'), op: z.enum(['has', 'notHas']), value: key }),
+  z.strictObject({ field: z.literal('hasNoMentor'), op: z.literal('eq'), value: z.boolean() }),
 ]);
 export type SegmentCondition = z.infer<typeof segmentConditionSchema>;
 
 export const MAX_SEGMENT_CONDITIONS = 10;
-export const segmentSchema = z.object({ conditions: z.array(segmentConditionSchema).max(MAX_SEGMENT_CONDITIONS) }).strict();
+export const segmentSchema = z.strictObject({ conditions: z.array(segmentConditionSchema).max(MAX_SEGMENT_CONDITIONS) });
 export type Segment = z.infer<typeof segmentSchema>;
 
 /** The role(s) a segment can reach: its `role` condition, or both. */
@@ -132,24 +132,22 @@ export type NudgeLocale = (typeof NUDGE_LOCALES)[number];
 
 const text = (max: number) => z.string().trim().max(max).nullable().optional();
 
-export const nudgeRuleInputSchema = z
-  .object({
-    name: z.string().trim().min(1).max(MAX_RULE_NAME),
-    enabled: z.boolean().default(false),
-    trigger: triggerSchema,
-    segment: segmentSchema.default({ conditions: [] }),
-    delayMinutes: z.number().int().min(0).max(MAX_DELAY_MINUTES).default(0),
-    channel: z.enum(NUDGE_CHANNELS).default('EMAIL'),
-    subjectEn: text(MAX_SUBJECT),
-    subjectTr: text(MAX_SUBJECT),
-    subjectDe: text(MAX_SUBJECT),
-    bodyEn: text(MAX_BODY),
-    bodyTr: text(MAX_BODY),
-    bodyDe: text(MAX_BODY),
-    maxPerUserPer30Days: z.number().int().min(1).max(10).default(2),
-    cooldownDays: z.number().int().min(0).max(90).default(7),
-  })
-  .strict();
+export const nudgeRuleInputSchema = z.strictObject({
+  name: z.string().trim().min(1).max(MAX_RULE_NAME),
+  enabled: z.boolean().default(false),
+  trigger: triggerSchema,
+  segment: segmentSchema.default({ conditions: [] }),
+  delayMinutes: z.number().int().min(0).max(MAX_DELAY_MINUTES).default(0),
+  channel: z.enum(NUDGE_CHANNELS).default('EMAIL'),
+  subjectEn: text(MAX_SUBJECT),
+  subjectTr: text(MAX_SUBJECT),
+  subjectDe: text(MAX_SUBJECT),
+  bodyEn: text(MAX_BODY),
+  bodyTr: text(MAX_BODY),
+  bodyDe: text(MAX_BODY),
+  maxPerUserPer30Days: z.number().int().min(1).max(10).default(2),
+  cooldownDays: z.number().int().min(0).max(90).default(7),
+});
 export type NudgeRuleInput = z.infer<typeof nudgeRuleInputSchema>;
 
 export type NudgeRuleInputResult =

@@ -25,7 +25,7 @@ import { requestOrigin } from '@/lib/servedHosts';
 //
 // Answers 202 at once: the file is written by the `api.export` job on the
 // worker, never inside this request. Poll GET /api/v1/exports/{id}.
-const createSchema = z.object({ resource: z.enum(EXPORT_RESOURCE_NAMES) }).strict();
+const createSchema = z.strictObject({ resource: z.enum(EXPORT_RESOURCE_NAMES) });
 
 export async function POST(request: Request) {
   return withApiKey(request, ANY_LIVE_KEY, (key) =>

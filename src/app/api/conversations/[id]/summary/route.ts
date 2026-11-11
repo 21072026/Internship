@@ -22,7 +22,7 @@ import { threadAiRefusal } from '@/lib/threadAiResponses';
 // opening the same thread again answers from the stored summary with no
 // provider call and no quota. `regenerate` asks for a fresh one.
 
-const schema = z.object({ regenerate: z.boolean().optional() }).strict();
+const schema = z.strictObject({ regenerate: z.boolean().optional() });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withRequestScope(request, () => handlePost(request, params));

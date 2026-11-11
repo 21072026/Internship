@@ -47,7 +47,7 @@ async function currentSetup(tenant: Awaited<ReturnType<typeof tenantWhere>>) {
   return survey ? { surveyId: survey.id, status: survey.status, campaigns: survey.campaigns } : null;
 }
 
-const setupSchema = z.object({ dayOffset: z.number().int().refine((n) => (OUTCOME_OFFSETS as readonly number[]).includes(n)).optional() }).strict();
+const setupSchema = z.strictObject({ dayOffset: z.number().int().refine((n) => (OUTCOME_OFFSETS as readonly number[]).includes(n)).optional() });
 
 // POST { dayOffset?: 30 | 90 | 180 } — create the destination survey (open)
 // and a DAYS_AFTER_END campaign for it. Idempotent: an org that already has

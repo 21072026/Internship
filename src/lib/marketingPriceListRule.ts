@@ -74,23 +74,19 @@ export interface PriceList {
 
 const seatMinor = z.number().int().min(1).max(PRICE_LIST_MAX_SEAT_MINOR);
 
-const planSchema = z
-  .object({
-    key: z.enum(MARKETING_PLAN_KEYS),
-    annualSeatMinor: seatMinor,
-    monthlySeatMinor: seatMinor.nullable(),
-    minSeats: z.number().int().min(1).max(PRICE_LIST_MAX_MIN_SEATS),
-    onboardingMinor: z.number().int().min(0).max(PRICE_LIST_MAX_ONBOARDING_MINOR),
-  })
-  .strict();
+const planSchema = z.strictObject({
+  key: z.enum(MARKETING_PLAN_KEYS),
+  annualSeatMinor: seatMinor,
+  monthlySeatMinor: seatMinor.nullable(),
+  minSeats: z.number().int().min(1).max(PRICE_LIST_MAX_MIN_SEATS),
+  onboardingMinor: z.number().int().min(0).max(PRICE_LIST_MAX_ONBOARDING_MINOR),
+});
 
 /** The shape of a stored price list. Unknown fields are refused, not ignored. */
-export const priceListSchema = z
-  .object({
-    currency: z.enum(PRICE_LIST_CURRENCIES),
-    plans: z.array(planSchema).min(1).max(MARKETING_PLAN_KEYS.length),
-  })
-  .strict()
+export const priceListSchema = z.strictObject({
+  currency: z.enum(PRICE_LIST_CURRENCIES),
+  plans: z.array(planSchema).min(1).max(MARKETING_PLAN_KEYS.length),
+})
   .superRefine((list, ctx) => {
     const order = list.plans.map((p) => MARKETING_PLAN_KEYS.indexOf(p.key));
     for (let i = 1; i < order.length; i++) {

@@ -13,7 +13,7 @@ import { actorFromSession, can } from '@/lib/authz';
 // remove any link of their own org (the route decides, not the button).
 // Another person's identity is 403, an unknown id 404.
 
-const bodySchema = z.object({ identityId: z.string().min(1).max(64) }).strict();
+const bodySchema = z.strictObject({ identityId: z.string().min(1).max(64) });
 const STATUS = { not_found: 404, forbidden: 403 } as const;
 
 async function body(request: Request) {

@@ -16,12 +16,12 @@ import { requireCapability } from '@/lib/capabilityGate';
 import { syncApplicationFromInterest } from '@/lib/applicationStage';
 import { stageTransaction } from '@/lib/applicationStageEvents';
 
-const bodySchema = z.object({
+const bodySchema = z.strictObject({
   menteeId: z.string().min(1),
   status: z.enum(['INTERESTED', 'SHORTLISTED', 'PASS']),
   note: z.string().max(1000).optional(),
   requisitionId: z.string().min(1).nullable().optional(),
-}).strict();
+});
 
 // GET ?menteeId=... — the requester company's current interest on one candidate.
 export async function GET(request: Request) {

@@ -8,6 +8,7 @@ import { PublicShell } from '@/components/landing/PublicShell';
 import { requestHostHeader, resolvePublicInquiryTarget } from '@/lib/publicHostOrg';
 import { loadPublicEmployer } from '@/lib/employerPageStore';
 import { formatDate } from '@/lib/relativeTime';
+import { contentLang } from '@/lib/contentLanguage';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,7 +79,7 @@ export default async function EmployerPage({ params }: Props) {
         {employer.about && (
           <section className="mt-8">
             <h2 className="text-xl font-semibold text-gray-900">{e.about}</h2>
-            <p className="mt-2 whitespace-pre-line text-gray-700">{employer.about}</p>
+            <p lang={contentLang(employer.about)} className="mt-2 whitespace-pre-line text-gray-700">{employer.about}</p>
           </section>
         )}
 

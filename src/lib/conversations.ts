@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { getThreadIfAllowed } from '@/lib/messaging';
 import { projectInCallerTenant } from '@/lib/projectAccess';
 
@@ -157,7 +158,19 @@ export async function getConversationIfAllowed(user: SessionUser, conversationId
     if (!conversation.projectId || !isParticipant) return null;
     return (await groupRoomOpensFor(user, conversation.projectId)) ? conversation : null;
   }
-  if (!isParticipant && user.role !== 'ADMIN') return null;
+  if (isParticipant) return conversation;
+  if (user.role !== 'ADMIN') return null;
+  // An admin outside a DIRECT conversation (#3602): `Conversation` carries no
+  // orgId, so the tenant comes from the people in it — every participant must
+  // be in the caller's tenant. "Any admin" used to mean any org's admin.
+  const people = await prisma.user.findMany({
+    where: { id: { in: conversation.participants.map((p) => p.userId) } },
+    select: { orgId: true },
+  });
+  if (people.length === 0) return null;
+  for (const person of people) {
+    if (!(await inCallerTenant(person.orgId, user.orgId))) return null;
+  }
   return conversation;
 }
 

@@ -79,7 +79,7 @@ export async function GET(request: Request) {
   });
 }
 
-const tierSchema = z.object({ userId: z.string().min(1), tier: z.string() }).strict();
+const tierSchema = z.strictObject({ userId: z.string().min(1), tier: z.string() });
 
 // PATCH { userId, tier } — change a tier. Signs the target out everywhere.
 export async function PATCH(request: Request) {
@@ -95,7 +95,7 @@ export async function PATCH(request: Request) {
   });
 }
 
-const grantSchema = z.object({ userId: z.string().min(1), cohortId: z.string().min(1).optional(), companyId: z.string().min(1).optional() }).strict();
+const grantSchema = z.strictObject({ userId: z.string().min(1), cohortId: z.string().min(1).optional(), companyId: z.string().min(1).optional() });
 
 // POST { userId, cohortId?, companyId? } — add a PROGRAM_ADMIN scope grant.
 export async function POST(request: Request) {

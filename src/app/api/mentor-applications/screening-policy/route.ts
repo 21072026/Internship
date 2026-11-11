@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   return NextResponse.json({ required: parseRequired(await resolveSettingRaw('mentorScreeningRequired', { orgId: g.orgId })) });
 }
 
-const schema = z.object({ required: z.array(z.enum(SCREENING_ITEMS)).max(SCREENING_ITEMS.length) }).strict();
+const schema = z.strictObject({ required: z.array(z.enum(SCREENING_ITEMS)).max(SCREENING_ITEMS.length) });
 
 export async function PUT(request: Request) {
   const g = await guard(request, 'org.settings.write');

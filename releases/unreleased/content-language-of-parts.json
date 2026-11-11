@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Language of user-written text (#3283, WCAG 3.1.2):** messages, support chat, interaction notes, bios, the employer page text and announcements now carry a `lang` attribute when their language is known or can be told with confidence. `src/lib/contentLanguage.ts` (`detectContentLanguage()` / `contentLang()`, pure and unit-tested) answers only EN/TR/DE, only for text of at least three words, and only when one language clearly outweighs the others; anything shorter or mixed stays unmarked, because a wrong `lang` is read in the wrong voice. An announcement declares the locale of the translation shown (`resolveAnnouncementLang()`). VPAT row 3.1.2 updated.",
+  "notes": {
+    "en": [
+      "Screen readers now read Turkish, German and English messages, notes and bios in the right voice when the language is clear from the text."
+    ],
+    "tr": [
+      "Ekran okuyucular artık Türkçe, Almanca ve İngilizce mesajları, notları ve biyografileri, dil metinden açıkça anlaşılıyorsa doğru sesle okuyor."
+    ],
+    "de": [
+      "Screenreader lesen türkische, deutsche und englische Nachrichten, Notizen und Profiltexte jetzt mit der richtigen Stimme vor, wenn die Sprache aus dem Text klar hervorgeht."
+    ]
+  }
+}

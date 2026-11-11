@@ -8,15 +8,13 @@ import { renderNotificationEmail } from '@/lib/notifications/emailRender';
 import { editableEvent, samplePayload } from '@/lib/notifications/templateAdmin';
 import { BODY_MAX, SUBJECT_MAX } from '@/lib/notifications/templateRender';
 
-const schema = z
-  .object({
-    eventKey: z.string().min(1).max(96),
-    locale: z.string().max(8),
-    // Both or neither: without a draft the preview shows what is stored now.
-    subject: z.string().max(SUBJECT_MAX).optional(),
-    body: z.string().max(BODY_MAX).optional(),
-  })
-  .strict();
+const schema = z.strictObject({
+  eventKey: z.string().min(1).max(96),
+  locale: z.string().max(8),
+  // Both or neither: without a draft the preview shows what is stored now.
+  subject: z.string().max(SUBJECT_MAX).optional(),
+  body: z.string().max(BODY_MAX).optional(),
+});
 
 /**
  * POST — the event mail exactly as it would arrive (#1719): rendered by

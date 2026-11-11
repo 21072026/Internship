@@ -13,13 +13,13 @@ import { requirePermission } from '@/lib/authz';
 // parameter a super admin may point at any tenant. The authorisation is
 // mayManageOrgRequirements() (#2542), and every query names `orgId` itself.
 
-const labelsSchema = z.object({
+const labelsSchema = z.strictObject({
   en: z.string().trim().min(1).max(200),
   tr: z.string().trim().min(1).max(200),
   de: z.string().trim().min(1).max(200),
-}).strict();
+});
 const roleSchema = z.enum(['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE']);
-const bodySchema = z.object({
+const bodySchema = z.strictObject({
   orgId: z.string().min(1),
   key: z.string().trim().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/),
   labels: labelsSchema,
@@ -30,7 +30,7 @@ const bodySchema = z.object({
   active: z.boolean().optional(),
   // The review chain (#1859).
   ...reviewChainSchema,
-}).strict();
+});
 
 async function validOrgStage(session: Session, route: string, orgId: string, stage?: string | null) {
   // Refused before the lookup, with the same answer as a missing org, so it

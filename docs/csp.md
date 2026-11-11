@@ -51,11 +51,15 @@ Turn the header off with `CSP_REPORT_ONLY=0`.
 1. **Report-only, nonce, endpoint** — this change. The print popup of the document
    templates (`TemplatesLibrary.tsx`) used to print itself from an inline
    `<script>`. That popup inherits our CSP, so it now prints from the opener.
-2. **Read the stream.** Note that the middleware matcher skips `/auth/*`, so the
-   sign-in pages carry no report-only policy yet. Widening the matcher is part of
-   this step. Run the e2e suite and the deployed environments under
-   report-only, and bind every remaining inline script or `eval` to the nonce or
-   remove it.
+2. **Read the stream.** The middleware matcher covers `/auth/*` too, so the
+   sign-in, register, reset, magic-link, SSO and 2FA pages carry the nonce like
+   every other page. None of the middleware's redirects applies there:
+   `wantsResume()` returns false for `/auth/*` (so `/auth/resume` cannot loop),
+   the `/en` 308 and the language rewrite cover public pages only, and the write
+   gates refuse only writes, which nothing sends to a page (no server actions).
+   `e2e/security-headers.spec.ts` pins this with a remembered browser. Run the
+   e2e suite and the deployed environments under report-only, and bind every
+   remaining inline script or `eval` to the nonce or remove it.
 3. **Enforce behind a flag** (default off). Once the stream is quiet, a flag swaps
    the strict policy into the enforced header. When it is on,
    `e2e/security-headers.spec.ts` asserts that `script-src` has neither

@@ -28,7 +28,7 @@ import { threadAiRefusal } from '@/lib/threadAiResponses';
 // presses Save. An unchanged log + stage + note is answered from the stored
 // copy (1-day TTL) with no provider call and no quota; `regenerate` asks again.
 
-const schema = z.object({ regenerate: z.boolean().optional() }).strict();
+const schema = z.strictObject({ regenerate: z.boolean().optional() });
 
 const LOG_ENTRIES = 10;
 

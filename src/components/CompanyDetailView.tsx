@@ -20,6 +20,7 @@ import { PRIMARY_CONTACT_ID, hasPrimary, primaryAsContact } from '@/lib/companyC
 import { ownerObjected } from '@/lib/contactPermissionRule';
 import { CONTACT_CHANNELS, marketingEmailAllowed } from '@/lib/contactPermissionRule';
 import { UsageSparkline } from '@/components/UsageSparkline';
+import { contentLang } from '@/lib/contentLanguage';
 
 // The account detail screen (#2560), rendered by the ADMIN page and — without
 // any of its editors — by the sales rep's own view (/sales/accounts/[id], #2580).
@@ -436,7 +437,7 @@ export function CompanyDetailView({
                     </span>
                   </div>
                   {i.subject && <p className="mt-1 font-medium text-gray-900 dark:text-gray-100">{i.subject}</p>}
-                  <p className="mt-0.5 line-clamp-2 text-gray-600">{i.notes}</p>
+                  <p lang={contentLang(i.notes)} className="mt-0.5 line-clamp-2 text-gray-600">{i.notes}</p>
                 </li>
               ))}
             </ul>

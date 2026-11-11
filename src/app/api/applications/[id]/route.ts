@@ -13,7 +13,7 @@ import { canPerformApplicationAction } from '@/lib/applications';
 import { APPLICATION_SELECT, actorFlagsFor, moveApplicationStage, visibleApplicationsWhere } from '@/lib/applicationStage';
 import { stageTransaction } from '@/lib/applicationStageEvents';
 
-const bodySchema = z.object({ action: z.literal('withdraw') }).strict();
+const bodySchema = z.strictObject({ action: z.literal('withdraw') });
 
 // PATCH { action: 'withdraw' } — the one thing a mentee does to their own
 // application (#1832). It is canPerformApplicationAction()'s MENTEE rule and

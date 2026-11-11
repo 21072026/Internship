@@ -9,7 +9,7 @@ import { requirePermission } from '@/lib/authz';
 // not editable: changing what a campaign means after it has sent would make
 // its send history describe a different campaign — create a new one instead.
 
-const patchSchema = z.object({ active: z.boolean().optional(), name: z.string().trim().min(1).max(120).optional() }).strict();
+const patchSchema = z.strictObject({ active: z.boolean().optional(), name: z.string().trim().min(1).max(120).optional() });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requirePermission('content.write', { request });
