@@ -24,6 +24,7 @@ import {
   nextStages,
   type ApplicationStage,
 } from '@/lib/applications';
+import { contentLang } from '@/lib/contentLanguage';
 
 // The applicant board of one requisition (#1838): a column per application
 // stage with the count the server computed (a groupBy, never the length of the
@@ -494,7 +495,7 @@ function CandidateDrawer({ card, onClose }: { card: Card; onClose: () => void })
                 </div>
               )}
             </dl>
-            {detail.bio && <p className="whitespace-pre-line text-gray-700 dark:text-gray-300">{detail.bio}</p>}
+            {detail.bio && <p lang={contentLang(detail.bio)} className="whitespace-pre-line text-gray-700 dark:text-gray-300">{detail.bio}</p>}
           </div>
         )}
         <Link href={`/company/candidates/${card.mentee.id}`} className="mt-5 inline-block text-sm font-medium text-blue-700 hover:underline dark:text-blue-300">{text.openProfile}</Link>

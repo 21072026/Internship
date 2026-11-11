@@ -23,6 +23,7 @@ import {
 } from '@/lib/supportAttachments';
 import { RecordChip } from '@/components/affiliate/RecordChip';
 import type { RecordSummary } from '@/lib/affiliateRecordRefRule';
+import { contentLang } from '@/lib/contentLanguage';
 
 interface SupportMsg { id: string; body: string; createdAt: string; senderId: string; sender: { fullName: string; role: string }; attachments: SupportAttachmentMeta[]; record?: RecordSummary | null }
 interface Ticket { id: string; status: 'OPEN' | 'IN_PROGRESS' | 'CLOSED'; subject?: string | null; createdAt: string; closedAt?: string | null; messages: SupportMsg[] }
@@ -150,7 +151,7 @@ export function SupportChat({ attach = null }: { attach?: { ref: string; summary
                   {ticket.messages.map((m) => (
                     <MessageBubble key={m.id} mine={m.senderId === me} senderLabel={m.senderId !== me ? s.teamLabel : undefined}>
                         {m.record && <RecordChip record={m.record} />}
-                        {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
+                        {m.body && <p lang={contentLang(m.body)} className="whitespace-pre-wrap break-words">{m.body}</p>}
                         <SupportAttachmentList attachments={m.attachments ?? []} />
                     </MessageBubble>
                   ))}
