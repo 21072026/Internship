@@ -189,6 +189,17 @@ test("PUT /api/mentorship/<A's relation> as B's admin: 404 and the row is untouc
   expect(after.nextActionNote).toBe(before.nextActionNote);
 });
 
+test("GET, PATCH and close /api/interview-panels/<A's panel> as B's admin: 404 and the row is untouched (#3588)", async ({ browser }) => {
+  const request = await requestAs(browser, 'B', 'admin');
+  expect((await request.get(`/api/interview-panels/${rows.A.panel.id}`)).status(), 'a cross-tenant read must read as not found').toBe(404);
+  const patch = await request.patch(`/api/interview-panels/${rows.A.panel.id}`, { data: { title: 'iso cross-tenant panel' } });
+  expect(patch.status(), 'a cross-tenant write must read as not found').toBe(404);
+  expect((await request.post(`/api/interview-panels/${rows.A.panel.id}/close`)).status(), 'a cross-tenant close must read as not found').toBe(404);
+  const after = await prisma.interviewPanel.findUniqueOrThrow({ where: { id: rows.A.panel.id } });
+  expect(after.title).toBe(rows.A.panel.title);
+  expect(after.closedAt).toBeNull();
+});
+
 test("GET and PATCH /api/offers/<A's offer> as B's admin: 404 and the row is untouched (#3588)", async ({ browser }) => {
   const request = await requestAs(browser, 'B', 'admin');
   expect((await request.get(`/api/offers/${tenants.orgA.offer.id}`)).status(), 'a cross-tenant read must read as not found').toBe(404);

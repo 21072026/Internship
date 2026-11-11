@@ -3,8 +3,8 @@ import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
-import { assertSameOrg, requireOrg } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { actorFromSession, can } from '@/lib/authz';
 
@@ -29,20 +29,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   return await withTenantScope(session, async () => {
     const { id } = await params;
-    const panel = await prisma.interviewPanel.findUnique({
-      where: { id },
+    // Inside the caller's tenant only (#3588): the middleware that would
+    // narrow this lookup is off in every deployment, and `assertSameOrg()` is a
+    // no-op with the flag off too. Another org's panel reads as missing.
+    const panel = await prisma.interviewPanel.findFirst({
+      where: withinTenant({ id }, await tenantWhere(session)),
       select: { id: true, orgId: true, closedAt: true, subjectId: true, createdById: true },
     });
     if (!panel) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Belt and braces on the tenant. `InterviewPanel` is registered in
-    // TENANT_MODELS since #1559, so with MT_ENFORCE_ISOLATION on the lookup
-    // above is already org-narrowed and a foreign id reads as "not found". The
-    // assert stays because it is the only check with the flag OFF — which is
-    // every deployment today — and because it fails loudly rather than
-    // returning a row: a panel is per-candidate, and "wrong tenant" must never
-    // be indistinguishable from "authorized".
-    assertSameOrg(panel.orgId, requireOrg(session));
 
     if (!isAdmin && panel.createdById !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
