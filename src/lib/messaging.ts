@@ -1,13 +1,19 @@
 import { prisma } from '@/lib/prisma';
 import { isParticipant, memberIdsOf } from '@/lib/relationParticipants';
+import { inCallerTenant } from '@/lib/tenantFilter';
 
 interface SessionUser {
   id: string;
   role: string;
+  // Pass `session.user` whole: an admin outside the thread may open it only in
+  // its own tenant (#3602); a user without an org reads as the default org's.
+  orgId?: string | null;
 }
 
 // A mentorship thread is accessible to its mentor, its mentee, any other
-// current member of a group relation (#1804), or any admin.
+// current member of a group relation (#1804), or an admin of the relation's
+// tenant (#3602 — "any admin" used to mean any org's, since the middleware that
+// would scope the lookup is off in every deployment).
 // Returns the relation (with participant ids/names) when allowed, else null.
 // `relationId` is nullable since #768 made Message.relationId nullable: a
 // conversation-only message has no mentorship thread, so it is never reachable
@@ -26,8 +32,10 @@ export async function getThreadIfAllowed(user: SessionUser, relationId: string |
   });
   if (!rel) return null;
   // The pair, or a seat beyond it (#1804): a group's members share one thread.
-  if (user.role !== 'ADMIN' && !(await isParticipant(rel, user.id))) return null;
-  return rel;
+  if (await isParticipant(rel, user.id)) return rel;
+  if (user.role !== 'ADMIN') return null;
+  // An admin who is not in the thread: their own tenant's threads only.
+  return (await inCallerTenant(rel.orgId, user.orgId)) ? rel : null;
 }
 
 // The "other" participant to notify when someone posts to a thread.

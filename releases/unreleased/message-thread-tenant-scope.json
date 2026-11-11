@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Security:** an admin who is not in a message thread can open it only inside their own organization: `getThreadIfAllowed()` checks the relation's org and `getConversationIfAllowed()` requires every participant of a DIRECT conversation to be in the caller's tenant — both used to let any admin of any org read and post into the thread (#3602)."
+}
