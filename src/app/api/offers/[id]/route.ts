@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { resolveOrgId } from '@/lib/orgScope';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
 import {
@@ -62,7 +63,11 @@ const baseSelect = {
 // every handler below applies the exact same rule.
 async function loadAuthorized(id: string, session: Session, admin: boolean) {
   const role = session.user.role;
-  const offer = await prisma.offer.findUnique({ where: { id }, select: baseSelect });
+  // Inside the caller's tenant only (#3588): `admin` below proves the
+  // permission, not the org, and the tenant middleware is off in every
+  // deployment. Another org's offer reads as missing — a 404, never a 403 that
+  // would confirm the id.
+  const offer = await prisma.offer.findFirst({ where: withinTenant({ id }, await tenantWhere(session)), select: baseSelect });
   if (!offer) return { offer: null, isOwnMenteeOffer: false, authorized: false };
 
   const isOwnMenteeOffer = role === 'MENTEE' && offer.relation.menteeId === session.user.id;
@@ -313,6 +318,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       const { position, requisitionId, companyId, startDate, compensationNote, expiresAt } = parsed.data;
       const normalizedRequisitionId = requisitionId || null;
       const effectiveCompanyId = companyId !== undefined ? companyId : offer.companyId;
+      if (companyId) {
+        // A company of another org reads as not found (#3588).
+        const company = await prisma.company.findFirst({ where: withinTenant({ id: companyId }, await tenantWhere(session)), select: { id: true } });
+        if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 });
+      }
       if (requisitionId !== undefined || companyId !== undefined) {
         const validation = await validateOfferRequisition(
           requisitionId !== undefined ? normalizedRequisitionId : offer.requisitionId,

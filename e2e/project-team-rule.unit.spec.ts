@@ -4,6 +4,9 @@ import {
   canManageProjectTeam,
   canWriteProjectSeries,
   memberAddRefusal,
+  menteeConnectionsFromSeats,
+  seatCounts,
+  type RelationSeat,
   nonManagerStatus,
   NO_CONNECTIONS,
 } from '../src/lib/projectTeamRule';
@@ -83,4 +86,58 @@ test('a project series is written by its managers and MENTOR members, never a pl
   expect(canWriteProjectSeries({ id: 'menteeMember', role: 'MENTEE' }, project)).toBe(false);
   expect(canWriteProjectSeries({ id: 'stranger', role: 'MENTOR' }, project)).toBe(false);
   expect(canWriteProjectSeries({ id: 'x', role: 'ADMIN' }, project)).toBe(true);
+});
+
+// #3584: a mentee's circle from seats — group relations (#1804) included, only
+// active participation counted, the org checked on the relation AND the person.
+const org = { orgId: 'orgA', defaultOrgId: 'orgDefault' };
+const seat = (relationId: string, userId: string, side: 'MENTOR' | 'MENTEE', over: Partial<RelationSeat> = {}): RelationSeat => ({
+  relationId, userId, side,
+  relationStatus: 'ACTIVE', relationOrgId: 'orgA', userOrgId: 'orgA',
+  userActive: true, userState: 'ACTIVE', leftAt: null,
+  ...over,
+});
+
+test('a group relation brings its mentors and its other mentees into the circle', { tag: '@smoke' }, () => {
+  const seats = [
+    seat('g', 'lead', 'MENTOR'), seat('g', 'me', 'MENTEE'), seat('g', 'peer', 'MENTEE'),
+    seat('g', 'co', 'MENTOR'), seat('g', 'p2', 'MENTEE'),
+    // A 1:1 of the co-mentor: "my mentor's other mentees", group-aware.
+    seat('r', 'co', 'MENTOR'), seat('r', 'p3', 'MENTEE'),
+  ];
+  const c = menteeConnectionsFromSeats('me', seats, org);
+  expect([...c.mentors].sort()).toEqual(['co', 'lead']);
+  expect([...c.mentees].sort()).toEqual(['p2', 'p3', 'peer']);
+});
+
+test('only active participation counts: left, ended, benched and inactive seats drop out', { tag: '@smoke' }, () => {
+  const seats = [
+    seat('g', 'lead', 'MENTOR'), seat('g', 'me', 'MENTEE'),
+    seat('g', 'left', 'MENTEE', { leftAt: new Date() }),
+    seat('g', 'benched', 'MENTEE', { userState: 'BENCHED' }),
+    seat('g', 'inactive', 'MENTEE', { userActive: false }),
+    seat('g', 'leftMentor', 'MENTOR', { leftAt: new Date() }),
+    // A completed group: none of it counts, the actor's own seat included.
+    seat('done', 'oldLead', 'MENTOR', { relationStatus: 'COMPLETED' }),
+    seat('done', 'me', 'MENTEE', { relationStatus: 'COMPLETED' }),
+    seat('done', 'oldPeer', 'MENTEE', { relationStatus: 'COMPLETED' }),
+  ];
+  const c = menteeConnectionsFromSeats('me', seats, org);
+  expect([...c.mentors]).toEqual(['lead']);
+  expect([...c.mentees]).toEqual([]);
+  // The actor's own seat must count too: a mentee who left has no circle there.
+  expect(menteeConnectionsFromSeats('me', [seat('g', 'lead', 'MENTOR'), seat('g', 'me', 'MENTEE', { leftAt: new Date() })], org).mentors.size).toBe(0);
+  // …and a benched mentee has none at all.
+  expect(menteeConnectionsFromSeats('me', [seat('g', 'lead', 'MENTOR'), seat('g', 'me', 'MENTEE', { userState: 'BENCHED' })], org).mentors.size).toBe(0);
+});
+
+test('the org is checked on the relation and on the person, NULL reading as the default org', { tag: '@smoke' }, () => {
+  expect(seatCounts(seat('g', 'x', 'MENTEE', { userOrgId: 'orgB' }), org)).toBe(false);
+  expect(seatCounts(seat('g', 'x', 'MENTEE', { relationOrgId: 'orgB' }), org)).toBe(false);
+  expect(seatCounts(seat('g', 'x', 'MENTEE', { userOrgId: null }), org)).toBe(false);
+  const dflt = { orgId: 'orgDefault', defaultOrgId: 'orgDefault' };
+  expect(seatCounts(seat('g', 'x', 'MENTEE', { userOrgId: null, relationOrgId: null }), dflt)).toBe(true);
+  expect(seatCounts(seat('g', 'x', 'MENTEE', { userOrgId: null, relationOrgId: null }), { orgId: null, defaultOrgId: 'orgDefault' })).toBe(true);
+  const seats = [seat('g', 'lead', 'MENTOR'), seat('g', 'me', 'MENTEE'), seat('g', 'foreign', 'MENTEE', { userOrgId: 'orgB' })];
+  expect([...menteeConnectionsFromSeats('me', seats, org).mentees]).toEqual([]);
 });

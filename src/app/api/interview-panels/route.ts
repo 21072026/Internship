@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { actorFromSession, can, requireRoleOrPermission } from '@/lib/authz';
@@ -44,13 +46,16 @@ export async function POST(request: Request) {
     }
     const { subjectId, interviewerIds } = parsed.data;
 
-    const subject = await prisma.user.findUnique({ where: { id: subjectId }, select: { id: true, orgId: true, fullName: true } });
+    // The candidate and every interviewer come from the caller's tenant (#3588):
+    // the middleware that would narrow these lookups is off in every deployment.
+    const tenant = await tenantWhere(session);
+    const subject = await prisma.user.findFirst({ where: withinTenant({ id: subjectId }, tenant), select: { id: true, orgId: true, fullName: true } });
     if (!subject) return NextResponse.json({ error: 'Candidate not found' }, { status: 404 });
 
     // Everyone on the panel has to be a real, active account that can actually
     // sign in and score — a ghost member would block completion for ever.
     const interviewers = await prisma.user.findMany({
-      where: { id: { in: [...new Set(interviewerIds)] }, isActive: true, role: { in: ['ADMIN', 'MENTOR'] } },
+      where: withinTenant<Prisma.UserWhereInput>({ id: { in: [...new Set(interviewerIds)] }, isActive: true, role: { in: ['ADMIN', 'MENTOR'] } }, tenant),
       select: { id: true, fullName: true },
     });
     if (interviewers.length === 0) {
@@ -110,10 +115,15 @@ export async function GET(request: Request) {
   return await withTenantScope(session, async () => {
     const subjectId = new URL(request.url).searchParams.get('subjectId');
     const panels = await prisma.interviewPanel.findMany({
-      where: {
-        ...(subjectId ? { subjectId } : {}),
-        ...(isAdmin ? {} : { members: { some: { userId: session.user.id } } }),
-      },
+      // The caller's tenant by hand (#3588): an admin's "the org's panels" was
+      // every org's while the middleware is off.
+      where: withinTenant(
+        {
+          ...(subjectId ? { subjectId } : {}),
+          ...(isAdmin ? {} : { members: { some: { userId: session.user.id } } }),
+        },
+        await tenantWhere(session),
+      ),
       orderBy: { createdAt: 'desc' },
       take: 100,
       include: {

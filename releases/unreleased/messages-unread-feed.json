@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**The header's unread-message count fetches once per page (#3593):** `ResponsiveShell` mounts two `MessagesButton`s (mobile bar + desktop strip), and each fetched `/api/messages/unread` on mount and on every navigation, so every signed-in page asked twice. One shared count now serves both (`src/components/messagesUnreadFeed.ts`, the same shape as the bell's feed from #3573): concurrent refreshes share a request, a pathname is refreshed once whichever button asks, the realtime `ready`/`unread` signals write the same count, and it is forgotten when the last button unmounts."
+}

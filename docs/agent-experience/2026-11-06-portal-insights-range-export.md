@@ -1,0 +1,6 @@
+# 2026-11-06 — #1909: the mentee's own report gets a range and an export
+
+- **Check a story's acceptance criteria against main before you close it.** All four sub-issues of #1909 were closed as completed, but `/portal/insights` (#1915) still took only `?days=` and had no export. The story's first criterion ("all four routes accept `?from=&to=`, all four screens have an export") was not met. Each sub-issue had shipped its own definition of done, not the story's.
+- **A pure rule under `node --test --experimental-strip-types` cannot import a sibling `.ts` without an extension**, and the repo does not enable `allowImportingTsExtensions`. Have the caller parse first (`rangeStart` / `rangeEnd`) and let the pure module take `Date | null`. A thin `*Query.ts` wrapper does the parsing for both the page and the route, so the export covers exactly the period on screen.
+- **Scope checks:** the employer route answers 404 for another company's `requisitionId` (#2542 rule). Two 403s exist, and neither confirms an id: a COMPANY account with no `companyId`, and a SOURCE account with no source. Both are about the caller's own account. The mentor and mentee routes take no subject id at all.
+- **`tsc` OOMs on this repo at the default heap.** Run it with `NODE_OPTIONS=--max-old-space-size=8192`, or an `Aborted` reads like a type error.

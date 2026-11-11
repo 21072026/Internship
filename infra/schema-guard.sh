@@ -114,6 +114,32 @@ EOF
   [ "$(printf '%s\n' "$fwd" | wc -l)" -gt "$(printf '%s\n' "$rev" | wc -l)" ]
 }
 
+# --- varchar-widening helper (#3489) -----------------------------------------
+# Lengthening a string column emits
+#   ALTER TABLE `T` MODIFY `col` VARCHAR(20) NOT NULL DEFAULT 'x';
+# which the blunt pattern flags exactly like a SHORTENING (that one truncates
+# or refuses rows). Same trick as the enum case: the reverse diff of a pure
+# widening is the identical clause with a SMALLER length. Exactly one
+# VARCHAR(n) on each side, identical otherwise (case-insensitive on the type
+# keyword only), forward n strictly greater — anything else stays destructive.
+# SsoAuthRequest.kind VarChar(10) -> VarChar(20) held prod back for 11 days.
+varchar_len() { # $1 = clause -> the n of its only VARCHAR(n), or fail
+  local c
+  c=$(printf '%s' "$1" | grep -oiE 'VARCHAR\([0-9]+\)' || true)
+  [ "$(printf '%s\n' "$c" | grep -c .)" = "1" ] || return 1
+  printf '%s\n' "$c" | sed -E 's/^[Vv][Aa][Rr][Cc][Hh][Aa][Rr]\(([0-9]+)\)$/\1/'
+}
+is_varchar_widening() { # $1 = forward clause, $2 = reverse clause
+  local nf nr shape_f shape_r
+  case "$1" in 'MODIFY `'*) ;; 'MODIFY COLUMN `'*) ;; *) return 1 ;; esac
+  nf=$(varchar_len "$1") || return 1
+  nr=$(varchar_len "$2") || return 1
+  shape_f=$(printf '%s' "$1" | sed -E 's/[Vv][Aa][Rr][Cc][Hh][Aa][Rr]\([0-9]+\)/VARCHAR(#)/')
+  shape_r=$(printf '%s' "$2" | sed -E 's/[Vv][Aa][Rr][Cc][Hh][Aa][Rr]\([0-9]+\)/VARCHAR(#)/')
+  [ "$shape_f" = "$shape_r" ] || return 1
+  [ "$nf" -gt "$nr" ]
+}
+
 # Print the clause for `column` from the reverse diff's ALTERs on `table`,
 # provided exactly ONE such clause exists (ambiguity stays destructive).
 reverse_clause_for() { # $1 = reverse stmts (normalized), $2 = table, $3 = column
@@ -179,12 +205,12 @@ if ! hits=$(printf '%s\n' "$sql" | grep -Ei "$DESTRUCTIVE"); then
   exit 0
 fi
 
-# Second look for MODIFY ... ENUM(...) NOT NULL hits: widening an enum matches
+# Second look for MODIFY ... ENUM(...)/VARCHAR(n) NOT NULL hits: widening matches
 # the pattern above but destroys nothing (#1223 was blocked by exactly this).
 # Verify each candidate against the reverse diff and drop the pure widenings;
 # every check that fails to line up keeps the hit destructive (fail closed).
-if printf '%s\n' "$hits" | grep -Eqi 'MODIFY[^;]*ENUM\('; then
-  log "ENUM change flagged — checking whether it only ADDS values"
+if printf '%s\n' "$hits" | grep -Eqi 'MODIFY[^;]*(ENUM|VARCHAR)\('; then
+  log "ENUM/VARCHAR change flagged — checking whether it only widens the column"
   if rsql=$($RUN_TOOL prisma migrate diff \
         --from-schema-datamodel prisma/schema.prisma \
         --to-url "$DATABASE_URL" \
@@ -212,6 +238,8 @@ if printf '%s\n' "$hits" | grep -Eqi 'MODIFY[^;]*ENUM\('; then
         rev_clause=$(reverse_clause_for "$rev_stmts" "$table" "$col") || { stmt_safe=0; break; }
         if is_enum_widening "$clause" "$rev_clause"; then
           log "  enum widening (adds values, removes none): $table.$col"
+        elif is_varchar_widening "$clause" "$rev_clause"; then
+          log "  varchar widening (longer, nothing truncated): $table.$col"
         else
           stmt_safe=0; break
         fi
@@ -243,12 +271,12 @@ EOF
       hits="${remaining%
 }"
       if [ -z "${hits//[[:space:]]/}" ]; then
-        log "All flagged statements are pure enum widenings — proceeding"
+        log "All flagged statements are pure enum/varchar widenings — proceeding"
         exit 0
       fi
     fi
   else
-    warn "Could not compute the reverse diff — keeping the ENUM change flagged as destructive."
+    warn "Could not compute the reverse diff — keeping the ENUM/VARCHAR change flagged as destructive."
   fi
 fi
 

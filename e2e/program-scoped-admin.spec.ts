@@ -133,6 +133,13 @@ test('program admin: reads and writes only its granted cohort; cohort-less relat
     expect(((await (await ctxOrg.get('/api/admin/analytics/funnel')).json()).capacity as { id: string }[]).some((m) => m.id === mentor.id)).toBe(true);
     // The routes without their own narrowing yet stay refused.
     expect((await ctxProg.get('/api/admin/analytics/forecast')).status()).toBe(403);
+    // Duplicate detection reads every candidate of the org, so it has no grant
+    // narrowing and asks without `listing`: refused (`unscoped_subject`). Merge
+    // asks `user.merge`, which the tier does not hold. The pre-flight check
+    // (MENTOR or `user.read`) refuses the tier the same way.
+    expect((await ctxProg.get('/api/admin/duplicates')).status()).toBe(403);
+    expect((await ctxProg.post('/api/admin/duplicates/merge', { data: { keepId: menteeA.id, mergeId: menteeB.id } })).status()).toBe(403);
+    expect((await ctxProg.post('/api/admin/duplicates/check', { data: { email: 'nobody@example.test' } })).status()).toBe(403);
     expect((await ctxProg.get('/api/admin/analytics/narrative')).status()).toBe(403);
 
     // The org admin is unaffected.

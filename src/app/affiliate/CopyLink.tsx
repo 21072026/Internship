@@ -5,7 +5,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useT } from '@/i18n/client';
 
 // The partner's referral link, selectable and with a copy button.
-export function CopyLink({ value }: { value: string }) {
+export function CopyLink({ value, testId = 'affiliate-referral-link' }: { value: string; testId?: string }) {
   const L = useT().affiliatePortal;
   const toast = useToast();
   async function copy() {
@@ -18,7 +18,7 @@ export function CopyLink({ value }: { value: string }) {
   }
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <code className="break-all rounded bg-gray-100 px-2 py-1 text-sm text-gray-900 dark:bg-gray-800 dark:text-gray-100" data-testid="affiliate-referral-link">
+      <code className="break-all rounded bg-gray-100 px-2 py-1 text-sm text-gray-900 dark:bg-gray-800 dark:text-gray-100" data-testid={testId}>
         {value}
       </code>
       <Button type="button" size="sm" variant="outline" onClick={() => void copy()}>

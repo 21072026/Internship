@@ -33,6 +33,8 @@ const securityHeaders = [
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
 ];
 
+const embedSecurityHeaders = securityHeaders.filter((h) => h.key !== 'Content-Security-Policy' && h.key !== 'X-Frame-Options');
+
 // Release fragments (#1275): the version shown to users is BASE (package.json)
 // plus the pending fragments under releases/unreleased/, derived here at build
 // time and inlined via env. PRs never edit package.json/CHANGELOG/releaseNotes
@@ -89,7 +91,16 @@ const nextConfig = {
   // dynamic requires, so it stays out of the webpack server bundle (#1464).
   serverExternalPackages: ['@prisma/client', 'bcryptjs', 'pdf-parse', 'mammoth', 'imapflow', 'mailparser', 'web-push'],
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    return [
+      // Every path but the Teams tab: frame-ancestors 'none' + X-Frame-Options DENY.
+      { source: '/:path((?!embed(?:/|$)).*)', headers: securityHeaders },
+      // The Teams tab (#1954): everything above EXCEPT the two framing headers,
+      // which src/middleware.ts sets per request — the Teams hosts while Teams
+      // SSO is configured, 'none' + DENY while it is not. Asserted by
+      // e2e/teams-embed-headers.spec.ts for both kinds of path.
+      { source: '/embed', headers: embedSecurityHeaders },
+      { source: '/embed/:path*', headers: embedSecurityHeaders },
+    ];
   },
 };
 
