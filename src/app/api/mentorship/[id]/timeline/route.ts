@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { actorFromSession, can } from '@/lib/authz';
+import { relationSubject } from '@/lib/authzRule';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
@@ -25,20 +26,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    // Admin reach from the permission rule, not the role string (#1571).
     const actor = await actorFromSession(session);
-    const isAdmin = !!actor && (await can(actor, 'program.read', undefined, session));
 
     return await withTenantScope(session, async () => {
       const relation = await prisma.mentorshipRelation.findUnique({
         where: { id },
-        select: { id: true, mentorId: true, menteeId: true, orgId: true },
+        select: { id: true, mentorId: true, menteeId: true, orgId: true, cohortId: true, companyId: true },
       });
       // Another tenant's relation answers exactly like a missing one — the
       // ADMIN branch below is "any relation of my tenant" (#2542 follow-up).
       if (!relation || !(await inCallerTenant(relation.orgId, resolveOrgId(session)))) {
         return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
       }
+
+      // Admin reach from the permission rule, asked WITH the relation (#1700):
+      // an org admin of its tenant, or a PROGRAM_ADMIN whose grant covers its
+      // programme or company — the subject-less question refused every one.
+      const isAdmin = !!actor && (await can(actor, 'program.read', relationSubject(relation), session));
 
       // The viewer's role *for this relation*, not their global role: an admin
       // sees everything, a mentor or mentee only their own pairing. Admin wins
@@ -47,7 +51,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       if (isAdmin) role = 'ADMIN';
       else if (relation.mentorId === session.user.id) role = 'MENTOR';
       else if (relation.menteeId === session.user.id) role = 'MENTEE';
-      if (!role) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      // Anyone else reads it as missing (#1700) — a 403 would confirm the id.
+      if (!role) return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
 
       const sp = new URL(request.url).searchParams;
       const kinds = sp.getAll('kinds').flatMap((v) => v.split(',')).map((v) => v.trim()).filter(Boolean);
