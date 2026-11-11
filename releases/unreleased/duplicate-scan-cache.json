@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**The duplicate scan is cheaper (#1434):** each record's normalized keys (e-mail, phones, name, university) are computed once per scan instead of on every comparison. `matchSignals()` now delegates to `matchSignalsOnKeys()`, which judges every pair; the lossless test against the all-pairs scan is unchanged and green. On a duplicate-heavy pool of 5 000 the pure scan goes from ~1.19 s to ~1.0 s. A repeat visit reuses the last result while the org's mentees are unchanged (`src/lib/duplicateScanCache.ts`: row count + latest `updatedAt`, one indexed aggregate, at most 5 min old), so `/api/admin/duplicates` drops from ~1.9 s to 190–260 ms after the first visit. A merge or an edit is seen by the very next scan (`e2e/duplicate-scan-cache.spec.ts`)."
+}

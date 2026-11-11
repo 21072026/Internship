@@ -1,3 +1,4 @@
+// i18n-scopes: no-dictionary — permission names ('org.settings.write') are not namespaces (#3599).
 // The permission rule (#1569, story #1565): "may this actor do this action to
 // this subject?" — pure, dependency-free and unit-tested
 // (scripts/test/authz-rule.test.mjs). The server half that reads the session,

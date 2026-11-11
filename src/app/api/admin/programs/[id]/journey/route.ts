@@ -4,7 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { journeyTemplate } from '@/lib/programJourneyRule';
 import { STEP_SELECT, journeyProgramFor, serializeStep, stepColumns, stepInputSchema } from '@/lib/programJourneyAdmin';
-import { requirePermission } from '@/lib/authz';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 
 // The journey builder's collection (#1853): the programme's steps, its pairs
@@ -17,12 +18,9 @@ import { requirePermission } from '@/lib/authz';
 const MAX_STEPS = 200;
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requirePermission('program.read', { request: _request });
-  if ('error' in gate) return gate.error;
-  const { session } = gate;
-  const auth = await journeyProgramFor(session, (await params).id);
+  const auth = await journeyProgramFor(_request, await getServerSession(authOptions), (await params).id, 'program.read');
   if ('refusal' in auth) return auth.refusal;
-  const { program } = auth;
+  const { session, program } = auth;
   return await withTenantScope(session, async () => {
     const [steps, relations] = await Promise.all([
       prisma.programStep.findMany({ where: { programId: program.id }, orderBy: [{ order: 'asc' }, { createdAt: 'asc' }], select: STEP_SELECT }),
@@ -43,12 +41,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requirePermission('program.write', { request });
-  if ('error' in gate) return gate.error;
-  const { session } = gate;
-  const auth = await journeyProgramFor(session, (await params).id);
+  const auth = await journeyProgramFor(request, await getServerSession(authOptions), (await params).id, 'program.write');
   if ('refusal' in auth) return auth.refusal;
-  const { program } = auth;
+  const { session, program } = auth;
   return await withTenantScope(session, async () => {
     const parsed = stepInputSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed', code: 'invalid' }, { status: 400 });
@@ -71,12 +66,9 @@ const patchSchema = z.union([
 ]);
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requirePermission('program.write', { request });
-  if ('error' in gate) return gate.error;
-  const { session } = gate;
-  const auth = await journeyProgramFor(session, (await params).id);
+  const auth = await journeyProgramFor(request, await getServerSession(authOptions), (await params).id, 'program.write');
   if ('refusal' in auth) return auth.refusal;
-  const { program } = auth;
+  const { session, program } = auth;
   return await withTenantScope(session, async () => {
     const parsed = patchSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });

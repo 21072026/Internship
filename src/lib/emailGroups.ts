@@ -172,7 +172,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     // the meeting reminders themselves, which live in their own group.
     // 'nudge' (#1684): an admin-authored reminder about the reader's own work;
     // non-essential by definition, so it always carries the reader's userId.
-    categories: ['interaction-reminder', 'stage-deadline', 'weekly-report', 'document-reminder', 'meeting-feedback', 'nudge'],
+    categories: ['interaction-reminder', 'stage-deadline', 'weekly-report', 'document-reminder', 'meeting-feedback', 'nudge', 'affiliate-window-ending'],
     legacy: ['deadlines', 'documents', 'weeklyReports', 'interactions'],
   },
   {

@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Security:** people named in a request body must belong to the caller's organization while tenant isolation enforcement is off: `POST /api/mentorship` refuses another org's mentor or mentee, `POST /api/invite` another org's pre-linked mentor or mentee, and `POST /api/mentor/mentees` another org's referrer (#3588)."
+}

@@ -5,6 +5,8 @@ import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
+import { checkPromotionChoice, type PromotionChoice } from '@/lib/promotionRelationsRule';
+import { afterPromotionEnded, applyPromotionChoice, openMenteeRelations, PromotionConflictError, type EndedRelation } from '@/lib/promotionRelations';
 import { isPendingActivation, isErasedAccount, isUnusableEmail, isPlaceholderEmail } from '@/lib/menteeAccount';
 import { verticalFor } from '@/lib/verticalContext';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
@@ -179,6 +181,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         rosterAbsentSince?: null;
       } = {};
       let roleUnchanged = false;
+      // The admin's choice for a promoted mentee's own open relations (#1506).
+      let promotionChoice: PromotionChoice | null = null;
       let previousRole: string | null = null;
       let convertedUser: { email: string; fullName: string; preferredLanguage: string | null; orgId: string | null } | null = null;
 
@@ -387,6 +391,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           // the state that exists.
           roleUnchanged = true;
         } else {
+          // A mentee promoted to MENTOR may still be the mentee of open
+          // relations (#1506): the admin decides what happens to them, or the
+          // conversion does not go through. Applied with the role change below,
+          // in one transaction.
+          if (body.role === 'MENTOR') {
+            const open = await openMenteeRelations(prisma, id);
+            const check = checkPromotionChoice(open.length, body.promotionChoice);
+            if (!check.ok) {
+              return NextResponse.json(
+                { error: 'Choose what happens to this person’s open mentee relations', code: check.code, openRelations: open },
+                { status: 400 },
+              );
+            }
+            promotionChoice = check.choice;
+          }
           previousRole = target.role;
           convertedUser = target;
           data.role = body.role;
@@ -418,11 +437,26 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         return NextResponse.json({ error: 'No supported fields to update' }, { status: 400 });
       }
 
-      const user = await prisma.user.update({
-        where: { id },
-        data,
-        select: { id: true, isActive: true, sourceId: true, referredById: true, skills: true, mentorCapacity: true, role: true, orgId: true },
-      });
+      const userSelect = { id: true, isActive: true, sourceId: true, referredById: true, skills: true, mentorCapacity: true, role: true, orgId: true } as const;
+      let promotion: { changed: string[]; ended: EndedRelation[] } = { changed: [], ended: [] };
+      let user;
+      if (promotionChoice) {
+        // The relations and the role change together or not at all (#1506).
+        try {
+          user = await prisma.$transaction(async (tx) => {
+            promotion = await applyPromotionChoice(tx, { userId: id, choice: promotionChoice!, actorId: session.user.id });
+            return tx.user.update({ where: { id }, data, select: userSelect });
+          });
+        } catch (e) {
+          if (e instanceof PromotionConflictError) {
+            return NextResponse.json({ error: 'A relation changed meanwhile', code: 'promotion_conflict' }, { status: 409 });
+          }
+          throw e;
+        }
+        await afterPromotionEnded(promotion.ended, session.user.id);
+      } else {
+        user = await prisma.user.update({ where: { id }, data, select: userSelect });
+      }
       // Dual-write the canonical twin of the list just saved (#1818).
       if (data.skills !== undefined) {
         await syncUserSkills(user.id, user.orgId, Array.isArray(user.skills) ? (user.skills as string[]) : []);
@@ -463,7 +497,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           actorEmail: session.user.email ?? null,
           targetType: 'user',
           targetId: id,
-          detail: `role ${previousRole} → ${data.role}`,
+          detail:
+            `role ${previousRole} → ${data.role}` +
+            (promotionChoice ? ` · open relations ${promotionChoice} (${promotion.changed.length})` : ''),
           request,
         });
       }

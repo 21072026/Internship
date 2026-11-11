@@ -30,6 +30,7 @@ import { runAuditDrains } from '@/lib/auditDrain';
 import { runRetentionPrune } from '@/lib/retentionEntries';
 import { runUsageRollup } from '@/lib/jobs/usageRollup';
 import { runTrialReminders } from '@/lib/jobs/trialReminders';
+import { runAffiliateWindowNotices } from '@/lib/jobs/affiliateWindowNotices';
 import { runReportSubscriptions } from '@/lib/jobs/reportSubscriptions';
 import { sweepRelationHealth } from '@/lib/jobs/relationHealthSweep';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -45,7 +46,7 @@ import { requirePermission } from '@/lib/authz';
 // every tenant and answers with instance-wide totals: the operator's trigger,
 // so it takes a super admin (#1575). A tenant ADMIN asking for one gets a 403
 // and an `authz.scope_denied` audit row, never a run.
-const OWN_ORG_JOBS = new Set(['relation-health', 'evaluations', 'program-journey', 'surveys', 'report-subscriptions']);
+const OWN_ORG_JOBS = new Set(['relation-health', 'evaluations', 'program-journey', 'surveys', 'report-subscriptions', 'affiliate-window-notices']);
 
 export async function GET(request: Request) {
   try {
@@ -79,7 +80,8 @@ export async function GET(request: Request) {
     if (params.get('enqueue') === '1') {
       const plan = manualJobFor(job, {
         orgId: OWN_ORG_JOBS.has(job ?? '') ? await settingsOrgOf(session) : targetOrgId,
-        at: params.get('at'),
+        // The window notice stamps what it announces: a moved clock is a super admin's only (#3556).
+        at: job === 'affiliate-window-notices' && !(await isSuperAdmin(session)) ? null : params.get('at'),
         batch: params.get('batch'),
       });
       if (!plan) return NextResponse.json({ error: 'not_enqueueable' }, { status: 400 });
@@ -225,6 +227,17 @@ export async function GET(request: Request) {
       const at = new URL(request.url).searchParams.get('at');
       const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
       return NextResponse.json({ message: 'Report subscriptions ran', reportSubscriptions: await runReportSubscriptions({ orgIds: [orgId], now }) });
+    }
+    // A partner's customers whose commission window ends soon (#3556): the
+    // caller's own org only. Unlike a report, a run stamps each customer it
+    // announces for good, so a moved clock would spend real notices early (or
+    // announce windows that have closed): `?at=` is honoured for a super admin
+    // only — the operator and the e2e harness — and a tenant admin's run is now.
+    if (job === 'affiliate-window-notices') {
+      const orgId = await settingsOrgOf(session);
+      const at = (await isSuperAdmin(session)) ? params.get('at') : null;
+      const now = at && !Number.isNaN(Date.parse(at)) ? new Date(at) : undefined;
+      return NextResponse.json({ message: 'Affiliate window notices ran', windowNotices: await runAffiliateWindowNotices({ orgIds: [orgId], now }) });
     }
     if (job === 'trial-reminders') {
       // `orgId` NARROWS the sweep to one tenant, and only to one the caller

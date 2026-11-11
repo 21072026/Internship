@@ -359,6 +359,10 @@ export const NOTIFICATION_EVENTS = [
   { key: 'interview_request.scheduled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'], audience: ['MENTEE', 'MENTOR', 'COMPANY', 'ADMIN'] },
   { key: 'interview_request.cancelled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title'], audience: ['MENTEE', 'MENTOR', 'COMPANY', 'ADMIN'] },
   { key: 'affiliate_application.new', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  // A partner's customers whose commission window ends soon (#3556): one mail per
+  // partner and run, sent with the copy src/lib/affiliateWindowNoticeMail.ts builds.
+  // E-mail only — the partner portal has no bell.
+  { key: 'affiliate.windowEnding', category: 'deadlines', emailGroup: 'task_reminders', defaultChannels: ['email'], delivery: 'batched', link: 'dashboard', params: ['count'] },
   { key: 'mentor_application.new', category: 'mentorship', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'mentor_application.approved', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   // Plan-change requests (#1743): to the operators of the org's world, and the
