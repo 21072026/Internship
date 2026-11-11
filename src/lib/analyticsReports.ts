@@ -18,7 +18,7 @@ import type { Locale } from '@/i18n/config';
 import { outcomeStageKeys, type OutcomeStageKeys } from '@/lib/pipelineStages';
 import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { attributedLeadWhere, sourceAttributionRows } from '@/lib/leadAttribution';
-import { countsAsPlacement, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
+import { countsAsPlacement, funnelStartedAt, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
 
 /**
  * A lead's stage as the source report reads it (#1504): a finished stage whose
@@ -71,6 +71,7 @@ const COMPARISON_RELATION_SELECT = (finishedKeys: string[]) =>
     pipelineStatus: true,
     employmentAttribution: true,
     startDate: true,
+    funnelEnteredAt: true,
     _count: { select: { interactions: true } },
     statusChanges: {
       // Time-to-hire is measured to the tenant's OWN finished stage,
@@ -107,11 +108,13 @@ function comparisonRow(
   const inProgress = relations.filter((r) => !finished.has(r.pipelineStatus) && !offPath.has(r.pipelineStatus)).length;
   const interactions = relations.reduce((n, r) => n + r._count.interactions, 0);
 
-  // Average days from relation start to the first transition INTO a
-  // finished stage, over relations that actually got there (with a
-  // recorded transition).
+  // Average days from FUNNEL ENTRY to the first transition INTO a finished
+  // stage, over relations that actually got there (with a recorded
+  // transition). Funnel entry, not the pairing (#1505, #1502): a coaching
+  // pair converted to PLACEMENT starts its clock at the conversion, and a row
+  // from before #1503 (no stamp) falls back to `startDate` exactly as before.
   const hireDurations = placed
-    .map((r) => (r.statusChanges[0] ? (r.statusChanges[0].createdAt.getTime() - r.startDate.getTime()) / 86_400_000 : null))
+    .map((r) => (r.statusChanges[0] ? (r.statusChanges[0].createdAt.getTime() - funnelStartedAt(r).getTime()) / 86_400_000 : null))
     .filter((d): d is number => d !== null && d >= 0);
   const avgDaysToHired = hireDurations.length
     ? Math.round(hireDurations.reduce((a, b) => a + b, 0) / hireDurations.length)

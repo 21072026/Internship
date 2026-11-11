@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**The programme/cohort comparison measures time to hire from funnel entry (#1502):** `comparisonRow()` in `src/lib/analyticsReports.ts` still counted \"average days to hired\" from the pairing date (`startDate`). #1505 had moved the funnel, forecast, deal-value and mentor numbers to `funnelStartedAt()`, but not this one. A coaching pair converted to PLACEMENT therefore carried its coaching months into `/api/admin/analytics/programs`, `/api/admin/analytics/cohorts` and the registry's cohort report. It now selects `funnelEnteredAt` and uses `funnelStartedAt()`. A row with no stamp still reads from `startDate`, so existing numbers do not move. Found while checking #1502's acceptance criteria and pinned in `e2e/time-to-hire-funnel-entry.spec.ts` (red at 140 days before the change, 85 after).",
+  "notes": {
+    "en": ["Programme comparison: average time to hire now starts when a person entered the placement funnel, matching the other reports."],
+    "tr": ["Program karşılaştırması: ortalama işe alım süresi artık kişinin yerleştirme hattına girdiği andan ölçülüyor, diğer raporlarla aynı."],
+    "de": ["Programmvergleich: Die durchschnittliche Zeit bis zur Einstellung zählt jetzt ab dem Eintritt in den Vermittlungstrichter, wie in den anderen Berichten."]
+  }
+}
