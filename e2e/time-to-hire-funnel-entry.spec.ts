@@ -8,7 +8,9 @@ import { signInViaApi } from './helpers/auth';
 // stamp, like every row from before #1503) and reads 140 days exactly as it
 // did; the other was a coaching pair that entered the funnel 40 days ago and
 // reads 30. The admin funnel (median of 30 and 140 = 85) and the mentor's
-// average days to hired (also 85) both follow.
+// average days to hired (also 85) both follow, and so does the programme
+// comparison (#1502) — its "average days to outcome" read the pairing date
+// until the story's acceptance check found it.
 
 const PW = 'TimeToHire123!';
 const DAY = 24 * 60 * 60 * 1000;
@@ -46,6 +48,11 @@ test('time to hire counts from funnel entry; a row without one from the pairing'
 
     const mine = await (await request.get('/api/mentor/analytics')).json();
     expect(mine.avgDaysToHired).toBe(85);
+
+    // Neither pair is in a programme, so both land in the comparison's
+    // "unassigned" row: (140 + 30) / 2 = 85, not the pairing-based 140.
+    const programs = await (await request.get('/api/admin/analytics/programs')).json();
+    expect(programs.unassigned).toMatchObject({ total: 2, hired: 2, avgDaysToHired: 85 });
   } finally {
     await prisma.mentorshipRelation.deleteMany({ where: { orgId: org.id } });
     for (const email of Object.values(emails)) await cleanupByEmail(email);
