@@ -47,6 +47,12 @@ export async function GET(request: Request) {
   return withTenantScope(session, async () => {
     // The tenant is a hand-written conjunct (#2542).
     const tenant = await tenantWhere(session);
+    // Another tenant's cohort reads exactly like a missing one (#1577): the
+    // report below would only come back empty, but echoing the id with a 200
+    // confirms nothing and still answers a question about a foreign row.
+    if (cohortId && !(await prisma.cohort.findFirst({ where: withinTenant({ id: cohortId }, tenant), select: { id: true } }))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     const [report, cohorts] = await Promise.all([
       loadExecutiveReport(tenant, settingsOrg, locale, { from, to }, cohortId),
       prisma.cohort.findMany({ where: withinTenant({}, tenant), select: { id: true, name: true }, orderBy: { name: 'asc' } }),

@@ -1,5 +1,5 @@
 import { test, expect, type Browser, type APIRequestContext, type BrowserContext } from '@playwright/test';
-import { prisma } from '../helpers/db';
+import { prisma, setOrgFeature } from '../helpers/db';
 import { seedTwoTenants, signInAsTenantActor, type SeededTenant, type TwoTenants } from '../helpers/tenants';
 import { seedLeakRows, cleanupLeakRows, type LeakRows, type LeakTenants } from '../helpers/leakSeed';
 
@@ -60,6 +60,20 @@ const MATRIX: Case[] = [
   { name: 'GET /api/companies', actor: 'admin', path: () => '/api/companies?all=1', markers: (t) => [t.company.id] },
   { name: 'GET /api/cohorts', actor: 'admin', path: () => '/api/cohorts', markers: (_t, r) => [r.cohort.id, r.cohort.name] },
   { name: 'GET /api/admin/analytics', actor: 'admin', path: () => '/api/admin/analytics', markers: (t) => [t.mentor.id] },
+  // The analytics sub-routes (#1577). Most of them answer with aggregates only;
+  // these are the ones whose body names a row: the stuck/funnel lists carry the
+  // people and the relation, the programme comparisons and the executive / ROI
+  // reports list the tenant's cohorts, and the forecast, benchmark and source
+  // reports carry the tenant's own stage labels (seeded "Iso A · …").
+  { name: 'GET /api/admin/analytics/aging', actor: 'admin', path: () => '/api/admin/analytics/aging', markers: (t) => [t.mentee.id, t.relation.id] },
+  { name: 'GET /api/admin/analytics/funnel', actor: 'admin', path: () => '/api/admin/analytics/funnel', markers: (t) => [t.mentor.id] },
+  { name: 'GET /api/admin/analytics/cohorts', actor: 'admin', path: () => '/api/admin/analytics/cohorts', markers: (_t, r) => [r.cohort.id, r.cohort.name] },
+  { name: 'GET /api/admin/analytics/programs', actor: 'admin', path: () => '/api/admin/analytics/programs', markers: (_t, r) => [r.cohort.id, r.cohort.name] },
+  { name: 'GET /api/admin/analytics/executive', actor: 'admin', path: () => '/api/admin/analytics/executive', markers: (_t, r) => [r.cohort.id, r.cohort.name] },
+  { name: 'GET /api/admin/analytics/roi', actor: 'admin', path: () => '/api/admin/analytics/roi', markers: (_t, r) => [r.cohort.id, r.cohort.name] },
+  { name: 'GET /api/admin/analytics/forecast', actor: 'admin', path: () => '/api/admin/analytics/forecast', markers: (t) => [t.stage.label] },
+  { name: 'GET /api/admin/analytics/benchmark', actor: 'admin', path: () => '/api/admin/analytics/benchmark', markers: (t) => [stagePrefix(t)] },
+  { name: 'GET /api/admin/analytics/sources', actor: 'admin', path: () => '/api/admin/analytics/sources', markers: (t) => [stagePrefix(t)] },
   {
     name: 'GET /api/admin/activity',
     actor: 'admin',
@@ -111,6 +125,11 @@ const MATRIX: Case[] = [
   { name: 'GET /api/requisitions', actor: 'companyUser', path: () => '/api/requisitions?pageSize=50', markers: (_t, r) => [r.requisition.id] },
 ];
 
+/** The tenant's own stage-label prefix ("Iso A · "): every stage label of a tenant starts with it. */
+function stagePrefix(t: SeededTenant): string {
+  return `${t.stage.label.split(' · ')[0]} · `;
+}
+
 let tenants: TwoTenants;
 let rows: LeakTenants;
 const contexts = new Map<string, BrowserContext>();
@@ -133,6 +152,10 @@ async function requestAs(browser: Browser, tenant: 'A' | 'B', actor: ActorKey): 
 test.beforeAll(async () => {
   tenants = await seedTwoTenants();
   rows = await seedLeakRows(tenants);
+  // The premium analytics reports answer 403 feature_locked without the tier;
+  // both tenants get it so the probe and the control read real bodies. The
+  // rows cascade with the organizations.
+  for (const t of [tenants.orgA, tenants.orgB]) await setOrgFeature(t.org.id, 'ADVANCED_ANALYTICS', true);
 });
 
 test.afterAll(async () => {
@@ -308,4 +331,35 @@ test("POST /api/agendas with A's guide on B's own relation as B's mentor: 404 an
   expect(res.status(), "another tenant's guide must read as not found").toBe(404);
   absent(await res.text(), [rows.A.agendaTemplate.title], "POST /api/agendas with A's guide (B → A)");
   expect(await prisma.sessionAgenda.count({ where: { templateId: rows.A.agendaTemplate.id } })).toBe(0);
+});
+
+// The analytics routes that take an id (#1577): another tenant's id reads as
+// missing, never as an empty report that echoes it back.
+for (const path of ['executive', 'roi', 'skills-gap']) {
+  test(`GET /api/admin/analytics/${path}?cohortId=<A's cohort> as B's admin: 404 (#1577)`, async ({ browser }) => {
+    const request = await requestAs(browser, 'B', 'admin');
+    const res = await request.get(`/api/admin/analytics/${path}?cohortId=${rows.A.cohort.id}`);
+    expect(res.status(), 'a cross-tenant cohort must read as not found').toBe(404);
+    absent(await res.text(), [rows.A.cohort.name], `${path} (B → A)`);
+    // The control: A's own cohort is a filter, not a refusal.
+    const own = await (await requestAs(browser, 'A', 'admin')).get(`/api/admin/analytics/${path}?cohortId=${rows.A.cohort.id}`);
+    expect(own.status()).toBe(200);
+  });
+}
+
+for (const path of ['aging', 'funnel', 'narrative']) {
+  test(`GET /api/admin/analytics/${path}?program=<A's cohort> as B's admin: 404 (#1577)`, async ({ browser }) => {
+    const request = await requestAs(browser, 'B', 'admin');
+    const res = await request.get(`/api/admin/analytics/${path}?program=${rows.A.cohort.id}`);
+    expect(res.status(), 'a cross-tenant programme must read as not found').toBe(404);
+  });
+}
+
+test("DELETE /api/admin/analytics/outcomes?userId=<A's mentee> as B's admin: 404 (#1577)", async ({ browser }) => {
+  const request = await requestAs(browser, 'B', 'admin');
+  const res = await request.delete(`/api/admin/analytics/outcomes?userId=${tenants.orgA.mentee.id}`);
+  expect(res.status(), 'a cross-tenant person must read as not found').toBe(404);
+  // The control: A's own mentee is a valid (empty) withdrawal.
+  const own = await (await requestAs(browser, 'A', 'admin')).delete(`/api/admin/analytics/outcomes?userId=${tenants.orgA.mentee.id}`);
+  expect(own.status()).toBe(200);
 });

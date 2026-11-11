@@ -91,6 +91,12 @@ export async function DELETE(request: Request) {
   if (!userId) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   return withTenantScope(session, async () => {
     const tenant = await tenantWhere(session);
+    // A person outside the caller's tenant reads as missing (#1577) — a 200
+    // `{ deleted: 0 }` would answer differently for a foreign id than for an
+    // own person without responses only by accident of the data.
+    if (!(await prisma.user.findFirst({ where: withinTenant({ id: userId }, tenant), select: { id: true } }))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    }
     const { count } = await prisma.surveyResponse.deleteMany({
       where: withinTenant({ respondentId: userId, survey: { templateKey: OUTCOME_TEMPLATE_KEY } }, tenant),
     });
