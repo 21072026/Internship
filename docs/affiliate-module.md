@@ -261,7 +261,7 @@ is also why it is not in `PUBLIC_ROUTES`.
 
 Order: hero (apply · partner portal · the product's sign-up page), introduction,
 commission table, steps, a call button, the closing call to action (apply ·
-e-mail) and this host's imprint, privacy and terms. The words are the org's
+e-mail) and the legal footer. The words are the org's
 landing copy (above), with generic dictionary fallbacks (`affiliateLanding`).
 The table is **built from the plan on every render** (`commissionTableRows()`),
 never typed, so the page cannot promise what the engine does not pay; the
@@ -270,6 +270,25 @@ payment of customer no. N on, every customer's payment earns the rate, each
 within its own window. Colours and mark follow the host's brand.
 `src/lib/affiliatePublicPage.ts` loads it; `e2e/affiliate-public-page.spec.ts`
 pins it.
+
+### The legal footer and the public partner terms (#3363)
+
+The page, the form and the terms page share one footer (`src/app/partner/PartnerFooter.tsx`).
+Its Imprint / Privacy / Terms links are the **organisation's own pages** when it set them
+(`landing.imprintUrl` / `privacyUrl` / `termsUrl`, https only, in the admin's landing
+settings) and this host's own `/imprint`, `/privacy`, `/terms` otherwise
+(`legalLinks()`). The texts stay where the organisation publishes them: we link, we do
+not host them (hosting a versioned AGB would be its own task). The form's privacy link
+follows the same rule.
+
+`/partner/terms` shows the **partner contract** — the same text a partner accepts in the
+portal (`AffiliateProgramSettings.contract`), in its current version, read-only and
+signed out; it is a 404 where the host serves no programme or the programme has no
+contract, and the footer links it only when there is one. With a contract, the
+application form asks the applicant to accept it: the body carries the version the form
+was rendered with, the route accepts only the **current** one (else `400` with field
+`contract`, so a form opened before a new version was published asks again) and stores
+it on `AffiliateApplication.contractVersion`.
 
 ### The figure cards (#3364)
 
