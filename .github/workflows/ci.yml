@@ -256,6 +256,13 @@ jobs:
       # shrinks; a new one fails here.
       - name: notifications go through the router (#1711)
         run: npm run check:notify
+      # A query on a TENANT_MODELS model carries its own tenant. The middleware
+      # that would add it is off in every deployment, so a query that leaves the
+      # org to it reads every org (#3578, #3587, #3588). Reviewed-safe sites are
+      # pinned per file, each with its reason, in
+      # scripts/tenant-queries-baseline.json, which only shrinks; a new one fails.
+      - name: tenant-model queries carry their tenant (#3588)
+        run: npm run check:tenant-queries
       # A vertical capability switches a MODULE off, and it only does so if the
       # gate is on every one of that module's write paths. Hiding the nav entry
       # (#2351) is not access control, and the leaked-writer class has now been
