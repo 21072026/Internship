@@ -21,7 +21,7 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 const schema = z.strictObject({
   item: z.enum(SCREENING_ITEMS).optional(),
   done: z.boolean().optional(),
-  interviewAt: z.string().datetime().nullable().optional(),
+  interviewAt: z.iso.datetime().nullable().optional(),
   interviewNotes: z.string().max(TEXT_LIMITS.mentorScreeningInterviewNotes).nullable().optional(),
   referenceName: z.string().max(TEXT_LIMITS.mentorScreeningReference).nullable().optional(),
   referenceContact: z.string().max(TEXT_LIMITS.mentorScreeningReference).nullable().optional(),

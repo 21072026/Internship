@@ -158,7 +158,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 // panel cannot be edited into a shape it could not have been created in.
 const patchSchema = z.object({
   title: z.string().max(160).optional().nullable(),
-  scheduledAt: z.string().datetime().optional().nullable(),
+  scheduledAt: z.iso.datetime().optional().nullable(),
   addInterviewerIds: z.array(z.string().min(1)).max(10).optional(),
   removeInterviewerIds: z.array(z.string().min(1)).max(10).optional(),
 });

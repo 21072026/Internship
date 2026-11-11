@@ -55,7 +55,7 @@ export type EventVisibility = 'public' | 'internal';
 export const EVENT_NAME_MAX = 96;
 
 // A timestamp as producers send it: `Date#toISOString()`.
-const isoInstant = z.string().datetime();
+const isoInstant = z.iso.datetime();
 const id = z.string().min(1);
 
 // One field of a configuration diff, as `redactedDiff()` returns it (#1699).

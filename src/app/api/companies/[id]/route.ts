@@ -26,9 +26,9 @@ import { ensureEmployerSlug } from '@/lib/employerPageStore';
 const updateCompanySchema = z.object({
   name: z.string().min(1).max(TEXT_LIMITS.companyName).optional(),
   description: z.string().max(TEXT_LIMITS.companyDescription).optional(),
-  contactEmail: z.string().email().max(TEXT_LIMITS.companyContactEmail).optional().or(z.literal('')),
+  contactEmail: z.email().max(TEXT_LIMITS.companyContactEmail).optional().or(z.literal('')),
   industry: z.string().max(TEXT_LIMITS.companyIndustry).optional(),
-  logoUrl: z.string().url().max(TEXT_LIMITS.companyLogoUrl).or(z.literal('')).optional(),
+  logoUrl: z.url().max(TEXT_LIMITS.companyLogoUrl).or(z.literal('')).optional(),
   size: z.string().max(TEXT_LIMITS.companySize).optional(),
   address: z.string().max(TEXT_LIMITS.companyAddress).optional(),
   quota: z.number().int().min(0).max(10000).nullable().optional(),

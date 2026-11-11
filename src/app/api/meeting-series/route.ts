@@ -61,7 +61,7 @@ const recurrenceSchema = z.object({
   // The clock `timeOfDay` is on. The browser sends its own IANA zone; an API
   // client may omit it, in which case the deployment default applies.
   timeZone: z.string().min(1).max(64).optional(),
-  meetLink: z.string().url().optional().or(z.literal('')),
+  meetLink: z.url().optional().or(z.literal('')),
   // Length of every occurrence (#1984); omitted → the one default.
   durationMinutes: durationMinutesField,
   // Accepted for backwards compatibility with older clients; occurrences are no

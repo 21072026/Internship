@@ -9,7 +9,7 @@ const capacity = z.number().int().min(EVENT_LIMITS.capacityMin).max(EVENT_LIMITS
 export const createEventSchema = z.object({
   title: z.string().trim().min(1).max(EVENT_LIMITS.titleMax),
   description: z.string().trim().max(EVENT_LIMITS.descriptionMax).optional().nullable(),
-  startsAt: z.string().datetime({ offset: true }),
+  startsAt: z.iso.datetime({ offset: true }),
   timeZone: z.string().min(1).max(64),
   durationMinutes: z.number().int().min(EVENT_LIMITS.durationMin).max(EVENT_LIMITS.durationMax).default(60),
   capacity: capacity.optional().default(null),
@@ -27,7 +27,7 @@ export type CreateEventInput = z.infer<typeof createEventSchema>;
 export const updateEventSchema = z.object({
   title: z.string().trim().min(1).max(EVENT_LIMITS.titleMax).optional(),
   description: z.string().trim().max(EVENT_LIMITS.descriptionMax).optional().nullable(),
-  startsAt: z.string().datetime({ offset: true }).optional(),
+  startsAt: z.iso.datetime({ offset: true }).optional(),
   timeZone: z.string().min(1).max(64).optional(),
   durationMinutes: z.number().int().min(EVENT_LIMITS.durationMin).max(EVENT_LIMITS.durationMax).optional(),
   capacity: capacity.optional(),

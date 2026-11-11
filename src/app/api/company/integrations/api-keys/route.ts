@@ -63,7 +63,7 @@ const schema = z.object({
   name: z.string().trim().min(1).max(80),
   scopes: z.array(z.string()).min(1).max(10),
   // Required here, unlike the admin path: a self-served credential is never permanent.
-  expiresAt: z.string().datetime(),
+  expiresAt: z.iso.datetime(),
 });
 
 export async function POST(request: Request) {

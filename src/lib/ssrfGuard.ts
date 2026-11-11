@@ -8,7 +8,7 @@ import { isIP } from 'node:net';
  * position*, which is a very different place from the admin's browser:
  * `http://127.0.0.1:3306` reaches the database, and
  * `http://169.254.169.254/latest/meta-data/` reaches the cloud metadata service
- * and, with it, instance credentials. `z.string().url()` accepted both.
+ * and, with it, instance credentials. `z.url()` accepted both.
  */
 
 /** Hostnames that are never legitimate outbound targets, whatever they resolve to. */

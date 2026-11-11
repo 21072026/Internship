@@ -6,7 +6,7 @@ import { sendPasswordResetEmail } from '@/services/emailService';
 import { isPasswordLoginBlocked } from '@/lib/ssoEnforcement';
 import { worldForHeaders } from '@/lib/hostWorld';
 
-const schema = z.object({ email: z.string().email() });
+const schema = z.object({ email: z.email() });
 
 // Only the four fields the reset mail needs (plus the two the SSO gate reads).
 // This route is the escape hatch when sign-in fails, so it must not share

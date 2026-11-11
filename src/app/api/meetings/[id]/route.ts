@@ -55,7 +55,7 @@ const patchSchema = z.strictObject({
   scheduledAt: z.string().min(1).optional(),
   timeZone: z.string().max(80).optional(),
   title: z.string().min(1).optional(),
-  meetLink: z.string().url().optional().or(z.literal('')),
+  meetLink: z.url().optional().or(z.literal('')),
   // A new length (#1984); the mirror is re-pushed with the new end.
   durationMinutes: durationMinutesField,
   // Reminder lead (#1636): null = the programme default, 0 = no reminder,

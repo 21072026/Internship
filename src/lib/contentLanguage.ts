@@ -44,11 +44,11 @@ const DOMINANCE = 3;
 /** Long texts are judged on their opening; the evidence saturates quickly. */
 const MAX_CHARS = 2000;
 
-// The languages the detector has evidence for: the keys of WORDS, never a
-// hand copy of the locale list (check:locale-list).
-type Scored = keyof typeof WORDS;
+// Every locale needs its own evidence below: keyed by `Locale`, so a fourth
+// language fails the type check here until it gets a word list (#2082).
+type Scored = Locale;
 
-const WORDS = {
+const WORDS: Record<Scored, ReadonlySet<string>> = {
   en: new Set([
     'the', 'and', 'is', 'are', 'you', 'your', 'of', 'to', 'for', 'with', 'this', 'that', 'it', 'have', 'has',
     'be', 'will', 'not', 'on', 'at', 'we', 'can', 'my', 'our', 'they', 'from', 'would', 'could', 'should',
@@ -67,7 +67,7 @@ const WORDS = {
     'haben', 'wird', 'noch', 'nach', 'bei', 'ihr', 'ihre', 'mein', 'meine', 'dein', 'deine', 'uns', 'euch',
     'schon', 'heute', 'morgen', 'woche', 'gerne', 'viele', 'grüße', 'gruß', 'das', 'dass', 'kann', 'können',
   ]),
-} satisfies Partial<Record<Locale, ReadonlySet<string>>>;
+};
 
 /** Letters only one of the three languages writes. */
 const LETTERS: Array<[RegExp, Scored]> = [

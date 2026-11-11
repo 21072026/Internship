@@ -14,7 +14,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { DEFAULT_VERTICAL } from '@/lib/verticals';
 import { inboundEmailDomain } from '@/lib/replyToken';
 
-const schema = z.object({ to: z.string().email() });
+const schema = z.object({ to: z.email() });
 
 // The brand name is tenant-supplied text going into markup.
 const esc = (s: string) =>

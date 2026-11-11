@@ -17,7 +17,7 @@ const body = z.string().trim().max(20_000).optional();
 const publishSchema = z.strictObject({
   bodies: z.strictObject({ en: body, tr: body, de: body }),
   authoritativeLocale: z.enum(AGREEMENT_LOCALES),
-  effectiveFrom: z.string().datetime().optional(),
+  effectiveFrom: z.iso.datetime().optional(),
 });
 
 
