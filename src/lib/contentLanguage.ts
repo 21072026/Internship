@@ -44,7 +44,9 @@ const DOMINANCE = 3;
 /** Long texts are judged on their opening; the evidence saturates quickly. */
 const MAX_CHARS = 2000;
 
-type Scored = 'en' | 'tr' | 'de';
+// Every locale needs its own evidence below: keyed by `Locale`, so a fourth
+// language fails the type check here until it gets a word list (#2082).
+type Scored = Locale;
 
 const WORDS: Record<Scored, ReadonlySet<string>> = {
   en: new Set([
