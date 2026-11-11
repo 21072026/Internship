@@ -180,7 +180,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       if ('action' in raw) {
         const parsed = actionSchema.safeParse(raw);
         if (!parsed.success) {
-          return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+          return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
         }
         const { action: actionStr, declineReasonCode, declineNote } = parsed.data;
         if (!isOfferAction(actionStr)) {
@@ -313,7 +313,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
       const parsed = editSchema.safeParse(raw);
       if (!parsed.success) {
-        return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+        return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
       }
       const { position, requisitionId, companyId, startDate, compensationNote, expiresAt } = parsed.data;
       const normalizedRequisitionId = requisitionId || null;

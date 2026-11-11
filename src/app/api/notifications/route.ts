@@ -114,7 +114,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const parsed = markReadSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   }
 
   await prisma.notification.updateMany({

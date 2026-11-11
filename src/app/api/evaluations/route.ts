@@ -120,7 +120,7 @@ export async function POST(request: Request) {
 
   return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());
-  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
 
   const rel = await prisma.mentorshipRelation.findUnique({ where: { id: parsed.data.relationId } });
   // Another tenant's relation answers like a missing one, flag on or off (#2542).

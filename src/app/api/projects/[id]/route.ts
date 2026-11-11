@@ -103,7 +103,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (!member) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const parsed = schema.safeParse(await request.json());
-    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     const d = parsed.data;
 
     if (!owner) {

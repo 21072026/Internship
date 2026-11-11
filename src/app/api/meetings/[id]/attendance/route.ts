@@ -68,7 +68,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const limited = enforceRateLimit(request, 'meeting-attendance', { limit: 30, windowMs: 60_000 });
   if (limited) return limited;
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   const id = readId((await params).id);
   return withTenantScope(session, async () => {
     const resolved = await resolveAttendanceTarget(session.user, id);
