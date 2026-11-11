@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**`next build` no longer depends on the `@napi-rs/canvas` native binding (#3590):** `src/lib/cvParse.ts` imported `pdf-parse` at module top. Importing it runs pdfjs-dist, which polyfills `DOMMatrix` from the native binding as a side effect and throws when the binding does not load. Because `next build` imports every route module to collect page data, a binding that failed to load on a runner broke \"Collecting page data\" for the three CV routes. `pdf-parse` is now imported inside `extractCvText()` when a PDF is actually read. Reproduced deterministically with `NAPI_RS_NATIVE_LIBRARY_PATH=/nonexistent`: the build failed before the change and passes after it. The CV e2e specs pass."
+}

@@ -1,0 +1,5 @@
+# 2026-11-11 — #3590: a build step that evaluated a runtime-only native binding
+
+- **An intermittent native-binding failure can usually be made deterministic.** napi-rs loaders honour `NAPI_RS_NATIVE_LIBRARY_PATH`. Pointing it at a file that does not exist makes the binding fail on every run, which turned a one-in-many CI failure into a reproducible red build. That gave a real before/after for the fix, where a re-run would only have shown luck.
+- **`next build` imports every route module to collect page data.** A top-level import with side effects therefore runs at BUILD time, even in a route that is dynamic anyway. pdfjs-dist polyfills `DOMMatrix` from `@napi-rs/canvas` when it is imported. Keep such libraries behind `await import()` inside the function that needs them. `serverExternalPackages` does not help here: it stops bundling, not evaluation.
+- **A fresh container's `npm ci` can move Playwright past the preinstalled browser build.** The fix is a symlink from the build number it asks for to an installed one, e.g. `ln -sfn /opt/pw-browsers/chromium_headless_shell-1248 /opt/pw-browsers/chromium_headless_shell-1254`. Never run `playwright install`.
