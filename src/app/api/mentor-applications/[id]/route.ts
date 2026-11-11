@@ -23,6 +23,15 @@ import { settingsOrgOf } from '@/lib/settingsOrg';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { missingRequired, parseChecklist, parseRequired, type ScreeningItem } from '@/lib/mentorScreeningRule';
 import { carryMentorApplicationAnswers } from '@/lib/forms/publicAnswers';
+import { checkPromotionChoice, type PromotionChoice } from '@/lib/promotionRelationsRule';
+import {
+  afterPromotionEnded,
+  applyPromotionChoice,
+  openMenteeRelations,
+  PromotionConflictError,
+  type EndedRelation,
+  type OpenMenteeRelation,
+} from '@/lib/promotionRelations';
 
 // Admin decide endpoint for #904 mentor applications (#933): take into review,
 // approve (creates or upgrades the MENTOR account), or reject. Mirrors the
@@ -54,7 +63,19 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     // The org's screening policy (#1807) rides along, so the panel can mark
     // which items gate approval without a second request.
     const screeningRequired = parseRequired(await resolveSettingRaw('mentorScreeningRequired', { orgId: await settingsOrgOf(session) }));
-    return NextResponse.json({ application, screeningRequired });
+    // The applicant's own open mentee relations (#1506): approving promotes a
+    // MENTEE account in place, and the admin decides what happens to them.
+    // The same world rule as the approval below.
+    const undecided = application.status === 'PENDING' || application.status === 'UNDER_REVIEW';
+    const account = undecided
+      ? await prisma.user.findFirst({
+          where: { email: application.email, role: 'MENTEE', ...worldUserWhere(await worldOfOrg(application.orgId)) },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+        })
+      : null;
+    const openRelations = account ? await openMenteeRelations(prisma, account.id) : [];
+    return NextResponse.json({ application, screeningRequired, openRelations });
   });
 }
 
@@ -62,11 +83,22 @@ const decideSchema = z.object({
   action: z.enum(['review', 'approve', 'reject', 'note']),
   reason: z.string().min(1).max(2000).optional(),
   note: z.string().max(2000).optional(),
+  // What happens to the applicant's own open mentee relations (#1506):
+  // z.string() + the whitelist in promotionRelationsRule.ts, never z.enum.
+  promotionChoice: z.string().max(16).optional(),
 });
 
 // A signal (not a real error) used to unwind the approve transaction when the
 // email belongs to an account whose role we must not silently repurpose.
 class RoleConflictError extends Error {}
+
+// The promotion needs the admin's choice for the applicant's open mentee
+// relations (#1506); unwinds the approval transaction like the two above.
+class PromotionChoiceError extends Error {
+  constructor(public code: 'promotion_choice_required' | 'invalid_promotion_choice', public openRelations: OpenMenteeRelation[]) {
+    super(code);
+  }
+}
 
 // Unwinds the approve transaction when the org's screening policy (#1807)
 // names items that are not done yet.
@@ -87,7 +119,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const parsed = decideSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
-  const { action, reason, note } = parsed.data;
+  const { action, reason, note, promotionChoice } = parsed.data;
   if (action === 'reject' && !reason?.trim()) {
     return NextResponse.json({ error: 'A rejection reason is required' }, { status: 400 });
   }
@@ -237,12 +269,30 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         if (existingUser.role !== 'MENTEE' && existingUser.role !== 'MENTOR') {
           throw new RoleConflictError();
         }
+        // A MENTEE promoted in place may still be the mentee of open
+        // relations (#1506): the admin chooses what happens to them, in this
+        // transaction, or the approval does not go through.
+        let promotion: { choice: PromotionChoice | null; changed: string[]; ended: EndedRelation[] } = { choice: null, changed: [], ended: [] };
+        if (existingUser.role === 'MENTEE') {
+          const open = await openMenteeRelations(tx, existingUser.id);
+          const check = checkPromotionChoice(open.length, promotionChoice);
+          if (!check.ok) throw new PromotionChoiceError(check.code, open);
+          if (check.choice) {
+            promotion = { choice: check.choice, ...(await applyPromotionChoice(tx, { userId: existingUser.id, choice: check.choice, actorId: session.user.id })) };
+          }
+        }
         const user = existingUser.role === 'MENTOR'
           ? existingUser
           : await tx.user.update({
               where: { id: existingUser.id },
               data: {
                 role: 'MENTOR',
+                // The role lives in the JWT until the next sign-in: without a
+                // cutoff the promoted account kept a MENTEE token (#1506) — the
+                // same stamp the admin's role convert writes. Like that path it
+                // leaves remembered devices alone: their refresh reads the user
+                // fresh and mints the new role (src/lib/trustedDevice.ts).
+                sessionsValidFrom: new Date(),
                 mentorCapacity: existingUser.mentorCapacity ?? application.capacity ?? undefined,
                 // Only fill in skills if the account has none yet — never
                 // overwrite what the person already curated on their profile.
@@ -258,7 +308,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
                 emailNotifications: true, notificationPrefs: true, skills: true, mentorCapacity: true,
               },
             });
-        return { outcome: 'promoted' as const, user };
+        return { outcome: 'promoted' as const, user, promotion };
       }
 
       const token = crypto.randomBytes(32).toString('hex');
@@ -281,6 +331,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return { outcome: 'invited' as const, invitation };
     }).catch((e) => {
       if (e instanceof RoleConflictError) return { outcome: 'role_conflict' as const };
+      if (e instanceof PromotionChoiceError) return { outcome: 'promotion_choice' as const, code: e.code, openRelations: e.openRelations };
+      if (e instanceof PromotionConflictError) return { outcome: 'promotion_conflict' as const };
       if (e instanceof ScreeningIncompleteError) return { outcome: 'screening_incomplete' as const, missing: e.missing };
       throw e;
     });
@@ -294,6 +346,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         { status: 409 }
       );
     }
+    if (result.outcome === 'promotion_choice') {
+      return NextResponse.json(
+        { error: 'Choose what happens to the applicant’s open mentee relations', code: result.code, openRelations: result.openRelations },
+        { status: 400 }
+      );
+    }
+    if (result.outcome === 'promotion_conflict') {
+      return NextResponse.json({ error: 'A relation changed meanwhile', code: 'promotion_conflict' }, { status: 409 });
+    }
     if (result.outcome === 'role_conflict') {
       return NextResponse.json(
         { error: 'An account with a different role already exists for this email', code: 'role_conflict' },
@@ -303,6 +364,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     if (result.outcome === 'promoted') {
       const user = result.user;
+      await afterPromotionEnded(result.promotion.ended, session.user.id);
       // Dual-write the canonical twin of the (possibly just copied) list (#1818).
       await syncUserSkills(user.id, user.orgId, Array.isArray(user.skills) ? (user.skills as string[]) : []);
       // The answers staged on the application (#1803) now have an account.
@@ -344,7 +406,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       actorEmail: session.user.email ?? null,
       targetType: 'mentor_application',
       targetId: id,
-      detail: `approved · ${result.outcome}`,
+      detail:
+        `approved · ${result.outcome}` +
+        (result.outcome === 'promoted' && result.promotion.choice
+          ? ` · open relations ${result.promotion.choice} (${result.promotion.changed.length})`
+          : ''),
       request,
     });
 
