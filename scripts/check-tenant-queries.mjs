@@ -46,7 +46,7 @@
 //      node scripts/check-tenant-queries.mjs --shrink
 //      node scripts/check-tenant-queries.mjs --list      (every unscoped site)
 
-import { readFileSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 
 const SRC_DIR = 'src/app';
@@ -162,7 +162,14 @@ function main() {
     return;
   }
   const counts = countByFile(sites);
-  const baseline = existsSync(BASELINE_FILE) ? JSON.parse(readFileSync(BASELINE_FILE, 'utf8')) : { reviewed: {} };
+  // Read, don't check-then-read: a missing file is the only case that falls
+  // back to an empty baseline (CodeQL js/file-system-race).
+  let baseline = { reviewed: {} };
+  try {
+    baseline = JSON.parse(readFileSync(BASELINE_FILE, 'utf8'));
+  } catch (err) {
+    if (err?.code !== 'ENOENT') throw err;
+  }
   const reviewed = baseline.reviewed ?? {};
   const errors = [];
 
