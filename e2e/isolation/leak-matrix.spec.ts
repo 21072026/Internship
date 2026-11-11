@@ -189,6 +189,12 @@ test("PUT /api/mentorship/<A's relation> as B's admin: 404 and the row is untouc
   expect(after.nextActionNote).toBe(before.nextActionNote);
 });
 
+test("GET /api/weekly-reports?relationId=<A's relation> as B's admin: 404 (#3588)", async ({ browser }) => {
+  const request = await requestAs(browser, 'B', 'admin');
+  const res = await request.get(`/api/weekly-reports?relationId=${tenants.orgA.relation.id}`);
+  expect(res.status(), 'a cross-tenant read must read as not found').toBe(404);
+});
+
 test("GET, PATCH and close /api/interview-panels/<A's panel> as B's admin: 404 and the row is untouched (#3588)", async ({ browser }) => {
   const request = await requestAs(browser, 'B', 'admin');
   expect((await request.get(`/api/interview-panels/${rows.A.panel.id}`)).status(), 'a cross-tenant read must read as not found').toBe(404);
