@@ -7,7 +7,7 @@ export const createInterviewRequestSchema = z.strictObject({
   requisitionId: z.string().min(1),
   menteeId: z.string().min(1),
   note: z.string().trim().max(1000).nullable().optional(),
-  proposedSlots: z.array(z.string().datetime({ offset: true })).max(5).optional(),
+  proposedSlots: z.array(z.iso.datetime({ offset: true })).max(5).optional(),
 });
 
 export const decideInterviewRequestSchema = z.strictObject({
@@ -29,7 +29,7 @@ export const MAX_INTERVIEW_GUESTS = 5;
 
 export const scheduleInterviewRequestSchema = z.strictObject({
   /** The confirmed instant, zone-qualified. One of the proposed slots unless `override` is set. */
-  slot: z.string().datetime({ offset: true }),
+  slot: z.iso.datetime({ offset: true }),
   /** The IANA zone the approver picked the slot on — stored on the Meeting, named in every mail. */
   timeZone: z.string().trim().min(1).max(80),
   durationMinutes: z.number().int().min(15).max(480).optional(),

@@ -48,7 +48,7 @@ const companySchema = z.object({
     .optional()
     .or(z.literal('')),
   industry: z.string().max(TEXT_LIMITS.companyIndustry).optional(),
-  logoUrl: z.string().url().max(TEXT_LIMITS.companyLogoUrl).or(z.literal('')).optional(),
+  logoUrl: z.url().max(TEXT_LIMITS.companyLogoUrl).or(z.literal('')).optional(),
   size: z.string().max(TEXT_LIMITS.companySize).optional(),
   address: z.string().max(TEXT_LIMITS.companyAddress).optional(),
   quota: z.number().int().min(0).max(10000).nullable().optional(),

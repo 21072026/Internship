@@ -20,7 +20,7 @@ export const REQUISITION_LIMITS = {
 } as const;
 
 const nullableText = (max: number) => z.string().trim().max(max).nullable().optional();
-const isoDate = z.string().datetime({ offset: true }).nullable().optional();
+const isoDate = z.iso.datetime({ offset: true }).nullable().optional();
 
 export const requisitionInputSchema = z.strictObject({
   companyId: z.string().min(1).optional(),

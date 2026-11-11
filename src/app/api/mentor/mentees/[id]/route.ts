@@ -13,7 +13,7 @@ import { isErasedAccount, isPendingActivation, isUnusableEmail } from '@/lib/men
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 
-const schema = z.object({ email: z.string().email() });
+const schema = z.object({ email: z.email() });
 
 // PATCH — set the real e-mail on a mentee record and send the activation link.
 //

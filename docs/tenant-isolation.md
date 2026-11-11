@@ -20,6 +20,21 @@ Every existing row is backfilled to a single `default` org, so the live app is
 effectively single-tenant and **nothing filters by `orgId` in production** (the
 flag is off).
 
+## Every tenant-model query carries its tenant (#3588)
+
+`npm run check:tenant-queries` (CI, `scripts/check-tenant-queries.mjs`) scans
+`src/app/**` for a Prisma query on a `TENANT_MODELS` model whose arguments carry
+no tenant: no `orgId`, no scoping helper (`withinTenant`, `tenantWhere`,
+`orgWhere`, `visibleApplicationsWhere`, … — the list is in the script, each one
+read before it was added), not the caller's own row, and — for a one-row read —
+no `inCallerTenant` / `assertSameOrg`-style guard right after it. Such a query
+reads every org's rows in production, where the middleware is off. Sites that
+are safe for a reason the scan cannot see (an id from a row already fetched with
+an org filter, a sessionless token route, a public asset) are pinned per file in
+`scripts/tenant-queries-baseline.json`, **each with the reason**, and the list
+only shrinks (`-- --shrink`). A new unscoped query fails the check: scope it, or
+add a reviewed entry that says why it is safe. `-- --list` prints every site.
+
 ## The leak matrix runs twice (#3588)
 
 `e2e/isolation/leak-matrix.spec.ts` runs in the `isolation-gate` job with

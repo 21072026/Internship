@@ -37,7 +37,10 @@ export function zodToJsonSchema(schema: ZodType): JsonSchema {
     case 'string': {
       const checks = checksOf(def);
       const out: JsonSchema = { type: 'string' };
-      if (checks.some((c) => c.check === 'string_format' && c.format === 'datetime')) out.format = 'date-time';
+      // `z.iso.datetime()` carries the format on the type itself; the older
+      // `z.string().datetime()` carried it as a check (#3568). Same contract.
+      const isDateTime = def.format === 'datetime' || checks.some((c) => c.check === 'string_format' && c.format === 'datetime');
+      if (isDateTime) out.format = 'date-time';
       if (checks.some((c) => c.check === 'min_length')) out.minLength = 1;
       return out;
     }

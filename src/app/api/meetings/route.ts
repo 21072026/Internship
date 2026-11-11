@@ -29,7 +29,7 @@ const schema = z.object({
   title: z.string().min(1),
   // Optional: omit/empty → a no-time meeting (just a link, no RSVP/reminder).
   scheduledAt: z.string().optional().or(z.literal('')),
-  meetLink: z.string().url().optional().or(z.literal('')),
+  meetLink: z.url().optional().or(z.literal('')),
   // The clock the organizer typed the time on — the browser's zone, not their
   // saved profile zone, since the two differ exactly when someone is travelling
   // (#1210). Stored on the meeting so the invite can name the reading that was

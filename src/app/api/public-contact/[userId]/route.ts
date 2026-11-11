@@ -13,7 +13,7 @@ import { sendPublicContactEmail } from '@/services/emailService';
 // honeypot field, a minimum render-to-submit time, and a per-IP rate limit.
 const schema = z.object({
   name: z.string().min(1).max(120),
-  email: z.string().email().max(200),
+  email: z.email().max(200),
   message: z.string().min(1).max(TEXT_LIMITS.publicContactMessage),
   // Honeypot — accept any string so a filled value passes validation and is
   // dropped silently by the handler (a 400 here would leak the trap to bots).

@@ -70,9 +70,9 @@ const updateProfileSchema = z.object({
     },
     { message: 'Invalid IANA timezone' }
   ),
-  linkedinUrl: z.string().url().max(TEXT_LIMITS.profileUrl).or(z.literal('')).optional(),
-  githubUrl: z.string().url().max(TEXT_LIMITS.profileUrl).or(z.literal('')).optional(),
-  portfolioUrl: z.string().url().max(TEXT_LIMITS.profileUrl).or(z.literal('')).optional(),
+  linkedinUrl: z.url().max(TEXT_LIMITS.profileUrl).or(z.literal('')).optional(),
+  githubUrl: z.url().max(TEXT_LIMITS.profileUrl).or(z.literal('')).optional(),
+  portfolioUrl: z.url().max(TEXT_LIMITS.profileUrl).or(z.literal('')).optional(),
   // The saved personal video room (#2007). Shape here, meaning below: the
   // https / no-credentials / not-our-host rule is checkPastedMeetingLink, the
   // same door every pasted meeting link goes through.

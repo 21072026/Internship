@@ -47,7 +47,7 @@ export async function GET(request: Request) {
 const createSchema = z.strictObject({
   relationId: z.string().min(1).max(191),
   type: z.enum(INTERACTION_TYPES),
-  date: z.string().datetime({ offset: true }),
+  date: z.iso.datetime({ offset: true }),
   subject: z.string().max(TEXT_LIMITS.interactionSubject).optional(),
   notes: z.string().trim().min(1).max(TEXT_LIMITS.interactionNotes),
   // The app's own bound (#3521, src/lib/interactionSchema.ts).

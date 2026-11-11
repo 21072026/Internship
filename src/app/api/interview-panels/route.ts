@@ -24,7 +24,7 @@ const createSchema = z.object({
   subjectId: z.string().min(1),
   interviewerIds: z.array(z.string().min(1)).min(1).max(10),
   title: z.string().max(160).optional().nullable(),
-  scheduledAt: z.string().datetime().optional().nullable(),
+  scheduledAt: z.iso.datetime().optional().nullable(),
 });
 
 export async function POST(request: Request) {

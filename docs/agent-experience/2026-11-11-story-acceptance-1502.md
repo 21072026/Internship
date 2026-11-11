@@ -1,0 +1,5 @@
+# 2026-11-11 — #1502: checking a story against its criteria found a missed reader
+
+- **A rule that moves to a helper leaves readers behind wherever that reader never named the old field the way you grep for it.** #1505 moved time-to-hire to `funnelStartedAt()` in four routes. The cohort/programme comparison computes the same figure as `avgDaysToHired` inside `comparisonRow()` (`src/lib/analyticsReports.ts`) and was missed. Grepping for the helper's users finds where it is used, not where it should be. To find the latter, grep for the raw arithmetic too (`startDate.getTime()` next to a stage-change timestamp).
+- **Run the new assertion against the old build before the fix.** The spec read 140 instead of 85 on `main`, which proves it pins the bug and not just the fix.
+- The other criteria hold, and the evidence is in the #1502 closing comment: one `CANONICAL_OUTCOME_KEYS` / `outcomeStageKeys` definition, `PLACEMENT_RELATION_WHERE` on every analytics reader, and `countsAsPlacement()` and `isOurHire(null) === true` keeping old rows' numbers.

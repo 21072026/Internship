@@ -90,7 +90,7 @@ export async function GET(request: Request) {
 const schema = z.object({
   name: z.string().trim().min(1).max(SOURCE_NAME_MAX),
   contactName: z.string().max(120).optional(),
-  contactEmail: z.string().email().max(160).optional().or(z.literal('')),
+  contactEmail: z.email().max(160).optional().or(z.literal('')),
 });
 
 // POST — create a source (admin).

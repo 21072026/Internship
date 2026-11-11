@@ -1,0 +1,717 @@
+{
+  "_doc": [
+    "Tenant-model queries in src/app that the static check cannot see a tenant on, each file reviewed and found safe (#3588). Checked by scripts/check-tenant-queries.mjs (npm run check:tenant-queries).",
+    "reviewed: { count, reason } per file. The reason says why EVERY counted site in that file is safe; it was written from the code in the #3588 audit.",
+    "Only shrinks: lower or delete an entry with  npm run check:tenant-queries -- --shrink  after scoping a query. A new entry needs a reviewer to read the sites and write the reason — prefer scoping the query (withinTenant(…, await tenantWhere(session)))."
+  ],
+  "reviewed": {
+    "src/app/affiliate/contract/page.tsx": {
+      "count": 1,
+      "reason": "The acceptance is keyed on partnerId_version with partner.id from portalPartner(), which reads the caller's own AffiliatePartner by { orgId: session.user.orgId, userId: session.user.id }."
+    },
+    "src/app/api/account/export/route.ts": {
+      "count": 3,
+      "reason": "Self-service GDPR export: every read keys on `id = session.user.id` (the user row, and relations where menteeId/mentorId is the caller), so only the caller's own data is returned."
+    },
+    "src/app/api/account/impersonations/route.ts": {
+      "count": 4,
+      "reason": "All AuditLog reads key on targetId = userId (session.user.id), the caller's own access record; the User.findMany only resolves display names of the actorIds on those rows, and those actors may be super admins outside the org by design (the route returns fullName only)."
+    },
+    "src/app/api/account/route.ts": {
+      "count": 2,
+      "reason": "Both sites are the caller's own row: `user` (L99) was read by `session.user.id` and `id` (L152) is `session.user.id`."
+    },
+    "src/app/api/admin/agenda-templates/route.ts": {
+      "count": 4,
+      "reason": "The update/findUniqueOrThrow pairs key on `existing.id` / `target.id`, each fetched just above with `withinTenant(..., await tenantWhere(session))`."
+    },
+    "src/app/api/admin/analytics/aging/route.ts": {
+      "count": 1,
+      "reason": "The User.findMany keys on `id: { in: relations.map(r => r.mentee.id) }`, where `relations` was read with `withinTenant(..., tenant)` (L73)."
+    },
+    "src/app/api/admin/analytics/outcomes/route.ts": {
+      "count": 2,
+      "reason": "Survey.update keys on `made.id` just created by createSurvey(orgId, ...) for the caller's org, and SurveyCampaign.findFirst keys on `survey.id`, which was read with `withinTenant({templateKey}, tenant)` or just created."
+    },
+    "src/app/api/admin/analytics/skills-gap/route.ts": {
+      "count": 3,
+      "reason": "Cohort.findFirst spreads `...tenant` from tenantWhere(session) into its where; the relations are keyed on that verified cohortId; Skill.findMany reads labels for skillIds from tenant-scoped holdings/requisitions (and Skill labels are catalogue data)."
+    },
+    "src/app/api/admin/announcements/[id]/cancel/route.ts": {
+      "count": 1,
+      "reason": "The updateMany keys on `id` only after `existing` was found with `withinTenant({ id }, tenant)` and a miss returns 404."
+    },
+    "src/app/api/admin/announcements/[id]/route.ts": {
+      "count": 3,
+      "reason": "PATCH update/findUnique and DELETE delete key on `id` only after `existing` was fetched with `withinTenant({ id }, await tenantWhere(session))` and a miss returns 404."
+    },
+    "src/app/api/admin/announcements/route.ts": {
+      "count": 2,
+      "reason": "User.findMany resolves sender names for `sentById` of announcements read with `withinTenant({}, tenant)`; Announcement.update keys on `announcement.id` just created by this handler."
+    },
+    "src/app/api/admin/attributes/route.ts": {
+      "count": 2,
+      "reason": "The reorder update runs only after every id in `order` was checked against `own` (orgAttribute.findMany({ where: { orgId } })), and the single update keys on `target.id` from findFirst({ id, orgId }); orgId comes from settingsOrgOf(session)."
+    },
+    "src/app/api/admin/automations/[id]/route.ts": {
+      "count": 1,
+      "reason": "The update keys on `current.id` from findOrgRule(orgId, id), which is automationRule.findFirst({ where: { id, orgId } }) with orgId = settingsOrgOf(session)."
+    },
+    "src/app/api/admin/candidates/bulk/route.ts": {
+      "count": 1,
+      "reason": "The update keys on `rel.id` from `relations`, read with `withinTenant({ menteeId: { in: candidateIds }, status: 'ACTIVE' }, tenant)` (L284)."
+    },
+    "src/app/api/admin/companies/[id]/channels/route.ts": {
+      "count": 1,
+      "reason": "The deleteMany keys on `company.id`, fetched with `withinTenant({ id }, await tenantWhere(session))`, 404 on a miss."
+    },
+    "src/app/api/admin/document-requirements/[id]/route.ts": {
+      "count": 2,
+      "reason": "Update/delete run only after the stored row's org passes mayManageOrgRequirements(session, current.orgId) (404 otherwise); deliberately cross-org only for a super admin, per the file header."
+    },
+    "src/app/api/admin/duplicates/merge/route.ts": {
+      "count": 1,
+      "reason": "The User.findMany only resolves names for the two mentor ids in a MergeError raised on primaryId/duplicateId, both verified with `withinTenant(..., tenant)` beforehand."
+    },
+    "src/app/api/admin/email-log/route.ts": {
+      "count": 6,
+      "reason": "Super-admin only (superAdminWorld(session), 403 otherwise) and scoped per world by `inWorld`; the two User.findMany read emails only to build that world filter (never returned), and the one groupBy without `inWorld` (L110) is the deliberately installation-wide 24h relay quota count by transport, with no addresses."
+    },
+    "src/app/api/admin/goal-templates/route.ts": {
+      "count": 2,
+      "reason": "Both updates key on `existing.id` / `target.id`, fetched with `withinTenant(..., tenant)` from tenantWhere(session)."
+    },
+    "src/app/api/admin/health/route.ts": {
+      "count": 3,
+      "reason": "Snapshot reads key on relationIds from `scored`/`pageIds`, which come from mentorshipRelation.findMany({ where: activeWhere }) built with withinTenant(..., tenant); Cohort.findMany keys on cohortIds taken from those same tenant-scoped relations."
+    },
+    "src/app/api/admin/hiring/queues/route.ts": {
+      "count": 5,
+      "reason": "Every where (`stalledWhere`, `expiringWhere`, `emptyWhere`, inline) carries `orgId` = resolveOrgId(session), and an org-less caller is refused before them. They are flagged only because they were built more than 40 lines above."
+    },
+    "src/app/api/admin/holiday-calendars/[id]/route.ts": {
+      "count": 1,
+      "reason": "The update keys on `owned.id` from holidayCalendar.findFirst({ where: { id, orgId } }) with orgId = settingsOrgOf(session)."
+    },
+    "src/app/api/admin/import/route.ts": {
+      "count": 1,
+      "reason": "The User.findMany is the deliberate per-world 'already exists' check (worldUserWhere(world), docs/worlds.md #2590). It matches only the addresses the admin uploaded and returns only those emails into the `taken` set used to plan rows."
+    },
+    "src/app/api/admin/invitations/bulk/route.ts": {
+      "count": 1,
+      "reason": "The resend update keys on `row.id` from `rows`, read with `withinTenant({ id: { in: ids } }, tenant)` (L109)."
+    },
+    "src/app/api/admin/invite/bulk/route.ts": {
+      "count": 2,
+      "reason": "InvitationToken.findMany spreads `pendingOrgWhere` = invitationOrgWhere(orgId) (a scoping helper, flagged only because it is held in a variable). The User.findMany is the deliberate per-world existence pre-flight (worldUserWhere(inviterWorld), as in single /api/invite) over the admin's own supplied addresses."
+    },
+    "src/app/api/admin/match-decisions/route.ts": {
+      "count": 1,
+      "reason": "User.findMany resolves names for mentorId/menteeId/decidedById of MatchDecision rows read with `withinTenant(..., await tenantWhere(session))`."
+    },
+    "src/app/api/admin/match-rounds/[id]/diagnostics/route.ts": {
+      "count": 1,
+      "reason": "The proposals read keys on `round.id`, fetched with `withinTenant({ id }, tenant)` and 404 on a miss."
+    },
+    "src/app/api/admin/match-rounds/[id]/proposals/route.ts": {
+      "count": 4,
+      "reason": "Every MatchProposal read keys on `roundId: round.id` (round fetched with `withinTenant({ id }, tenant)`) or on ids already confirmed in that round (`proposal.id`, `eligible`)."
+    },
+    "src/app/api/admin/match-rounds/[id]/publish/route.ts": {
+      "count": 1,
+      "reason": "The locked-proposals read keys on `round.id`, fetched with `withinTenant({ id }, tenant)`; the people it names are re-read with `withinTenant`."
+    },
+    "src/app/api/admin/match-rounds/[id]/route.ts": {
+      "count": 4,
+      "reason": "The updateMany/findUnique/deleteMany calls key on `round.id`, fetched with `withinTenant({ id }, await tenantWhere(session))` in both PATCH and DELETE, 404 on a miss."
+    },
+    "src/app/api/admin/match-rounds/[id]/run/route.ts": {
+      "count": 2,
+      "reason": "The claim updateMany and proposals deleteMany key on `round.id`, fetched with `withinTenant({ id }, tenant)` at the top of the handler."
+    },
+    "src/app/api/admin/matching/simulate/route.ts": {
+      "count": 1,
+      "reason": "The relations read keys on `cohort.id`, verified with `withinTenant({ id: body.cohortId }, tenant)` and 404 on a miss."
+    },
+    "src/app/api/admin/message-templates/route.ts": {
+      "count": 2,
+      "reason": "Both updates key on `existing.id` / `target.id`, fetched with `withinTenant(..., tenant)` from tenantWhere(session)."
+    },
+    "src/app/api/admin/newsletters/[id]/route.ts": {
+      "count": 3,
+      "reason": "PATCH updates and DELETE delete key on `id` only after `existing` was fetched with `withinTenant({ id }, await tenantWhere(session))`, 404 on a miss."
+    },
+    "src/app/api/admin/newsletters/[id]/send/route.ts": {
+      "count": 2,
+      "reason": "Both updates key on `id` only after `issue` was fetched with `withinTenant({ id }, await tenantWhere(session))`, 404 on a miss."
+    },
+    "src/app/api/admin/newsletters/route.ts": {
+      "count": 2,
+      "reason": "User.findMany resolves author names for `createdById` of issues read with `withinTenant({}, tenant)`; Newsletter.update keys on `created.id` just created by this handler."
+    },
+    "src/app/api/admin/plan-requests/route.ts": {
+      "count": 1,
+      "reason": "Super-admin only (superAdminWorld, 403 otherwise) and deliberately cross-org within the caller's world. The User.findMany resolves requestedById of rows filtered by `org: orgWorldWhere(world)`."
+    },
+    "src/app/api/admin/programs/[id]/journey/[stepId]/route.ts": {
+      "count": 3,
+      "reason": "loadStep keys on `programId: program.id`, and the updates key on `current.id` from it; `program` comes from journeyProgramFor → programGate, which reads the cohort with `withinTenant({ id }, await tenantWhere(session))` and 404s otherwise."
+    },
+    "src/app/api/admin/programs/[id]/journey/route.ts": {
+      "count": 7,
+      "reason": "Every read/write keys on `programId: program.id` (or `cohortId: program.id`), and `program` is the tenant-checked cohort from journeyProgramFor → programGate (withinTenant + tenantWhere). Reorder ids are confirmed against that program first."
+    },
+    "src/app/api/admin/relation-health/[id]/route.ts": {
+      "count": 1,
+      "reason": "The snapshot read keys on relationId `id` only after the relation's orgId passed `inCallerTenant(relation.orgId, resolveOrgId(session))`, 404 otherwise."
+    },
+    "src/app/api/admin/relations/[id]/participants/route.ts": {
+      "count": 2,
+      "reason": "Both User.findUnique key on `relation.mentorId` / `relation.menteeId` of a relation fetched with `withinTenant({ id }, tenant)`, 404 on a miss."
+    },
+    "src/app/api/admin/report-subscriptions/[id]/route.ts": {
+      "count": 2,
+      "reason": "update and delete key on `sub.id`, the row `own(id, gate.orgId)` already fetched with `{ id, orgId }` from subscriptionAdminOrg(); another org's id 404s before the write."
+    },
+    "src/app/api/admin/roles/route.ts": {
+      "count": 2,
+      "reason": "The admin list's where is `{ AND: [{ role: 'ADMIN' }, scope] }` with `scope = await orgWhere(g.orgId)`, and the granter lookup takes `{ id: { in: granterIds } }` from the createdById of grants on those org-scoped admins, selecting names only."
+    },
+    "src/app/api/admin/safeguarding/[id]/route.ts": {
+      "count": 1,
+      "reason": "update keys on `id` only after `safeguardingFlag.findFirst({ where: { id, orgId } })` with `orgId = settingsOrgOf(session)` found the flag; another org's id 404s."
+    },
+    "src/app/api/admin/safeguarding/route.ts": {
+      "count": 3,
+      "reason": "Both counts spread `base`, which is built with `orgId` from settingsOrgOf(session) a few lines above; the sender lookup is `{ id: { in: senderIds } }` taken from the org-scoped flags just read."
+    },
+    "src/app/api/admin/saved-views/[id]/route.ts": {
+      "count": 2,
+      "reason": "update/delete key on `id` only after loadOwned() found it with `withinTenant({ id }, await tenantWhere(session))` and confirmed the caller authored it (or is super admin)."
+    },
+    "src/app/api/admin/saved-views/route.ts": {
+      "count": 1,
+      "reason": "update keys on `existing.id`, a row just read with `withinTenant({ surface, name, createdById: session.user.id }, tenantWhere(session))` — the caller's own view in their tenant."
+    },
+    "src/app/api/admin/settings/history/route.ts": {
+      "count": 1,
+      "reason": "The where is `{ AND: [{ OR: layers }, …] }` where `layers` starts as `[{ orgId }]` from settingsOrgOf(session) and only adds the global NULL-org layer for isSuperAdmin; the check cannot see `orgId` inside the `layers` variable."
+    },
+    "src/app/api/admin/sources/[id]/route.ts": {
+      "count": 2,
+      "reason": "Both writes key on `id` only after `source.findFirst({ where: withinTenant({ id }, tenantWhere(session)) })` confirmed the source is the caller's tenant's; the user updateMany only clears sourceId pointing at that verified source."
+    },
+    "src/app/api/admin/sources/route.ts": {
+      "count": 1,
+      "reason": "findUniqueOrThrow keys on `result.id`, the row findOrCreateSource(orgId, …) just created under the caller's resolveOrgId/defaultOrgId org."
+    },
+    "src/app/api/admin/support/reports/[id]/github/route.ts": {
+      "count": 2,
+      "reason": "Both writes run only after the conditional claim `updateMany({ where: { id, orgId: admin.orgId, githubIssueUrl: null } })` changed a row, so `id` is proven the caller's org's (reportAdminOrg); the release updateMany is additionally limited to the pending marker this request set."
+    },
+    "src/app/api/admin/survey-campaigns/[id]/route.ts": {
+      "count": 1,
+      "reason": "findUnique by `id` runs only after `updateMany({ where: withinTenant({ id }, tenantWhere(session)) })` matched a row (count 0 returns 404), so the id is the caller's tenant's."
+    },
+    "src/app/api/admin/users/[id]/reset-2fa/route.ts": {
+      "count": 1,
+      "reason": "tx.user.update keys on `user.id` from `user.findFirst({ where: withinTenant({ id }, tenantWhere(session)) })`; another tenant's user 404s first."
+    },
+    "src/app/api/admin/users/[id]/sign-out-all/route.ts": {
+      "count": 1,
+      "reason": "update keys on `user.id` from `user.findFirst({ where: withinTenant({ id }, tenantWhere(session)) })`; another tenant's user 404s first."
+    },
+    "src/app/api/admin/users/[id]/sso-exempt/route.ts": {
+      "count": 1,
+      "reason": "update keys on `user.id` after the explicit org check `isSuperAdminFor(session, user.orgId) || callerOrgId === user.orgId` (403 otherwise), which is more than 40 lines above the write."
+    },
+    "src/app/api/admin/weekly-reports/[relationId]/route.ts": {
+      "count": 1,
+      "reason": "weeklyReport.findMany keys on `relationId` only after the relation was fetched and checked with `inCallerTenant(relation.orgId, session.user.orgId)` plus canReadWeeklyReports; another org's relation 404s."
+    },
+    "src/app/api/agendas/personalize/route.ts": {
+      "count": 1,
+      "reason": "findUnique keys on `rel.id`, the relation of the agenda returned by agendaIfAllowed(session, agendaId), which already refused agendas the caller may not reach (missing → 404, forbidden → 403)."
+    },
+    "src/app/api/ai/artifacts/[id]/route.ts": {
+      "count": 2,
+      "reason": "PATCH's findUnique is followed by `a.subjectUserId !== session.user.id → 404`, so only the caller's own artefact (their own data, their org) reaches the update keyed on that same id."
+    },
+    "src/app/api/applications/[id]/route.ts": {
+      "count": 2,
+      "reason": "findFirst is `{ id, ...scope }` with `scope = visibleApplicationsWhere(seatScopedActor({ …, orgId }))`; the findUniqueOrThrow re-reads `current.id`, that scoped row, after the move."
+    },
+    "src/app/api/applications/[id]/stage/route.ts": {
+      "count": 2,
+      "reason": "findFirst is `{ id, ...scope }` with `scope = visibleApplicationsWhere(seatScopedActor({ …, orgId }))`; the findUniqueOrThrow re-reads `current.id`, that scoped row."
+    },
+    "src/app/api/applications/bulk-stage/route.ts": {
+      "count": 1,
+      "reason": "findMany is `{ id: { in: uniqueIds }, ...scope }` with `scope = visibleApplicationsWhere(seatScopedActor({ …, orgId }))`; ids outside it are skipped as not_found and never written."
+    },
+    "src/app/api/apply/route.ts": {
+      "count": 2,
+      "reason": "Public-by-design apply link: the user lookup is the mentor named in the link (active MENTOR/ADMIN, refused unless that mentor's own org has the mentorship capability) and returns only fullName and an accepting flag; the relation count is that mentor's own active load, folded into the boolean and never returned."
+    },
+    "src/app/api/auth/reset/route.ts": {
+      "count": 1,
+      "reason": "Sessionless token route: user.update keys on `record.userId` from the passwordResetToken looked up by the secret token and checked unused/unexpired."
+    },
+    "src/app/api/auth/verify-email/route.ts": {
+      "count": 1,
+      "reason": "Sessionless token route: user.findUnique keys on `record.userId` from the emailVerificationToken looked up by the secret token and checked unused/unexpired."
+    },
+    "src/app/api/availability/exceptions/route.ts": {
+      "count": 1,
+      "reason": "zoneOf(mentorId) reads only the timezone of a mentorId returned by writableMentorId() — the caller, or for an ADMIN a user verified by mayWriteAvailabilityFor() with `{ id, orgId: resolveOrgId(session) }`."
+    },
+    "src/app/api/availability/route.ts": {
+      "count": 1,
+      "reason": "zoneOfMentor() reads only the timezone of a mentorId already cleared by writableMentorId() (POST) or mayWriteAvailabilityFor(session, current.mentorId) (PATCH), both of which check the caller or an ADMIN's own org."
+    },
+    "src/app/api/avatar/[userId]/route.ts": {
+      "count": 1,
+      "reason": "DELETE's user.update keys on `userId` only after `userInCallerOrg(userId, resolveOrgId(session))` (404 otherwise), and non-self targets also need the user.write permission."
+    },
+    "src/app/api/avatar/route.ts": {
+      "count": 1,
+      "reason": "user.update keys on `targetUserId`, which is the caller's own id or passed `userInCallerOrg(targetUserId, resolveOrgId(session))` and the user.write permission check earlier in the handler."
+    },
+    "src/app/api/calendar-events/route.ts": {
+      "count": 1,
+      "reason": "The relation findMany spreads `relWhere`, built about 65 lines above as `withinTenant(…, await tenantWhere(session))`, outside the check's 40-line window."
+    },
+    "src/app/api/candidates/[id]/hiring/route.ts": {
+      "count": 2,
+      "reason": "The two findMany wrap `appScope = visibleApplicationsWhere(seatScopedActor({ …, orgId }))` and `irScope = interviewRequestActorWhere({ …, orgId })`, both of which carry the org, and the candidate was first checked with `{ id, orgId, role: 'MENTEE' }`."
+    },
+    "src/app/api/cohorts/[id]/clone/route.ts": {
+      "count": 1,
+      "reason": "tx.programStep.findMany keys on `source.id`, the programme returned by programWriteGate(), which checks the caller's tenant (and PROGRAM_ADMIN grant) and answers 404 otherwise."
+    },
+    "src/app/api/cohorts/[id]/route.ts": {
+      "count": 3,
+      "reason": "All three writes key on `g.program.id` from programWriteGate(), which checks that the programme is in the caller's tenant (and in a PROGRAM_ADMIN's grant); relations pointing at that cohort are therefore its own."
+    },
+    "src/app/api/companies/[id]/export/route.ts": {
+      "count": 5,
+      "reason": "Every read keys on `company.id` from `company.findFirst(andScope(scope, withinTenant({ id }, tenant)))` or on relation ids from that company's relations (relations also ANDed with `relationScope` from scopeForRole); another org's company 404s first."
+    },
+    "src/app/api/companies/[id]/route.ts": {
+      "count": 2,
+      "reason": "update and delete key on `id` only after `company.findFirst({ where: withinTenant({ id }, tenantWhere(session)) })` found it (404 otherwise); a COMPANY caller is also limited to its own session.user.companyId."
+    },
+    "src/app/api/companies/route.ts": {
+      "count": 5,
+      "reason": "All five sites use the variable `where` (or `company: { is: where }`), built about 60 lines above with `andScope(scope, await tenantWhere(session), …)`, which is outside the check's window."
+    },
+    "src/app/api/company/analytics/route.ts": {
+      "count": 4,
+      "reason": "recruitingReport() spreads `scope = { companyId?, orgId: params.orgId }` into every query, with orgId from settingsOrgOf(session) and companyId from session.user.companyId for a COMPANY; the check cannot see `orgId` inside the spread."
+    },
+    "src/app/api/company/candidates/[id]/route.ts": {
+      "count": 1,
+      "reason": "user.findUnique by `id` runs only after a relation or application linking that candidate to `session.user.companyId` (the caller's own company) was found; returns 404 otherwise."
+    },
+    "src/app/api/company/interests/route.ts": {
+      "count": 1,
+      "reason": "company.findUnique keys on `companyId = session.user.companyId`, the COMPANY caller's own company, and reads only its name."
+    },
+    "src/app/api/company/onboarding/route.ts": {
+      "count": 1,
+      "reason": "invitationToken.count keys on `companyId = session.user.companyId`, the caller's own company, which was just confirmed with `company.findFirst({ id: companyId, orgId })`."
+    },
+    "src/app/api/company/outreach/[id]/route.ts": {
+      "count": 4,
+      "reason": "findFirst is `{ id, ...scope }` with `scope = outreachActorWhere({ …, orgId })`; every later update/updateMany keys on `row.id` from that scoped read."
+    },
+    "src/app/api/company/outreach/route.ts": {
+      "count": 5,
+      "reason": "GET's findMany spreads `scope = outreachActorWhere({ …, orgId })`. POST keys on the caller's own `companyId` (session.user.companyId): the compound-unique lookup and the reopen use it, and `existing.id` comes from that lookup. The company/user name reads run after outreachPreconditions/talentPoolIntroPreconditions(orgId, …) confirmed the mentee."
+    },
+    "src/app/api/company/requisitions/[id]/applications/route.ts": {
+      "count": 1,
+      "reason": "findMany uses `where`, an AND of `scope = visibleApplicationsWhere(seatScopedActor({ …, orgId }))` and `requisitionId` of a requisition fetched with `{ id, orgId, companyId }`."
+    },
+    "src/app/api/company/requisitions/[id]/fit-reasons/route.ts": {
+      "count": 1,
+      "reason": "findMany is `{ AND: [scope, { requisitionId: requisition.id }] }` with `scope = visibleApplicationsWhere(seatScopedActor({ …, orgId }))`, and the requisition was fetched with `{ id, orgId, companyId }`."
+    },
+    "src/app/api/consent/renew/route.ts": {
+      "count": 2,
+      "reason": "Sessionless token route: the User findUnique/update key on `userId` returned by verifyConsentRenewToken() (an HMAC-signed renewal token mailed to that user), so only the token holder's own row is read and stamped."
+    },
+    "src/app/api/contributor-terms/route.ts": {
+      "count": 1,
+      "reason": "The Project.findUnique runs only after projectInCallerTenant(session, projectId) returned true a few lines above (another tenant's project answers 404 first)."
+    },
+    "src/app/api/cv/[userId]/route.ts": {
+      "count": 1,
+      "reason": "The User.update in DELETE keys on the path `userId` only after userInCallerOrg(userId, resolveOrgId(session)) and canAccessCv() both passed; another org's user is 404 before any write."
+    },
+    "src/app/api/cv/route.ts": {
+      "count": 1,
+      "reason": "The User.update keys on `targetUserId`, which has already passed userInCallerOrg(targetUserId, resolveOrgId(session)) and canAccessCv(); it defaults to the caller's own session.user.id."
+    },
+    "src/app/api/document-review/[token]/file/route.ts": {
+      "count": 1,
+      "reason": "Sessionless token route: DocumentReview.findUnique keys on `reviewToken` (48-hex secret mailed to the external reviewer), and the file is served only when that review is the document's current EXTERNAL PENDING step."
+    },
+    "src/app/api/document-review/[token]/route.ts": {
+      "count": 1,
+      "reason": "Sessionless token route: DocumentReview.findUnique keys on the 48-hex secret `reviewToken`; resolve() then requires it to be the current EXTERNAL step of a PENDING document, so the token is the only credential and reaches only its own step."
+    },
+    "src/app/api/documents/[id]/review/invite/route.ts": {
+      "count": 1,
+      "reason": "The DocumentReview.updateMany keys on `current.id`, a step of the document loaded by loadReviewDocument(id) that was refused with 404 unless doc.requirement.orgId equals the caller's resolveOrgId(session)."
+    },
+    "src/app/api/documents/[id]/route.ts": {
+      "count": 1,
+      "reason": "DocumentReview.findMany in isCurrentReviewer() keys on `documentId` = doc.id of a document already returned by loadInCallerOrg() (owner/uploader org checked via inCallerTenant/userInCallerOrg) before it is called."
+    },
+    "src/app/api/email-action/route.ts": {
+      "count": 3,
+      "reason": "Sessionless signed-token route: User.findUnique keys on action.userId from verifyEmailActionToken(), and both MentorshipRelation.findUnique reads (extend, read) are followed by a check that the token's user is that relation's mentor (or mentor/mentee) before anything is acted on."
+    },
+    "src/app/api/events/[id]/route.ts": {
+      "count": 1,
+      "reason": "ProgramEvent.update keys on `id` only after the same id was fetched with findFirst({ AND: [visibleEventsWhere(actor), { id }] }), where visibleEventsWhere always carries actor.orgId, and canManageEvent() passed."
+    },
+    "src/app/api/forms/responses/route.ts": {
+      "count": 1,
+      "reason": "The FormDefinition.findUnique by id only reads `surface`; the write proceeds only if the id is also in activeForms(orgId, surface, role) for the caller's org, so another org's definition answers 404 like a missing one."
+    },
+    "src/app/api/goals/route.ts": {
+      "count": 1,
+      "reason": "ProjectTaskTemplate.update keys on `template.id`, which came from a findFirst with withinTenant(..., await tenantWhere(session)) a few lines above."
+    },
+    "src/app/api/interview-panels/[id]/close/route.ts": {
+      "count": 2,
+      "reason": "The updateMany and findUnique key on `id` after the same panel was found with withinTenant({ id }, await tenantWhere(session)) (another org's panel is 404)."
+    },
+    "src/app/api/interview-panels/[id]/outcome/route.ts": {
+      "count": 1,
+      "reason": "The MentorshipRelation.updateMany in advanceRelationStage() keys on relation.id of the active mentorship of panel.subjectId, where the panel was checked with inCallerTenant(panel.orgId, orgId); the update is also guarded on the row's read pipelineStatus/status."
+    },
+    "src/app/api/interview-panels/[id]/reopen/route.ts": {
+      "count": 1,
+      "reason": "InterviewPanel.update keys on `id` after findFirst with withinTenant({ id }, await tenantWhere(session)) returned the panel and the admin/creator check passed."
+    },
+    "src/app/api/interview-panels/[id]/route.ts": {
+      "count": 4,
+      "reason": "All sites follow a panel loaded with withinTenant({ id }, tenantWhere(session)): User.findMany reads names of panel.subjectId and panel members, Application.findMany keys on menteeId = panel.subjectId (a single-org user row) and only for an admin/active mentor who may decide, InterviewPanel.update keys on the checked id, and User.findUnique reads the subject's name."
+    },
+    "src/app/api/interview-panels/[id]/score/route.ts": {
+      "count": 1,
+      "reason": "InterviewPanel.findUnique by id is followed immediately by a membership check (only a user listed in panel.members may score, 403 otherwise); members are added only from tenant-filtered user lists, so a caller cannot write to another org's panel."
+    },
+    "src/app/api/interview-panels/route.ts": {
+      "count": 1,
+      "reason": "User.findMany keys on `{ id: { in: panels.map(p => p.subjectId) } }`, ids taken from a panel list fetched with withinTenant(..., await tenantWhere(session)); only fullName is read."
+    },
+    "src/app/api/interview-prep/session/[id]/turn/route.ts": {
+      "count": 2,
+      "reason": "Both PracticeSession.update calls key on row.id, where `row` was fetched with findFirst({ where: { id, userId: session.user.id } }) — the caller's own session only."
+    },
+    "src/app/api/interview-requests/[id]/cancel/route.ts": {
+      "count": 1,
+      "reason": "The findFirst where is `{ id, ...scope }` with scope = interviewRequestActorWhere({ ..., orgId }), which always carries orgId for every role (ADMIN/MENTOR/COMPANY); the follow-up updateMany also carries orgId."
+    },
+    "src/app/api/interview-requests/[id]/schedule/route.ts": {
+      "count": 2,
+      "reason": "InterviewRequest.findFirst uses `{ id, ...scope }` from interviewRequestActorWhere(), which always includes orgId; the User.findUnique reads only timezone/language of relation.mentorId, the active mentor of that already-scoped request's mentee."
+    },
+    "src/app/api/invite/[id]/route.ts": {
+      "count": 2,
+      "reason": "InvitationToken.update and .delete key on `id` after the same id was fetched with withinTenant({ id }, await tenantWhere(session)) and mayManage() passed."
+    },
+    "src/app/api/invite/opened/route.ts": {
+      "count": 2,
+      "reason": "Public sessionless route keyed on the secret invitation `token` (the token is the credential); the update keys on invite.id of that row and only stamps openedAt, and the email is echoed only to the token holder of a live invitation of this host's world."
+    },
+    "src/app/api/invite/route.ts": {
+      "count": 1,
+      "reason": "MentorshipRelation.count keys on `mentorId`, which was just verified with prisma.user.findFirst(withinTenant({ id: mentorId }, tenantWhere(session))); it only produces an advisory capacity warning."
+    },
+    "src/app/api/journey/route.ts": {
+      "count": 1,
+      "reason": "ProgramStep.findMany keys on step ids from previewJourney(rel.cohortId, rel.id), where `rel` passed inCallerTenant(rel.orgId, session.user.orgId) and the mentor/mentee/admin seat check."
+    },
+    "src/app/api/meeting-feedback/[token]/route.ts": {
+      "count": 1,
+      "reason": "Sessionless signed-token route: User.findUnique keys on action.userId from verifyMeetingFeedbackToken() and reads only isActive; the token is mailed only to that rater."
+    },
+    "src/app/api/meeting-series/route.ts": {
+      "count": 1,
+      "reason": "MentorshipRelation.findMany in announceNextOccurrence() keys on series.relationId / series.projectId of a series that was created or updated only after ensureRelationAccess (withinTenant + tenantWhere) or the project tenant check (projectInCallerTenant / inCallerTenant)."
+    },
+    "src/app/api/meetings/[id]/attendance/route.ts": {
+      "count": 2,
+      "reason": "MeetingAttendance.findMany and User.findMany key on the target returned by resolveAttendanceTarget(session.user, id), which requires loadAccessibleMeeting() for a row or meetingInCallerTenant() plus pair/admin membership for a series occurrence."
+    },
+    "src/app/api/meetings/[id]/end/route.ts": {
+      "count": 2,
+      "reason": "Both MentorshipRelation.findFirst calls only decide whether the caller may end the occurrence and are keyed on the caller's own id (OR mentorId/menteeId = user.id); the series was already checked with meetingInCallerTenant()."
+    },
+    "src/app/api/mentor-applications/[id]/route.ts": {
+      "count": 3,
+      "reason": "The update, updateMany and the transaction's findUnique all key on `id` after the application was fetched with withinTenant({ id }, await tenantWhere(session)) (another org's id is 404)."
+    },
+    "src/app/api/mentor-applications/[id]/screening/route.ts": {
+      "count": 1,
+      "reason": "MentorApplication.update keys on `id` after findFirst with withinTenant({ id }, await tenantWhere(session)) returned the row."
+    },
+    "src/app/api/mentor-applications/route.ts": {
+      "count": 1,
+      "reason": "The pending-application findFirst by email runs in the public apply route, and this route is the only creator of MentorApplication rows and always files them in defaultOrgId(), so every row it can match is in the same (default) org the new application goes to."
+    },
+    "src/app/api/mentor/mentees/[id]/route.ts": {
+      "count": 1,
+      "reason": "User.update keys on mentee.id after the mentee row was refused with 404 unless inCallerTenant(mentee.orgId, resolveOrgId(session)), and (for a non-admin) a relation with the caller as mentor exists."
+    },
+    "src/app/api/mentor/offers/route.ts": {
+      "count": 1,
+      "reason": "The User.findMany where is offerableMenteesWhere(tenant) with tenant = await tenantWhere(session); that helper wraps its filter in withinTenant(..., tenant), so the scope is there but not visible to the check."
+    },
+    "src/app/api/mentors/route.ts": {
+      "count": 3,
+      "reason": "The User.count/findMany use `where`, built ~110 lines above with `orgId: resolveOrgId(session)` (null matches only org-less rows, never all); the groupBy keys on mentor ids from that scoped list."
+    },
+    "src/app/api/mentorship-requests/route.ts": {
+      "count": 1,
+      "reason": "MentorshipRelation.count keys on preferredMentor.id, which came from a findFirst with withinTenant(..., await tenantWhere(session)) just above; it only yields an availability number."
+    },
+    "src/app/api/mentorship/[id]/contract-end/route.ts": {
+      "count": 1,
+      "reason": "The updateMany keys on relation.id of a relation fetched with withinTenant({ id }, await tenantWhere(session)) after the admin/owning-mentor check."
+    },
+    "src/app/api/mentorship/[id]/lifecycle/route.ts": {
+      "count": 1,
+      "reason": "The updateMany keys on `id` after the relation was fetched with withinTenant({ id }, await tenantWhere(session)) and found to be the caller's own (mentor) or the caller is admin."
+    },
+    "src/app/api/mentorship/[id]/route.ts": {
+      "count": 1,
+      "reason": "The update keys on `id` after findFirst with withinTenant({ id }, await tenantWhere(session)); retargeted company/project/cohort ids are checked by refuseForeignTargets() first."
+    },
+    "src/app/api/mentorship/[id]/trial/route.ts": {
+      "count": 1,
+      "reason": "The updateMany keys on relation.id of a relation fetched with withinTenant({ id }, await tenantWhere(session)) and the admin/owner check."
+    },
+    "src/app/api/mentorship/[id]/value/route.ts": {
+      "count": 2,
+      "reason": "RelationValue.deleteMany/findUnique key on relation.id from loadForEditor(), which fetches the relation with withinTenant({ id }, await tenantWhere(session)) and checks admin/owner."
+    },
+    "src/app/api/mentorship/route.ts": {
+      "count": 6,
+      "reason": "The list/count sites use `where` = andScope(scope, ...) with scope from scopeForRole(session.user, 'relation'), which ANDs the caller's org in (scopeInTenant + orgWhere); the count at 442 keys on mentorId verified with withinTenant(..., tenantWhere(session))."
+    },
+    "src/app/api/messages/route.ts": {
+      "count": 2,
+      "reason": "Both reads run after getThreadIfAllowed()/getConversationIfAllowed(), which since #3602 let a non-participant admin in only inside their own tenant (relation org, or every DIRECT participant's org); Project.findUnique serves a GROUP room the caller participates in, User.findUnique reads the counterpart of that already-authorised thread."
+    },
+    "src/app/api/messages/search/route.ts": {
+      "count": 2,
+      "reason": "MentorshipRelation.findMany keys on the caller's own id (OR mentorId/menteeId = session.user.id via `me`); Project.findUnique keys on the projectId of a GROUP conversation the caller is a participant of and that getConversationIfAllowed() opened."
+    },
+    "src/app/api/newsletter/subscription/route.ts": {
+      "count": 1,
+      "reason": "User.update keys on me.id, the caller's own row fetched by session.user.id."
+    },
+    "src/app/api/newsletter/unsubscribe/route.ts": {
+      "count": 2,
+      "reason": "Sessionless token route: the user id comes only from verifyUnsubscribeToken() (an HMAC-signed token), and the update keys on user.id from that same row, so only the token holder's own newsletter flag can change."
+    },
+    "src/app/api/offers/[id]/route.ts": {
+      "count": 7,
+      "reason": "Every flagged read/write runs after loadAuthorized(), which fetches the offer with withinTenant({ id }, tenantWhere(session)) and 404s another org's id; the compensation/letter/accept-record findUniques, the guarded updateMany, the findUniqueOrThrow re-reads and the field-edit update all key on that same tenant-checked id, and the AuditLog findMany filters targetId = that offer id (cuid) with action 'offer.*'."
+    },
+    "src/app/api/onboarding/route.ts": {
+      "count": 2,
+      "reason": "Both User.findUnique calls key on `id` destructured from session.user, i.e. the caller's own row."
+    },
+    "src/app/api/portal/requisitions/[id]/route.ts": {
+      "count": 1,
+      "reason": "The extra screeningQuestions findUnique keys on job.id, where job was just fetched with visibleJobsWhere(orgId) (orgId = resolveOrgId(session)) and 404s when absent."
+    },
+    "src/app/api/profile-view/route.ts": {
+      "count": 2,
+      "reason": "Public-by-design: the findFirst only checks that the target has publicProfile: true (returns no fields) and the update only increments that public profile's profileViews counter; nothing of another org is read or returned beyond the counted/not-counted boolean."
+    },
+    "src/app/api/profile/digest/route.ts": {
+      "count": 1,
+      "reason": "ownDigest() is only called with session.user.id; no id is taken from the request, so it reads the caller's own ProfileDigest."
+    },
+    "src/app/api/profile/route.ts": {
+      "count": 1,
+      "reason": "The MentorshipRelation.count keys on mentorId = user.id, where user was loaded by session.user.id (the caller's own row)."
+    },
+    "src/app/api/project-tasks/[taskId]/route.ts": {
+      "count": 1,
+      "reason": "The MentorshipRelation.findFirst is a membership existence check keyed on task.projectId, where task came from taskFor(), which resolves the task's org (project or assignee/author) and refuses another tenant's task as 'missing'."
+    },
+    "src/app/api/projects/[id]/join-requests/route.ts": {
+      "count": 1,
+      "reason": "Project.findUnique keys on the route id only after projectInCallerTenant(session, id) (withinTenant + tenantWhere) has 404'd another tenant's project."
+    },
+    "src/app/api/projects/[id]/members/route.ts": {
+      "count": 2,
+      "reason": "In DELETE, after projectInCallerTenant(session, id), the User.findUnique keys on nextOwner.userId taken from that project's own members list, and Project.update keys on the tenant-checked project id."
+    },
+    "src/app/api/projects/[id]/route.ts": {
+      "count": 6,
+      "reason": "GET/PUT/DELETE each call projectInCallerTenant(session, id) first and 404 a foreign project; every flagged Project.findUnique/update/delete and the MentorshipRelation.updateMany (where projectId: id) then key on that tenant-checked id."
+    },
+    "src/app/api/projects/[id]/task-templates/route.ts": {
+      "count": 2,
+      "reason": "After projectInCallerTenant(session, id), the update keys on target.id from a findFirst filtered by projectId: id, and the archive updateMany filters by projectId: id, so only the tenant-checked project's own templates are touched."
+    },
+    "src/app/api/projects/[id]/tasks/route.ts": {
+      "count": 5,
+      "reason": "projectInCallerTenant(session, id) gates the handler; Project.findUnique and the legacy-member MentorshipRelation.findFirst key on that id, the useCount updateMany keys on ids from a template list scoped to projectId: id or the caller's tenant pool (withinTenant), the template findUnique keys on created[0].templateId from that list, and the User.findUnique reads only preferredLanguage of an assignee verified as a member of this project."
+    },
+    "src/app/api/public/partner-media/[id]/route.ts": {
+      "count": 1,
+      "reason": "Public by design: serves the bytes of one partner-page theme asset keyed only on its unguessable cuid (ASSET_ID_RE-checked); returns the media and nothing else about the owning org."
+    },
+    "src/app/api/re-engagement/leave/route.ts": {
+      "count": 1,
+      "reason": "Sessionless token route: userId comes only from verifyLeaveToken() (signed token), so the lookup reaches only the token holder's own row."
+    },
+    "src/app/api/register/route.ts": {
+      "count": 5,
+      "reason": "Sessionless registration keyed on the secret invitation token (findUnique/update/updateMany where token, deliberately unscoped as documented, with a world check); Company.findUnique keys on invitation.companyId and the MentorshipRelation.findFirst on the mentor/mentee pair from that invitation plus the new user's id, all decided by the invitation row, not the request."
+    },
+    "src/app/api/relation-health/route.ts": {
+      "count": 1,
+      "reason": "RelationHealthSnapshot.findMany keys on relationId in rows.map(r => r.id), where rows came from a mentorshipRelation.findMany filtered with withinTenant(..., tenantWhere(session)) (and mentorId for mentors)."
+    },
+    "src/app/api/report-subscriptions/unsubscribe/route.ts": {
+      "count": 1,
+      "reason": "Sessionless token route: the subscription id comes only from verifyReportUnsubscribeToken() (signed), and the update only sets isActive: false on that one row."
+    },
+    "src/app/api/requisitions/[id]/route.ts": {
+      "count": 2,
+      "reason": "Inside the PATCH transaction, `current` is fetched with { id, orgId: scope.orgId, companyId for COMPANY }; the Company.findUnique keys on current.companyId and the Requisition.findUnique re-read on current.id."
+    },
+    "src/app/api/requisitions/[id]/shortlist/route.ts": {
+      "count": 1,
+      "reason": "Application.findUnique keys on (requisition.id, menteeId), where requisition was fetched with { id, orgId } and menteeId was verified with user.findFirst({ id: menteeId, orgId, role: 'MENTEE' })."
+    },
+    "src/app/api/rsvp/route.ts": {
+      "count": 2,
+      "reason": "Sessionless token route: the meeting is resolved from the RSVP token, and both User.findUnique calls read only timezone/preferredLanguage of that meeting's own relation participant (requestedById) and organiser (meeting.createdById)."
+    },
+    "src/app/api/session-notes/route.ts": {
+      "count": 1,
+      "reason": "The MentorshipRelation.findUnique (seat names) keys on relationId only after relationForNotes(session, relationId) returned a relation that passed inCallerTenant (otherwise 'missing' → 404)."
+    },
+    "src/app/api/source/mentees/route.ts": {
+      "count": 2,
+      "reason": "ownSourceId() reads the caller's own row (session.user.id), and the mentee list filters by that sourceId; every write path that sets a sourceId (admin/source-users, users/[id], this POST) checks the Source is in the caller's tenant, so a source's mentees are its org's."
+    },
+    "src/app/api/source/outcomes/route.ts": {
+      "count": 2,
+      "reason": "ownSourceId() reads the caller's own row by session.user.id, and referrals() is always called with a where that includes orgId (inWindow carries orgId = resolveOrgId(session))."
+    },
+    "src/app/api/status-changes/route.ts": {
+      "count": 1,
+      "reason": "The MentorshipRelation.update keys on relationId only after the relation was loaded and checked with inCallerTenant(relation.orgId, resolveOrgId(session)) (another org → 404), more than 40 lines above."
+    },
+    "src/app/api/tags/[id]/merge/route.ts": {
+      "count": 1,
+      "reason": "Tag.delete keys on source.id, where source was fetched with { id, orgId: resolveOrgId(session) } (both merge ends org-filtered); an org-less legacy admin is the only unfiltered case and has no tenant to cross from."
+    },
+    "src/app/api/tags/[id]/route.ts": {
+      "count": 2,
+      "reason": "Tag.update and Tag.delete key on tag.id, where tag came from findFirst({ id, orgId: resolveOrgId(session) }); the same org-less-admin caveat as the merge route applies."
+    },
+    "src/app/api/todos/route.ts": {
+      "count": 4,
+      "reason": "The MentorshipRelation findMany/findFirst key on mentorId = viewer.id (the caller's own relations); the useCount updateMany keys on ids from a template list filtered withinTenant(..., tenantWhere(session)); the User.findUnique reads only preferredLanguage of an assignee that passed mayReach() (inCallerTenant for admins, own mentee otherwise)."
+    },
+    "src/app/api/unsubscribe/applyUnsubscribe.ts": {
+      "count": 3,
+      "reason": "readGroupState/applyGroupPref are only called with scope.userId from verifyUnsubscribeToken() (signed token) in the unsubscribe, prefs and one-click routes; they read/write only that user's notificationPrefs."
+    },
+    "src/app/api/unsubscribe/route.ts": {
+      "count": 1,
+      "reason": "preferredLocale() reads only preferredLanguage for scope.userId taken from verifyUnsubscribeToken() (signed token)."
+    },
+    "src/app/api/users/[id]/activity/route.ts": {
+      "count": 2,
+      "reason": "The ActivityLog reads key on the route id only after access is proven: the caller's own id, an admin whose user.findFirst(withinTenant({ id }, tenantWhere(session))) found the target, or a mentor with a relation to that mentee."
+    },
+    "src/app/api/users/[id]/route.ts": {
+      "count": 3,
+      "reason": "PATCH first checks user.findFirst(withinTenant({ id }, tenant)) and 404s another tenant's user (far above the flagged lines); the later User.findUnique and both User.update calls key on that same tenant-checked id."
+    },
+    "src/app/api/users/route.ts": {
+      "count": 3,
+      "reason": "User.findMany/count use `where`/`pickerWhere` built with withinTenant(..., tenant) a few dozen lines above; the MentorshipRelation.groupBy keys on mentorId in the ids of that tenant-scoped user list."
+    },
+    "src/app/api/v1/candidates/[id]/route.ts": {
+      "count": 1,
+      "reason": "The User.update keys on id only after findFirst({ id, role: 'MENTEE', orgId: key.orgId }) found the row for the API key's org."
+    },
+    "src/app/api/v1/me/route.ts": {
+      "count": 1,
+      "reason": "ApiKey.findUnique keys on key.id, the authenticated key itself from withApiKey()."
+    },
+    "src/app/api/v1/relationships/[id]/stage/route.ts": {
+      "count": 3,
+      "reason": "All three re-reads key on id after findFirst({ id, orgId: key.orgId }) confirmed the relation belongs to the API key's org (the move itself is an updateMany with orgId: key.orgId)."
+    },
+    "src/app/api/weekly-reports/[id]/route.ts": {
+      "count": 2,
+      "reason": "The update and findUniqueOrThrow key on report.id, where report came from loadReport(), which filters { id, orgId: await settingsOrgOf(session) }."
+    },
+    "src/app/api/weekly-reports/route.ts": {
+      "count": 2,
+      "reason": "findMany/count filter by relationId only after weeklyReportRelation(relationId, await tenantWhere(session)) returned the relation (404 otherwise) and canReadWeeklyReports passed."
+    },
+    "src/app/brand/[version]/[file]/route.ts": {
+      "count": 1,
+      "reason": "Public-by-design: generated brand icons are served to anyone by (version, kind), restricted to allowlisted PNG kinds and image/png rows; the stored source upload is never served and no tenant data beyond the public icon bytes is returned."
+    },
+    "src/app/mentor/page.tsx": {
+      "count": 1,
+      "reason": "getMentorData() is only called with session.user.id, so the findMany reads the caller's own mentor relations (mentorId)."
+    },
+    "src/app/p/[userId]/opengraph-image.tsx": {
+      "count": 1,
+      "reason": "Public-by-design: only opted-in profiles (publicProfile: true, MENTEE/MENTOR) with PII-free fields are read, and the result is dropped unless the owner's org vertical matches the request host's world."
+    },
+    "src/app/p/[userId]/page.tsx": {
+      "count": 2,
+      "reason": "Public-by-design: both findFirst calls require publicProfile: true and select only shareable fields; the page also 404s a profile of another world. Note: generateMetadata (line 25) lacks that world check, so the name/role of an opted-in public profile can appear in the <title> on the other product's host — public data, but a worlds-rule inconsistency worth a follow-up."
+    },
+    "src/app/portal/journey/page.tsx": {
+      "count": 1,
+      "reason": "getMenteeRelation() is only called with session.user.id and filters by menteeRelationWhere(menteeId), i.e. the caller's own relations."
+    },
+    "src/app/portal/page.tsx": {
+      "count": 2,
+      "reason": "getMenteeData() is only called with session.user.id; the User.findUnique and the menteeRelationWhere(menteeId) findMany read the caller's own row and relations."
+    },
+    "src/app/projects/[id]/opengraph-image.tsx": {
+      "count": 1,
+      "reason": "Public-by-design: reads only name/technologies of a project with isPublic: true; any other id gets the generic card."
+    },
+    "src/app/projects/[id]/page.tsx": {
+      "count": 1,
+      "reason": "The flagged findFirst is generateMetadata, which reads only the name of an isPublic: true project (the public showcase is cross-tenant by design); the main page's internal view is gated by inCallerTenant(p.orgId, session.user.orgId)."
+    },
+    "src/app/projects/page.tsx": {
+      "count": 1,
+      "reason": "Public showcase by design: the findMany requires isPublic: true and is narrowed to the request host's vertical (verticalScope), selecting only showcase fields."
+    },
+    "src/app/sitemap.ts": {
+      "count": 1,
+      "reason": "Lists only ids/updatedAt of isPublic: true, ACTIVE projects, which are public pages by design, and only on hosts whose vertical lists 'projects'; it is not narrowed to the host's world the way /projects is (minor, ids of public pages only)."
+    },
+    "src/app/weekly-reports/booklet/[relationId]/page.tsx": {
+      "count": 1,
+      "reason": "WeeklyReport.findMany filters by relationId only after the relation was loaded and checked with inCallerTenant(relation.orgId, session.user.orgId) plus canReadWeeklyReports (admin-only page)."
+    }
+  }
+}

@@ -24,6 +24,7 @@ import { settingsOrgOf } from '@/lib/settingsOrg';
 import { getMentorImpact } from '@/lib/mentorImpact';
 import { DocumentReviewQueue } from '@/components/DocumentReviewQueue';
 import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
+import { contentLang } from '@/lib/contentLanguage';
 
 async function getMentorData(mentorId: string) {
   const relations = await prisma.mentorshipRelation.findMany({
@@ -287,7 +288,7 @@ export default async function MentorDashboard() {
                       {t.mentor.interactionWith.split('{name}')[1]}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-700 truncate">{interaction.notes}</p>
+                  <p lang={contentLang(interaction.notes)} className="text-sm text-gray-700 truncate">{interaction.notes}</p>
                   <p className="text-xs text-gray-400 mt-1">
                     {formatDate(interaction.date, locale)}
                   </p>

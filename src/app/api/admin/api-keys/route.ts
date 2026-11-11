@@ -94,7 +94,7 @@ const schema = z.object({
   // purpose, and "no scopes" must never be read as "all scopes".
   scopes: z.array(z.string()).min(1).max(API_SCOPES.length),
   // Optional. Null / omitted means "never expires" (the UI warns about it).
-  expiresAt: z.string().datetime().nullish(),
+  expiresAt: z.iso.datetime().nullish(),
   // Optional period allowance (#2010): both or neither. Omitted = no quota.
   quotaPeriod: z.string().nullish(),
   quotaLimit: z.number().int().nullish(),

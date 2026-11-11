@@ -60,6 +60,7 @@ import { RelationCadencePanel } from '@/components/RelationCadencePanel';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
 import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
 import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
+import { contentLang } from '@/lib/contentLanguage';
 
 interface InteractionLog {
   id: string;
@@ -832,7 +833,7 @@ export default function MenteeDetailPage() {
                     {interaction.subject && (
                       <p className="text-sm font-medium text-gray-900">{interaction.subject}</p>
                     )}
-                    <p className="text-sm text-gray-700">{interaction.notes}</p>
+                    <p lang={contentLang(interaction.notes)} className="text-sm text-gray-700">{interaction.notes}</p>
                     <AutoLoggedBadge autoLogged={interaction.autoLogged} className="text-xs mt-1" />
                     <p className="text-xs text-gray-400 mt-1">
                       {formatDate(interaction.date, locale)}

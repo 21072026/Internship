@@ -66,7 +66,7 @@ const schema = z.object({
   // The ending-soon nudge's lead (#1786), 1…90 days.
   relationEndingLeadDays: z.string().regex(/^\d{1,2}$/).refine((v) => +v >= 1 && +v <= 90, 'invalid lead').optional(),
   relationDefaultCadenceWeeks: z.string().refine((v) => v === '' || (/^\d{1,2}$/.test(v) && +v >= 1 && +v <= MAX_CADENCE_WEEKS), 'invalid cadence').optional(),
-  supportEmail: z.string().email().or(z.literal('')).optional(),
+  supportEmail: z.email().or(z.literal('')).optional(),
   weeklyDigest: z.enum(['true', 'false']).optional(),
   retentionMonths: z.string().regex(/^\d{1,3}$/).optional(),
   // The vocabulary is src/lib/twoFactorPolicyRule.ts (#1644): `all` holds

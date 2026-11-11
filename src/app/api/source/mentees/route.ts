@@ -60,7 +60,7 @@ export async function GET() {
 
 const schema = z.object({
   fullName: z.string().min(1).max(160),
-  email: z.string().email(),
+  email: z.email(),
   university: z.string().max(160).optional(),
   department: z.string().max(160).optional(),
   // A list from the current form, a comma-joined string from an older bundle.
