@@ -20,6 +20,39 @@ function sanitizeFilename(name: string): string {
   return (cleaned || 'file').slice(0, 100);
 }
 
+/**
+ * The plain `filename="…"` fallback must be ASCII. A header value is a byte
+ * string: Node and undici refuse any character above U+00FF outright ("ş" is
+ * U+015F), so a Turkish CV name used to turn the whole download into a 500
+ * once Next stopped smoothing that over (15.5.29). Accents are folded where
+ * Unicode can (ö → o); anything left over becomes "_". The real name travels
+ * in `filename*` (RFC 6266 § 4.3), which every current browser prefers.
+ */
+function asciiFallback(safe: string): string {
+  const folded = safe
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\x20-\x7e]/g, '_')
+    .trim();
+  return folded || 'file';
+}
+
+/** RFC 5987 ext-value: percent-encode everything outside attr-char. */
+function encodeExtValue(safe: string): string {
+  return encodeURIComponent(safe).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+/**
+ * A `Content-Disposition` value for a user-supplied filename: header-safe
+ * whatever the name holds (CR/LF, quotes, any script), with the original name
+ * preserved through `filename*`. Every route that puts a stored upload's own
+ * name into the header goes through here.
+ */
+export function contentDisposition(filename: string, disposition: 'inline' | 'attachment' = 'attachment'): string {
+  const safe = sanitizeFilename(filename);
+  return `${disposition}; filename="${asciiFallback(safe)}"; filename*=UTF-8''${encodeExtValue(safe)}`;
+}
+
 export interface DownloadHeaderOptions {
   filename: string;
   contentType: string;
@@ -38,15 +71,9 @@ export function downloadHeaders({
   size,
   inline = false,
 }: DownloadHeaderOptions): Record<string, string> {
-  const safe = sanitizeFilename(filename);
-  // Both forms: the plain one for old clients, `filename*` so a Turkish or
-  // otherwise non-ASCII CV name survives the trip (RFC 5987).
-  const encoded = encodeURIComponent(safe);
-  const disposition = inline ? 'inline' : 'attachment';
-
   return {
     'Content-Type': contentType,
-    'Content-Disposition': `${disposition}; filename="${safe}"; filename*=UTF-8''${encoded}`,
+    'Content-Disposition': contentDisposition(filename, inline ? 'inline' : 'attachment'),
     'Content-Length': String(size),
     'Cache-Control': 'private, no-store',
     'X-Content-Type-Options': 'nosniff',

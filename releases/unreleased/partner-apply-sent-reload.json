@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Partner application keeps its confirmation on a language switch:** the switcher reloads the page, which dropped a sent `/partner/apply` form back to an empty one. The tab now remembers that it sent (a `sessionStorage` flag, never the typed values) and shows the confirmation in the new language.",
+  "notes": {
+    "en": ["After sending a partner application, switching the language keeps the confirmation instead of showing an empty form."],
+    "tr": ["Partner başvurusu gönderildikten sonra dil değiştirildiğinde boş form yerine onay mesajı görünmeye devam ediyor."],
+    "de": ["Nach dem Absenden einer Partnerbewerbung bleibt beim Sprachwechsel die Bestätigung sichtbar statt eines leeren Formulars."]
+  }
+}

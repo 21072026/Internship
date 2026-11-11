@@ -430,7 +430,7 @@ export async function POST(request: Request) {
 
   const parsed = recurrenceSchema.safeParse(raw);
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   }
   const { projectId, relationId, title, daysOfWeek, timeOfDay, timeZone, meetLink, active, durationMinutes } = parsed.data;
   // Exactly one context (#2013) — the rule Meeting follows (#1051), not a second one.
@@ -503,7 +503,7 @@ export async function PUT(request: Request) {
   return await withTenantScope(session, async () => {
     const parsed = updateSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     }
     const { id, weeksAhead: _weeksAhead, ...incoming } = parsed.data;
 

@@ -12,6 +12,7 @@ import { resolveMeetingLink, meetingLinkRefusal } from '@/lib/meetingRoom';
 import { canManageEvent } from '@/lib/groupEventRule';
 import { updateEventSchema } from '@/lib/groupEventInput';
 import { audienceUserIds, eventSelect, eventView, noticeEvent, setEventCapacity, visibleEventsWhere } from '@/lib/groupEvents';
+import { z } from 'zod';
 
 // One group session (#1856). GET answers 404 for an event the caller may not
 // see — the same answer as a missing id, never a 403 that confirms it. The
@@ -68,7 +69,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (capGate) return capGate;
     const actor = { role: session.user.role, userId: session.user.id, orgId };
     const parsed = updateEventSchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return NextResponse.json({ error: 'Invalid request', code: 'validation_failed', details: parsed.error.flatten() }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid request', code: 'validation_failed', details: z.flattenError(parsed.error) }, { status: 400 });
     const input = parsed.data;
     if (input.timeZone && !isValidTimeZone(input.timeZone)) return NextResponse.json({ error: 'Unknown time zone', code: 'invalid_time_zone' }, { status: 400 });
     const { id } = await params;

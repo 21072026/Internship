@@ -41,7 +41,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return await withTenantScope(session, async () => {
       const parsed = schema.safeParse(await request.json());
       if (!parsed.success) {
-        return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+        return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
       }
       // Normalized the same way registration and sign-in normalize, so the
       // account can actually be found again afterwards.

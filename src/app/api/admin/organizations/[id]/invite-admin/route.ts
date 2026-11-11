@@ -75,7 +75,7 @@ async function handlePost(request: Request, params: Promise<{ id: string }>) {
 
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     }
     const email = parsed.data.email?.trim() ? parsed.data.email.trim() : null;
     const label = parsed.data.label?.trim() || null;

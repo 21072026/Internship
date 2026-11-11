@@ -40,7 +40,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (blocked) return blocked;
 
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     const action = parsed.data.action as Parameters<typeof verificationTransition>[0]['action'];
 
     const company = await prisma.company.findFirst({ where: { id, orgId }, select: { id: true, name: true, verificationStatus: true } });

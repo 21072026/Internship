@@ -65,7 +65,7 @@ export async function POST(request: Request) {
   if ('error' in authz) return authz.error;
   const { session } = authz;
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   const gate = await validOrgStage(session, 'POST /api/admin/document-requirements', parsed.data.orgId, parsed.data.appliesToStage);
   if ('error' in gate) return NextResponse.json({ error: gate.error }, { status: gate.status });
   try {

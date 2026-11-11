@@ -74,7 +74,7 @@ export async function PUT(request: Request) {
   const { session } = gate;
   const orgId = await settingsOrgOf(session);
   const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   const body = parsed.data;
   return withTenantScope(session, async () => {
     const scope = await programOf(orgId, body.programId ?? null);

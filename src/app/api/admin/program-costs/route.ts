@@ -117,7 +117,7 @@ export async function POST(request: Request) {
 
     const parsed = createSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     }
     const data = parsed.data;
 
@@ -169,7 +169,7 @@ export async function PATCH(request: Request) {
 
     const parsed = patchSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     }
     const { id, ...fields } = parsed.data;
 
@@ -229,7 +229,7 @@ export async function DELETE(request: Request) {
 
     const parsed = deleteSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     }
 
     // Deleting a cost line is safe in a way deleting a Placement is not: a cost

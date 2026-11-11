@@ -46,7 +46,7 @@ export async function POST(request: Request) {
     const denied = await requireCapability(session.user.orgId, 'mentorship');
     if (denied) return denied;
     const parsed = createSchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return NextResponse.json({ error: 'Invalid request', details: parsed.error.flatten() }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid request', details: z.flattenError(parsed.error) }, { status: 400 });
     return withTenantScope(session, async () => {
       if (parsed.data.cohortId) {
         const cohort = await prisma.cohort.findFirst({

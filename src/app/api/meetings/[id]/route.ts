@@ -189,7 +189,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const body = await request.json().catch(() => null);
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   }
   const { scheduledAt, timeZone, title, meetLink, durationMinutes, reminderLeadMinutes, status, cancelReason, scope, force } = parsed.data;
   if (!scheduledAt && title === undefined && meetLink === undefined && durationMinutes === undefined && reminderLeadMinutes === undefined && !status) {

@@ -21,6 +21,8 @@
 //   Offer           decidedAt ?? sentAt ?? createdAt — the latest thing that
 //                               actually happened to it
 //   RelationNote    createdAt
+//   MentorQuestion  answeredAt when answered, else createdAt (#1700)
+//   Evaluation      createdAt   — INTERIM/FINAL rows are submitted when written
 // SQL cannot ORDER BY a coalesce of two columns through Prisma, so each of
 // those "?? " pairs is split into DISJOINT queries (one per branch) rather than
 // sorted in JS after an unbounded read. Disjoint matters twice over: it keeps
@@ -33,7 +35,7 @@ import { isStageTransition } from '@/lib/stageChange';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 import { readableGoalsWhere } from '@/lib/goalVisibilityRule';
 
-export const TIMELINE_KINDS = ['stage', 'interaction', 'meeting', 'goal', 'report', 'offer', 'note'] as const;
+export const TIMELINE_KINDS = ['stage', 'interaction', 'meeting', 'goal', 'question', 'evaluation', 'report', 'offer', 'note'] as const;
 export type TimelineKind = (typeof TIMELINE_KINDS)[number];
 
 export function isTimelineKind(value: string): value is TimelineKind {
@@ -57,7 +59,17 @@ export type TimelineViewerRole = 'ADMIN' | 'MENTOR' | 'MENTEE';
 //   note                   — RelationNote is the mentor's private note on the
 //                            mentee. Never exposed to them (same rule as
 //                            /api/relation-notes).
-const MENTEE_KINDS: readonly TimelineKind[] = ['stage', 'interaction', 'meeting', 'goal', 'report', 'offer'];
+//   question               — the mentee asks it (#1700); both sides read it.
+//   evaluation             — the FACT and the date only (#1700): no score, no
+//                            comment, no author — the same promise the
+//                            evaluation.added notification makes. Only the
+//                            relation's own INTERIM/FINAL records; an interview
+//                            panel's scorecard is hiring material, not history
+//                            of the pairing.
+const MENTEE_KINDS: readonly TimelineKind[] = ['stage', 'interaction', 'meeting', 'goal', 'question', 'evaluation', 'report', 'offer'];
+
+/** The relation's own evaluations — never an interview panel's scorecard. */
+const RELATION_EVALUATION_TYPES = ['INTERIM', 'FINAL'] as const;
 
 export function visibleKinds(role: TimelineViewerRole): TimelineKind[] {
   return role === 'MENTEE' ? [...MENTEE_KINDS] : [...TIMELINE_KINDS];
@@ -215,6 +227,9 @@ export async function buildRelationTimeline(req: TimelineRequest): Promise<Timel
     sentOffers,
     draftOffers,
     notes,
+    openQuestions,
+    answeredQuestions,
+    evaluations,
   ] = await Promise.all([
     want('stage')
       ? prisma.statusChange.findMany({
@@ -303,12 +318,47 @@ export async function buildRelationTimeline(req: TimelineRequest): Promise<Timel
           include: { author: { select: { fullName: true } } },
         })
       : [],
+    // A question is one event at a time, like a goal: asked until answered,
+    // then dated by the answer — two disjoint queries, so no row emits twice.
+    want('question')
+      ? prisma.mentorQuestion.findMany({
+          where: where<Prisma.MentorQuestionWhereInput>(base, { answeredAt: null }, afterCursor('createdAt', cursor)),
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take,
+        })
+      : [],
+    want('question')
+      ? prisma.mentorQuestion.findMany({
+          where: where<Prisma.MentorQuestionWhereInput>(base, { answeredAt: { not: null } }, afterCursor('answeredAt', cursor)),
+          orderBy: [{ answeredAt: 'desc' }, { id: 'desc' }],
+          take,
+        })
+      : [],
+    // Only submitted records count (blind scoring, #824); scores are never
+    // selected, so no viewer's payload can carry one.
+    want('evaluation')
+      ? prisma.evaluation.findMany({
+          where: where<Prisma.EvaluationWhereInput>(
+            base,
+            { submittedAt: { not: null }, type: { in: [...RELATION_EVALUATION_TYPES] } },
+            afterCursor('createdAt', cursor),
+          ),
+          orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+          take,
+          select: { id: true, type: true, createdAt: true, authorId: true, comment: true },
+        })
+      : [],
   ]);
 
   // Meeting records only `createdById` (no relation field on the model), and
   // WeeklyReport names its reviewer but not its author — resolve both in one
   // lookup rather than N.
-  const organizerIds = [...timedMeetings, ...untimedMeetings].map((m) => m.createdById);
+  // Questions and evaluations name their person by id only, too.
+  const organizerIds = [
+    ...[...timedMeetings, ...untimedMeetings].map((m) => m.createdById),
+    ...[...openQuestions, ...answeredQuestions].map((q) => q.askedById),
+    ...(role === 'MENTEE' ? [] : evaluations.map((e) => e.authorId)),
+  ];
   const organizers = organizerIds.length
     ? await prisma.user.findMany({ where: { id: { in: [...new Set(organizerIds)] } }, select: { id: true, fullName: true } })
     : [];
@@ -399,6 +449,25 @@ export async function buildRelationTimeline(req: TimelineRequest): Promise<Timel
         detail: trim(n.body),
         actor: n.author?.fullName ?? null,
       })
+    ),
+    ...openQuestions.map((q) =>
+      row('question', 'question_asked', q.id, q.createdAt, {
+        title: trim(q.question),
+        actor: nameById.get(q.askedById) ?? null,
+      })
+    ),
+    ...answeredQuestions.map((q) =>
+      row('question', 'question_answered', q.id, q.answeredAt as Date, {
+        title: trim(q.question),
+        detail: trim(q.answer),
+      })
+    ),
+    // The mentee's row is the fact and the date — nothing that could carry the
+    // judgement (#1700): no comment, no author, and scores were never selected.
+    ...evaluations.map((e) =>
+      row('evaluation', `evaluation_${e.type.toLowerCase()}`, e.id, e.createdAt,
+        role === 'MENTEE' ? {} : { detail: trim(e.comment), actor: nameById.get(e.authorId) ?? null },
+      )
     ),
   ];
 
