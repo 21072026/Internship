@@ -80,6 +80,8 @@ export async function decideMentorshipRequest(opts: {
       // nothing on this path needs them, and the outgoing mentor's notice below
       // is built from names and dates only.
       replacesRelationId: true,
+      // The programme the new relation joins (#1626) — server-written only.
+      programId: true,
       replacesRelation: {
         select: {
           id: true,
@@ -230,7 +232,13 @@ export async function decideMentorshipRequest(opts: {
     const trialWindow = await stageTrialWindow({ orgId: gate.orgId, toStage: pipelineStatus, enteredAt: new Date() });
     // The agreed duration and rhythm (#1784), counted from today — the start
     // the new relation gets by default.
-    const schedule = scheduleCreateData(opts.schedule ?? {}, new Date(), await relationScheduleDefaults(gate.orgId));
+    // The programme (#1626): the request's own, kept only while it is still a
+    // programme of the org the relation is stamped with — a deleted one is
+    // already NULL (SetNull), and a cross-org id never becomes a relation's.
+    const programId = req.programId
+      ? (await prisma.cohort.findFirst({ where: { id: req.programId, orgId: gate.orgId }, select: { id: true } }))?.id ?? null
+      : null;
+    const schedule = scheduleCreateData(opts.schedule ?? {}, new Date(), await relationScheduleDefaults(gate.orgId, programId));
 
     // Interactive form (was an array `$transaction`) so the ACTIVE-mentor guard
     // sits INSIDE the transaction that writes (#419) — the pre-flight above ran
@@ -250,7 +258,7 @@ export async function decideMentorshipRequest(opts: {
           throw new AlreadyMentoredError(req.menteeId, active.id);
         }
         const created = await tx.mentorshipRelation.create({
-          data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId, pipelineStatus, ...trialWindow, ...schedule },
+          data: { mentorId, menteeId: req.menteeId, orgId: gate.orgId, cohortId: programId, pipelineStatus, ...trialWindow, ...schedule },
         });
         // `status: 'PENDING'` in the where is the real serializer for THIS
         // request: the UPDATE takes the row lock MySQL grants anyway, so two

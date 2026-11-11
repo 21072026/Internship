@@ -378,6 +378,9 @@ async function apply(ctx: Ctx): Promise<Applied> {
   const stages = await resolvePipelineStages(orgId);
 
   if (intent.kind !== 'open_trial') {
+    // The affiliate customer's end is its own fact, kept whether or not the CRM
+    // knows the account: a linked customer exists without a Company.
+    if (intent.kind === 'lost' || intent.kind === 'reactivate') await recordAffiliateEnd(ctx, intent.kind);
     // Only a trial event creates an account: a conversion, a loss or a
     // reactivation of an account the CRM never heard of has nothing to act on.
     if (!companyId) return { outcome: 'unknown_account' };
@@ -651,6 +654,36 @@ async function attributeToAffiliate(ctx: Ctx): Promise<void> {
     targetType: 'AffiliatePartner',
     targetId: plan.partnerId,
     detail: `${ctx.source.slug}: ${event.event_type}: customer ${plan.externalRef} linked to partner ${plan.partnerId}`,
+  });
+}
+
+/**
+ * The affiliate customer's end (#3542): `cancelled` / `deactivated` stamp
+ * `AffiliateCustomer.endedAt` at the event's `occurred_at`, `reactivated` clears
+ * it. Only the customer row of THIS org with the event's external id is touched
+ * (explicit `orgId`, the ingest is sessionless), through `ctx.db` so a dry run
+ * writes nothing. Both writes are guarded and idempotent: a first end is kept
+ * (a second cancel does not move it), and a reactivation clears only an end
+ * that happened at or before it — an older reactivation arriving late cannot
+ * undo a newer cancellation. The status rule reads the column
+ * (src/lib/affiliateCustomerStatusRule.ts).
+ */
+async function recordAffiliateEnd(ctx: Ctx, kind: 'lost' | 'reactivate'): Promise<void> {
+  const { db, event, orgId } = ctx;
+  const externalRef = customerRefFor(event.external_id);
+  if (!externalRef) return;
+  const at = event.occurred_at;
+  const written =
+    kind === 'lost'
+      ? await db.affiliateCustomer.updateMany({ where: { orgId, externalRef, endedAt: null }, data: { endedAt: at } })
+      : await db.affiliateCustomer.updateMany({ where: { orgId, externalRef, endedAt: { lte: at } }, data: { endedAt: null } });
+  if (written.count === 0) return;
+  await note(ctx, {
+    action: kind === 'lost' ? 'integration.affiliate_ended' : 'integration.affiliate_reactivated',
+    orgId,
+    targetType: 'AffiliateCustomer',
+    targetId: externalRef,
+    detail: `${ctx.source.slug}: ${event.event_type}: customer ${externalRef} ${kind === 'lost' ? 'ended' : 'active again'}`,
   });
 }
 

@@ -175,6 +175,21 @@ else
   bad "helper pipeline failed to recognize the #1223 widening"
 fi
 
+
+echo
+echo "is_varchar_widening (#3489, SsoAuthRequest.kind VarChar(10) -> VarChar(20)):"
+VF="MODIFY \`kind\` VARCHAR(20) NOT NULL DEFAULT 'oidc'"
+if is_varchar_widening "$VF" "MODIFY \`kind\` VARCHAR(10) NOT NULL DEFAULT 'oidc'"; then ok "10 -> 20 is a widening"; else bad "10 -> 20 not recognized"; fi
+if is_varchar_widening "$VF" "MODIFY \`kind\` varchar(10) NOT NULL DEFAULT 'oidc'"; then ok "lowercase reverse type still matches"; else bad "lowercase reverse type rejected"; fi
+if is_varchar_widening "MODIFY \`kind\` VARCHAR(10) NOT NULL DEFAULT 'oidc'" "MODIFY \`kind\` VARCHAR(20) NOT NULL DEFAULT 'oidc'"; then bad "SHORTENING accepted (would truncate)"; else ok "20 -> 10 stays destructive"; fi
+if is_varchar_widening "$VF" "$VF"; then bad "equal length accepted"; else ok "equal length stays destructive"; fi
+if is_varchar_widening "$VF" "MODIFY \`kind\` VARCHAR(10) NULL DEFAULT 'oidc'"; then bad "NULL -> NOT NULL accepted"; else ok "nullability change stays destructive"; fi
+if is_varchar_widening "$VF" "MODIFY \`kind\` VARCHAR(10) NOT NULL DEFAULT 'saml'"; then bad "default change accepted"; else ok "any other difference stays destructive"; fi
+if is_varchar_widening "$VF" "MODIFY \`kind\` TEXT NOT NULL"; then bad "TEXT -> VARCHAR accepted"; else ok "type change stays destructive"; fi
+if is_varchar_widening "DROP COLUMN \`kind\`" "MODIFY \`kind\` VARCHAR(10) NOT NULL"; then bad "non-MODIFY accepted"; else ok "non-MODIFY clause stays destructive"; fi
+VREV=$(printf '%s\n' "ALTER TABLE \`SsoAuthRequest\` MODIFY \`kind\` VARCHAR(10) NOT NULL DEFAULT 'oidc';" | normalize_sql)
+VFWD=$(alter_clauses "$(printf '%s\n' "ALTER TABLE \`SsoAuthRequest\` MODIFY \`kind\` VARCHAR(20) NOT NULL DEFAULT 'oidc';" | normalize_sql)")
+if VRC=$(reverse_clause_for "$VREV" "SsoAuthRequest" "kind") && is_varchar_widening "$VFWD" "$VRC"; then ok "the #3489 widening is recognized through the full helper pipeline"; else bad "helper pipeline failed on the #3489 widening"; fi
 echo
 printf 'Total: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ] || exit 1

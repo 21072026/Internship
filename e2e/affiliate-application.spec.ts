@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
 import { MARKETING_HOST, asHost } from './helpers/auth';
@@ -118,4 +119,33 @@ test('the form page exists where the programme exists', async ({ page }) => {
   await expect(page.getByTestId('affiliate-apply-form')).toBeVisible();
   await page.context().setExtraHTTPHeaders({});
   expect((await page.goto('/partner/apply'))?.status()).toBe(404);
+});
+
+// #3363: with a partner contract, the applicant ticks its CURRENT version; the
+// version is stored on the application, and the form links the public terms page.
+test('with a partner contract the current version must be accepted and is recorded', async ({ request, page }) => {
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { contract: { en: 'Synthetic partner terms.' }, contractVersion: 2 } });
+  const post = (data: unknown) => request.post('/api/partner/apply', { headers: { ...asHost(MARKETING_HOST), ...freshIp('affiliate-application') }, data });
+  const email = `contract-${stamp}@partner.example`;
+  for (const contractVersion of [undefined, null, 1]) {
+    const res = await post({ ...valid, email, contractVersion });
+    expect([res.status(), (await res.json()).fields], String(contractVersion)).toEqual([400, ['contract']]);
+  }
+  expect((await post({ ...valid, email, contractVersion: 2 })).status()).toBe(200);
+  await expect.poll(() => prisma.affiliateApplication.findFirst({ where: { orgId, email }, select: { contractVersion: true } })).toEqual({ contractVersion: 2 });
+
+  await page.context().setExtraHTTPHeaders({ ...asHost(MARKETING_HOST), 'accept-language': 'en' });
+  await page.goto('/partner/apply');
+  await expect(page.getByTestId('affiliate-apply-contract')).toBeVisible();
+  await expect(page.getByTestId('affiliate-apply-contract-link')).toHaveAttribute('href', '/partner/terms');
+  const terms = await page.goto('/partner/terms');
+  expect(terms?.status()).toBe(200);
+  await expect(page.getByTestId('partner-contract-text')).toHaveText('Synthetic partner terms.');
+  await expect(page.getByTestId('partner-contract-version')).toContainText('2');
+
+  // No contract: no tick to give, and no terms page.
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { contract: Prisma.DbNull, contractVersion: 0 } });
+  expect((await page.goto('/partner/terms'))?.status()).toBe(404);
+  await page.goto('/partner/apply');
+  await expect(page.getByTestId('affiliate-apply-contract')).toHaveCount(0);
 });

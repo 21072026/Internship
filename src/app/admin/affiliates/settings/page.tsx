@@ -16,10 +16,11 @@ import { parseWindowNoticeDays, WINDOW_NOTICE_DAYS_MAX } from '@/lib/affiliateWi
 import { resyncInFlight, type PlanResyncState } from '@/lib/affiliatePlanResyncRule';
 import { AffiliateTabs } from '../AffiliateTabs';
 import { LandingSettings } from './LandingSettings';
+import { CustomerStatusSettings } from './CustomerStatusSettings';
 import type { Landing } from '@/lib/affiliateLandingRule';
 
 // The programme's settings (docs/affiliate-module.md, #3116): the commission plan,
-// the referral address, the public page's content (#3359) and the partner contract. The server is the judge (parseCommissionPlan,
+// the referral address, the customer-status thresholds (#3542), the public page's content (#3359) and the partner contract. The server is the judge (parseCommissionPlan,
 // saveContract); this form converts what a person types — "19,99", "15" % — into
 // minor units and basis points, and marks the fields the server names.
 
@@ -48,6 +49,8 @@ interface Settings {
   windowNoticeDays: number;
   /** The public programme page's content (#3359). */
   landing: Landing;
+  /** The customer-status thresholds (#3542); not part of the plan. */
+  customerStatus: { freeMonths: number; passiveAfterDays: number };
   currencies: string[];
   canWrite: boolean;
 }
@@ -394,6 +397,8 @@ export default function AffiliateSettingsPage() {
           )}
         </fieldset>
       </Card>
+
+      <CustomerStatusSettings initial={settings.customerStatus} readOnly={readOnly} />
 
       <Card>
         <CardHeader>

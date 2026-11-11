@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { getCompanyFeatureSources, type FeatureSource, type PremiumFeature } from '@/lib/entitlements';
 import { withTenantScope } from '@/lib/orgContext';
 import { requirePermission } from '@/lib/authz';
@@ -20,7 +21,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { session } = gate;
   return await withTenantScope(session, async () => {
   const { id } = await params;
-  const company = await prisma.company.findUnique({ where: { id }, select: { id: true } });
+  // Inside the caller's tenant only (#3588): `getCompanyFeatureSources()` takes a
+  // bare id and scopes nothing, so this lookup is the whole check.
+  const company = await prisma.company.findFirst({ where: withinTenant({ id }, await tenantWhere(session)), select: { id: true } });
   if (!company) return NextResponse.json({ error: 'Company not found' }, { status: 404 });
   return NextResponse.json(await featurePayload(id));
   });
