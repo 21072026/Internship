@@ -77,7 +77,7 @@ export async function POST(request: Request) {
       const parsedBody = schema.safeParse(await request.json());
       if (!parsedBody.success) {
         return NextResponse.json(
-          { error: 'Validation failed', details: parsedBody.error.flatten() },
+          { error: 'Validation failed', details: z.flattenError(parsedBody.error) },
           { status: 400 },
         );
       }

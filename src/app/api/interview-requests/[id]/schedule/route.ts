@@ -28,6 +28,7 @@ import {
   isProposedSlot,
   scheduleInterviewRequestSchema,
 } from '@/lib/interviewRequests';
+import { z } from 'zod';
 
 class NotApproved extends Error {}
 
@@ -59,7 +60,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
     const parsed = scheduleInterviewRequestSchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return NextResponse.json({ error: 'Invalid request', code: 'validation_failed', details: parsed.error.flatten() }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid request', code: 'validation_failed', details: z.flattenError(parsed.error) }, { status: 400 });
     const { slot, timeZone, durationMinutes, meetLink, guestEmails, override, createPanel, interviewerIds } = parsed.data;
     if (!isValidTimeZone(timeZone)) return NextResponse.json({ error: 'Unknown time zone', code: 'invalid_time_zone' }, { status: 400 });
     const when = new Date(slot);

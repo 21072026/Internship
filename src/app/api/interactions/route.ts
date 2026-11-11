@@ -10,6 +10,7 @@ import { inCallerTenant } from '@/lib/tenantFilter';
 import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { createInteraction } from '@/lib/interactionWrite';
 import { createInteractionSchema } from '@/lib/interactionSchema';
+import { z } from 'zod';
 
 
 export async function GET(request: Request) {
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Validation failed', details: parsed.error.flatten() },
+        { error: 'Validation failed', details: z.flattenError(parsed.error) },
         { status: 400 }
       );
     }

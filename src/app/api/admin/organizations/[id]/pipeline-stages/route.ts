@@ -98,7 +98,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if ('error' in gate) return gate.error;
   const parsed = putSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   }
   const stages = parsed.data.stages;
 

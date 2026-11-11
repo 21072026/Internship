@@ -16,7 +16,7 @@
 // Dependency-free apart from zod, like the catalogue: safe for the route, a
 // unit test or a script.
 
-import type { ZodTypeAny } from 'zod';
+import type { ZodType } from 'zod';
 import { EVENT_CATALOG } from './catalog';
 
 export type JsonSchema = { [key: string]: unknown };
@@ -25,13 +25,13 @@ export type JsonSchema = { [key: string]: unknown };
 // expose the fields this walker reads, so they are read through a loose view.
 type Check = { check: string; format?: string; value?: number; inclusive?: boolean };
 type Def = { type: string; checks?: { _zod: { def: Check } }[]; [key: string]: unknown };
-const defOf = (schema: ZodTypeAny): Def => (schema as unknown as { _zod: { def: Def } })._zod.def;
+const defOf = (schema: ZodType): Def => (schema as unknown as { _zod: { def: Def } })._zod.def;
 const checksOf = (def: Def): Check[] => (def.checks ?? []).map((c) => c._zod.def);
 /** The v3-style construct name (`any` → `ZodAny`) the refusal message has always used. */
 const zodName = (type: string) => `Zod${type.charAt(0).toUpperCase()}${type.slice(1)}`;
 
 /** JSON Schema for one zod schema, or a throw naming the construct it cannot describe. */
-export function zodToJsonSchema(schema: ZodTypeAny): JsonSchema {
+export function zodToJsonSchema(schema: ZodType): JsonSchema {
   const def = defOf(schema);
   switch (def.type) {
     case 'string': {
@@ -60,30 +60,30 @@ export function zodToJsonSchema(schema: ZodTypeAny): JsonSchema {
     case 'enum':
       return { type: 'string', enum: Object.values(def.entries as Record<string, string>) };
     case 'nullable': {
-      const inner = zodToJsonSchema(def.innerType as ZodTypeAny);
+      const inner = zodToJsonSchema(def.innerType as ZodType);
       return typeof inner.type === 'string' ? { ...inner, type: [inner.type, 'null'] } : { anyOf: [inner, { type: 'null' }] };
     }
     case 'object': {
-      const shape = def.shape as Record<string, ZodTypeAny>;
+      const shape = def.shape as Record<string, ZodType>;
       const properties: Record<string, JsonSchema> = {};
       const required: string[] = [];
       for (const [key, value] of Object.entries(shape)) {
         if (defOf(value).type === 'optional') {
-          properties[key] = zodToJsonSchema(defOf(value).innerType as ZodTypeAny);
+          properties[key] = zodToJsonSchema(defOf(value).innerType as ZodType);
         } else {
           properties[key] = zodToJsonSchema(value);
           required.push(key);
         }
       }
       const out: JsonSchema = { type: 'object', properties, required };
-      const catchall = def.catchall as ZodTypeAny | undefined;
+      const catchall = def.catchall as ZodType | undefined;
       if (catchall && defOf(catchall).type === 'never') out.additionalProperties = false;
       return out;
     }
     case 'array':
-      return { type: 'array', items: zodToJsonSchema(def.element as ZodTypeAny) };
+      return { type: 'array', items: zodToJsonSchema(def.element as ZodType) };
     case 'union':
-      return { anyOf: (def.options as ZodTypeAny[]).map(zodToJsonSchema) };
+      return { anyOf: (def.options as ZodType[]).map(zodToJsonSchema) };
     default:
       throw new Error(`payloadSchema: cannot describe zod ${zodName(def.type)} — extend zodToJsonSchema before publishing it`);
   }

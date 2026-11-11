@@ -6,6 +6,7 @@ import { actorFromSession, can, type Permission } from '@/lib/authz';
 import { resolveOrgId } from '@/lib/orgScope';
 import { interactionAccess, updateInteraction } from '@/lib/interactionWrite';
 import { updateInteractionSchema } from '@/lib/interactionSchema';
+import { z } from 'zod';
 
 
 /** Does the caller act as an admin here? The permission rule answers, not the role string (#1571). */
@@ -74,7 +75,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'Validation failed', details: parsed.error.flatten() },
+        { error: 'Validation failed', details: z.flattenError(parsed.error) },
         { status: 400 }
       );
     }

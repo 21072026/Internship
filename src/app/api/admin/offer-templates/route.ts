@@ -61,7 +61,7 @@ export async function PUT(request: Request) {
   const g = await gate(request);
   if ('error' in g) return g.error;
   const parsed = putSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   const { locale, bodyMarkdown } = parsed.data;
   return withTenantScope(g.session, async () => {
     const row = await prisma.offerTemplate.upsert({

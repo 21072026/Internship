@@ -9,6 +9,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { attendanceOpen, canManageEvent } from '@/lib/groupEventRule';
 import { attendanceSchema } from '@/lib/groupEventInput';
 import { visibleEventsWhere } from '@/lib/groupEvents';
+import { z } from 'zod';
 
 // PATCH — the host (or an admin) records who turned up (#1856), one person at a
 // time, in #2014's vocabulary. Lives on the EventRegistration row; `null`
@@ -22,7 +23,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (capGate) return capGate;
     const actor = { role: session.user.role, userId: session.user.id, orgId };
     const parsed = attendanceSchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return NextResponse.json({ error: 'Invalid request', code: 'validation_failed', details: parsed.error.flatten() }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid request', code: 'validation_failed', details: z.flattenError(parsed.error) }, { status: 400 });
     const { userId, attendance } = parsed.data;
     const { id } = await params;
 

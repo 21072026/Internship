@@ -208,7 +208,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Validation failed', code: 'too_long' }, { status: 400 });
   }
   const parsed = schema.safeParse(fields);
-  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   const { templateKey, audience, action } = parsed.data;
 
   const content = normalizeNewsletterContent(parsed.data.content);

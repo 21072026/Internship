@@ -86,7 +86,7 @@ export async function POST(request: Request) {
 
   const parsed = postSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   }
   const { requestedPlan, billingCycle } = parsed.data;
   const reason = parsed.data.reason || null;
