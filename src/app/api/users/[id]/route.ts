@@ -23,8 +23,8 @@ import { isLastActiveOrgAdmin } from '@/lib/adminTiers';
 // Tenant (#2542): every lookup by id in this file is narrowed to the caller's
 // own tenant (`tenantWhere`, src/lib/tenantFilter.ts), so a record of another
 // tenant answers exactly like an id that does not exist — 404, confirming
-// nothing. Not `assertSameOrg()`: that guard is a no-op while
-// MT_ENFORCE_ISOLATION is off, which is every deployment today, and a
+// nothing. Not `assertSameOrg()`: that guard was a no-op while
+// MT_ENFORCE_ISOLATION was off until #3588 (every deployment), and a
 // MARKETING admin could read (and switch off) an INTERNSHIP mentee by id.
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {

@@ -30,8 +30,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   return await withTenantScope(session, async () => {
     const { id } = await params;
     // Inside the caller's tenant only (#3588): the middleware that would
-    // narrow this lookup is off in every deployment, and `assertSameOrg()` is a
-    // no-op with the flag off too. Another org's panel reads as missing.
+    // narrow this lookup is off in every deployment (and `assertSameOrg()` was a
+    // no-op with it until #3588). Another org's panel reads as missing.
     const panel = await prisma.interviewPanel.findFirst({
       where: withinTenant({ id }, await tenantWhere(session)),
       select: { id: true, orgId: true, closedAt: true, subjectId: true, createdById: true },

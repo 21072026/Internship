@@ -52,7 +52,7 @@ test('orgScoped() filters queries to a single tenant', async () => {
   expect(scoped).not.toHaveProperty('orgId');
 });
 
-test('guards fail-closed only when enforcement is on', async () => {
+test('requireOrg fails closed only when enforcement is on; assertSameOrg always guards', async () => {
   const session = (orgId: string | null) => ({ user: { orgId } }) as unknown as Parameters<typeof resolveOrgId>[0];
 
   expect(resolveOrgId(session('org-1'))).toBe('org-1');
@@ -61,19 +61,21 @@ test('guards fail-closed only when enforcement is on', async () => {
 
   const prev = process.env.MT_ENFORCE_ISOLATION;
   try {
-    // Enforcement OFF (default): no-ops, never throws.
+    // Enforcement OFF (default): requireOrg is a no-op; assertSameOrg still
+    // guards (#3588), with the default-org rule for NULLs.
     process.env.MT_ENFORCE_ISOLATION = 'false';
     expect(isIsolationEnforced()).toBe(false);
     expect(requireOrg(session(null))).toBeNull();
-    expect(() => assertSameOrg('org-2', 'org-1')).not.toThrow();
+    expect(() => assertSameOrg('org-2', 'org-1', 'org-default')).toThrow();
+    expect(() => assertSameOrg(null, null, 'org-default')).not.toThrow();
 
     // Enforcement ON: requireOrg throws with no org; assertSameOrg blocks mismatch.
     process.env.MT_ENFORCE_ISOLATION = 'true';
     expect(isIsolationEnforced()).toBe(true);
     expect(requireOrg(session('org-1'))).toBe('org-1');
     expect(() => requireOrg(session(null))).toThrow();
-    expect(() => assertSameOrg('org-1', 'org-1')).not.toThrow();
-    expect(() => assertSameOrg('org-2', 'org-1')).toThrow();
+    expect(() => assertSameOrg('org-1', 'org-1', 'org-default')).not.toThrow();
+    expect(() => assertSameOrg('org-2', 'org-1', 'org-default')).toThrow();
   } finally {
     if (prev === undefined) delete process.env.MT_ENFORCE_ISOLATION;
     else process.env.MT_ENFORCE_ISOLATION = prev;

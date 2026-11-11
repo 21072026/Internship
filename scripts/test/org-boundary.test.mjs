@@ -2,7 +2,7 @@
 // Run: node --test --experimental-strip-types scripts/test/org-boundary.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sameTenant } from '../../src/lib/orgScope.ts';
+import { sameTenant, assertSameOrg } from '../../src/lib/orgScope.ts';
 
 const DEFAULT = 'org-default';
 
@@ -45,3 +45,33 @@ test('the rule does not depend on MT_ENFORCE_ISOLATION', () => {
     else process.env.MT_ENFORCE_ISOLATION = before;
   }
 });
+
+// assertSameOrg (#3588): the same rule, as a throwing guard, and NOT gated on
+// MT_ENFORCE_ISOLATION any more — it used to be a no-op with the flag off,
+// which is every deployment.
+for (const flag of [undefined, 'false', 'true']) {
+  test(`assertSameOrg enforces the boundary with MT_ENFORCE_ISOLATION=${flag ?? '(unset)'}`, () => {
+    const prev = process.env.MT_ENFORCE_ISOLATION;
+    if (flag === undefined) delete process.env.MT_ENFORCE_ISOLATION;
+    else process.env.MT_ENFORCE_ISOLATION = flag;
+    try {
+      // Another org's row is refused.
+      assert.throws(() => assertSameOrg('org-b', 'org-a', DEFAULT), /Cross-tenant/);
+      // The caller's own row passes.
+      assert.doesNotThrow(() => assertSameOrg('org-a', 'org-a', DEFAULT));
+      // A NULL-org row is the default org's: the default org's people keep it…
+      assert.doesNotThrow(() => assertSameOrg(null, DEFAULT, DEFAULT));
+      assert.doesNotThrow(() => assertSameOrg(undefined, DEFAULT, DEFAULT));
+      // …and an org-less session (a token minted before the backfill) is the
+      // default org's too, so it is not locked out of its own rows.
+      assert.doesNotThrow(() => assertSameOrg(null, null, DEFAULT));
+      assert.doesNotThrow(() => assertSameOrg(DEFAULT, null, DEFAULT));
+      // Neither NULL is a wildcard for another org.
+      assert.throws(() => assertSameOrg(null, 'org-a', DEFAULT), /Cross-tenant/);
+      assert.throws(() => assertSameOrg('org-a', null, DEFAULT), /Cross-tenant/);
+    } finally {
+      if (prev === undefined) delete process.env.MT_ENFORCE_ISOLATION;
+      else process.env.MT_ENFORCE_ISOLATION = prev;
+    }
+  });
+}
