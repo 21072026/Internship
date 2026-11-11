@@ -231,7 +231,7 @@ const createSchema = z.object({
   brandName: z.string().max(TEXT_LIMITS.orgBrandName).optional(),
   brandLogoUrl: z.string().max(2000).optional(),
   brandColor: z.string().max(TEXT_LIMITS.orgBrandColor).optional(),
-  supportEmail: z.union([z.string().email().max(TEXT_LIMITS.orgSupportEmail), z.literal('')]).optional(),
+  supportEmail: z.union([z.email().max(TEXT_LIMITS.orgSupportEmail), z.literal('')]).optional(),
   starterPack: z.boolean().optional(),
   sampleProgram: z.boolean().optional(),
   firstAdminEmail: z.union([z.string().trim().email().max(191), z.literal('')]).optional(),

@@ -13,7 +13,7 @@ import { createUser } from '@/lib/userCreate';
 
 const schema = z.object({
   companyId: z.string().min(1),
-  email: z.string().email(),
+  email: z.email(),
   fullName: z.string().min(1),
 });
 

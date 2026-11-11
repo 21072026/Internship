@@ -16,7 +16,7 @@ const schema = z.object({
   relationId: z.string().min(1),
   fromStatus: stage,
   toStatus: stage,
-  createdAt: z.string().datetime().optional(),
+  createdAt: z.iso.datetime().optional(),
   // Drop-off reason (#810) — z.string() + a central whitelist (src/lib/dropoffReasons.ts),
   // never z.enum. Required by validateDropoffReason() when toStatus is a
   // negative/off-path stage in the relation's org pipeline.

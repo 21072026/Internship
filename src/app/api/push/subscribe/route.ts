@@ -12,7 +12,7 @@ import { logActivity } from '@/lib/activity';
 // bounded by the column width — an endpoint is never user-authored text, so
 // anything outside that shape is a bug or an attempt to write junk rows.
 const subscribeSchema = z.object({
-  endpoint: z.string().url().startsWith('https://').max(500),
+  endpoint: z.url().startsWith('https://').max(500),
   keys: z.object({
     p256dh: z.string().min(1).max(255),
     auth: z.string().min(1).max(255),

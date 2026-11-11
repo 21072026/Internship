@@ -282,7 +282,7 @@ export async function GET(request: Request) {
 // (Local, not exported: a route file may only export its handlers — Next type-
 // checks that. The PATCH side keeps its own copy, five lines and one comment.)
 const dueDateSchema = z
-  .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.string().datetime()])
+  .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.iso.datetime()])
   .nullable()
   .optional();
 

@@ -43,7 +43,7 @@ const schema = z.object({
   // tabs and one filled in is valid.
   content: contentSchema,
   // ISO 8601. Required for 'schedule', ignored otherwise.
-  scheduledAt: z.string().datetime().optional(),
+  scheduledAt: z.iso.datetime().optional(),
   // 'draft' saves it, 'schedule' hands it to the dispatcher, 'send' dispatches
   // it in this request. Three verbs rather than a status field: the caller says
   // what it wants to happen, the route owns which status that is.

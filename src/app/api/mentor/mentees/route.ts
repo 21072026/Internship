@@ -28,7 +28,7 @@ import {
 
 const schema = z.object({
   fullName: z.string().min(1),
-  email: z.string().email().optional().or(z.literal('')),
+  email: z.email().optional().or(z.literal('')),
   phone: z.string().optional(),
   whatsapp: z.string().optional(),
   city: z.string().optional(),

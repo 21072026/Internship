@@ -12,7 +12,7 @@ const schema = z
   .object({
     action: z.enum(['send', 'schedule', 'discard']),
     ids: z.array(z.string().min(1).max(64)).min(1).max(OUTBOUND_BULK_MAX),
-    at: z.string().datetime({ offset: true }).optional(),
+    at: z.iso.datetime({ offset: true }).optional(),
   })
   .refine((b) => b.action !== 'schedule' || !!b.at, { message: 'at is required to schedule' });
 

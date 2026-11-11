@@ -22,7 +22,7 @@ import { worldOfOrg, worldUserWhere } from '@/lib/userWorld';
 export { MAX_GUESTS_PER_MEETING } from '@/lib/meetingGuestLimits';
 
 // Deliberately narrower than RFC 5322 and identical in spirit to what the rest
-// of the app accepts (z.string().email()): the address has to survive being
+// of the app accepts (z.email()): the address has to survive being
 // handed to a mail server, and anything exotic enough to fail this is worth
 // rejecting at the form rather than silently bouncing hours later.
 export const guestSchema = z.object({

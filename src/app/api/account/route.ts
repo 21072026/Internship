@@ -16,7 +16,7 @@ import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { sendSecurityNotice } from '@/lib/securityNotices';
 
 const schema = z.object({
-  email: z.string().email().optional(),
+  email: z.email().optional(),
   currentPassword: z.string().optional(),
   newPassword: passwordSchema.optional(),
 });

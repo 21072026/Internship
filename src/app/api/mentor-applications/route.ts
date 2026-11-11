@@ -31,7 +31,7 @@ const STATUSES = ['PENDING', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'] as const;
 
 const applySchema = z.object({
   fullName: z.string().min(1).max(191),
-  email: z.string().email(),
+  email: z.email(),
   phone: z.string().max(191).optional(),
   // A list from the current form, a comma-joined string from an older bundle
   // — `capSkills` splits either (@/lib/skills, #2314).
@@ -39,7 +39,7 @@ const applySchema = z.object({
   experience: z.string().max(TEXT_LIMITS.mentorApplicationExperience).optional(),
   motivation: z.string().max(TEXT_LIMITS.mentorApplicationMotivation).optional(),
   capacity: z.number().int().min(1).optional(),
-  linkedinUrl: z.string().url().max(TEXT_LIMITS.profileUrl).optional().or(z.literal('')),
+  linkedinUrl: z.url().max(TEXT_LIMITS.profileUrl).optional().or(z.literal('')),
   locale: z.enum(locales).optional(),
   // Anti-spam (mirrors the public-contact form, src/app/api/public-contact/[userId]/route.ts):
   // a hidden honeypot field bots fill in, and a client-stamped render time to

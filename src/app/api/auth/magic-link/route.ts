@@ -7,7 +7,7 @@ import { sendMagicLinkEmail } from '@/services/emailService';
 import { isPasswordLoginBlocked } from '@/lib/ssoEnforcement';
 import { worldForHeaders } from '@/lib/hostWorld';
 
-const schema = z.object({ email: z.string().email() });
+const schema = z.object({ email: z.email() });
 
 // "E-mail me a sign-in link" (#1959). The same door as /api/auth/forgot, built
 // the same way: whoever is here cannot sign in, so there is no session; the

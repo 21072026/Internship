@@ -18,7 +18,7 @@ import {
   normalizeExternalId,
 } from '@/lib/accountEventRule';
 
-const isoDate = z.string().datetime({ offset: true }).transform((v) => new Date(v));
+const isoDate = z.iso.datetime({ offset: true }).transform((v) => new Date(v));
 const nullableIsoDate = isoDate.nullable().optional().transform((v) => v ?? null);
 const shortText = (max: number) => z.string().trim().max(max).nullable().optional();
 
