@@ -505,6 +505,13 @@ the check.
 
 - **Home:** the referral link, the customer count and the totals per commission
   status, and a notice while the partnership is suspended or ending.
+- **Funnel and threshold (#3543):** under the totals, the partner's own
+  [funnel](#the-funnel-35433544) for this month, the last 12 months or all time
+  (`?period=month|year|all`), and — when the plan has a switch to a percent — the
+  "N / target paying customers" indicator. The customer list shows each
+  customer's [status](#customer-status-3542) as a badge and filters by it
+  (`?status=`). Both read `partnerFunnel()` / `partnerCustomers()` in
+  `src/lib/affiliatePartnerView.ts`, narrowed to the session's partner.
 - **Commission terms (#3349):** a read-only box under the totals shows the
   organisation's current plan — bands, the commission above the last band, the percent
   phase, due days, the rule after a termination, the plan version and its effective
@@ -663,6 +670,40 @@ clock and the two programme settings:
   the admin screens read the counts from: three queries whatever the programme's
   size (settings, customers, newest payment per customer), the status judged in
   memory by the rule — never a SQL copy of it.
+
+## The funnel (#3543/#3544)
+
+One aggregate, `src/lib/affiliateFunnel.ts`, feeds the partner portal and the
+admin screens, so a partner and the programme team read the same numbers. The
+rules are pure in `src/lib/affiliateFunnelRule.ts`
+(`scripts/test/affiliate-funnel-rule.test.mjs`).
+
+- **`partnerFunnels(orgId, { partnerIds?, period })`** → per partner:
+  - **clicks** (and unique clicks) — the tracked link's daily counter
+    ([Link clicks](#link-clicks-3541)) summed over the period's UTC days;
+  - **registrations** — customers registered (`AffiliateCustomer.createdAt`) in
+    the period, split into *in free period* (`FREE_PERIOD`) and *left without
+    paying* (`NEVER_PAID`);
+  - **paying** — of those, `ACTIVE` + `PASSIVE`;
+  - **active / passive** — the paying ones by their status today.
+- **A cohort, judged today.** Every step after the clicks counts the customers who
+  registered in the period, with today's [status](#customer-status-3542). A
+  customer who registered before the period and paid in it is not in it.
+- **Periods** are UTC calendar months: `month` from the first of this month,
+  `year` this month and the eleven before it, `all` no lower bound.
+- **Rates** are each step's share of the step before, rounded to a whole percent,
+  none when the step before is zero. Registrations may exceed clicks: a customer
+  who came through the direct (old) link registers without a click.
+- **`partnerThresholds(orgId, { partnerIds? })`** → "N / target" towards the
+  current plan's `switchAtCustomer`: the partner's payments run through the
+  engine's own `evaluatePartner()`, so N is the number of eligible paying
+  customers ordered by first-payment date (`customerOrder`), and the date shown
+  once reached is its `switchedAt` — exactly what the commissions use. No entry
+  (and no indicator) when the plan has no threshold or a 0 % rate.
+- The statuses come from `partnerCustomerStatusCounts()` with `registeredFrom`;
+  the customer list filters `partnerCustomerStatuses()`, the list those counts
+  fold, so a filter count and a funnel number cannot disagree. A partner reads
+  only its own partner id (session scope); every query names `orgId`.
 
 ## Admin funnel board (#3544)
 
