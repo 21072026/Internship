@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Check } from 'lucide-react';
 import { Input } from '@/components/ui/Input';
@@ -13,6 +13,11 @@ import { AFFILIATE_HEARD_FROM, APPLICATION_LIMITS, type ApplicationField } from 
 // (parseAffiliateApplication); this form keeps what is typed, marks the fields
 // the server names and carries the honeypot and the render time the route's
 // anti-spam reads. No password field: nobody gets an account from this form.
+
+// The language switcher reloads the page, which used to drop a sent form back to
+// an empty one (and invite a second submit). The tab remembers that it sent — a
+// flag only, never what was typed.
+const SENT_KEY = 'affiliate-apply-sent';
 
 export function ApplicationForm({
   accent,
@@ -39,6 +44,14 @@ export function ApplicationForm({
   const [invalid, setInvalid] = useState<Set<ApplicationField>>(new Set());
   const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'error' | 'closed' | 'limited'>('idle');
 
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem(SENT_KEY) === '1') setState('sent');
+    } catch {
+      // Storage blocked: the form simply starts empty.
+    }
+  }, []);
+
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
   const err = (f: ApplicationField) => (invalid.has(f) ? L.errors[f] : undefined);
 
@@ -52,7 +65,14 @@ export function ApplicationForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, consent, contractVersion: contract ? contractVersion : null, website, renderedAt: renderedAt.current, locale }),
       });
-      if (res.ok) return setState('sent');
+      if (res.ok) {
+        try {
+          sessionStorage.setItem(SENT_KEY, '1');
+        } catch {
+          // Storage blocked: the confirmation still shows until the next reload.
+        }
+        return setState('sent');
+      }
       const body = await res.json().catch(() => ({}));
       if (res.status === 400 && Array.isArray(body.fields)) {
         setInvalid(new Set(body.fields as ApplicationField[]));
