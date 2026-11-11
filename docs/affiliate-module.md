@@ -871,6 +871,77 @@ end, so it knows when that customer's commissions stop.
   the notice (a plan change lengthens `windowMonths`, or a back-dated first payment is
   corrected), the new date is not announced again; the portal column shows it.
 
+## Moving the settings (#3622)
+
+A programme's settings live in the environment they were typed into. A topic
+environment (`pr<N>`) drops its database with the PR, so a page, a theme or a
+contract prepared there used to be typed again on preview and on prod. The
+settings screen's **Move the settings** card exports them as one file and
+imports such a file elsewhere.
+
+**The file** is one JSON document (`affiliate-settings-YYYY-MM-DD.json`):
+`format: "affiliate-settings"`, `version: 1`, the export time, the app version,
+`sections` and `assets`. The sections are `landing` (page content and theme),
+`contract`, `customerStatus` (`freeMonths`, `passiveAfterDays`), `windowNotice`,
+`referralUrl` and `plan`. A section never set is left out (a contract with no
+text, no plan, a referral address never entered), and an import leaves that
+section of the target alone — an empty address in the file would otherwise
+*clear* the target's and break every partner's link. The theme's media travel inside the file,
+base64, with their SHA-256: they are compressed already, so a zip would save
+nothing and would put an archive parser (paths, decompression bombs) in front of
+the import. At most one asset per media slot; 50 MB per file
+(`SETTINGS_TRANSFER_MAX_BYTES`), counted while the body is read.
+
+**Never in it:** partners, customers, payments, commissions, payouts,
+applications, contract acceptances — no person and no money that happened — and
+not the organisation's name, id or host either.
+
+**Import** is two calls to `POST /api/admin/affiliate/settings/import`
+(`affiliate.write`, the org from the session):
+
+1. `?dryRun=1` — the preview. Every section is read by **its own writer's
+   parser** and compared with what is stored: `changed`, `same`, or `invalid`
+   with the parser's `field:code` issues; the small settings (referral address,
+   customer status, window notice) also carry `from` and `to`. Media must match their hash, pass the
+   upload's signature check and fit the slot. Nothing is written.
+2. `?sections=…[&confirmPlan=1]` — applies the chosen sections **through the
+   writers a save from the screen uses** (`saveLanding`, `saveContract`,
+   `saveCustomerStatusSettings`, `saveWindowNoticeDays`, `saveReferralUrl`,
+   `savePlan`), in that order, the plan last. A selected section that would not
+   save refuses the whole file before anything is written.
+
+The rules are pure in `src/lib/affiliateSettingsTransferRule.ts` (envelope,
+assets, selection, id remapping; unit-tested in
+`scripts/test/affiliate-settings-transfer-rule.test.mjs`); the server half is
+`src/lib/affiliateSettingsTransfer.ts`.
+
+- **Never pre-selected:** the plan and the contract (`NOT_PRESELECTED`). The
+  screen pre-selects the other sections that would change; the admin ticks
+  these two on purpose.
+- **The plan needs its own confirmation.** It is never pre-selected, and the
+  server answers `400 plan_unconfirmed` to a selection that names it without
+  `confirmPlan=1`. Loaded, it is a new plan version and queues the partners'
+  re-evaluation, exactly like a save on the screen; recorded commissions stay.
+- **The contract** is published as a new version when its text differs, so
+  every partner must accept it again before the portal opens (the screen says so
+  when it is ticked); past acceptances are untouched.
+- **Media** are stored as new uploads of the target org (the upload's own
+  checks, `storeLandingAssetBytes()`) and the theme is pointed at the new ids.
+  An asset whose bytes equal what the slot shows today is reused, so the same
+  file imported twice adds no rows. An upload the landing save then refuses is
+  swept with the other unused uploads after 24 h.
+- **Not atomic across sections**: each writer has its own transaction. A
+  concurrent save half-way stops the import with `409 conflict`, the section
+  and the sections already applied; loading the file again is harmless, an
+  unchanged section writes nothing.
+- **One import at a time** per organisation and process (`withImportSlot`):
+  a second request while one runs is `409 busy`. A file is up to 50 MB and is
+  decoded more than once, so parallel imports could crowd the container.
+- **Audit:** `affiliate.settings.export` (sections, number of media) and
+  `affiliate.settings.import` (sections, which changed, where it stopped —
+  `error` when a writer threw) — never contents. The import row is written even
+  when the import stopped or failed. Each writer still writes its own row.
+
 ## Migration from a previous system
 
 An admin screen (`/admin/affiliates/migration`, `affiliate.write`) — not a script on
