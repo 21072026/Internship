@@ -195,8 +195,6 @@ test("GET /api/admin/companies/<A's company>/entitlements as B's admin: 404 (#35
   expect(res.status(), 'a cross-tenant read must read as not found').toBe(404);
 });
 
-});
-
 test("POST /api/mentorship pairing A's people as B's admin: refused, nothing created (#3588)", async ({ browser }) => {
   const before = await prisma.mentorshipRelation.count({ where: { menteeId: tenants.orgA.mentee.id } });
   const request = await requestAs(browser, 'B', 'admin');
