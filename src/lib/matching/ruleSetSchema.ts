@@ -49,7 +49,7 @@ export const matchRuleSchema = z
   })
   // A soft-only dimension (#2038) can add to a score, never block a pair.
   .refine((r) => r.kind === 'WEIGHTED' || !SOFT_ONLY_DIMENSIONS.includes(r.dimension), {
-    message: 'This rule can only be weighted',
+    error: 'This rule can only be weighted',
     path: ['kind'],
   });
 

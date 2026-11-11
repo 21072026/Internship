@@ -35,7 +35,7 @@ const putSchema = z.strictObject({
   defaultSlotMinutes: bounded('defaultSlotMinutes'),
 })
   // A monthly cap below the weekly one would make the weekly one a lie.
-  .refine((v) => v.maxPerWeek == null || v.maxPerMonth == null || v.maxPerMonth >= v.maxPerWeek, { path: ['maxPerMonth'], message: 'below_weekly' });
+  .refine((v) => v.maxPerWeek == null || v.maxPerMonth == null || v.maxPerMonth >= v.maxPerWeek, { path: ['maxPerMonth'], error: 'below_weekly' });
 
 // PUT — replace the rules. Every field is sent; null clears that rule.
 export async function PUT(request: Request) {

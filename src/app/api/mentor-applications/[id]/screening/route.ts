@@ -27,7 +27,7 @@ const schema = z.strictObject({
   referenceContact: z.string().max(TEXT_LIMITS.mentorScreeningReference).nullable().optional(),
   referenceOutcome: z.string().max(TEXT_LIMITS.mentorScreeningReferenceOutcome).nullable().optional(),
 })
-  .refine((v) => (v.item === undefined) === (v.done === undefined), { message: 'item_and_done_together' });
+  .refine((v) => (v.item === undefined) === (v.done === undefined), { error: 'item_and_done_together' });
 
 const blankToNull = (v: string | null | undefined) => (v === undefined ? undefined : v?.trim() ? v.trim() : null);
 

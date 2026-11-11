@@ -16,7 +16,7 @@ const patchSchema = z
     text: z.string().trim().min(1).max(TEXT_LIMITS.agendaItemText).optional(),
     order: z.number().int().min(0).optional(),
   })
-  .refine((v) => v.done !== undefined || v.text !== undefined || v.order !== undefined, { message: 'empty' });
+  .refine((v) => v.done !== undefined || v.text !== undefined || v.order !== undefined, { error: 'empty' });
 
 // The item must belong to THIS agenda: an item id from another agenda the
 // caller may also see must not be reachable through this URL.

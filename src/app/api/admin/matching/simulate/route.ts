@@ -27,7 +27,7 @@ const schema = z
     topN: z.number().int().min(1).max(10).optional(),
   })
   .refine((b) => [b.menteeId, b.cohortId, b.unmatched || undefined].filter(Boolean).length === 1, {
-    message: 'Pick exactly one of menteeId, cohortId, unmatched',
+    error: 'Pick exactly one of menteeId, cohortId, unmatched',
   });
 
 export async function POST(request: Request) {
