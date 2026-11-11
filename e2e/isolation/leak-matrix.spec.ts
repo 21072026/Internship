@@ -34,7 +34,11 @@ import { seedLeakRows, cleanupLeakRows, type LeakRows, type LeakTenants } from '
  * prove nothing changed.
  *
  * Runs only in the `isolation` Playwright project; CI runs it on every PR in
- * the `isolation-gate` job of `.github/workflows/e2e.yml`.
+ * the `isolation-gate` job of `.github/workflows/e2e.yml` — and a second time,
+ * against a server with the flag OFF, in the `leak-matrix-flag-off` job
+ * (`npm run test:e2e:leak-matrix:flag-off`, #3588). That second run is the one
+ * that matters for production, where the flag is off: there every row is held
+ * by the route's own tenant filter, never by the middleware.
  */
 
 type ActorKey = 'admin' | 'mentor' | 'companyUser';

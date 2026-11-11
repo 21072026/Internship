@@ -20,6 +20,15 @@ Every existing row is backfilled to a single `default` org, so the live app is
 effectively single-tenant and **nothing filters by `orgId` in production** (the
 flag is off).
 
+## The leak matrix runs twice (#3588)
+
+`e2e/isolation/leak-matrix.spec.ts` runs in the `isolation-gate` job with
+`MT_ENFORCE_ISOLATION=true`, and again in the `leak-matrix-flag-off` job with the
+flag **off** — the way every deployment runs. The flag-on run proves the
+middleware scopes; only the flag-off run proves a route's own filter does, which
+is what production depends on. Locally: `npm run test:e2e:leak-matrix:flag-off`.
+A new matrix row must pass in both.
+
 ## The enforcement building blocks (`src/lib/orgScope.ts`)
 
 Explicit, opt-in primitives for scoping an individual query:
