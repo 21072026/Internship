@@ -156,6 +156,8 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   so a readable name never goes there. The form's hint asks for a trade name, not
   a person's name. The rule is `src/lib/affiliateCustomerLabelRule.ts`, the one
   writer `src/lib/affiliateCustomerLabel.ts`.
+  `createdAt` is the registration (the linking event's time); `endedAt` is the
+  account's cancellation, null while live (#3542, [Customer status](#customer-status-3542)).
 - **AffiliatePayment** — `amountMinor`, `currency`, `receivedAt` (never in the
   future), `source` (MANUAL / API / IMPORT), `externalPaymentRef` (**required,
   unique per organisation**, so a double entry is caught even under a mistyped customer).
@@ -168,7 +170,8 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
 - **AffiliateProgramSettings** — one per organisation: the commission plan (JSON,
   validated by `parseCommissionPlan`) and its `planVersion`, the referral base URL
   (`referralUrl`), landing copy, contract text and `contractVersion`. Without a
-  valid plan the writer refuses payments.
+  valid plan the writer refuses payments. `freeMonths` / `passiveAfterDays` (defaults 2
+  and 45) are the customer-status thresholds — not part of the plan.
 - **InvitationToken.partnerId** — the partner an AFFILIATE invitation links to.
 - **AffiliateContractAcceptance** — one row per partner and contract version.
 - **AffiliateClickDaily** — one row per partner and UTC day: `clicks` and `uniqueClicks`
@@ -199,6 +202,12 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   audited (`affiliate.landing.update`) with the locales and which contact fields are
   set, never the texts. The wording is the organisation's data — the code carries
   only generic labels.
+  The **customer-status thresholds** (#3542) sit on the same tab: `freeMonths` and
+  `passiveAfterDays`, written only by `saveCustomerStatusSettings()` through
+  `PUT /api/admin/affiliate/settings/customer-status` (`affiliate.write`), whole
+  numbers in 0…36 and 1…730. They are not part of the commission plan: a change
+  never bumps `planVersion` and re-evaluates nothing. Audited
+  (`affiliate.customer_status.update`) with the old and new values.
 - **Partners** (`src/lib/affiliatePartners.ts`, `/api/admin/affiliate/partners`) —
   the list with customer counts and PENDING / APPROVED / PAID totals summed in SQL,
   a new partner (referral code: letters, digits, `-`, `_`, unique per organisation
@@ -620,6 +629,34 @@ with `referral_code: "<code>"`, and the ingest links the customer:
 
 Pinned by `e2e/affiliate-auto-attribution.spec.ts` (@smoke: the four-step flow, repeat
 and dry run, another org's code, suspended/terminated partners).
+
+## Customer status (#3542)
+
+Every affiliate customer stands at one point of the partner's funnel, derived by
+ONE pure rule, `customerStatus()` in `src/lib/affiliateCustomerStatusRule.ts`
+(`scripts/test/affiliate-customer-status-rule.test.mjs`), from the registration
+(`AffiliateCustomer.createdAt`), the newest payment's `receivedAt`, `endedAt`, the
+clock and the two programme settings:
+
+| Status | When |
+|---|---|
+| `FREE_PERIOD` | No payment, not ended, and fewer than `freeMonths` calendar months (UTC, clamped to month end) since registration. |
+| `NEVER_PAID` | No payment, and the free period has run out or the account ended. |
+| `ACTIVE` | The last payment is less than `passiveAfterDays` × 24 h old, and the account has not ended since. |
+| `PASSIVE` | Paid before, but the last payment is `passiveAfterDays` × 24 h old or older, or the account ended after it. |
+
+- **A payment after the end brings the customer back.** An end counts only when no
+  payment was received after it (an end at the same instant as the payment counts).
+- **The end comes from the feed**: `cancelled` / `deactivated` account events stamp
+  `endedAt`, `reactivated` clears it
+  ([account-events.md](integrations/account-events.md#affiliate-customer-end-3542)),
+  in the event's own org only, never in a dry run.
+- **The status is never stored.** It moves with the clock, so it is computed when
+  read. `partnerCustomerStatusCounts(orgId, { partnerIds })`
+  (`src/lib/affiliateCustomerStatus.ts`) is the one query the partner portal and
+  the admin screens read the counts from: three queries whatever the programme's
+  size (settings, customers, newest payment per customer), the status judged in
+  memory by the rule — never a SQL copy of it.
 
 ## Payments from the source system (#3355)
 

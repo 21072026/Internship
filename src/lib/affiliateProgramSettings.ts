@@ -1,7 +1,8 @@
 // The programme's settings: the commission plan (docs/affiliate-module.md, #3116)
-// the referral base URL (#3117) and the public programme page's content (#3359).
+// the referral base URL (#3117), the public programme page's content (#3359) and
+// the customer-status thresholds (#3542).
 // The ONE writer of AffiliateProgramSettings.plan / planVersion / planEffectiveAt /
-// referralUrl / landing.
+// referralUrl / landing / freeMonths / passiveAfterDays.
 // The contract half has its own writer (src/lib/affiliateContract.ts).
 //
 // A plan change:
@@ -28,6 +29,12 @@ import { PLAN_RESYNC_MAX_ATTEMPTS } from '@/lib/affiliatePlanResync';
 import { parseResyncState, queuedResync, type PlanResyncState } from '@/lib/affiliatePlanResyncRule';
 import { parseReferralUrl, type ReferralUrlIssue } from '@/lib/affiliateReferralRule';
 import { canonicalLanding, LEGAL_LINKS, parseLanding, readStoredLanding, type Landing, type LandingIssue } from '@/lib/affiliateLandingRule';
+import {
+  parseCustomerStatusSettings,
+  storedCustomerStatusSettings,
+  type CustomerStatusSettings,
+  type SettingIssue,
+} from '@/lib/affiliateCustomerStatusRule';
 
 /**
  * The currencies a programme may run in. EUR only in the first release; every
@@ -220,11 +227,50 @@ export async function saveLanding(
   }
 }
 
+/**
+ * Sets the customer-status thresholds (src/lib/affiliateCustomerStatusRule.ts):
+ * the free period and the days without a payment before a customer is passive.
+ * They are not part of the commission plan — planVersion is never touched and no
+ * commission is re-evaluated. An unchanged save writes nothing; a change is
+ * audited with the old and new values.
+ */
+export async function saveCustomerStatusSettings(
+  orgId: string,
+  raw: unknown,
+  actorId: string,
+): Promise<
+  | { ok: true; settings: CustomerStatusSettings; changed: boolean }
+  | { ok: false; issues: { field: keyof CustomerStatusSettings; code: SettingIssue }[] }
+> {
+  const parsed = parseCustomerStatusSettings(raw);
+  if (!parsed.ok) return parsed;
+  const next = parsed.settings;
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const current = await tx.affiliateProgramSettings.findUnique({ where: { orgId }, select: { freeMonths: true, passiveAfterDays: true } });
+      const from = storedCustomerStatusSettings(current);
+      if (current && from.freeMonths === next.freeMonths && from.passiveAfterDays === next.passiveAfterDays) {
+        return { ok: true as const, settings: next, changed: false };
+      }
+      if (current) await tx.affiliateProgramSettings.update({ where: { orgId }, data: next });
+      else await tx.affiliateProgramSettings.create({ data: { orgId, ...next } });
+      await tx.auditLog.create({
+        data: { orgId, actorId, action: 'affiliate.customer_status.update', detail: JSON.stringify({ from, to: next }) },
+      });
+      return { ok: true as const, settings: next, changed: true };
+    });
+  } catch (e) {
+    // Two first saves of one organisation: the loser hits the unique orgId.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new AffiliateSettingsError('conflict');
+    throw e;
+  }
+}
+
 export async function programSettings(orgId: string) {
   const [settings, payments] = await Promise.all([
     prisma.affiliateProgramSettings.findUnique({
       where: { orgId },
-      select: { plan: true, planVersion: true, planEffectiveAt: true, planResync: true, referralUrl: true, landing: true, contract: true, contractVersion: true, updatedAt: true },
+      select: { plan: true, planVersion: true, planEffectiveAt: true, planResync: true, referralUrl: true, landing: true, contract: true, contractVersion: true, freeMonths: true, passiveAfterDays: true, updatedAt: true },
     }),
     prisma.affiliatePayment.count({ where: { orgId } }),
   ]);
@@ -238,6 +284,7 @@ export async function programSettings(orgId: string) {
     landing: readStoredLanding(settings?.landing),
     contract: settings?.contract ?? null,
     contractVersion: settings?.contractVersion ?? 0,
+    customerStatus: storedCustomerStatusSettings(settings),
     currencyLocked: payments > 0,
     currencies: AFFILIATE_CURRENCIES,
   };
