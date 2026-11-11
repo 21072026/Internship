@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Partner page theme (#3535):** `/partner` and `/partner/apply` can take an organisation's own look, stored as data in `AffiliateProgramSettings.landing.theme` and edited with a live preview on `/admin/affiliates/settings`. The rule (`src/lib/affiliateLandingRule.ts`) allows six `#rrggbb` colours judged for WCAG AA contrast on save (text on a fill is derived, white or black), two fonts from a fixed list self-hosted by `next/font`, named layout variants (hero height/alignment/scrim, centred logo, card style, corners, a band behind the steps, a plain closing call) and an entrance effect that `prefers-reduced-motion` always switches off. Logo, hero and showcase media are uploads to the new `AffiliateLandingAsset` table (PNG/JPEG/WebP ≤ 5 MB, MP4/WebM ≤ 15 MB, signature-checked), referenced by id — no external URL, CSS or script can enter the page — and served by `GET /api/public/partner-media/[id]` with byte ranges. Independent of WHITE_LABEL branding. Without a theme the page is unchanged. The landing audit row now names the changed parts only (`{ changed: [...] }`).",
+  "notes": {
+    "en": ["The public partner page can now look like your own website: colours, fonts, logo, a picture or video at the top and gentle scroll effects, with a live preview in the programme settings."],
+    "tr": ["Herkese açık partner sayfası artık kendi web sitenize benzeyebilir: renkler, yazı tipleri, logo, üstte görsel ya da video ve hafif kaydırma efektleri; program ayarlarında canlı önizlemeyle."],
+    "de": ["Die öffentliche Partnerseite kann jetzt wie Ihre eigene Website aussehen: Farben, Schriften, Logo, ein Bild oder Video oben und dezente Scroll-Effekte, mit Live-Vorschau in den Programmeinstellungen."]
+  }
+}

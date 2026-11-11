@@ -101,9 +101,11 @@ export interface Landing {
   termsUrl: string | null;
   /** The figure cards; a key that is absent reads as `hidden`. */
   stats: Partial<Record<LandingStatKey, LandingStat>>;
+  /** The page's look (#3535); null = the page as it always was (host brand colours). */
+  theme: LandingTheme | null;
 }
 
-export type LandingIssueCode = 'type' | 'locale' | 'unknown' | 'too_long' | 'too_many' | 'invalid' | 'not_https';
+export type LandingIssueCode = 'type' | 'locale' | 'unknown' | 'too_long' | 'too_many' | 'invalid' | 'not_https' | 'contrast';
 export interface LandingIssue {
   /** A dotted path into the input, e.g. `copy.de.heroTitle`, `copy.en.steps.2.title`, `phone`. */
   field: string;
@@ -112,7 +114,7 @@ export interface LandingIssue {
 
 export type LandingParseResult = { ok: true; landing: Landing } | { ok: false; issues: LandingIssue[] };
 
-export const EMPTY_LANDING: Landing = { copy: {}, phone: null, email: null, productSignupUrl: null, imprintUrl: null, privacyUrl: null, termsUrl: null, stats: {} };
+export const EMPTY_LANDING: Landing = { copy: {}, phone: null, email: null, productSignupUrl: null, imprintUrl: null, privacyUrl: null, termsUrl: null, stats: {}, theme: null };
 
 /** The legal links an organisation may set, each falling back to this host's own page. */
 export const LEGAL_LINKS = [
@@ -242,7 +244,7 @@ export function parseLanding(input: unknown): LandingParseResult {
   const landing: Landing = { ...EMPTY_LANDING, copy: {}, stats: {} };
 
   for (const key of Object.keys(input)) {
-    if (!['copy', 'phone', 'email', 'productSignupUrl', 'imprintUrl', 'privacyUrl', 'termsUrl', 'stats'].includes(key)) issues.push({ field: key, code: 'unknown' });
+    if (!['copy', 'phone', 'email', 'productSignupUrl', 'imprintUrl', 'privacyUrl', 'termsUrl', 'stats', 'theme'].includes(key)) issues.push({ field: key, code: 'unknown' });
   }
 
   const copy = input.copy;
@@ -294,6 +296,8 @@ export function parseLanding(input: unknown): LandingParseResult {
     if (!isObject(stats)) issues.push({ field: 'stats', code: 'type' });
     else landing.stats = parseStats(stats, issues);
   }
+
+  if (input.theme !== undefined && input.theme !== null) landing.theme = parseTheme(input.theme, issues);
 
   return issues.length > 0 ? { ok: false, issues } : { ok: true, landing };
 }
@@ -399,7 +403,7 @@ export function canonicalLanding(landing: Landing): string {
     const st = landing.stats[k];
     return st && st.mode !== 'hidden' ? [st.mode, st.value] : null;
   });
-  return JSON.stringify([copy, landing.phone, landing.email, landing.productSignupUrl, LEGAL_LINKS.map((l) => landing[l.key]), stats]);
+  return JSON.stringify([copy, landing.phone, landing.email, landing.productSignupUrl, LEGAL_LINKS.map((l) => landing[l.key]), stats, canonicalTheme(landing.theme)]);
 }
 
 /** True when the landing holds anything a visitor would see. */
@@ -513,4 +517,313 @@ export function legalLinks(landing: Pick<Landing, LegalLinkKey>): Record<LegalLi
   const out = {} as Record<LegalLinkKey, { href: string; external: boolean }>;
   for (const { key, fallback } of LEGAL_LINKS) out[key] = landing[key] ? { href: landing[key] as string, external: true } : { href: fallback, external: false };
   return out;
+}
+
+// ── The page's look (#3535) ─────────────────────────────────────────────────
+//
+// An organisation can make /partner and /partner/apply look like its own site.
+// The look is DATA like the copy, and deliberately narrow: six colours as
+// #rrggbb, two fonts from FONT_KEYS (self-hosted, never a URL), a handful of
+// named layout variants, an entrance animation, and up to three pictures or
+// videos that were uploaded to OUR storage — referenced by asset id, so no
+// external address, stylesheet or script can enter the page through it.
+//
+// Contrast is judged here, on save, against WCAG 2.x AA. Body text needs 4.5:1
+// against the page and the cards; headings, figures and themed buttons are
+// rendered as large text (≥ 24px, or ≥ 19px bold), which needs 3:1. The colour
+// of the text on a filled area (a button, the hero's gradient) is never chosen
+// by hand: onFill() picks white or black, whichever meets the bar, so a fill
+// can only be refused where no text colour could work on it at all. A picture
+// or video cannot be measured; text over one sits on a scrim (heroOverlay) or
+// carries a shadow, and the editor's preview shows the result.
+//
+// Not the org's WHITE_LABEL branding (brandColor / brand mark, ENTERPRISE): the
+// partner page is a marketing page of the programme, and its look is edited by
+// the programme's admin next to its copy.
+
+export const THEME_COLOR_KEYS = ['primary', 'secondary', 'heading', 'text', 'background', 'surface'] as const;
+export type ThemeColorKey = (typeof THEME_COLOR_KEYS)[number];
+
+/** The fonts a theme may name; each is self-hosted by next/font (src/app/partner/fonts.ts). */
+export const FONT_KEYS = [
+  'inter',
+  'roboto',
+  'open-sans',
+  'lato',
+  'montserrat',
+  'poppins',
+  'manrope',
+  'nunito',
+  'raleway',
+  'dm-sans',
+  'playfair-display',
+  'merriweather',
+] as const;
+export type FontKey = (typeof FONT_KEYS)[number];
+
+/** Every named option of a theme, with its allowed values; the first is the default. */
+export const THEME_OPTIONS = {
+  heroAlign: ['center', 'start'],
+  heroHeight: ['compact', 'tall'],
+  heroOverlay: ['brand', 'dark', 'none'],
+  navLayout: ['start', 'center'],
+  corners: ['rounded', 'square', 'large'],
+  cardStyle: ['shadow', 'outline', 'flat'],
+  stepsStyle: ['plain', 'band'],
+  ctaStyle: ['band', 'plain'],
+  animation: ['none', 'fade', 'rise', 'zoom'],
+} as const;
+export type ThemeOptionKey = keyof typeof THEME_OPTIONS;
+export type ThemeOptions = { [K in ThemeOptionKey]: (typeof THEME_OPTIONS)[K][number] };
+
+/** The media slots: the logo (an image), the hero's background and the picture beside the closing call (image or video). */
+export const THEME_MEDIA_SLOTS = ['logo', 'hero', 'showcase'] as const;
+export type ThemeMediaSlot = (typeof THEME_MEDIA_SLOTS)[number];
+/** Which kinds of upload a slot takes. */
+export const THEME_MEDIA_KINDS: Record<ThemeMediaSlot, readonly ('image' | 'video')[]> = {
+  logo: ['image'],
+  hero: ['image', 'video'],
+  showcase: ['image', 'video'],
+};
+
+export interface LandingTheme extends ThemeOptions {
+  colors: Record<ThemeColorKey, string>;
+  headingFont: FontKey;
+  bodyFont: FontKey;
+  /** Asset ids of AffiliateLandingAsset rows of the same organisation. */
+  media: Record<ThemeMediaSlot, string | null>;
+}
+
+/** What a new theme starts from in the editor: neutral, and AA-clean. */
+export const DEFAULT_THEME: LandingTheme = {
+  colors: { primary: '#2563eb', secondary: '#7c3aed', heading: '#111827', text: '#374151', background: '#ffffff', surface: '#f3f4f6' },
+  headingFont: 'inter',
+  bodyFont: 'inter',
+  heroAlign: 'center',
+  heroHeight: 'compact',
+  heroOverlay: 'brand',
+  navLayout: 'start',
+  corners: 'rounded',
+  cardStyle: 'shadow',
+  stepsStyle: 'plain',
+  ctaStyle: 'band',
+  animation: 'none',
+  media: { logo: null, hero: null, showcase: null },
+};
+
+/** AA for body text, and for large text (≥ 24px, or ≥ 18.66px bold). */
+export const CONTRAST_TEXT = 4.5;
+export const CONTRAST_LARGE = 3;
+
+const HEX_RE = /^#[0-9a-f]{6}$/;
+/** The shape of an asset id (a cuid): letters and digits only, so it is safe in a URL path. */
+export const ASSET_ID_RE = /^[a-z0-9]{20,40}$/;
+
+/** A colour as the theme stores it: `#rrggbb`, lower case; `#rgb` is expanded. Null for anything else. */
+export function parseHexColor(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  let s = raw.trim().toLowerCase();
+  if (/^#[0-9a-f]{3}$/.test(s)) s = `#${s[1]}${s[1]}${s[2]}${s[2]}${s[3]}${s[3]}`;
+  return HEX_RE.test(s) ? s : null;
+}
+
+/** WCAG relative luminance of a `#rrggbb` colour. */
+export function relativeLuminance(hex: string): number {
+  const [r, g, b] = [1, 3, 5].map((i) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** WCAG contrast ratio of two `#rrggbb` colours (1 … 21). */
+export function contrastRatio(a: string, b: string): number {
+  const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+export const WHITE = '#ffffff';
+export const BLACK = '#000000';
+
+/**
+ * The text colour for a filled area: white when it reaches `min` on every one
+ * of `fills` (a gradient has two), else black when that does, else null — no
+ * text colour works there. White is preferred: it is what a brand's own
+ * buttons almost always use.
+ */
+export function onFill(fills: string[], min: number): string | null {
+  if (fills.every((f) => contrastRatio(WHITE, f) >= min)) return WHITE;
+  if (fills.every((f) => contrastRatio(BLACK, f) >= min)) return BLACK;
+  return null;
+}
+
+/** The colours a page renders, all derived from a theme that parseTheme accepted. */
+export interface ThemePalette extends Record<ThemeColorKey, string> {
+  /** Text on a primary / secondary button (large text). */
+  onPrimary: string;
+  onSecondary: string;
+  /** Text on the hero and on a `band` call to action (the primary → secondary gradient). */
+  onHero: string;
+  onBand: string;
+  /** Text on the heading-coloured `band` behind the steps (its title only: large). */
+  onHeading: string;
+  /** Small accent text on the page (the table's eyebrow): primary when it reaches 4.5:1, else the heading colour. */
+  accentText: string;
+  /** Large accent text on a card (the figures, the step numbers): primary when it reaches 3:1 there, else the heading colour. */
+  accentLarge: string;
+}
+
+export function themePalette(theme: LandingTheme): ThemePalette {
+  const c = theme.colors;
+  return {
+    ...c,
+    onPrimary: onFill([c.primary], CONTRAST_LARGE) ?? BLACK,
+    onSecondary: onFill([c.secondary], CONTRAST_LARGE) ?? BLACK,
+    onHero: onFill([c.primary, c.secondary], CONTRAST_LARGE) ?? WHITE,
+    onBand: onFill([c.primary, c.secondary], CONTRAST_TEXT) ?? WHITE,
+    onHeading: onFill([c.heading], CONTRAST_LARGE) ?? WHITE,
+    accentText: contrastRatio(c.primary, c.background) >= CONTRAST_TEXT ? c.primary : c.heading,
+    accentLarge: contrastRatio(c.primary, c.surface) >= CONTRAST_LARGE ? c.primary : c.heading,
+  };
+}
+
+/**
+ * The contrast every theme must meet, as issues on the colour to change. Only
+ * pairs the page actually renders are judged, so a variant that is not in use
+ * (a `plain` call to action, an image hero) asks nothing of its colours.
+ */
+export function themeContrastIssues(theme: LandingTheme): LandingIssue[] {
+  const c = theme.colors;
+  const out: LandingIssue[] = [];
+  const need = (field: ThemeColorKey, ok: boolean) => {
+    if (!ok && !out.some((i) => i.field === `theme.colors.${field}`)) out.push({ field: `theme.colors.${field}`, code: 'contrast' });
+  };
+  need('text', contrastRatio(c.text, c.background) >= CONTRAST_TEXT);
+  need('surface', contrastRatio(c.text, c.surface) >= CONTRAST_TEXT);
+  need('heading', contrastRatio(c.heading, c.background) >= CONTRAST_LARGE && contrastRatio(c.heading, c.surface) >= CONTRAST_LARGE);
+  // The gradient hero (no picture) carries its title, subtitle and nav on both stops.
+  if (!theme.media.hero) need('secondary', onFill([c.primary, c.secondary], CONTRAST_LARGE) !== null);
+  // A `band` call to action carries body text and the bullets on the gradient.
+  if (theme.ctaStyle === 'band') need('secondary', onFill([c.primary, c.secondary], CONTRAST_TEXT) !== null);
+  return out;
+}
+
+function parseTheme(input: unknown, issues: LandingIssue[]): LandingTheme | null {
+  if (!isObject(input)) {
+    issues.push({ field: 'theme', code: 'type' });
+    return null;
+  }
+  const before = issues.length;
+  const theme: LandingTheme = { ...DEFAULT_THEME, colors: { ...DEFAULT_THEME.colors }, media: { ...DEFAULT_THEME.media } };
+  const optionKeys = Object.keys(THEME_OPTIONS) as ThemeOptionKey[];
+  for (const [key, value] of Object.entries(input)) {
+    const path = `theme.${key}`;
+    if (key === 'colors') {
+      if (!isObject(value)) {
+        issues.push({ field: path, code: 'type' });
+        continue;
+      }
+      for (const [ck, cv] of Object.entries(value)) {
+        if (!(THEME_COLOR_KEYS as readonly string[]).includes(ck)) issues.push({ field: `${path}.${ck}`, code: 'unknown' });
+        else if (cv !== null && cv !== undefined) {
+          const hex = parseHexColor(cv);
+          if (hex) theme.colors[ck as ThemeColorKey] = hex;
+          else issues.push({ field: `${path}.${ck}`, code: 'invalid' });
+        }
+      }
+    } else if (key === 'headingFont' || key === 'bodyFont') {
+      if (value === null || value === undefined) continue;
+      if (typeof value === 'string' && (FONT_KEYS as readonly string[]).includes(value)) theme[key] = value as FontKey;
+      else issues.push({ field: path, code: 'invalid' });
+    } else if ((optionKeys as string[]).includes(key)) {
+      if (value === null || value === undefined) continue;
+      const allowed = THEME_OPTIONS[key as ThemeOptionKey] as readonly string[];
+      if (typeof value === 'string' && allowed.includes(value)) (theme as unknown as Record<string, string>)[key] = value;
+      else issues.push({ field: path, code: 'invalid' });
+    } else if (key === 'media') {
+      if (!isObject(value)) {
+        issues.push({ field: path, code: 'type' });
+        continue;
+      }
+      for (const [slot, id] of Object.entries(value)) {
+        if (!(THEME_MEDIA_SLOTS as readonly string[]).includes(slot)) issues.push({ field: `${path}.${slot}`, code: 'unknown' });
+        else if (id !== null && id !== undefined && id !== '') {
+          // An id, never an address: a URL, a data: URI or a path is refused here.
+          if (typeof id === 'string' && ASSET_ID_RE.test(id)) theme.media[slot as ThemeMediaSlot] = id;
+          else issues.push({ field: `${path}.${slot}`, code: 'invalid' });
+        }
+      }
+    } else {
+      issues.push({ field: path, code: 'unknown' });
+    }
+  }
+  if (issues.length > before) return null;
+  issues.push(...themeContrastIssues(theme));
+  return issues.length > before ? null : theme;
+}
+
+/** The asset ids a theme points at, slot by slot (the save checks they are the org's and of the right kind). */
+export function themeMediaRefs(theme: LandingTheme | null): { slot: ThemeMediaSlot; id: string }[] {
+  if (!theme) return [];
+  return THEME_MEDIA_SLOTS.flatMap((slot) => (theme.media[slot] ? [{ slot, id: theme.media[slot] as string }] : []));
+}
+
+function canonicalTheme(theme: LandingTheme | null): unknown {
+  if (!theme) return null;
+  return [
+    THEME_COLOR_KEYS.map((k) => theme.colors[k]),
+    theme.headingFont,
+    theme.bodyFont,
+    (Object.keys(THEME_OPTIONS) as ThemeOptionKey[]).map((k) => theme[k]),
+    THEME_MEDIA_SLOTS.map((s) => theme.media[s]),
+  ];
+}
+
+/**
+ * Which parts of the landing a save changes — the audit row's whole detail
+ * (field names only, never a value): `copy.<locale>`, `phone`, `email`,
+ * `productSignupUrl`, `imprintUrl` / `privacyUrl` / `termsUrl`, `stats`, `theme` (added or removed) or `theme.colors`,
+ * `theme.fonts`, `theme.layout`, `theme.animation`, `theme.media`.
+ */
+export function changedLandingFields(before: Landing, after: Landing): string[] {
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  const one = (l: Landing, locale: LandingLocale) => JSON.parse(canonicalLanding({ ...EMPTY_LANDING, copy: { [locale]: l.copy[locale] } }))[0];
+  const out: string[] = [];
+  for (const l of LANDING_LOCALES) if (!same(one(before, l), one(after, l))) out.push(`copy.${l}`);
+  for (const k of ['phone', 'email', 'productSignupUrl', ...LEGAL_LINKS.map((l) => l.key)] as const) if (before[k] !== after[k]) out.push(k);
+  const stats = (l: Landing) => JSON.parse(canonicalLanding({ ...EMPTY_LANDING, stats: l.stats }))[5];
+  if (!same(stats(before), stats(after))) out.push('stats');
+  const a = before.theme;
+  const b = after.theme;
+  if (!a || !b) {
+    if (a !== b) out.push('theme');
+    return out;
+  }
+  const layout = (t: LandingTheme) => (Object.keys(THEME_OPTIONS) as ThemeOptionKey[]).filter((k) => k !== 'animation').map((k) => t[k]);
+  if (!same(THEME_COLOR_KEYS.map((k) => a.colors[k]), THEME_COLOR_KEYS.map((k) => b.colors[k]))) out.push('theme.colors');
+  if (a.headingFont !== b.headingFont || a.bodyFont !== b.bodyFont) out.push('theme.fonts');
+  if (!same(layout(a), layout(b))) out.push('theme.layout');
+  if (a.animation !== b.animation) out.push('theme.animation');
+  if (!same(THEME_MEDIA_SLOTS.map((s) => a.media[s]), THEME_MEDIA_SLOTS.map((s) => b.media[s]))) out.push('theme.media');
+  return out;
+}
+
+/** The upload rules for a theme's media (the route and the editor's file picker read the same lists). */
+export const THEME_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp'] as const;
+export const THEME_VIDEO_TYPES = ['video/mp4', 'video/webm'] as const;
+export const THEME_MEDIA_MAX_BYTES = { image: 5 * 1024 * 1024, video: 15 * 1024 * 1024 } as const;
+/** At most this many uploads per organisation, referenced or not (unreferenced ones are swept on save). */
+export const THEME_MEDIA_MAX_PER_ORG = 30;
+
+/** The kind of a declared upload type, or null when the theme does not take it (no SVG: it can carry script). */
+export function themeMediaKind(contentType: string): 'image' | 'video' | null {
+  const t = contentType.toLowerCase();
+  if ((THEME_IMAGE_TYPES as readonly string[]).includes(t)) return 'image';
+  if ((THEME_VIDEO_TYPES as readonly string[]).includes(t)) return 'video';
+  return null;
+}
+
+/** Where an uploaded theme asset is served (public: the page it decorates is public). */
+export function themeMediaUrl(id: string): string {
+  return `/api/public/partner-media/${id}`;
 }

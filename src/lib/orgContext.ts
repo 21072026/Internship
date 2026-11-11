@@ -499,6 +499,7 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // orgId on every create and in every WHERE, so it is right without a bound
   // context too (an API import, a migration script).
   'AffiliateProgramSettings',
+  'AffiliateLandingAsset',
   'AffiliatePartner',
   'AffiliateCustomer',
   'AffiliatePayment',
