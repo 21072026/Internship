@@ -18,6 +18,7 @@ import { AffiliateTabs } from '../AffiliateTabs';
 import { LandingSettings } from './LandingSettings';
 import { CustomerStatusSettings } from './CustomerStatusSettings';
 import type { Landing } from '@/lib/affiliateLandingRule';
+import type { ThemeMedia } from '@/lib/partnerThemeLook';
 
 // The programme's settings (docs/affiliate-module.md, #3116): the commission plan,
 // the referral address, the customer-status thresholds (#3542), the public page's content (#3359) and the partner contract. The server is the judge (parseCommissionPlan,
@@ -49,6 +50,8 @@ interface Settings {
   windowNoticeDays: number;
   /** The public programme page's content (#3359). */
   landing: Landing;
+  /** The theme's uploads by slot, for the editor's preview (#3535). */
+  landingMedia: ThemeMedia;
   /** The customer-status thresholds (#3542); not part of the plan. */
   customerStatus: { freeMonths: number; passiveAfterDays: number };
   currencies: string[];
@@ -426,7 +429,7 @@ export default function AffiliateSettingsPage() {
         </fieldset>
       </Card>
 
-      <LandingSettings initial={settings.landing} readOnly={readOnly} localeLabel={localeLabel} />
+      <LandingSettings initial={settings.landing} initialMedia={settings.landingMedia ?? {}} readOnly={readOnly} localeLabel={localeLabel} />
 
       <Card>
         <CardHeader>

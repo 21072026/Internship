@@ -18,12 +18,15 @@ export function ApplicationForm({
   accent,
   privacy,
   contractVersion,
+  ink,
 }: {
   accent: string;
   /** The organisation's privacy page, or this host's (#3363). */
   privacy: { href: string; external: boolean };
   /** The partner contract's current version; null when the programme has none. */
   contractVersion: number | null;
+  /** The text colour on the accent when a theme picked the accent (#3535); absent, the button keeps its own. */
+  ink?: string;
 }) {
   const t = useT();
   const L = t.affiliateApply;
@@ -140,7 +143,7 @@ export function ApplicationForm({
       {state === 'closed' && <p className="text-sm text-red-600" role="alert">{L.closed}</p>}
       {state === 'limited' && <p className="text-sm text-red-600" role="alert">{L.limited}</p>}
 
-      <Button type="submit" disabled={state === 'sending'} className="w-full" style={{ backgroundColor: accent }} data-testid="affiliate-apply-submit">
+      <Button type="submit" disabled={state === 'sending'} className="w-full" style={{ backgroundColor: accent, ...(ink ? { color: ink } : {}) }} data-testid="affiliate-apply-submit">
         {L.submit}
       </Button>
     </form>

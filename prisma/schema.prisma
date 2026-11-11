@@ -389,6 +389,7 @@ model Organization {
   brandAssets             BrandAsset[]
   // The affiliate module (docs/affiliate-module.md, MARKETING only).
   affiliateSettings       AffiliateProgramSettings?
+  affiliateLandingAssets  AffiliateLandingAsset[]
   affiliatePartners       AffiliatePartner[]
   affiliateApplications   AffiliateApplication[]
   affiliateCustomers      AffiliateCustomer[]
@@ -9433,6 +9434,27 @@ model AffiliateProgramSettings {
   // Days before a customer's commission window ends that its partner is told
   // (#3556, src/lib/affiliateWindowNoticeRule.ts). 0 = off; 0…180.
   windowNoticeDays Int          @default(30)
+}
+
+// A picture or video the public partner page's theme shows (#3535): the logo,
+// the hero's background, the media beside the closing call. Uploaded on
+// /admin/affiliates/settings, referenced from AffiliateProgramSettings.landing
+// (theme.media) by id, served publicly by /api/public/partner-media/<id> — so
+// the page never loads a file from anywhere but our own storage. Bytes in the
+// database like every other upload. Unreferenced rows are swept when the
+// landing is saved (src/lib/affiliateProgramSettings.ts).
+model AffiliateLandingAsset {
+  id          String       @id @default(cuid())
+  orgId       String
+  org         Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  // 'image' | 'video' (themeMediaKind, src/lib/affiliateLandingRule.ts).
+  kind        String       @db.VarChar(10)
+  contentType String       @db.VarChar(50)
+  size        Int
+  data        Bytes
+  createdAt   DateTime     @default(now())
+
+  @@index([orgId, createdAt])
 }
 
 model AffiliatePartner {

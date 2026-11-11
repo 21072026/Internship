@@ -4,6 +4,7 @@ import { decide } from '@/lib/authzRule';
 import { requireCapability } from '@/lib/capabilityGate';
 import { programSettings } from '@/lib/affiliateProgramSettings';
 import { readStoredContract } from '@/lib/affiliateContractRule';
+import { themeMediaFor } from '@/lib/affiliateLandingAssets';
 
 // GET — the programme's settings (docs/affiliate-module.md): the commission plan,
 // the contract texts and their versions. `affiliate.read` (every admin tier),
@@ -20,5 +21,7 @@ export async function GET(request: Request) {
   // Whether this admin may save (an OBSERVER or an impersonated session may not):
   // the same rule the PUT routes apply, so the form never offers a refused write.
   const canWrite = decide({ actor: auth.actor, permission: 'affiliate.write' }).allow;
-  return NextResponse.json({ ...s, contract: readStoredContract(s.contract), canWrite });
+  // The theme's uploads by slot, with their kind, for the editor's preview (#3535).
+  const landingMedia = await themeMediaFor(orgId, s.landing.theme);
+  return NextResponse.json({ ...s, contract: readStoredContract(s.contract), canWrite, landingMedia });
 }
