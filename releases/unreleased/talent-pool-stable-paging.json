@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Talent-pool pages no longer overlap:** `GET /api/company/talent-pool` ordered by `updatedAt` alone, so candidates sharing a timestamp (one bulk write) could appear on two pages and another could be skipped; the order now breaks ties on `id`."
-}

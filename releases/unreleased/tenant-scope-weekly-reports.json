@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Security:** weekly reports stay inside the caller's organization while tenant isolation enforcement is off: `GET /api/weekly-reports?relationId=` and `GET/PATCH /api/weekly-reports/[id]` read another org's relation or report as not found (#3588)."
-}

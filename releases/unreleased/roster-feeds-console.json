@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Roster feeds console and schedule (#1967):** `/admin/roster-feeds` lists each feed with its schedule (UTC, shown in the viewer's zone), next run, last run and on/off/paused state. Admins can create and edit feeds with a column mapper fed by a pasted or uploaded sample header, start a dry run or a real run, browse the run history and a run detail (per-row outcomes filterable by action, paged, CSV export with formula-injection guard), approve a run the deactivation ceiling stopped (ceiling only, same file hash only, audited as `roster.run_approved`), and dismiss the banner for a failed or stopped run. Runs take a claim on the feed (one conditional UPDATE on `RosterFeed.claimedUntil`), so the waker, a click and a second replica never run one feed twice. One queued job, `roster.sweep`, runs due feeds every 5 minutes on #1676's scheduler (`sweepDueRosterFeeds`). Three failed runs in a row pause a feed with `pausedReason` and send an alert. New routes `/api/admin/roster-feeds/[id]/run`, `/runs`, `/runs/[runId]` (+ `/approve`, `/acknowledge`) are ADMIN-only and tenant-scoped, and another org's ids get a 404. The e2e HR-export stub is `e2e/support/roster-source.mjs` (`ROSTER_FEED_ALLOW_INSECURE_STUB=1`, test-only).",
-  "notes": {
-    "en": ["Admins can now connect an HR export as a scheduled roster feed: map its columns from a sample file, preview a run, apply it, and see every row it changed."],
-    "tr": ["Yöneticiler artık bir İK dışa aktarımını zamanlanmış kişi listesi beslemesi olarak bağlayabilir: sütunları örnek bir dosyadan eşleyin, bir çalıştırmayı önizleyin, uygulayın ve değiştirdiği her satırı görün."],
-    "de": ["Admins können jetzt einen HR-Export als geplanten Personen-Feed anbinden: Spalten anhand einer Beispieldatei zuordnen, einen Lauf als Vorschau prüfen, anwenden und jede geänderte Zeile einsehen."]
-  }
-}

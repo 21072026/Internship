@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Affiliate window notice (#3556):** a partner is told once per customer, by e-mail, that the customer's percent window ends within the programme's lead time. The window end is computed once (`customerWindowEndsAt()`, which the engine now reads too); who is told is the pure `dueWindowNotices()` in `src/lib/affiliateWindowNoticeRule.ts` — only windows that still earn (percent phase reached, customer has an ordinal, not cut short by a STOP_ALL termination), never after the end. New `AffiliateProgramSettings.windowNoticeDays` (default 30, 0…180, 0 = off; `PUT /api/admin/affiliate/settings/window-notice`, audited) and `AffiliateCustomer.windowNoticeSentAt`, claimed with a conditional update before the mail leaves. Daily job `affiliate.windowNotices` (05:35 UTC; `GET /api/cron?job=affiliate-window-notices`), one mail per partner and run through `notifyEvent('affiliate.windowEnding')`, category `affiliate-window-ending` (task_reminders).",
-  "notes": {
-    "en": ["Partners now get an e-mail before a customer's commission window ends, so they know when that customer stops earning them commission. Set how many days ahead in the programme settings, or turn it off."],
-    "tr": ["Partnerler artık bir müşterinin komisyon süresi bitmeden e-posta alıyor; böylece o müşteriden ne zaman komisyon kazanmayı bırakacaklarını biliyorlar. Kaç gün önce gideceğini program ayarlarından belirleyin ya da kapatın."],
-    "de": ["Partner erhalten jetzt eine E-Mail, bevor die Provisionslaufzeit eines Kunden endet, und wissen so, wann dieser Kunde keine Provision mehr bringt. Wie viele Tage vorher, legen Sie in den Programmeinstellungen fest — oder schalten es ab."]
-  }
-}

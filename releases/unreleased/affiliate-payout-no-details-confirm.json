@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Payout to a partner without payout details is confirmed first (#3351):** the Payouts screen asks \"No payout details — record anyway?\" before recording a payout for a partner who has not given an IBAN. The server still records it: a payout is a record of a transfer made outside the CRM, and refusing it would leave the commissions unpaid while the bank says otherwise. The rule and its reason are in `docs/affiliate-module.md`.",
-  "notes": {
-    "en": ["Recording a payout for a partner without payout details now asks for confirmation first."],
-    "tr": ["Ödeme bilgisi olmayan bir partnere payout kaydederken artık önce onay isteniyor."],
-    "de": ["Eine Auszahlung an einen Partner ohne Auszahlungsdaten muss jetzt zuerst bestätigt werden."]
-  }
-}

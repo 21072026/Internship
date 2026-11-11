@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Promotion to mentor asks about open mentee relations (#1506):** the mentor application approval and the admin's role convert refuse an account that is still the mentee of an open relation (`400 promotion_choice_required` with `openRelations`) until the admin picks `COACHING`, `END` or `KEEP` (`src/lib/promotionRelationsRule.ts`); the choice is applied in the promotion's transaction (`src/lib/promotionRelations.ts`: reclassify, lifecycle end as `ENDED_EARLY`/`changed_goals`, or nothing) and audited. **Security:** promotion through an approved mentor application now stamps `sessionsValidFrom`, so the account's old MENTEE session no longer survives the promotion (the role convert always did). No schema change.",
-  "notes": {
-    "en": ["Promoting someone to mentor now asks what should happen to their own open mentee relationships — turn them into coaching, end them, or leave them — instead of leaving them silently in the pipeline."],
-    "tr": ["Birini mentora terfi ettirirken artık kendi açık mentee ilişkilerine ne olacağı soruluyor — koçluğa çevir, kapat ya da dokunma — ilişkiler sessizce hatta bırakılmıyor."],
-    "de": ["Beim Befördern zum Mentor wird jetzt gefragt, was mit den eigenen offenen Mentee-Beziehungen geschehen soll — in Coaching umwandeln, beenden oder belassen — statt sie stillschweigend in der Pipeline zu lassen."]
-  }
-}

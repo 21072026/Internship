@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Security — programme writes stay in the tenant and the grant (#3576):** `PATCH`/`DELETE /api/cohorts/[id]` and `POST /api/cohorts/[id]/clone` go through one gate, `programWriteGate()` (`src/lib/programWriteGate.ts`): the programme is loaded inside the caller's tenant and `program.write` is asked with it as the subject. Another organisation's programme, or one a PROGRAM_ADMIN holds no grant for, answers 404 and nothing is written (the refusal is still audited as `authz.capability_denied`). Pinned by `e2e/cohort-tenant-scope.spec.ts` (@smoke) and a cross-tenant write row in the isolation leak matrix."
-}

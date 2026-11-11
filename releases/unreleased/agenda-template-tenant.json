@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Security: a session reaches a guide only in its relation's own org (#3592).** `POST /api/agendas`, `POST /api/agendas/personalize` and `POST /api/agendas/[id]/carry-over` read a library template by id and checked the org in JS — a default-org relation accepted every org's guide, a legacy NULL-org guide was offered to every org, and carry-over did not check at all. One helper, `agendaTemplateWhere()` (`src/lib/agendas.ts`), now puts the relation's org in the WHERE (NULL = the default org) and `instantiateAgenda()` requires it; another org's guide, a retired one and an unknown id answer the same 404. Two leak-matrix rows (`GET /api/admin/agenda-templates`, `GET /api/agendas/templates`) and a cross-tenant write probe."
-}

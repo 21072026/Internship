@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Journey builder for programme admins (#3582):** every route under `/api/admin/programs/[id]/journey` asked `program.read` / `program.write` without a subject, which the permission rule refuses for every PROGRAM_ADMIN — so a programme admin could not open the journey of a programme it holds a grant for. `journeyProgramFor()` now goes through the shared `programGate()` (`src/lib/programWriteGate.ts`, #3576) with the programme as the subject: an org admin or a granted PROGRAM_ADMIN gets in; an ungranted PROGRAM_ADMIN and another org's programme answer 404. Pinned by `e2e/journey-program-admin-scope.spec.ts` (@smoke).",
-  "notes": {
-    "en": ["Programme admins can now build the journey of the programmes they are responsible for."],
-    "tr": ["Program yöneticileri artık sorumlu oldukları programların akışını düzenleyebilir."],
-    "de": ["Programm-Admins können jetzt den Ablauf der Programme bearbeiten, für die sie zuständig sind."]
-  }
-}

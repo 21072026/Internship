@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Admin pages ship half the HTML (#3599):** the `admin` dictionary scope (#2987) was the union of every admin screen — 220 namespaces, 616–669 KB of HTML (175–182 KB gzip) on each admin page. It is now split one level deeper: `admin` carries only the chrome (layout, error, loading), each `src/app/admin/<section>/layout.tsx` mounts `admin/<section>`, and the dashboard mounts `admin/index`; `check:i18n-scopes` fails on an unmounted one. Nav keys, permission names and tour step keys no longer count as namespace reads (`// i18n-scopes: no-dictionary`, refused on a file that reads the dictionary). Measured on a local production build: 267–376 KB (64–97 KB gzip).",
-  "notes": {
-    "en": ["Admin pages load faster: each screen now downloads only the texts it shows."],
-    "tr": ["Yönetici sayfaları daha hızlı açılıyor: her ekran artık yalnızca gösterdiği metinleri indiriyor."],
-    "de": ["Admin-Seiten laden schneller: Jede Ansicht lädt jetzt nur die Texte, die sie anzeigt."]
-  }
-}
