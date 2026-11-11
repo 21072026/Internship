@@ -248,7 +248,7 @@ test('a mentee cannot read another mentee\'s offer', async ({ page }) => {
   const otherMenteeEmail = uniqueEmail('idorother');
   // Same org on purpose: this is the IDOR check inside a tenant (403); another
   // org's offer reads as 404 since #3598 (offers-tenant-scope.spec.ts).
-  const otherMentee = await seedUser(otherMenteeEmail, s.pw, 'MENTEE', 'Other Mentee', { orgId: s.org.id });
+  await seedUser(otherMenteeEmail, s.pw, 'MENTEE', 'Other Mentee', { orgId: s.org.id });
   try {
     const offer = await prisma.offer.create({
       data: { orgId: s.org.id, relationId: s.relation.id, companyId: s.company.id, status: 'SENT', position: 'Data Analyst', sentAt: new Date(), createdById: s.admin.id },
