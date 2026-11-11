@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { withTenantScope } from '@/lib/orgContext';
 import { previewJourney } from '@/lib/programJourney';
 import { journeyProgramFor } from '@/lib/programJourneyAdmin';
-import { requirePermission } from '@/lib/authz';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 
 // GET ?relationId= — the dry-run timeline of the journey against one of the
@@ -11,12 +12,9 @@ import { requirePermission } from '@/lib/authz';
 // never claims a ProgramStepRun, so previewing can never deliver anything.
 // `?at=` pins the clock (the same convention as GET /api/cron).
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requirePermission('program.read', { request });
-  if ('error' in gate) return gate.error;
-  const { session } = gate;
-  const auth = await journeyProgramFor(session, (await params).id);
+  const auth = await journeyProgramFor(request, await getServerSession(authOptions), (await params).id, 'program.read');
   if ('refusal' in auth) return auth.refusal;
-  const { program } = auth;
+  const { session, program } = auth;
   return await withTenantScope(session, async () => {
     const url = new URL(request.url);
     const relationId = url.searchParams.get('relationId') ?? '';

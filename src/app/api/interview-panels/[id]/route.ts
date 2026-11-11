@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
-import { assertSameOrg, requireOrg } from '@/lib/orgScope';
 import { criteriaByTemplate, resolveCriteria } from '@/lib/evaluationTemplates';
 import { canSeeOtherScorecards, divergence, isPanelComplete, panelAverage } from '@/lib/interviewPanel';
 import { blindLabel, isBlindFor } from '@/lib/blindReview';
@@ -31,8 +32,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   return await withTenantScope(session, async () => {
     const { id } = await params;
-    const panel = await prisma.interviewPanel.findUnique({
-      where: { id },
+    // Inside the caller's tenant only (#3588): the middleware that would
+    // narrow this lookup is off in every deployment, and `assertSameOrg()` is a
+    // no-op with the flag off too. Another org's panel reads as missing.
+    const panel = await prisma.interviewPanel.findFirst({
+      where: withinTenant({ id }, await tenantWhere(session)),
       include: { members: true, scorecards: true },
     });
     if (!panel) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -181,8 +185,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
 
-    const panel = await prisma.interviewPanel.findUnique({
-      where: { id },
+    // Inside the caller's tenant only (#3588): the middleware that would
+    // narrow this lookup is off in every deployment, and `assertSameOrg()` is a
+    // no-op with the flag off too. Another org's panel reads as missing.
+    const panel = await prisma.interviewPanel.findFirst({
+      where: withinTenant({ id }, await tenantWhere(session)),
       select: {
         id: true,
         orgId: true,
@@ -195,14 +202,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     });
     if (!panel) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    // Belt and braces on the tenant. `InterviewPanel` is registered in
-    // TENANT_MODELS since #1559, so with MT_ENFORCE_ISOLATION on the lookup
-    // above is already org-narrowed and a foreign id reads as "not found". The
-    // assert stays because it is the only check with the flag OFF — which is
-    // every deployment today — and because it fails loudly rather than
-    // returning a row: a panel is per-candidate, and "wrong tenant" must never
-    // be indistinguishable from "authorized".
-    assertSameOrg(panel.orgId, requireOrg(session));
 
     if (!isAdmin && panel.createdById !== session.user.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -224,7 +223,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     );
     const addable = add.length
       ? await prisma.user.findMany({
-          where: { id: { in: add }, isActive: true, role: { in: ['ADMIN', 'MENTOR'] } },
+          where: withinTenant<Prisma.UserWhereInput>({ id: { in: add }, isActive: true, role: { in: ['ADMIN', 'MENTOR'] } }, await tenantWhere(session)),
           select: { id: true },
         })
       : [];

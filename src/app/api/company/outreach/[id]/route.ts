@@ -73,6 +73,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
       await notify(row.requestedById, 'outreach.revokedCompany', { name: row.mentee.fullName }, '/company');
       await logActivity({ action: 'outreach.revoked', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'candidate_outreach', targetId: row.id, orgId });
+      await prisma.auditLog.create({ data: { actorId: session.user.id, action: 'OUTREACH_REVOKED', targetId: row.id, orgId } });
       return NextResponse.json({ request: { id: row.id, status: 'REVOKED' } });
     }
 
@@ -87,6 +88,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (target === 'DECLINED') {
       await notify(row.requestedById, 'outreach.declinedCompany', { name: row.mentee.fullName }, '/company');
       await logActivity({ action: 'outreach.declined', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'candidate_outreach', targetId: row.id, orgId });
+      await prisma.auditLog.create({ data: { actorId: session.user.id, action: 'OUTREACH_DECLINED', targetId: row.id, orgId } });
       return NextResponse.json({ request: { id: row.id, status: target } });
     }
 
@@ -111,6 +113,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     await notify(row.menteeId, 'outreach.approvedCandidate', { company: row.company.name }, `/messages/c/${conversation.id}`);
     await notify(row.requestedById, 'outreach.approvedCompany', { name: row.mentee.fullName }, `/messages/c/${conversation.id}`);
     await logActivity({ action: 'outreach.approved', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'candidate_outreach', targetId: row.id, orgId });
+    await prisma.auditLog.create({ data: { actorId: session.user.id, action: 'OUTREACH_APPROVED', targetId: row.id, orgId } });
     return NextResponse.json({ request: { id: row.id, status: target, conversationId: conversation.id } });
   });
 }

@@ -19,6 +19,7 @@ import {
   statCards,
   needsLiveStats,
   STAT_LIVE_MIN_PARTNERS,
+  legalLinks,
 } from '../../src/lib/affiliateLandingRule.ts';
 
 const fields = (r) => (r.ok ? [] : r.issues.map((i) => `${i.field}:${i.code}`));
@@ -254,4 +255,18 @@ test('a partner link sends the visitor to the sign-up page with that code only',
   const { readFileSync } = await import('node:fs');
   const partners = readFileSync(new URL('../../src/lib/affiliatePartners.ts', import.meta.url), 'utf8');
   assert.ok(partners.includes(`PARTNER_CODE_RE = /${REFERRAL_CODE_RE.source}/;`), 'REFERRAL_CODE_RE must match PARTNER_CODE_RE');
+});
+
+test('legal links (#3363): https only, and an empty one falls back to this host\'s own page', () => {
+  const ok = parseLanding({ imprintUrl: ' https://acme.example/imprint ', privacyUrl: '', termsUrl: null });
+  assert.equal(ok.ok, true);
+  assert.deepEqual([ok.landing.imprintUrl, ok.landing.privacyUrl, ok.landing.termsUrl], ['https://acme.example/imprint', null, null]);
+  assert.deepEqual(legalLinks(ok.landing), {
+    imprintUrl: { href: 'https://acme.example/imprint', external: true },
+    privacyUrl: { href: '/privacy', external: false },
+    termsUrl: { href: '/terms', external: false },
+  });
+  assert.deepEqual(fields(parseLanding({ termsUrl: 'http://acme.example/agb', privacyUrl: 'javascript:alert(1)' })).sort(), ['privacyUrl:not_https', 'termsUrl:not_https']);
+  // A link is part of the change comparison.
+  assert.notEqual(canonicalLanding(ok.landing), canonicalLanding(EMPTY_LANDING));
 });

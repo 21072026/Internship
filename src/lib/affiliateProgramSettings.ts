@@ -27,7 +27,7 @@ import { enqueue } from '@/lib/jobs/queue';
 import { PLAN_RESYNC_MAX_ATTEMPTS } from '@/lib/affiliatePlanResync';
 import { parseResyncState, queuedResync, type PlanResyncState } from '@/lib/affiliatePlanResyncRule';
 import { parseReferralUrl, type ReferralUrlIssue } from '@/lib/affiliateReferralRule';
-import { canonicalLanding, parseLanding, readStoredLanding, type Landing, type LandingIssue } from '@/lib/affiliateLandingRule';
+import { canonicalLanding, LEGAL_LINKS, parseLanding, readStoredLanding, type Landing, type LandingIssue } from '@/lib/affiliateLandingRule';
 
 /**
  * The currencies a programme may run in. EUR only in the first release; every
@@ -207,6 +207,7 @@ export async function saveLanding(
             phone: landing.phone !== null,
             email: landing.email !== null,
             productSignupUrl: landing.productSignupUrl !== null,
+            legalLinks: LEGAL_LINKS.filter((l) => landing[l.key] !== null).map((l) => l.key),
           }),
         },
       });

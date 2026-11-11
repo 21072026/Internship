@@ -4,7 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { readStepPayload, readStepTranslations } from '@/lib/programJourneyRule';
 import { STEP_SELECT, journeyProgramFor, serializeStep, stepColumns, stepInputSchema } from '@/lib/programJourneyAdmin';
-import { requirePermission } from '@/lib/authz';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
 
 
 // One step of a programme's journey (#1853).
@@ -25,12 +26,9 @@ async function loadStep(programId: string, stepId: string) {
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string; stepId: string }> }) {
   const { id, stepId } = await params;
-  const gate = await requirePermission('program.write', { request });
-  if ('error' in gate) return gate.error;
-  const { session } = gate;
-  const auth = await journeyProgramFor(session, id);
+  const auth = await journeyProgramFor(request, await getServerSession(authOptions), id, 'program.write');
   if ('refusal' in auth) return auth.refusal;
-  const { program } = auth;
+  const { session, program } = auth;
   return await withTenantScope(session, async () => {
     const parsed = patchSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed', code: 'invalid' }, { status: 400 });
@@ -69,12 +67,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string; stepId: string }> }) {
   const { id, stepId } = await params;
-  const gate = await requirePermission('program.write', { request: _request });
-  if ('error' in gate) return gate.error;
-  const { session } = gate;
-  const auth = await journeyProgramFor(session, id);
+  const auth = await journeyProgramFor(_request, await getServerSession(authOptions), id, 'program.write');
   if ('refusal' in auth) return auth.refusal;
-  const { program } = auth;
+  const { session, program } = auth;
   return await withTenantScope(session, async () => {
     const current = await loadStep(program.id, stepId);
     if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });

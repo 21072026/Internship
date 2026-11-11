@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Security:** `GET /api/company/analytics` writes the caller's org into its admin-branch queries, so an admin's pipeline counts and recruiting report cover its own organization only while tenant isolation enforcement is off (#3588)."
+}
