@@ -17,6 +17,7 @@ import { agendaIfAllowed, viewerOf } from '@/lib/agendaAccess';
 import { resolveItemText, resolveTemplateText } from '@/lib/agendasRule';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { aiProposeAgenda } from '@/lib/aiAgenda';
+import { agendaTemplateWhere } from '@/lib/agendas';
 import { AGENDA_LOG_ENTRIES, agendaGoalsFor, agendaHasContext, templateFallback, type AgendaPayloadInput } from '@/lib/aiAgendaRule';
 import { threadAiRefusal } from '@/lib/threadAiResponses';
 
@@ -86,11 +87,12 @@ async function handlePost(request: Request) {
       };
       guideId = agenda.templateId;
     } else if (parsed.data.templateId) {
-      const template = await prisma.agendaTemplate.findUnique({
-        where: { id: parsed.data.templateId },
-        select: { id: true, orgId: true, archivedAt: true, title: true, translations: true, items: { orderBy: { order: 'asc' }, select: { prompt: true, translations: true } } },
+      // The relation's org's library only (#3592): the org is in the WHERE.
+      const template = await prisma.agendaTemplate.findFirst({
+        where: await agendaTemplateWhere(parsed.data.templateId, rel.orgId),
+        select: { id: true, title: true, translations: true, items: { orderBy: { order: 'asc' }, select: { prompt: true, translations: true } } },
       });
-      if (!template || template.archivedAt || (template.orgId !== null && template.orgId !== rel.orgId && rel.orgId !== null)) {
+      if (!template) {
         return NextResponse.json({ error: 'Template not found' }, { status: 404 });
       }
       guide = {

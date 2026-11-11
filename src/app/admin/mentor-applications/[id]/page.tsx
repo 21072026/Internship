@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { PromotionRelationsChoice, type OpenRelationSummary } from '@/components/PromotionRelationsChoice';
+import type { PromotionChoice } from '@/lib/promotionRelationsRule';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
@@ -65,6 +67,10 @@ export default function MentorApplicationDetailPage() {
   const [savingNote, setSavingNote] = useState(false);
   const [rejectReasonText, setRejectReasonText] = useState('');
   const [screeningRequired, setScreeningRequired] = useState<ScreeningItem[]>([]);
+  // The applicant's own open mentee relations (#1506): approving promotes the
+  // account, so the admin chooses what happens to them first.
+  const [openRelations, setOpenRelations] = useState<OpenRelationSummary[]>([]);
+  const [promotionChoice, setPromotionChoice] = useState<PromotionChoice | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/mentor-applications/${id}`);
@@ -72,6 +78,7 @@ export default function MentorApplicationDetailPage() {
       const d = await res.json();
       setApp(d.application ?? null);
       setScreeningRequired(d.screeningRequired ?? []);
+      setOpenRelations(Array.isArray(d.openRelations) ? d.openRelations : []);
       // The note has its own column: reading it back out of `rejectReason`
       // was the other half of the bug that overwrote the reason (#1806).
       setNote(d.application?.adminNote ?? '');
@@ -96,6 +103,7 @@ export default function MentorApplicationDetailPage() {
       if (!res.ok) {
         if (d.code === 'already_decided') toast(a.alreadyDecided, 'error');
         else if (d.code === 'role_conflict') toast(a.roleConflict, 'error');
+        else if (d.code === 'promotion_choice_required') toast(t.promotionRelations.title, 'error');
         else if (d.code === 'screening_incomplete')
           toast(a.screening.incomplete.replace('{items}', (d.missing as ScreeningItem[]).map((i) => a.screening.items[i]).join(', ')), 'error');
         else toast(d.error || a.actionError, 'error');
@@ -243,11 +251,19 @@ export default function MentorApplicationDetailPage() {
               >
                 {a.takeUnderReview}
               </Button>
+              {decidable && openRelations.length > 0 && (
+                <PromotionRelationsChoice
+                  relations={openRelations}
+                  choice={promotionChoice}
+                  onChoice={setPromotionChoice}
+                  testIdPrefix="mentor-application-promotion"
+                />
+              )}
               <Button
                 className="w-full"
-                disabled={!decidable}
+                disabled={!decidable || (openRelations.length > 0 && !promotionChoice)}
                 loading={busy}
-                onClick={() => decide({ action: 'approve' })}
+                onClick={() => decide({ action: 'approve', ...(promotionChoice ? { promotionChoice } : {}) })}
                 data-testid="mentor-application-approve"
               >
                 {a.approve}

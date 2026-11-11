@@ -92,6 +92,13 @@ export interface Landing {
   email: string | null;
   /** https: the product's own sign-up page ("open an account" button). */
   productSignupUrl: string | null;
+  /**
+   * https: the organisation's own legal pages (#3363) — the footer links of the
+   * public page and the form. Null = this host's own /imprint, /privacy, /terms.
+   */
+  imprintUrl: string | null;
+  privacyUrl: string | null;
+  termsUrl: string | null;
   /** The figure cards; a key that is absent reads as `hidden`. */
   stats: Partial<Record<LandingStatKey, LandingStat>>;
 }
@@ -105,7 +112,15 @@ export interface LandingIssue {
 
 export type LandingParseResult = { ok: true; landing: Landing } | { ok: false; issues: LandingIssue[] };
 
-export const EMPTY_LANDING: Landing = { copy: {}, phone: null, email: null, productSignupUrl: null, stats: {} };
+export const EMPTY_LANDING: Landing = { copy: {}, phone: null, email: null, productSignupUrl: null, imprintUrl: null, privacyUrl: null, termsUrl: null, stats: {} };
+
+/** The legal links an organisation may set, each falling back to this host's own page. */
+export const LEGAL_LINKS = [
+  { key: 'imprintUrl', fallback: '/imprint' },
+  { key: 'privacyUrl', fallback: '/privacy' },
+  { key: 'termsUrl', fallback: '/terms' },
+] as const;
+export type LegalLinkKey = (typeof LEGAL_LINKS)[number]['key'];
 
 const isLocale = (v: string): v is LandingLocale => (LANDING_LOCALES as readonly string[]).includes(v);
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -224,10 +239,10 @@ function parseCopy(input: unknown, path: string, issues: LandingIssue[]): Landin
 export function parseLanding(input: unknown): LandingParseResult {
   const issues: LandingIssue[] = [];
   if (!isObject(input)) return { ok: false, issues: [{ field: '*', code: 'type' }] };
-  const landing: Landing = { copy: {}, phone: null, email: null, productSignupUrl: null, stats: {} };
+  const landing: Landing = { ...EMPTY_LANDING, copy: {}, stats: {} };
 
   for (const key of Object.keys(input)) {
-    if (!['copy', 'phone', 'email', 'productSignupUrl', 'stats'].includes(key)) issues.push({ field: key, code: 'unknown' });
+    if (!['copy', 'phone', 'email', 'productSignupUrl', 'imprintUrl', 'privacyUrl', 'termsUrl', 'stats'].includes(key)) issues.push({ field: key, code: 'unknown' });
   }
 
   const copy = input.copy;
@@ -246,7 +261,7 @@ export function parseLanding(input: unknown): LandingParseResult {
     }
   }
 
-  const optionalString = (key: 'phone' | 'email' | 'productSignupUrl'): string | null => {
+  const optionalString = (key: 'phone' | 'email' | 'productSignupUrl' | LegalLinkKey): string | null => {
     const v = input[key];
     if (v === null || v === undefined) return null;
     if (typeof v !== 'string') {
@@ -266,11 +281,12 @@ export function parseLanding(input: unknown): LandingParseResult {
     landing.email = parseEmail(email);
     if (landing.email === null) issues.push({ field: 'email', code: email.trim().length > LANDING_LIMITS.email ? 'too_long' : 'invalid' });
   }
-  const url = optionalString('productSignupUrl');
-  if (url !== null) {
+  for (const key of ['productSignupUrl', ...LEGAL_LINKS.map((l) => l.key)] as const) {
+    const url = optionalString(key);
+    if (url === null) continue;
     const parsed = parseHttpsUrl(url);
-    if (parsed.ok) landing.productSignupUrl = parsed.url;
-    else issues.push({ field: 'productSignupUrl', code: parsed.code });
+    if (parsed.ok) landing[key] = parsed.url;
+    else issues.push({ field: key, code: parsed.code });
   }
 
   const stats = input.stats;
@@ -383,7 +399,7 @@ export function canonicalLanding(landing: Landing): string {
     const st = landing.stats[k];
     return st && st.mode !== 'hidden' ? [st.mode, st.value] : null;
   });
-  return JSON.stringify([copy, landing.phone, landing.email, landing.productSignupUrl, stats]);
+  return JSON.stringify([copy, landing.phone, landing.email, landing.productSignupUrl, LEGAL_LINKS.map((l) => landing[l.key]), stats]);
 }
 
 /** True when the landing holds anything a visitor would see. */
@@ -490,4 +506,11 @@ export function customerSignupRedirect(signupUrl: string | null, ref: unknown): 
   if (url.protocol !== 'https:') return null;
   url.searchParams.set('ref', ref);
   return url.toString();
+}
+
+/** The footer's three legal links: the organisation's own page, else this host's. */
+export function legalLinks(landing: Pick<Landing, LegalLinkKey>): Record<LegalLinkKey, { href: string; external: boolean }> {
+  const out = {} as Record<LegalLinkKey, { href: string; external: boolean }>;
+  for (const { key, fallback } of LEGAL_LINKS) out[key] = landing[key] ? { href: landing[key] as string, external: true } : { href: fallback, external: false };
+  return out;
 }

@@ -145,6 +145,9 @@ export interface JobPayloadMap {
   'retention.prune': Record<string, never>;
   'usage.rollup': Record<string, never>;
   'trial.reminders': ScopedPayload;
+  /// A partner's customers whose commission window ends soon (#3556,
+  /// src/lib/jobs/affiliateWindowNotices.ts). `orgIds` narrows, `at` pins the clock.
+  'affiliate.windowNotices': ScopedPayload;
   'relationHealth.sweep': ScopedPayload;
   'surveys.campaigns': ScopedPayload & { batch?: number };
   'evaluations.reminders': ScopedPayload;
@@ -257,6 +260,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'retention.prune',
   'usage.rollup',
   'trial.reminders',
+  'affiliate.windowNotices',
   'relationHealth.sweep',
   'surveys.campaigns',
   'evaluations.reminders',

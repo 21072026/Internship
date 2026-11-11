@@ -127,7 +127,8 @@ export async function POST(request: Request) {
         );
       }
       if (referredById) {
-        const referrer = await prisma.user.findUnique({ where: { id: referredById }, select: { role: true } });
+        // The caller's tenant only (#3588), like the source below.
+        const referrer = await prisma.user.findFirst({ where: withinTenant({ id: referredById }, await tenantWhere(session)), select: { role: true } });
         if (!referrer || !['ADMIN', 'MENTOR', 'MENTEE'].includes(referrer.role)) {
           return NextResponse.json({ error: 'Invalid source user' }, { status: 400 });
         }

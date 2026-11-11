@@ -100,3 +100,19 @@ dialog — and the answer rides the same stage write (`stageMoveData` + `recordS
 the stage gate (#1589) still decides and its dialog (#1590) still shows. The server flag
 `EMPLOYMENT_ATTRIBUTION_REQUIRED` stays off: the boards, bulk moves and API clients do not send
 it yet.
+
+**A promotion to MENTOR asks about the person's own open relations (#1506).** Both promotion
+paths — the mentor application approval (`PATCH /api/mentor-applications/[id]`, `action:
+'approve'`) and the admin's role convert (`PATCH /api/users/[id] { role: 'MENTOR' }`) — refuse
+an account that is still the mentee of an open (`status: ACTIVE`) relation with `400
+promotion_choice_required` and the relations (`openRelations`: id, mentor name, stage, kind;
+no contact data). The admin's `promotionChoice` (`src/lib/promotionRelationsRule.ts`, no
+default) is applied in the promotion's own transaction (`src/lib/promotionRelations.ts`):
+`COACHING` reclassifies the relations (out of the funnel, history kept), `END` closes them
+through the lifecycle write (`ENDED_EARLY`, `changed_goals`, a `RelationLifecycleEvent`, the
+mentor notified) and `KEEP` changes nothing. Nothing is deleted, nothing reopens, so the
+one-active-mentor rule (#419) is untouched. An account without open relations promotes
+exactly as before. The application approval also stamps `sessionsValidFrom` now, like the role
+convert always did: the promoted account's MENTEE token stops working and the next sign-in
+carries MENTOR. Neither path revokes remembered devices — their refresh reads the user fresh
+and mints the new role (`src/lib/trustedDevice.ts`).

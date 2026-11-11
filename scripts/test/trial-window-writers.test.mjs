@@ -62,6 +62,8 @@ const EXEMPT = {
     'expireTrials() moves elapsed records OUT of TRIAL_ACTIVE into TRIAL_EXPIRED; the window it reads is the one that must stay. Its `pipelineStatus` key in the where is a filter.',
   'src/app/api/mentorship/[id]/trial/route.ts':
     'The hand-set trial end (#2553): it writes the date the person typed, and its only stage write returns a TRIAL_EXPIRED record to TRIAL_ACTIVE in the same data block as that date — the window is explicit, so there is nothing for trialWindowFor() to stamp. Its other `pipelineStatus` key is the conditional where.',
+  'src/lib/promotionRelations.ts':
+    'A promotion\'s open-relation choice (#1506) never moves a stage: COACHING writes kind/funnelEnteredAt, END the lifecycle columns. `pipelineStatus` is only copied into the read-only summary the admin is shown.',
   'src/lib/dormantFirstContact.ts':
     'Writes only the dormancy stamps (dormantSince, nudge counters); `pipelineStatus` is read to find first-stage records, never written.',
 };

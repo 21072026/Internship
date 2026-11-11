@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
+import { PromotionRelationsChoice, type OpenRelationSummary } from '@/components/PromotionRelationsChoice';
+import type { PromotionChoice } from '@/lib/promotionRelationsRule';
 
 // Convert a MENTOR ↔ MENTEE account (#1243), from anywhere an admin looks at
 // the person — the users list and both profile pages (#1252). Kept as a
@@ -24,6 +26,10 @@ export function RoleConvertButton({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A mentee still in open relations (#1506): the server answers
+  // promotion_choice_required with them, and the panel asks before resending.
+  const [openRelations, setOpenRelations] = useState<OpenRelationSummary[] | null>(null);
+  const [choice, setChoice] = useState<PromotionChoice | null>(null);
 
   // People-roles only: ADMIN is not grantable through the endpoint, and
   // COMPANY/SOURCE accounts carry structural links (it refuses them too).
@@ -38,13 +44,19 @@ export function RoleConvertButton({
       const res = await fetch(`/api/users/${userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ role: toMentor ? 'MENTOR' : 'MENTEE' }),
+        body: JSON.stringify({ role: toMentor ? 'MENTOR' : 'MENTEE', ...(choice ? { promotionChoice: choice } : {}) }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        if (data.code === 'promotion_choice_required' && Array.isArray(data.openRelations)) {
+          setOpenRelations(data.openRelations);
+          return;
+        }
         throw new Error(data.error ?? t.common.error);
       }
       setOpen(false);
+      setOpenRelations(null);
+      setChoice(null);
       await onDone();
     } catch (e) {
       setError(t.usersAdmin.convertFailed.replace('{e}', e instanceof Error ? e.message : String(e)));
@@ -81,16 +93,21 @@ export function RoleConvertButton({
           {error && (
             <p className="text-xs text-red-600 mt-2" data-testid={`convert-role-error-${userId}`}>{error}</p>
           )}
+          {openRelations && openRelations.length > 0 && (
+            <PromotionRelationsChoice relations={openRelations} choice={choice} onChoice={setChoice} testIdPrefix={`convert-role-${userId}`} />
+          )}
           <div className="flex gap-2 mt-3">
             <Button
               size="sm"
               loading={busy}
+              // Once the open relations are on screen, no promotion without a choice.
+              disabled={!!openRelations?.length && !choice}
               data-testid={`convert-role-confirm-${userId}`}
               onClick={convert}
             >
               {t.usersAdmin.convertConfirm}
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => { setOpen(false); setError(null); }}>
+            <Button variant="ghost" size="sm" onClick={() => { setOpen(false); setError(null); setOpenRelations(null); setChoice(null); }}>
               {t.common.cancel}
             </Button>
           </div>

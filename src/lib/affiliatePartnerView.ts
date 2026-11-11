@@ -17,6 +17,11 @@ import { parseCommissionPlan } from '@/lib/affiliateCommissionRule';
 import { planTermsView } from '@/lib/affiliatePlanTerms';
 import { listPayouts } from '@/lib/affiliatePayouts';
 import { referralLink } from '@/lib/affiliateReferralRule';
+import { trackedReferralLink } from '@/lib/affiliateClicks';
+import { partnerCustomerStatuses } from '@/lib/affiliateCustomerStatus';
+import { CUSTOMER_STATUSES, emptyStatusCounts, type CustomerStatus } from '@/lib/affiliateCustomerStatusRule';
+import { partnerFunnels, partnerThresholds } from '@/lib/affiliateFunnel';
+import { funnelFromCounts, parseFunnelPeriod } from '@/lib/affiliateFunnelRule';
 import type { GatedPartner } from '@/lib/affiliateContract';
 
 export const PORTAL_CUSTOMERS_PER_PAGE = 50;
@@ -35,8 +40,9 @@ const boundedPage = (raw: unknown) => {
 
 export async function partnerSummary(partner: GatedPartner) {
   const scope = scopeOf(partner);
-  const [settings, row, customers, sums] = await Promise.all([
+  const [settings, org, row, customers, sums] = await Promise.all([
     prisma.affiliateProgramSettings.findUnique({ where: { orgId: scope.orgId }, select: { referralUrl: true } }),
+    prisma.organization.findUnique({ where: { id: scope.orgId }, select: { publicHost: true } }),
     prisma.affiliatePartner.findFirst({ where: { id: scope.partnerId, orgId: scope.orgId }, select: { noticeEffectiveAt: true } }),
     prisma.affiliateCustomer.count({ where: scope }),
     prisma.affiliateCommission.groupBy({ by: ['status'], where: scope, _count: { _all: true }, _sum: { amountMinor: true } }),
@@ -52,6 +58,8 @@ export async function partnerSummary(partner: GatedPartner) {
     status: partner.status,
     noticeEffectiveAt: row?.noticeEffectiveAt?.toISOString() ?? null,
     link: referralLink(settings?.referralUrl, partner.code),
+    // The /r/<code> link that counts clicks (#3541); `link` stays as the old, direct one.
+    trackedLink: trackedReferralLink(org?.publicHost, settings?.referralUrl, partner.code),
     customers,
     totals,
   };
@@ -78,25 +86,54 @@ export async function partnerPlanTerms(partner: GatedPartner) {
   };
 }
 
-export async function partnerCustomers(partner: GatedPartner, rawPage?: unknown) {
+/**
+ * The partner's own funnel for a period and its progress towards the plan's
+ * switch to a percent (#3543) — through the same aggregate the admin screens
+ * read (src/lib/affiliateFunnel.ts), narrowed to this partner. `threshold` is
+ * null when the plan has no threshold (the indicator is then hidden).
+ */
+export async function partnerFunnel(partner: GatedPartner, rawPeriod?: unknown) {
   const scope = scopeOf(partner);
-  const page = boundedPage(rawPage);
-  const [rows, total] = await Promise.all([
-    prisma.affiliateCustomer.findMany({
-      where: scope,
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      skip: (page - 1) * PORTAL_CUSTOMERS_PER_PAGE,
-      take: PORTAL_CUSTOMERS_PER_PAGE,
-      select: { id: true, externalRef: true, partnerLabel: true, createdAt: true, _count: { select: { payments: true } } },
-    }),
-    prisma.affiliateCustomer.count({ where: scope }),
+  const period = parseFunnelPeriod(rawPeriod);
+  const [funnels, thresholds] = await Promise.all([
+    partnerFunnels(scope.orgId, { partnerIds: [scope.partnerId], period }),
+    partnerThresholds(scope.orgId, { partnerIds: [scope.partnerId] }),
   ]);
-  const ids = rows.map((r) => r.id);
+  const threshold = thresholds.get(scope.partnerId) ?? null;
+  return {
+    period,
+    funnel: funnels.get(scope.partnerId) ?? funnelFromCounts({ clicks: 0, uniqueClicks: 0 }, emptyStatusCounts()),
+    threshold: threshold && { ...threshold, reachedAt: threshold.reachedAt?.toISOString() ?? null },
+  };
+}
+
+const parseStatus = (raw: unknown): CustomerStatus | null =>
+  (CUSTOMER_STATUSES as readonly unknown[]).includes(raw) ? (raw as CustomerStatus) : null;
+
+/**
+ * The partner's customers, newest first, each with its status (#3542), and
+ * optionally only those of one status. The status moves with the clock, so it
+ * is judged for all of the partner's customers by the shared helper and the
+ * page is cut from that list — the filter and the funnel counts can never disagree.
+ */
+export async function partnerCustomers(partner: GatedPartner, opts: { page?: unknown; status?: unknown } = {}) {
+  const scope = scopeOf(partner);
+  const page = boundedPage(opts.page);
+  const status = parseStatus(opts.status);
+  const all = await partnerCustomerStatuses(scope.orgId, { partnerIds: [scope.partnerId] });
+  const matching = status ? all.filter((c) => c.status === status) : all;
+  const slice = matching.slice((page - 1) * PORTAL_CUSTOMERS_PER_PAGE, page * PORTAL_CUSTOMERS_PER_PAGE);
+  const ids = slice.map((c) => c.id);
+  const statusBy = new Map(slice.map((c) => [c.id, c.status]));
   // Earned per customer (everything but REJECTED), and the first payment day —
   // the customer's "since", whether it was entered by hand (createdAt is the
   // moment of entry, possibly back-dated) or imported — summed in SQL for this page.
-  const [earned, first] = ids.length
+  const [rows, earned, first] = ids.length
     ? await Promise.all([
+        prisma.affiliateCustomer.findMany({
+          where: { ...scope, id: { in: ids } },
+          select: { id: true, externalRef: true, partnerLabel: true, createdAt: true, _count: { select: { payments: true } } },
+        }),
         prisma.affiliateCommission.groupBy({
           by: ['customerId'],
           where: { ...scope, customerId: { in: ids }, status: { not: 'REJECTED' } },
@@ -104,19 +141,30 @@ export async function partnerCustomers(partner: GatedPartner, rawPage?: unknown)
         }),
         prisma.affiliatePayment.groupBy({ by: ['customerId'], where: { orgId: scope.orgId, customerId: { in: ids } }, _min: { receivedAt: true } }),
       ])
-    : [[], []];
+    : [[], [], []];
+  const rowBy = new Map(rows.map((r) => [r.id, r]));
   const earnedBy = new Map(earned.map((e) => [e.customerId, e._sum.amountMinor ?? 0]));
   const firstBy = new Map(first.map((f) => [f.customerId, f._min.receivedAt]));
   return {
-    rows: rows.map((r) => ({
-      id: r.id,
-      ref: r.externalRef,
-      label: r.partnerLabel,
-      since: (firstBy.get(r.id) ?? r.createdAt).toISOString(),
-      payments: r._count.payments,
-      earnedMinor: earnedBy.get(r.id) ?? 0,
-    })),
-    total,
+    rows: ids.flatMap((id) => {
+      const r = rowBy.get(id);
+      if (!r) return [];
+      return [
+        {
+          id: r.id,
+          ref: r.externalRef,
+          label: r.partnerLabel,
+          since: (firstBy.get(r.id) ?? r.createdAt).toISOString(),
+          payments: r._count.payments,
+          earnedMinor: earnedBy.get(r.id) ?? 0,
+          status: statusBy.get(r.id) as CustomerStatus,
+        },
+      ];
+    }),
+    total: matching.length,
+    status,
+    counts: Object.fromEntries(CUSTOMER_STATUSES.map((st) => [st, all.filter((c) => c.status === st).length])) as Record<CustomerStatus, number>,
+    all: all.length,
     page,
     perPage: PORTAL_CUSTOMERS_PER_PAGE,
   };
