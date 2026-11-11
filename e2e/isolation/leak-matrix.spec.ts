@@ -233,6 +233,13 @@ test("GET and PATCH /api/offers/<A's offer> as B's admin: 404 and the row is unt
   expect(after.position).toBe(tenants.orgA.offer.position);
 });
 
+test("GET /api/messages?relationId=<A's relation> as B's admin: refused, no message body (#3602)", async ({ browser }) => {
+  const request = await requestAs(browser, 'B', 'admin');
+  const res = await request.get(`/api/messages?relationId=${tenants.orgA.relation.id}`);
+  expect(res.status(), 'another tenant\'s thread must not open').not.toBe(200);
+  expect(await res.text()).not.toContain(rows.A.message.body);
+});
+
 test("GET /api/mentorship/<A's relation> as B's admin: 404", async ({ browser }) => {
   const request = await requestAs(browser, 'B', 'admin');
   const res = await request.get(`/api/mentorship/${tenants.orgA.relation.id}`);
