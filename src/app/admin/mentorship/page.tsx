@@ -1,5 +1,6 @@
 'use client';
 import { useT, useLocale } from "@/i18n/client";
+import { UNASSIGNED_PROGRAM } from '@/lib/programFilterRule';
 import { mentorshipAssignmentError } from "@/lib/mentorshipAssignmentError";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { parseGateBody, type GateInfo } from "@/lib/upgradePrompt";
@@ -106,10 +107,15 @@ export default function MentorshipPage() {
   // The mentee field searches the server (#1437); this is the one it picked.
   const [pickedMentee, setPickedMentee] = useState<PickedPerson | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
+  // The org's programmes (#1626): the list filter and the assignment field.
+  // Empty when the caller may not list them (a PROGRAM_ADMIN today) — then
+  // neither control renders, and the server scope still decides what is seen.
+  const [programs, setPrograms] = useState<{ id: string; name: string }[]>([]);
+  const [programFilter, setProgramFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const assignDialogRef = useModalFocus<HTMLDivElement>(showForm, () => setShowForm(false));
-  const [formData, setFormData] = useState({ mentorId: '', menteeId: '', companyId: '', durationMonths: '', cadenceWeeks: '' });
+  const [formData, setFormData] = useState({ mentorId: '', menteeId: '', companyId: '', cohortId: '', durationMonths: '', cadenceWeeks: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
@@ -154,6 +160,7 @@ export default function MentorshipPage() {
       else if (statusFilter !== 'ALL') params.set('lifecycle', statusFilter);
       if (search) params.set('search', search);
       if (agreementFilter) params.set('agreement', agreementFilter);
+      if (programFilter) params.set('program', programFilter);
       params.set('page', String(page));
       params.set('pageSize', String(PAGE_SIZE));
       const res = await fetch(`/api/mentorship?${params}`);
@@ -165,7 +172,7 @@ export default function MentorshipPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, search, agreementFilter, page, t.mentorships.loadFailed]);
+  }, [statusFilter, search, agreementFilter, programFilter, page, t.mentorships.loadFailed]);
 
   const fetchPickers = async () => {
     try {
@@ -177,6 +184,12 @@ export default function MentorshipPage() {
         // `all=1`: the company picker offers every company, not one page (#2437).
         fetch('/api/companies?all=1'),
       ]);
+      // The programmes (#1626) — best effort: a caller who may not list them
+      // simply gets no programme controls.
+      fetch('/api/cohorts')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => setPrograms(Array.isArray(d?.cohorts) ? d.cohorts.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })) : []))
+        .catch(() => setPrograms([]));
       const [usersData, companiesData] = await Promise.all([usersRes.json(), companiesRes.json()]);
       // Admins mentor too (#1141); `sortForPicker` keeps mentors first. The
       // mentee picker offers admins and mentors as well (a mentor can be
@@ -223,7 +236,7 @@ export default function MentorshipPage() {
   // Any filter change returns to the first page.
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter, agreementFilter]);
+  }, [search, statusFilter, agreementFilter, programFilter]);
 
   const handleCreate = async () => {
     if (!formData.mentorId || !formData.menteeId) {
@@ -242,6 +255,7 @@ export default function MentorshipPage() {
           mentorId: formData.mentorId,
           menteeId: formData.menteeId,
           companyId: formData.companyId || undefined,
+          cohortId: formData.cohortId || undefined,
           // The agreed duration and rhythm (#1784); left out → the org's defaults.
           ...(formData.durationMonths ? { durationMonths: Number(formData.durationMonths) } : {}),
           ...(formData.cadenceWeeks ? { expectedMeetingIntervalWeeks: Number(formData.cadenceWeeks) } : {}),
@@ -269,7 +283,7 @@ export default function MentorshipPage() {
       }
       await fetchRelations();
       setShowForm(false);
-      setFormData({ mentorId: '', menteeId: '', companyId: '', durationMonths: '', cadenceWeeks: '' });
+      setFormData({ mentorId: '', menteeId: '', companyId: '', cohortId: '', durationMonths: '', cadenceWeeks: '' });
       setPickedMentee(null);
     } catch {
       setFormError(t.mentorships.assignFailed);
@@ -551,6 +565,15 @@ export default function MentorshipPage() {
                 value={formData.companyId}
                 onChange={(e) => setFormData((p) => ({ ...p, companyId: e.target.value }))}
               />
+              {programs.length > 0 && (
+                <Select
+                  label={t.mentorships.programOptional}
+                  options={[{ value: '', label: t.mentorships.noProgram }, ...programs.map((c) => ({ value: c.id, label: c.name }))]}
+                  value={formData.cohortId}
+                  onChange={(e) => setFormData((p) => ({ ...p, cohortId: e.target.value }))}
+                  data-testid="assign-program"
+                />
+              )}
               <div className="grid gap-4 sm:grid-cols-2">
                 <Select
                   label={t.relationSchedule.duration}
@@ -704,6 +727,21 @@ export default function MentorshipPage() {
           <option value="">{t.agreementCard.column}: {t.agreementCard.filterAll}</option>
           {AGREEMENT_STATUSES.map((a) => <option key={a} value={a}>{t.agreementCard.status[a]}</option>)}
         </select>
+        {/* Filter by programme (#1626). Only the org's own programmes are offered;
+            the server ANDs it with the caller's scope, so it can only narrow. */}
+        {programs.length > 0 && (
+          <select
+            aria-label={t.mentorships.programFilter}
+            data-testid="program-filter"
+            value={programFilter}
+            onChange={(e) => setProgramFilter(e.target.value)}
+            className="min-h-11 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm"
+          >
+            <option value="">{t.mentorships.programFilter}: {t.mentorships.allPrograms}</option>
+            {programs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value={UNASSIGNED_PROGRAM}>{t.mentorships.noProgram}</option>
+          </select>
+        )}
         <input
           type="search"
           data-testid="mentorship-search"

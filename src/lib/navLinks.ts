@@ -1,3 +1,4 @@
+// i18n-scopes: no-dictionary — `key` indexes t.nav in the component; these names are not namespaces (#3599).
 import {
   Scale,
   BookOpenCheck,

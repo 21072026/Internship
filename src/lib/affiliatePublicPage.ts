@@ -20,11 +20,19 @@ import { requestHostHeader, resolvePublicInquiryTarget } from '@/lib/publicHostO
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { parseCommissionPlan, type CommissionPlan } from '@/lib/affiliateCommissionRule';
 import { landingHasContent, readStoredLanding, type Landing } from '@/lib/affiliateLandingRule';
+import { readStoredContract, type ContractTexts } from '@/lib/affiliateContractRule';
+
+/** The partner contract as published (#3363): its current version and texts; null when there is none. */
+export interface PublicContract {
+  version: number;
+  texts: ContractTexts;
+}
 
 export interface PublicProgramme {
   orgId: string;
   landing: Landing;
   plan: CommissionPlan;
+  contract: PublicContract | null;
 }
 
 /**
@@ -34,16 +42,22 @@ export interface PublicProgramme {
  */
 export async function affiliateProgrammeForHost(
   hostHeader: string | null | undefined,
-): Promise<{ orgId: string; plan: CommissionPlan; landing: unknown } | null> {
+): Promise<{ orgId: string; plan: CommissionPlan; landing: unknown; contract: PublicContract | null } | null> {
   const target = await resolvePublicInquiryTarget(hostHeader);
   if (!target.open || target.vertical !== 'MARKETING' || !target.orgId) return null;
   const orgId = target.orgId;
   if (!(await shellCapabilities(orgId)).includes('affiliate')) return null;
   // Sessionless: no tenant context is bound, so the org is named explicitly.
-  const settings = await prisma.affiliateProgramSettings.findUnique({ where: { orgId }, select: { plan: true, landing: true } });
+  const settings = await prisma.affiliateProgramSettings.findUnique({
+    where: { orgId },
+    select: { plan: true, landing: true, contract: true, contractVersion: true },
+  });
   if (!settings?.plan) return null;
   const plan = parseCommissionPlan(settings.plan);
-  return plan.ok ? { orgId, plan: plan.plan, landing: settings.landing } : null;
+  if (!plan.ok) return null;
+  const texts = readStoredContract(settings.contract);
+  const contract = settings.contractVersion > 0 && Object.keys(texts).length > 0 ? { version: settings.contractVersion, texts } : null;
+  return { orgId, plan: plan.plan, landing: settings.landing, contract };
 }
 
 /** The programme this request's host publishes, or null (render a 404). */
@@ -52,5 +66,5 @@ export async function publicProgrammeForRequest(): Promise<PublicProgramme | nul
   if (!programme) return null;
   const landing = readStoredLanding(programme.landing);
   if (!landingHasContent(landing)) return null;
-  return { orgId: programme.orgId, landing, plan: programme.plan };
+  return { orgId: programme.orgId, landing, plan: programme.plan, contract: programme.contract };
 }

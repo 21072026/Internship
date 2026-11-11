@@ -23,7 +23,7 @@ per organisation, and every number in tests and examples here is synthetic.
 | 6 | Referral codes | Permanent once issued, unique per organisation. A migrated partner keeps the exact code the previous system used (a number or a custom slug). |
 | 7 | Payouts | Recorded and approved in the CRM; the bank transfer itself stays manual. |
 | 8 | Contract | Each organisation writes its programme copy and partner contract (per locale). A changed contract bumps its version, and every partner must accept the current version before the portal or its API answers. |
-| 9 | Clicks | Not migrated. New clicks, if recorded, store a keyed hash of the IP, never the raw address. |
+| 9 | Clicks | Not migrated. New clicks are counted through the tracked link `/r/<code>` as **per-partner, per-day counters only** — no IP, user-agent or cookie is stored ([Link clicks](#link-clicks-3541)). |
 
 ## The commission plan
 
@@ -174,6 +174,8 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   and 45) are the customer-status thresholds — not part of the plan.
 - **InvitationToken.partnerId** — the partner an AFFILIATE invitation links to.
 - **AffiliateContractAcceptance** — one row per partner and contract version.
+- **AffiliateClickDaily** — one row per partner and UTC day: `clicks` and `uniqueClicks`
+  (`@@unique([partnerId, day])`). Counters only ([Link clicks](#link-clicks-3541)).
 
 ## Admin screens
 
@@ -251,6 +253,12 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   row carries their sum, the transfer day (a calendar day, not in the future) and
   an optional bank reference; the commissions become PAID with `payoutId` and
   `paidAt`, and stay frozen for good. Audited (`affiliate.payout.create`).
+  **A partner without payout details can be paid** (#3351): a payout is a
+  record, not a payment order — the transfer happens outside the CRM and may
+  already have gone another way, so refusing it would make the CRM disagree with
+  the bank and leave the commissions "unpaid". The screen asks first ("No payout
+  details — record anyway?"); the server does not refuse. If the CRM ever
+  triggers the transfer itself, this turns into a server-side refusal.
 
 ## The public programme page
 
@@ -264,7 +272,7 @@ is also why it is not in `PUBLIC_ROUTES`.
 
 Order: hero (apply · partner portal · the product's sign-up page), introduction,
 commission table, steps, a call button, the closing call to action (apply ·
-e-mail) and this host's imprint, privacy and terms. The words are the org's
+e-mail) and the legal footer. The words are the org's
 landing copy (above), with generic dictionary fallbacks (`affiliateLanding`).
 The table is **built from the plan on every render** (`commissionTableRows()`),
 never typed, so the page cannot promise what the engine does not pay; the
@@ -273,6 +281,25 @@ payment of customer no. N on, every customer's payment earns the rate, each
 within its own window. Colours and mark follow the host's brand.
 `src/lib/affiliatePublicPage.ts` loads it; `e2e/affiliate-public-page.spec.ts`
 pins it.
+
+### The legal footer and the public partner terms (#3363)
+
+The page, the form and the terms page share one footer (`src/app/partner/PartnerFooter.tsx`).
+Its Imprint / Privacy / Terms links are the **organisation's own pages** when it set them
+(`landing.imprintUrl` / `privacyUrl` / `termsUrl`, https only, in the admin's landing
+settings) and this host's own `/imprint`, `/privacy`, `/terms` otherwise
+(`legalLinks()`). The texts stay where the organisation publishes them: we link, we do
+not host them (hosting a versioned AGB would be its own task). The form's privacy link
+follows the same rule.
+
+`/partner/terms` shows the **partner contract** — the same text a partner accepts in the
+portal (`AffiliateProgramSettings.contract`), in its current version, read-only and
+signed out; it is a 404 where the host serves no programme or the programme has no
+contract, and the footer links it only when there is one. With a contract, the
+application form asks the applicant to accept it: the body carries the version the form
+was rendered with, the route accepts only the **current** one (else `400` with field
+`contract`, so a form opened before a new version was published asks again) and stores
+it on `AffiliateApplication.contractVersion`.
 
 ### The figure cards (#3364)
 
@@ -485,6 +512,11 @@ the check.
   fragment or its own `ref`; the link is that URL with `ref=<code>` set
   (`src/lib/affiliateReferralRule.ts`, unit-tested). Without one the portal shows
   the code alone.
+  When the organisation also has a public host this deployment serves
+  (`Organization.publicHost`), the portal shows the **tracked link**
+  `<public host>/r/<code>` first and keeps the direct link beside it as the
+  "old link": links already shared keep working and their customers are still
+  attributed, only the tracked one counts clicks ([Link clicks](#link-clicks-3541)).
 - **Customers, commissions, payouts:** read through `src/lib/affiliatePartnerView.ts`,
   narrowed by `affiliateRowScope()` to the partner's own rows. A partner sees its
   customers' opaque references, payment amounts and dates, commissions and payouts
@@ -504,6 +536,56 @@ the check.
   org-scoped). A question changes nothing: a correction is still the admin's, through
   the one payment writer. No dispute model or status exists by design; one would
   follow only if questions become frequent.
+
+## Link clicks (#3541)
+
+A partner's direct link goes straight to the product, so its clicks never reach
+us. The **tracked link** `/r/<code>` passes through the CRM and redirects on.
+Route: `src/app/r/[code]/route.ts`; rule (pure, unit-tested in
+`scripts/test/affiliate-click-rule.test.mjs`): `src/lib/affiliateClickRule.ts`;
+server half: `src/lib/affiliateClicks.ts`.
+
+- **Which organisation.** The request's host, through the same resolver as the
+  public programme page (`resolvePublicInquiryTarget`): the org mapped to the host,
+  MARKETING, with the `affiliate` capability. The code is looked up in that org
+  only, so another org's code is never counted on this host.
+- **Where the visitor goes.** Always a 302, never an error page. A well-formed code
+  goes to `referralLink(referralUrl, code)`; a malformed one to the bare
+  `referralUrl`; no programme or no referral URL here → this host's home page (`/`).
+  The target comes **only from the settings** — nothing of the request reaches it
+  (no open redirect). Whether the code belongs to a partner is not asked for the
+  redirect, so the `Location` reveals nothing (the same rule as `/partner?ref=`,
+  #3365). When the referral URL is the `/partner` page itself, that page forwards
+  to the sign-up page as before.
+- **What is counted.** After the response (`after()`, so timing reveals nothing
+  either), one click for an **ACTIVE** partner of the host's org, when the request is
+  a GET, not a browser prefetch (`Sec-Purpose`/`Purpose`), and not a known bot,
+  link-preview fetcher or command-line client (`isBotUserAgent`; an empty
+  user-agent counts as a bot). Unknown codes, suspended or terminated partners,
+  another org's codes and bots are redirected and counted never.
+- **Unique clicks.** The first click of a visitor for a partner on a UTC day. The
+  visitor key is `HMAC(dayKey, IP + user-agent)`, where `dayKey` is derived from
+  the server secret and the UTC date — the same on every replica, and a new one
+  every day, so yesterday's keys cannot be linked to today's. The key lives only
+  in the rate-limit store, in a window that ends at the next UTC midnight (≤ 24 h).
+- **Rate limit.** At most 30 counted clicks per visitor (hashed IP) and hour
+  (`CLICK_RATE_LIMIT`). Over it the visitor is **still redirected**, the click is
+  not counted. The limiter is called directly (`rateLimit()`), not through
+  `enforceRateLimit()`, because that one writes the client IP into the activity
+  log on a breach.
+- **Write.** One upsert on `(partnerId, day)` incrementing `clicks` (and
+  `uniqueClicks` for a unique click); a lost race on the first click of the day
+  retries as the update. The orgId is passed explicitly (sessionless route).
+
+**What is NOT stored**, anywhere — database, rate-limit store, logs:
+
+- the visitor's IP address (only an HMAC of it, in the rate-limit store, for at
+  most the rest of the UTC day);
+- the user-agent (likewise only inside the HMAC visitor key);
+- any cookie: the route sets none and reads none;
+- the referring page, the time of the click beyond its UTC day, or anything that
+  ties a click to a later registration — attribution stays with the
+  `referral_code` of the account event (below).
 
 ## Automatic attribution (#3354)
 

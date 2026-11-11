@@ -1,3 +1,4 @@
+import { I18nScope } from '@/i18n/scope';
 import { gatePage } from '@/lib/pageCapabilityGate';
 import { gateOutboxPage } from '@/lib/outboxRoute';
 
@@ -7,5 +8,5 @@ import { gateOutboxPage } from '@/lib/outboxRoute';
 export default async function Layout({ children }: { children: React.ReactNode }) {
   await gatePage('/admin/outbox');
   await gateOutboxPage();
-  return <>{children}</>;
+  return <I18nScope scope="admin/outbox">{children}</I18nScope>;
 }

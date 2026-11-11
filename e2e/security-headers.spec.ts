@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { floodIp } from './helpers/rateLimit';
 
 test('responses carry the security headers', async ({ request }) => {
   const res = await request.get('/');
@@ -75,27 +76,37 @@ test('every script tag the server renders carries the request nonce', async ({ r
   expect(executable.filter((t) => !t.includes(`nonce="${nonce}"`))).toEqual([]);
 });
 
+// /api/csp-report is limited to 60 reports per IP per 10 min, and in a full-suite
+// shard every page any spec opens can send report-only violations into the one
+// shared loopback bucket — so these tests post from an address of their own
+// (e2e/helpers/rateLimit.ts, #2159).
+const REPORT_IP = floodIp('security-headers:csp-report');
+
 test('the report endpoint takes both report shapes and refuses garbage', async ({ request }) => {
   const legacy = await request.post('/api/csp-report', {
-    headers: { 'content-type': 'application/csp-report' },
+    headers: { 'content-type': 'application/csp-report', ...REPORT_IP },
     data: JSON.stringify({
       'csp-report': { 'document-uri': 'http://localhost/x?token=t', 'effective-directive': 'script-src-elem', 'blocked-uri': 'inline' },
     }),
   });
   expect(legacy.status()).toBe(204);
   const batch = await request.post('/api/csp-report', {
-    headers: { 'content-type': 'application/reports+json' },
+    headers: { 'content-type': 'application/reports+json', ...REPORT_IP },
     data: JSON.stringify([{ type: 'csp-violation', body: { effectiveDirective: 'script-src', blockedURL: 'eval' } }]),
   });
   expect(batch.status()).toBe(204);
   const junk = await request.post('/api/csp-report', {
-    headers: { 'content-type': 'application/csp-report' },
+    headers: { 'content-type': 'application/csp-report', ...REPORT_IP },
     data: 'not json',
   });
   expect(junk.status()).toBe(400);
 });
 
 test("a real browser's violation report reaches the endpoint and is accepted", async ({ page }) => {
+  // The browser's own report goes out from this spec's address too (see above).
+  await page.route('**/api/csp-report', (route) =>
+    route.continue({ headers: { ...route.request().headers(), ...REPORT_IP } }),
+  );
   await page.goto('/features');
   const report = page.waitForRequest((r) => r.url().endsWith('/api/csp-report') && r.method() === 'POST');
   // An inline event handler: the strict policy would block it (script-src-attr;
