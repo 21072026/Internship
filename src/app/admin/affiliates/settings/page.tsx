@@ -12,6 +12,7 @@ import { useLocale, useT } from '@/i18n/client';
 import { formatMinorAmount, parseMinorUnits } from '@/lib/money';
 import { interpolate } from '@/lib/notificationText';
 import { parseReferralUrl, referralLink, type ReferralUrlIssue } from '@/lib/affiliateReferralRule';
+import { parseWindowNoticeDays, WINDOW_NOTICE_DAYS_MAX } from '@/lib/affiliateWindowNoticeRule';
 import { resyncInFlight, type PlanResyncState } from '@/lib/affiliatePlanResyncRule';
 import { AffiliateTabs } from '../AffiliateTabs';
 import { LandingSettings } from './LandingSettings';
@@ -44,6 +45,8 @@ interface Settings {
   contract: Record<string, string>;
   contractVersion: number;
   referralUrl: string | null;
+  /** Days before a customer's window ends that its partner is told (#3556); 0 = off. */
+  windowNoticeDays: number;
   /** The public programme page's content (#3359). */
   landing: Landing;
   /** The customer-status thresholds (#3542); not part of the plan. */
@@ -129,7 +132,9 @@ export default function AffiliateSettingsPage() {
   const [contract, setContract] = useState<Record<string, string>>({});
   const [referralUrl, setReferralUrl] = useState('');
   const [referralIssue, setReferralIssue] = useState<ReferralUrlIssue | null>(null);
-  const [busy, setBusy] = useState<'plan' | 'contract' | 'referral' | null>(null);
+  const [windowNoticeDays, setWindowNoticeDays] = useState('');
+  const [windowNoticeInvalid, setWindowNoticeInvalid] = useState(false);
+  const [busy, setBusy] = useState<'plan' | 'contract' | 'referral' | 'notice' | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/admin/affiliate/settings');
@@ -146,6 +151,7 @@ export default function AffiliateSettingsPage() {
     setForm(formFrom(s.plan, s.currencies[0] ?? 'EUR', locale));
     setContract(s.contract ?? {});
     setReferralUrl(s.referralUrl ?? '');
+    setWindowNoticeDays(String(s.windowNoticeDays));
   }, [locale]);
 
   useEffect(() => {
@@ -240,6 +246,34 @@ export default function AffiliateSettingsPage() {
         setReferralUrl(body.referralUrl ?? '');
       } else if (body.code === 'invalid_referral_url') {
         setReferralIssue(body.issue);
+        toast(L.errorInvalid, 'error');
+      } else toast(body.code === 'conflict' ? L.errorConflict : L.loadFailed, 'error');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveWindowNotice() {
+    // The server's own rule decides; the field only refuses what it cannot be.
+    const days = parseWindowNoticeDays(windowNoticeDays);
+    if (days === null) {
+      setWindowNoticeInvalid(true);
+      toast(L.errorInvalid, 'error');
+      return;
+    }
+    setBusy('notice');
+    try {
+      const res = await fetch('/api/admin/affiliate/settings/window-notice', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ windowNoticeDays: days }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        toast(body.changed ? L.windowNoticeSaved : L.windowNoticeUnchanged);
+        setWindowNoticeDays(String(body.windowNoticeDays));
+      } else if (body.code === 'invalid_input') {
+        setWindowNoticeInvalid(true);
         toast(L.errorInvalid, 'error');
       } else toast(body.code === 'conflict' ? L.errorConflict : L.loadFailed, 'error');
     } finally {
@@ -365,6 +399,32 @@ export default function AffiliateSettingsPage() {
       </Card>
 
       <CustomerStatusSettings initial={settings.customerStatus} readOnly={readOnly} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{L.windowNoticeTitle}</CardTitle>
+          <p className="text-sm text-gray-600 dark:text-gray-400">{L.windowNoticeHint}</p>
+        </CardHeader>
+        <fieldset disabled={readOnly} className="space-y-3">
+          <Input
+            label={L.windowNoticeLabel}
+            inputMode="numeric"
+            value={windowNoticeDays}
+            error={windowNoticeInvalid ? interpolate(L.windowNoticeRange, { max: String(WINDOW_NOTICE_DAYS_MAX) }) : undefined}
+            hint={L.windowNoticeFieldHint}
+            onChange={(e) => {
+              setWindowNoticeDays(e.target.value);
+              setWindowNoticeInvalid(false);
+            }}
+            data-testid="affiliate-window-notice-days"
+          />
+          {!readOnly && (
+            <Button type="button" onClick={() => void saveWindowNotice()} disabled={busy !== null} data-testid="affiliate-save-window-notice">
+              {L.saveWindowNotice}
+            </Button>
+          )}
+        </fieldset>
+      </Card>
 
       <LandingSettings initial={settings.landing} readOnly={readOnly} localeLabel={localeLabel} />
 

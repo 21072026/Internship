@@ -73,6 +73,13 @@ const MATRIX: Case[] = [
     markers: (_t, r) => [r.evaluationTemplate.id, r.evaluationTemplate.name],
   },
   {
+    // The guided-conversation library (#3592).
+    name: 'GET /api/admin/agenda-templates',
+    actor: 'admin',
+    path: () => '/api/admin/agenda-templates',
+    markers: (_t, r) => [r.agendaTemplate.id, r.agendaTemplate.title],
+  },
+  {
     // Takes the org as a parameter, so the probe asks for the OTHER tenant's
     // org id outright — the IDOR shape, not just an unfiltered list.
     name: 'GET /api/admin/document-requirements?orgId=<target>',
@@ -82,6 +89,9 @@ const MATRIX: Case[] = [
   },
   { name: 'GET /api/invite', actor: 'admin', path: () => '/api/invite', markers: (t) => [t.invitation.id, t.invitation.email] },
   { name: 'GET /api/interview-panels', actor: 'admin', path: () => '/api/interview-panels', markers: (_t, r) => [r.panel.id, r.panel.title] },
+  // Offers (#3588): the admin list, and one offer by id — the by-id row asks
+  // for the TARGET tenant's offer, so the probe is the IDOR shape too.
+  { name: 'GET /api/offers', actor: 'admin', path: () => '/api/offers?pageSize=100', markers: (t) => [t.offer.id, t.offer.position] },
   { name: 'GET /api/requisitions', actor: 'admin', path: () => '/api/requisitions?pageSize=50', markers: (_t, r) => [r.requisition.id, r.requisition.title] },
   { name: 'GET /api/users', actor: 'admin', path: () => '/api/users', markers: (t) => [t.mentor.email, t.companyUser.email] },
   { name: 'GET /api/tags', actor: 'admin', path: () => '/api/tags', markers: (t) => [t.tag.id, t.tag.name] },
@@ -89,6 +99,8 @@ const MATRIX: Case[] = [
   // ── MENTOR reads ──
   { name: 'GET /api/mentorship', actor: 'mentor', path: () => '/api/mentorship?pageSize=100', markers: (t) => [t.relation.id] },
   { name: 'GET /api/interview-panels', actor: 'mentor', path: () => '/api/interview-panels', markers: (_t, r) => [r.panel.id] },
+  // The guide picker a mentor reads (#3592).
+  { name: 'GET /api/agendas/templates', actor: 'mentor', path: () => '/api/agendas/templates', markers: (_t, r) => [r.agendaTemplate.id, r.agendaTemplate.title] },
 
   // ── COMPANY reads ──
   { name: 'GET /api/mentorship', actor: 'companyUser', path: () => '/api/mentorship?pageSize=100', markers: (t) => [t.relation.id] },
@@ -177,6 +189,46 @@ test("PUT /api/mentorship/<A's relation> as B's admin: 404 and the row is untouc
   expect(after.nextActionNote).toBe(before.nextActionNote);
 });
 
+test("GET /api/admin/companies/<A's company>/entitlements as B's admin: 404 (#3588)", async ({ browser }) => {
+  const request = await requestAs(browser, 'B', 'admin');
+  const res = await request.get(`/api/admin/companies/${tenants.orgA.company.id}/entitlements`);
+  expect(res.status(), 'a cross-tenant read must read as not found').toBe(404);
+});
+
+test("POST /api/mentorship pairing A's people as B's admin: refused, nothing created (#3588)", async ({ browser }) => {
+  const before = await prisma.mentorshipRelation.count({ where: { menteeId: tenants.orgA.mentee.id } });
+  const request = await requestAs(browser, 'B', 'admin');
+  const res = await request.post('/api/mentorship', { data: { mentorId: tenants.orgA.mentor.id, menteeId: tenants.orgA.mentee.id } });
+  expect(res.status(), 'another tenant\'s people must read as invalid').toBe(400);
+  expect(await prisma.mentorshipRelation.count({ where: { menteeId: tenants.orgA.mentee.id } })).toBe(before);
+});
+
+test("GET /api/weekly-reports?relationId=<A's relation> as B's admin: 404 (#3588)", async ({ browser }) => {
+  const request = await requestAs(browser, 'B', 'admin');
+  const res = await request.get(`/api/weekly-reports?relationId=${tenants.orgA.relation.id}`);
+  expect(res.status(), 'a cross-tenant read must read as not found').toBe(404);
+});
+
+test("GET, PATCH and close /api/interview-panels/<A's panel> as B's admin: 404 and the row is untouched (#3588)", async ({ browser }) => {
+  const request = await requestAs(browser, 'B', 'admin');
+  expect((await request.get(`/api/interview-panels/${rows.A.panel.id}`)).status(), 'a cross-tenant read must read as not found').toBe(404);
+  const patch = await request.patch(`/api/interview-panels/${rows.A.panel.id}`, { data: { title: 'iso cross-tenant panel' } });
+  expect(patch.status(), 'a cross-tenant write must read as not found').toBe(404);
+  expect((await request.post(`/api/interview-panels/${rows.A.panel.id}/close`)).status(), 'a cross-tenant close must read as not found').toBe(404);
+  const after = await prisma.interviewPanel.findUniqueOrThrow({ where: { id: rows.A.panel.id } });
+  expect(after.title).toBe(rows.A.panel.title);
+  expect(after.closedAt).toBeNull();
+});
+
+test("GET and PATCH /api/offers/<A's offer> as B's admin: 404 and the row is untouched (#3588)", async ({ browser }) => {
+  const request = await requestAs(browser, 'B', 'admin');
+  expect((await request.get(`/api/offers/${tenants.orgA.offer.id}`)).status(), 'a cross-tenant read must read as not found').toBe(404);
+  const patch = await request.patch(`/api/offers/${tenants.orgA.offer.id}`, { data: { position: 'iso cross-tenant offer' } });
+  expect(patch.status(), 'a cross-tenant write must read as not found').toBe(404);
+  const after = await prisma.offer.findUniqueOrThrow({ where: { id: tenants.orgA.offer.id } });
+  expect(after.position).toBe(tenants.orgA.offer.position);
+});
+
 test("GET /api/mentorship/<A's relation> as B's admin: 404", async ({ browser }) => {
   const request = await requestAs(browser, 'B', 'admin');
   const res = await request.get(`/api/mentorship/${tenants.orgA.relation.id}`);
@@ -242,4 +294,14 @@ test("PATCH and DELETE /api/cohorts/<A's cohort> as B's admin: 404 and the cohor
   expect(clone.status(), 'a cross-tenant clone must read as not found').toBe(404);
   const after = await prisma.cohort.findUnique({ where: { id: rows.A.cohort.id } });
   expect(after?.name).toBe(before.name);
+});
+
+test("POST /api/agendas with A's guide on B's own relation as B's mentor: 404 and nothing is created (#3592)", async ({ browser }) => {
+  const request = await requestAs(browser, 'B', 'mentor');
+  const res = await request.post('/api/agendas', {
+    data: { relationId: tenants.orgB.relation.id, templateId: rows.A.agendaTemplate.id },
+  });
+  expect(res.status(), "another tenant's guide must read as not found").toBe(404);
+  absent(await res.text(), [rows.A.agendaTemplate.title], "POST /api/agendas with A's guide (B → A)");
+  expect(await prisma.sessionAgenda.count({ where: { templateId: rows.A.agendaTemplate.id } })).toBe(0);
 });

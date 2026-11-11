@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 
 export const SUBMITTED_WEEKLY_REPORT_STATUSES = ['SUBMITTED', 'APPROVED', 'CHANGES_REQUESTED'] as const;
 
@@ -7,9 +8,15 @@ export interface WeeklyReportViewer {
   role: string;
 }
 
-export async function weeklyReportRelation(relationId: string) {
-  return prisma.mentorshipRelation.findUnique({
-    where: { id: relationId },
+/**
+ * The relation a weekly-report request names, inside the caller's tenant only
+ * (#3588): `canReadWeeklyReports()` lets any ADMIN through, so the org has to be
+ * decided here — the middleware that would narrow this lookup is off in every
+ * deployment. Another org's relation reads as missing.
+ */
+export async function weeklyReportRelation(relationId: string, tenant: TenantWhere) {
+  return prisma.mentorshipRelation.findFirst({
+    where: withinTenant({ id: relationId }, tenant),
     select: {
       id: true,
       orgId: true,
@@ -23,6 +30,7 @@ export async function weeklyReportRelation(relationId: string) {
   });
 }
 
+/** Role and participation only — never the org. Pair it with a tenant-scoped lookup. */
 export function canReadWeeklyReports(viewer: WeeklyReportViewer, relation: { mentorId: string; menteeId: string }): boolean {
   return viewer.role === 'ADMIN' || relation.mentorId === viewer.id || relation.menteeId === viewer.id;
 }

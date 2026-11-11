@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -91,7 +92,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         where: { id },
         select: { id: true, orgId: true, subjectId: true, closedAt: true, outcome: true },
       });
-      if (!panel || (panel.orgId && panel.orgId !== orgId)) return NextResponse.json({ error: 'Not found', code: 'not_found' }, { status: 404 });
+      if (!panel || !(await inCallerTenant(panel.orgId, orgId))) return NextResponse.json({ error: 'Not found', code: 'not_found' }, { status: 404 });
       const relation = await findActiveMentorship(prisma, panel.subjectId);
       if (role === 'MENTOR' && relation?.mentorId !== session.user.id) return NextResponse.json({ error: 'Not found', code: 'not_found' }, { status: 404 });
       // The scorecards decide first: no outcome pre-empts an open collection.

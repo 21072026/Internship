@@ -55,7 +55,9 @@ export async function GET(request: Request) {
   }
 
   const select = TALENT_POOL_SELECT;
-  const orderBy = { updatedAt: 'desc' } as const;
+  // `id` breaks ties: rows touched by one bulk write share an `updatedAt`, and
+  // without a total order MySQL may return the same row on two pages.
+  const orderBy = [{ updatedAt: 'desc' as const }, { id: 'desc' as const }];
 
   // The count has to come from the same set the page is sliced from (#1392) —
   // and since #1820 the skill is part of that set's SQL too (`skillTermWhere`:

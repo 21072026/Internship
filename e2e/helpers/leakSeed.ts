@@ -28,6 +28,7 @@ export type LeakRows = {
   apiKey: { id: string; name: string };
   supportEmail: string;
   evaluationTemplate: { id: string; name: string };
+  agendaTemplate: { id: string; title: string };
   documentRequirement: { id: string; key: string };
   panel: { id: string; title: string };
   requisition: { id: string; title: string };
@@ -58,6 +59,10 @@ async function seedFor(t: SeededTenant, stamp: string): Promise<LeakRows> {
   await prisma.setting.create({ data: { orgId, key: 'supportEmail', value: supportEmail } });
   const evaluationTemplate = await prisma.evaluationTemplate.create({
     data: { orgId, name: mark('Template'), scope: 'MENTEE' },
+  });
+  // A guided conversation of this tenant's library (#3592).
+  const agendaTemplate = await prisma.agendaTemplate.create({
+    data: { orgId, title: mark('Agenda'), items: { create: [{ order: 0, prompt: mark('AgendaPrompt') }] } },
   });
   const documentRequirement = await prisma.documentRequirement.create({
     data: { orgId, key: `iso_${t.label.toLowerCase()}_${stamp.replace(/[^a-z0-9]/gi, '')}`, labels: { en: mark('Doc') } },
@@ -91,6 +96,7 @@ async function seedFor(t: SeededTenant, stamp: string): Promise<LeakRows> {
     apiKey: { id: apiKey.id, name: apiKey.name },
     supportEmail,
     evaluationTemplate: { id: evaluationTemplate.id, name: evaluationTemplate.name },
+    agendaTemplate: { id: agendaTemplate.id, title: agendaTemplate.title },
     documentRequirement: { id: documentRequirement.id, key: documentRequirement.key },
     panel: { id: panel.id, title: panel.title ?? '' },
     requisition: { id: requisition.id, title: requisition.title },
@@ -126,6 +132,7 @@ export async function cleanupLeakRows(orgIds: string[]): Promise<void> {
   const org = { orgId: { in: orgIds } };
   const rel = { relation: org };
   await prisma.statusChange.deleteMany({ where: rel });
+  await prisma.sessionAgenda.deleteMany({ where: rel });
   await prisma.interactionLog.deleteMany({ where: rel });
   await prisma.message.deleteMany({ where: rel });
   await prisma.goal.deleteMany({ where: rel });
@@ -135,6 +142,7 @@ export async function cleanupLeakRows(orgIds: string[]): Promise<void> {
   await prisma.requisition.deleteMany({ where: org });
   await prisma.documentRequirement.deleteMany({ where: org });
   await prisma.evaluationTemplate.deleteMany({ where: org });
+  await prisma.agendaTemplate.deleteMany({ where: org });
   await prisma.setting.deleteMany({ where: org });
   await prisma.apiKey.deleteMany({ where: org });
   await prisma.webhook.deleteMany({ where: org });

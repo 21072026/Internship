@@ -107,6 +107,7 @@ export const SCHEDULES: readonly Schedule[] = [
   queue({ key: 'retention.prune', cron: '20 3 * * *', job: 'retention.prune', payload: {}, catchUp: 'latest', why: 'The one retention job (#1678), nightly 03:20 — the quiet hour.' }),
   queue({ key: 'usage.rollup', cron: '40 2 * * *', job: 'usage.rollup', payload: {}, catchUp: 'latest', why: 'Nightly billing rollup (#1750) at 02:40, after the day has closed in UTC.' }),
   queue({ key: 'trial.reminders', cron: '20 5 * * *', job: 'trial.reminders', payload: {}, catchUp: 'latest', why: 'Expires the trials that ran out overnight and reminds the rest (#2415), early and ahead of the mail-heavy slots.' }),
+  queue({ key: 'affiliate.windowNotices', cron: '35 5 * * *', job: 'affiliate.windowNotices', payload: {}, catchUp: 'latest', why: 'Partners told once that a customer\'s commission window ends soon (#3556); daily, early, before the mail-heavy slots. A rerun claims nothing twice.' }),
   queue({ key: 'reports.subscriptions', cron: '25 * * * *', job: 'reports.subscriptions', payload: {}, catchUp: 'latest', why: 'Scheduled report delivery (#1905), hourly at :25.' }),
   queue({ key: 'relationHealth.sweep', cron: '0 2 * * *', job: 'relationHealth.sweep', payload: {}, catchUp: 'latest', why: 'Nightly relationship-health sweep (#1901) at 02:00; mails the at-risk digest.' }),
   queue({ key: 'surveys.campaigns', cron: '0 10 * * *', job: 'surveys.campaigns', payload: {}, catchUp: 'latest', why: 'Survey campaigns (#1887) and their reminders (#1889), daily 10:00 — mid-morning.' }),
