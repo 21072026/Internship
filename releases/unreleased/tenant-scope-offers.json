@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Security:** offers stay inside the caller's organization while tenant isolation enforcement is off: `GET/PATCH /api/offers/[id]` read another org's offer as not found, the admin list and the pay benchmark (`/api/admin/offers/benchmark`) cover the caller's org only, and creating or editing an offer refuses another org's relation or company (#3588)."
-}

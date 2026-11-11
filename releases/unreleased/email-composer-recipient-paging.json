@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**The e-mail composer's recipient list pages and searches on the server (#1438):** `GET /api/mentorship?view=recipients` is the composer's own narrow read: a relation id plus the mentee's name and language (no e-mail address), 50 per page, or every match of the search with `all=1` (capped at 2 000; `src/lib/boardPage.ts`). `/admin/email` and `/mentor/email` list one page with \"Show more\" and a recipient search. \"Select all\" picks every match of the current search and shows how many. A pick survives a change of search. The outcome prefill link asks for its one relation by id.",
-  "notes": {
-    "en": ["Writing to many mentees: the recipient list can be searched, and \"Select all\" picks everyone who matches the search."],
-    "tr": ["Çok sayıda mentee'ye yazarken alıcı listesinde arama yapabilirsiniz; \"Tümünü seç\" aramaya uyan herkesi seçer."],
-    "de": ["Beim Schreiben an viele Mentees ist die Empfängerliste durchsuchbar, und „Alle auswählen“ wählt alle, die zur Suche passen."]
-  }
-}

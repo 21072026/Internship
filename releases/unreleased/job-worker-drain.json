@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**The job worker drains within a tick:** `createWorker({ drainMs })` keeps claiming after a claim that filled the free capacity has settled, until a claim comes back short or `drainMs` has passed; `/api/jobs/worker/tick` passes 4 s (under the 5 s tick interval). Before, one claim per tick capped throughput at `concurrency` jobs per 5 s however fast the jobs were (2 per 5 s by default), so instant `event.deliver` subscriber jobs queued behind each other — the e2e full suite's `placement-ledger` poll ran out at 30 s waiting for its `placement` delivery. Default `drainMs` is 0, so a worker built without it behaves as before."
-}

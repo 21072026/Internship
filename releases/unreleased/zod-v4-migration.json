@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**zod 4 and @hookform/resolvers 5 (#3558, supersedes #3522):** the validation library moves to zod 4.6 with no change anyone can see. Default error messages keep their zod 3 wording through one error map (`src/lib/zodV3Messages.ts`, installed on the server in `instrumentation.ts` and in the browser in `providers.tsx`), measured case by case against `zod/v3` in `scripts/test/zod-v3-messages.test.mjs`. The webhook payload contract is produced byte-for-byte from zod 4's internals (`src/lib/events/payloadSchema.ts`; the committed fixture is untouched). Two zod 4 behaviour changes are neutralised: a requisition PATCH no longer picks up `status`/`filled` defaults inside `.partial()`, and the three enum-keyed records use `z.partialRecord` so a subset of keys still parses (`scripts/test/zod-v4-defaults.test.mjs`)."
-}

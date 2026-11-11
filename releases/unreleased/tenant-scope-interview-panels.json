@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Security:** interview panels stay inside the caller's organization while tenant isolation enforcement is off: the list, `GET/PATCH /api/interview-panels/[id]`, `close` and `reopen` read another org's panel as not found, a panel can no longer be convened about another org's candidate or seat another org's interviewers, and `outcome` treats a panel without an org as the default org's (#3588). The routes relied on `assertSameOrg()`, which is a no-op with the flag off."
-}

@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Partner link clicks (#3541):** a partner's tracked link `/r/<code>` on the org's public host answers 302 to the programme's `referralUrl` with `ref=<code>` (target from the settings only, `clickRedirectTarget()` in `src/lib/affiliateClickRule.ts`) and, after the response, counts the click in the new tenant model `AffiliateClickDaily` (one row per partner and UTC day: `clicks`, `uniqueClicks`). Counted only for an ACTIVE partner of the host's org, a GET that is not a prefetch or a bot, and under 30 counted clicks per visitor and hour — over it, an unknown/suspended/other-org code or without a referral URL the visitor is still redirected. No IP, user-agent or cookie is stored: \"unique\" and the limit run in the rate-limit store under daily-rotating HMAC keys that expire at UTC midnight. The partner portal shows the `/r/` link with the direct link kept as the old one.",
-  "notes": {
-    "en": ["Partners now get a link that counts its clicks — no personal data is stored. Links shared before keep working."],
-    "tr": ["Partnerler artık tıklamalarını sayan bir link alıyor; kişisel veri saklanmıyor. Daha önce paylaşılan linkler çalışmaya devam ediyor."],
-    "de": ["Partner erhalten jetzt einen Link, der seine Klicks zählt – ohne personenbezogene Daten zu speichern. Bereits geteilte Links funktionieren weiter."]
-  }
-}

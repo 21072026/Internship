@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Check-ins in chat (#1953):** a survey campaign's invitation is also offered as a Slack/Teams card (`survey.invited`, chat only, `surveys` opt-out group). \"Answer now\" asks SELECT/BOOLEAN/SCALE/NPS questions one at a time as buttons, carries the answers so far in the next button's value (`src/lib/chat/surveyFlow.ts`) and submits the whole response through `submitSurveyResponse()` on the last click — invitation claimed, reminders stop, ANONYMOUS surveys store no respondent. A survey with a free-text, number, date or multi-select question links to the survey page instead. No schema change.",
-  "notes": {
-    "en": ["Survey check-ins can now be answered with a few button clicks right in Slack or Microsoft Teams."],
-    "tr": ["Anket check-in'leri artık Slack veya Microsoft Teams içinde birkaç düğme tıklamasıyla yanıtlanabilir."],
-    "de": ["Umfrage-Check-ins lassen sich jetzt mit wenigen Klicks direkt in Slack oder Microsoft Teams beantworten."]
-  }
-}
