@@ -190,6 +190,12 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   programme's size (an e2e counts them at 1 and 25 partners). While the plan, the
   contract or the first partner is missing it shows those setup steps.
   `affiliate.read` (OBSERVER included).
+- **Funnel** (`/admin/affiliates/funnel`, `/api/admin/affiliate/funnel`, #3544) — one
+  row per partner: clicks, unique clicks, registrations, paying, active, passive,
+  the two conversion rates and the customers left to the plan's switch, with warning
+  badges; a period selector and sortable columns, all three in the URL. The overview
+  shows the org total of the same funnel over the whole programme. See
+  [Admin funnel board](#admin-funnel-board-3544). `affiliate.read` (OBSERVER included).
 - **Settings** — the plan and the contract (above), the referral base URL, and the
   **public programme page's content** (#3359): `AffiliateProgramSettings.landing`,
   written only by `saveLanding()` through `PUT /api/admin/affiliate/settings/landing`.
@@ -253,6 +259,12 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   row carries their sum, the transfer day (a calendar day, not in the future) and
   an optional bank reference; the commissions become PAID with `payoutId` and
   `paidAt`, and stay frozen for good. Audited (`affiliate.payout.create`).
+  **A partner without payout details can be paid** (#3351): a payout is a
+  record, not a payment order — the transfer happens outside the CRM and may
+  already have gone another way, so refusing it would make the CRM disagree with
+  the bank and leave the commissions "unpaid". The screen asks first ("No payout
+  details — record anyway?"); the server does not refuse. If the CRM ever
+  triggers the transfer itself, this turns into a server-side refusal.
 
 ## The public programme page
 
@@ -266,7 +278,7 @@ is also why it is not in `PUBLIC_ROUTES`.
 
 Order: hero (apply · partner portal · the product's sign-up page), introduction,
 commission table, steps, a call button, the closing call to action (apply ·
-e-mail) and this host's imprint, privacy and terms. The words are the org's
+e-mail) and the legal footer. The words are the org's
 landing copy (above), with generic dictionary fallbacks (`affiliateLanding`).
 The table is **built from the plan on every render** (`commissionTableRows()`),
 never typed, so the page cannot promise what the engine does not pay; the
@@ -275,6 +287,25 @@ payment of customer no. N on, every customer's payment earns the rate, each
 within its own window. Colours and mark follow the host's brand.
 `src/lib/affiliatePublicPage.ts` loads it; `e2e/affiliate-public-page.spec.ts`
 pins it.
+
+### The legal footer and the public partner terms (#3363)
+
+The page, the form and the terms page share one footer (`src/app/partner/PartnerFooter.tsx`).
+Its Imprint / Privacy / Terms links are the **organisation's own pages** when it set them
+(`landing.imprintUrl` / `privacyUrl` / `termsUrl`, https only, in the admin's landing
+settings) and this host's own `/imprint`, `/privacy`, `/terms` otherwise
+(`legalLinks()`). The texts stay where the organisation publishes them: we link, we do
+not host them (hosting a versioned AGB would be its own task). The form's privacy link
+follows the same rule.
+
+`/partner/terms` shows the **partner contract** — the same text a partner accepts in the
+portal (`AffiliateProgramSettings.contract`), in its current version, read-only and
+signed out; it is a 404 where the host serves no programme or the programme has no
+contract, and the footer links it only when there is one. With a contract, the
+application form asks the applicant to accept it: the body carries the version the form
+was rendered with, the route accepts only the **current** one (else `400` with field
+`contract`, so a form opened before a new version was published asks again) and stores
+it on `AffiliateApplication.contractVersion`.
 
 ### The figure cards (#3364)
 
@@ -674,6 +705,39 @@ rules are pure in `src/lib/affiliateFunnelRule.ts`
   fold, so a filter count and a funnel number cannot disagree. A partner reads
   only its own partner id (session scope); every query names `orgId`.
 
+## Admin funnel board (#3544)
+
+The admin's Funnel tab (`/admin/affiliates/funnel`, `GET /api/admin/affiliate/funnel`,
+`affiliate.read`) and the overview's org total show the SAME numbers as the partner
+portal (#3543): the steps come from the shared `partnerFunnels()` and the threshold
+from `partnerThresholds()` in `src/lib/affiliateFunnel.ts` (the engine's own ordinal,
+through `evaluatePartner()`). The board adds only admin-only pieces on top, in
+`src/lib/affiliateFunnelBoard.ts` and the pure `src/lib/affiliateFunnelBoardRule.ts`
+(`scripts/test/affiliate-funnel-board-rule.test.mjs`) — never a second count.
+
+- **Columns**: clicks, unique clicks, registrations, paying, active, passive, click →
+  registration and registration → paying (whole %, the portal card's `stepRate`;
+  empty when there is nothing to divide by), and the customers left to the plan's
+  switch (lifetime whatever the period; "Reached" at 0; empty without a switch).
+- **Periods**: the shared vocabulary, `month` / `year` / `all`.
+- **Badges** (thresholds fixed in the rule file, not settings):
+  `CLICKS_NO_SIGNUPS` (more than 100 clicks, no registration in the period),
+  `MOSTLY_PASSIVE` (at least 3 paying, more than half of them passive),
+  `WINDOW_ENDING` (ACTIVE customers of a partner already in the percent phase whose
+  `windowMonths` window, counted from their first valid payment, ends within 30
+  days; none after a `STOP_ALL` termination, none for a customer first paid at or
+  after the termination). The window warning is lifetime.
+- **Sorting** takes a key from `FUNNEL_SORTS` and `asc`/`desc`; an unknown key,
+  direction, period or page is a 400. Sorting and paging (50 rows) happen on the
+  server over the computed rows — a request string never reaches a query — with the
+  partner id as the tiebreak and empty values last in both directions. Period,
+  sort and page are in the URL.
+- **Org total**: the sum of the partners' funnels (`funnelTotal()`); the overview
+  shows it for `all`.
+- A fixed number of queries whatever the programme's size: the partners, the shared
+  funnel and threshold queries, and for the window warning every customer's status
+  (`partnerCustomerStatuses()`) and the first valid payment per customer.
+
 ## Payments from the source system (#3355)
 
 A customer's payment can arrive through the account-event feed as
@@ -685,6 +749,51 @@ org) and the `affiliate.payment.record` audit row are identical. The writer take
 an optional transaction (`recordAffiliatePayment(input, tx)`): the feed's batch
 dry run passes its own, which is rolled back with everything else. Refunds and
 cancellations are not handled yet (#3475).
+
+## Window notice (#3556)
+
+A partner hears, once per customer, that the customer's percent window is about to
+end, so it knows when that customer's commissions stop.
+
+- **The date is the engine's.** `customerWindowEndsAt()` in
+  `src/lib/affiliateCommissionRule.ts` (first valid payment + `windowMonths`, clamped
+  to the month's last day) is the one computation; the engine stores it on every
+  commission and the notice reads it from the engine's evaluation. The portal column
+  (#3557) reads the same value.
+- **Who is told** is the pure `dueWindowNotices()` in `src/lib/affiliateWindowNoticeRule.ts`
+  (unit-tested): the plan has a percent phase and a window, the partner has reached
+  the percent phase, the customer has an ordinal (first paid before a termination
+  took effect), and the end lies in `(now, now + windowNoticeDays]`. A window that
+  has already ended is never announced late. Under `STOP_ALL` a termination that
+  ends the earning before the window does drops the notice; under `RUN_OUT` the
+  partner keeps hearing about the customers that keep earning.
+- **The lead time** is `AffiliateProgramSettings.windowNoticeDays` (default 30,
+  0…180, 0 = off): admin settings, `PUT /api/admin/affiliate/settings/window-notice`
+  (`affiliate.write`), audited `affiliate.window_notice.update`. It is not part of the
+  plan, so a change bumps no plan version and re-evaluates nothing.
+- **The job** `affiliate.windowNotices` (daily 05:35 UTC, `src/lib/jobs/affiliateWindowNotices.ts`;
+  by hand `GET /api/cron?job=affiliate-window-notices`, the caller's own org; `&at=`
+  only for a super admin, since a run stamps what it announces)
+  claims each due customer with one conditional update on
+  `AffiliateCustomer.windowNoticeSentAt` (`null` in the WHERE) **before** the mail
+  leaves: a rerun claims nothing and sends nothing. A partner without a portal
+  account, with an erased one, or a suspended partner is skipped without a claim,
+  so it still hears about the customer if that changes before the end. At most 200 partner
+  mails per run; the rest are picked up the next day.
+- **The mail** (`src/lib/affiliateWindowNoticeMail.ts`) is one per partner and run,
+  listing the customers claimed in it: the customer as the portal shows it (its
+  label, else its reference) and the end day, in the partner's language
+  (`emailDictionary`), with a link to `/affiliate/customers` on the org's own host.
+  No amount, nothing about the customer as a person. It goes through
+  `notifyEvent(…, 'affiliate.windowEnding', …)` with the prerendered mail, e-mail
+  only (the portal has no bell), category `affiliate-window-ending` in the
+  `task_reminders` group; under outbound approval it is held like the other
+  deadline reminders.
+- **The first run** needs no backfill: only ends still ahead and within the lead
+  time are announced.
+- **Known limit:** the stamp is per customer, not per date. If the end moves after
+  the notice (a plan change lengthens `windowMonths`, or a back-dated first payment is
+  corrected), the new date is not announced again; the portal column shows it.
 
 ## Migration from a previous system
 

@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Security:** four smaller admin surfaces stay inside the caller's organization while tenant isolation enforcement is off: the team to-do list (`/api/todos?scope=team`), a company's entitlement map (`/api/admin/companies/[id]/entitlements`), mentor-suggestion feedback (`/api/admin/mentor-suggest/feedback`) and an AI artefact by id (`/api/ai/artifacts/[id]`, now a 404 rather than a 403 for another org's id) (#3588)."
+}

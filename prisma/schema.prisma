@@ -2627,6 +2627,11 @@ model MentorshipRequest {
   // The reason is shown to the mentee — it is the one thing they are owed.
   cancelledById      String?
   cancelReason       String?                 @db.Text
+  // The programme (the Cohort row, #1626) the relation this request becomes
+  // belongs to. Written only by the server — today the re-match path, from the
+  // replaced pairing's own programme — and copied onto the new relation by the
+  // decision (src/lib/mentorshipDecision.ts). Additive and nullable.
+  programId          String?
   createdAt          DateTime                @default(now())
   updatedAt          DateTime                @updatedAt
 
@@ -2639,11 +2644,14 @@ model MentorshipRequest {
   // SetNull for the same reason: a deleted relation must not delete the record
   // that a re-match was asked for.
   replacesRelation MentorshipRelation? @relation("RematchRequests", fields: [replacesRelationId], references: [id], onDelete: SetNull)
+  // SetNull: deleting a programme leaves the request, just without one.
+  program          Cohort?             @relation("MentorshipRequestProgram", fields: [programId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([menteeId])
   @@index([preferredMentorId])
   @@index([replacesRelationId])
+  @@index([programId])
   @@index([status, expiresAt])
 }
 
@@ -4269,15 +4277,16 @@ model Cohort {
   // gated when it OR its organisation is in RULES mode.
   eligibilityMode String        @default("OPEN") @db.VarChar(8)
 
-  relations        MentorshipRelation[]
-  programCosts     ProgramCost[]
-  steps            ProgramStep[]
-  events           ProgramEvent[]
-  adminScopeGrants AdminScopeGrant[]
-  settings         Setting[]
-  stageSlas        StageSla[]
-  matchRounds      MatchRound[]
-  eligibilityRules ProgramEligibilityRule[]
+  relations          MentorshipRelation[]
+  programCosts       ProgramCost[]
+  steps              ProgramStep[]
+  events             ProgramEvent[]
+  adminScopeGrants   AdminScopeGrant[]
+  settings           Setting[]
+  stageSlas          StageSla[]
+  matchRounds        MatchRound[]
+  eligibilityRules   ProgramEligibilityRule[]
+  mentorshipRequests MentorshipRequest[]      @relation("MentorshipRequestProgram")
 }
 
 // Programme eligibility (#1945, docs/program-eligibility.md): "a person whose
@@ -9368,6 +9377,9 @@ model AffiliateApplication {
   // The consent record: when, and which privacy text — set by the server, never the body.
   consentAt          DateTime
   consentTextVersion String                     @db.VarChar(32)
+  // The partner contract version the applicant ticked "read" for (#3363), checked
+  // against the current one at submit; null when the programme had no contract.
+  contractVersion    Int?
   status             AffiliateApplicationStatus @default(PENDING)
   decidedAt          DateTime?
   decidedById        String?
@@ -9418,6 +9430,9 @@ model AffiliateProgramSettings {
   passiveAfterDays Int          @default(45)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
+  // Days before a customer's commission window ends that its partner is told
+  // (#3556, src/lib/affiliateWindowNoticeRule.ts). 0 = off; 0…180.
+  windowNoticeDays Int          @default(30)
 }
 
 model AffiliatePartner {
@@ -9475,6 +9490,11 @@ model AffiliateCustomer {
   endedAt      DateTime?
   payments     AffiliatePayment[]
   commissions  AffiliateCommission[]
+
+  // When the partner was told this customer's commission window is ending (#3556,
+  // src/lib/affiliateWindowNoticeRule.ts). Claimed with a conditional update
+  // BEFORE the mail leaves, so a re-run never sends twice. Null = not told.
+  windowNoticeSentAt DateTime?
 
   @@unique([orgId, externalRef])
   @@index([partnerId])

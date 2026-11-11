@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { requirePermission } from '@/lib/authz';
@@ -54,11 +55,16 @@ export async function POST(request: Request) {
 
     // The batch anchors the write: it names the mentee, the rule set and
     // whether AI ranked it. No batch, nothing to attach an outcome to.
+    // The caller's tenant only (#3588): another org's batch reads as missing,
+    // and the mentor named must be one of this org's people.
+    const tenant = await tenantWhere(session);
     const batch = await prisma.matchFeedback.findMany({
-      where: { batchId },
+      where: withinTenant({ batchId }, tenant),
       select: { mentorId: true, menteeId: true, aiUsed: true, ruleSetVersion: true, rank: true },
     });
     if (batch.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const mentor = await prisma.user.findFirst({ where: withinTenant({ id: mentorId }, tenant), select: { id: true } });
+    if (!mentor) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const shown = batch.find((r) => r.mentorId === mentorId) ?? null;
     // Dismissing something that was never shown is not a decision about a

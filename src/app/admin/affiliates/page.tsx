@@ -10,6 +10,7 @@ import { formatMinorAmount } from '@/lib/money';
 import { formatDate } from '@/lib/relativeTime';
 import { interpolate } from '@/lib/notificationText';
 import type { AffiliateOverview } from '@/lib/affiliateOverview';
+import type { Funnel } from '@/lib/affiliateFunnelRule';
 import { AffiliateTabs } from './AffiliateTabs';
 
 // The partner programme's home (docs/affiliate-module.md, #3173): what the
@@ -18,13 +19,17 @@ import { AffiliateTabs } from './AffiliateTabs';
 // waiting, and the setup steps while any of them is still open.
 const COMMISSION_STATUSES = ['PENDING', 'APPROVED', 'PAID', 'REJECTED'] as const;
 const PARTNER_STATUSES = ['ACTIVE', 'SUSPENDED', 'TERMINATED'] as const;
+// The org total of the partner funnel (#3544), over the whole programme — the
+// Funnel tab's total row for "all time".
+const FUNNEL_STEPS = ['clicks', 'uniqueClicks', 'registrations', 'paying', 'active', 'passive'] as const;
 
 export default function AdminAffiliatesPage() {
   const t = useT();
   const L = t.affiliateAdmin;
   const C = t.affiliateCommissions;
+  const F = t.affiliateFunnel;
   const locale = useLocale();
-  const [data, setData] = useState<AffiliateOverview | null>(null);
+  const [data, setData] = useState<(AffiliateOverview & { funnel: Funnel }) | null>(null);
   const [failed, setFailed] = useState(false);
   const [forbidden, setForbidden] = useState(false);
 
@@ -108,6 +113,26 @@ export default function AdminAffiliatesPage() {
                   </Link>
                 )}
               </div>
+
+              <Card data-testid="affiliate-overview-funnel">
+                <CardHeader>
+                  <CardTitle>{F.overviewTitle}</CardTitle>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{F.overviewHint}</p>
+                </CardHeader>
+                <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                  {FUNNEL_STEPS.map((k) => (
+                    <div key={k}>
+                      <dt className="text-xs text-gray-600 dark:text-gray-400">{F.columns[k]}</dt>
+                      <dd className="text-xl font-semibold tabular-nums text-gray-900 dark:text-gray-100" data-testid={`affiliate-overview-funnel-${k}`}>
+                        {data.funnel[k]}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <Link href="/admin/affiliates/funnel?period=all" className="mt-3 inline-block text-sm text-blue-600 hover:underline dark:text-blue-400">
+                  {F.openFunnel}
+                </Link>
+              </Card>
 
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <Card data-testid="affiliate-overview-partners">

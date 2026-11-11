@@ -108,6 +108,14 @@ test('the marketing host shows the org’s copy, a table from its plan and every
   await expect(page.getByTestId('partner-call')).toHaveAttribute('href', 'tel:+49301234567');
   await expect(page.getByTestId('partner-contact-mail')).toHaveAttribute('href', 'mailto:partners@acme.example');
   for (const href of ['/imprint', '/privacy', '/terms']) await expect(page.locator(`footer a[href="${href}"]`)).toHaveCount(1);
+  // The organisation's own legal pages replace this host's (#3363); an empty one keeps the fallback.
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { landing: { ...LANDING, imprintUrl: 'https://acme.example/impressum', termsUrl: 'https://acme.example/agb' } } });
+  await page.reload();
+  await expect(page.getByTestId('partner-legal-imprintUrl')).toHaveAttribute('href', 'https://acme.example/impressum');
+  await expect(page.getByTestId('partner-legal-privacyUrl')).toHaveAttribute('href', '/privacy');
+  await expect(page.getByTestId('partner-legal-termsUrl')).toHaveAttribute('href', 'https://acme.example/agb');
+  await expect(page.getByTestId('partner-legal-contract')).toHaveCount(0); // no partner contract in this programme
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { landing: LANDING } });
   // A visitor can pick the language of the page (and of the form behind it).
   await expect(page.getByTestId('language-switcher')).toBeVisible();
 });

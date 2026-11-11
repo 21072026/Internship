@@ -4,6 +4,8 @@ import { requireCapability } from '@/lib/capabilityGate';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { settingsOrgOf } from '@/lib/settingsOrg';
+import type { Session } from 'next-auth';
 import { emit } from '@/lib/events/emit';
 import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -22,9 +24,12 @@ const mentorSchema = z.object({
   mentorComment: z.string().max(TEXT_LIMITS.weeklyReportMentorComment).nullable().optional(),
 }).strict();
 
-async function loadReport(id: string) {
-  return prisma.weeklyReport.findUnique({
-    where: { id },
+// Inside the caller's org only (#3588): `canReadWeeklyReports()` lets any ADMIN
+// through, and the middleware that would narrow this lookup is off in every
+// deployment. `WeeklyReport.orgId` is required, so the strict org matches.
+async function loadReport(id: string, session: Session) {
+  return prisma.weeklyReport.findFirst({
+    where: { id, orgId: await settingsOrgOf(session) },
     include: { relation: { select: { mentorId: true, menteeId: true, status: true, mentee: { select: { preferredLanguage: true, notificationPrefs: true } } } } },
   });
 }
@@ -33,7 +38,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   return withTenantScope(session, async () => {
-    const report = await loadReport((await params).id);
+    const report = await loadReport((await params).id, session);
     if (!report) return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     if (!canReadWeeklyReports(session.user, report.relation)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     return NextResponse.json({ report });
@@ -47,7 +52,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (capGate) return capGate;
   if (session.user.role === 'ADMIN') return NextResponse.json({ error: 'Administrators have read-only access' }, { status: 403 });
   return withTenantScope(session, async () => {
-    const report = await loadReport((await params).id);
+    const report = await loadReport((await params).id, session);
     if (!report) return NextResponse.json({ error: 'Report not found' }, { status: 404 });
     if (report.relation.status !== 'ACTIVE') return NextResponse.json({ error: 'The mentorship is not active', code: 'inactive_relation' }, { status: 409 });
 

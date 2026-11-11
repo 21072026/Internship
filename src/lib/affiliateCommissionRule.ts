@@ -183,6 +183,17 @@ export function addMonthsUtc(from: Date, months: number): Date {
   );
 }
 
+/**
+ * When a customer's percent window ends (exclusive): its first valid payment plus
+ * the plan's `windowMonths`; null when the plan sets no limit. The ONE place this
+ * date is computed — the engine below, the partner's window notice
+ * (src/lib/affiliateWindowNoticeRule.ts, #3556) and the portal all read it here,
+ * so a mail and a screen can never name two different days.
+ */
+export function customerWindowEndsAt(plan: Pick<CommissionPlan, 'windowMonths'>, firstPaymentAt: Date): Date | null {
+  return plan.windowMonths === null ? null : addMonthsUtc(firstPaymentAt, plan.windowMonths);
+}
+
 export interface PaymentFact {
   id: string;
   customerId: string;
@@ -295,7 +306,7 @@ export function evaluatePartner(plan: CommissionPlan, partner: PartnerFacts, pay
     if (ord === undefined) return none('NEW_CUSTOMER_AFTER_NOTICE');
 
     const first = firstOf.get(p.customerId)!;
-    const windowEndsAt = plan.windowMonths === null ? null : addMonthsUtc(first.receivedAt, plan.windowMonths);
+    const windowEndsAt = customerWindowEndsAt(plan, first.receivedAt);
     const at = p.receivedAt.getTime();
 
     if (notice !== null && at >= notice && plan.afterNotice === 'STOP_ALL') return none('AFTER_NOTICE', ord, windowEndsAt);

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**The mentee's own report takes a date range, an export and print (#1909):** `/portal/insights` and `GET /api/portal/insights` accept `?from=&to=` next to the `?days=1|7|30` presets. The window rule is pure in `src/lib/portalInsightsWindow.ts` and is shared by the page and the route through `insightsWindowFrom()`. A range wins over a preset, and a bad or inverted range falls back to seven days instead of erroring. `getMenteeActivity()` takes an optional `until`; existing callers still end at now. The screen exports its own numbers as an Excel workbook and has a print layout. The route still takes no subject id, and none of it is gated: a participant's own data is free core. With this, all four audiences in #1909 (employer, mentor, SOURCE, mentee) have a range, an export and a scope enforced in the route.",
+  "notes": {
+    "en": ["Your activity page now lets you pick any date range, export the numbers to Excel and print them."],
+    "tr": ["Aktivite sayfanda artık istediğin tarih aralığını seçebilir, rakamları Excel'e aktarabilir ve yazdırabilirsin."],
+    "de": ["Auf deiner Aktivitätsseite kannst du jetzt einen beliebigen Zeitraum wählen, die Zahlen nach Excel exportieren und drucken."]
+  }
+}

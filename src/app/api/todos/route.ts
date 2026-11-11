@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { actorFromSession, can } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
-import { inCallerTenant, tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { inCallerTenant, tenantWhere, withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { notify } from '@/lib/notify';
 import { resolveTemplateTitle, serializeTaskTemplate, taskTemplateSelect } from '@/lib/goalTemplates';
 import { visibleToViewer } from '@/lib/todoVisibility';
@@ -138,14 +138,15 @@ function serialize(row: Row, viewer: { id: string; role: string }, ownerId: stri
  * itself is NOT tenant-anchored (it is reached through User/Project), which is
  * exactly why the task query below filters by these ids rather than by org.
  */
-async function teamMemberIds(viewer: { id: string; role: string }): Promise<string[]> {
+async function teamMemberIds(viewer: { id: string; role: string }, tenant: TenantWhere): Promise<string[]> {
   if (viewer.role === 'ADMIN') {
     // Deliberately uncapped, unlike TEAM_LIMIT below: a cap here would drop
     // *people* from the answer rather than shorten the list, and which people
     // would depend on storage order. It selects one indexed column, and
-    // `withTenantScope` has already narrowed it to this organisation.
+    // The caller's tenant is written in by hand (#3588): `withTenantScope`
+    // narrows nothing while MT_ENFORCE_ISOLATION is off (every deployment).
     const users = await prisma.user.findMany({
-      where: { isActive: true },
+      where: withinTenant({ isActive: true }, tenant),
       select: { id: true },
     });
     return users.map((u) => u.id);
@@ -205,7 +206,7 @@ export async function GET(request: Request) {
       if (!isAdmin && session.user.role !== 'MENTOR') {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
-      const ids = await teamMemberIds(session.user);
+      const ids = await teamMemberIds(session.user, await tenantWhere(session));
       const rows = (await prisma.projectTask.findMany({
         where: { assigneeId: { in: ids }, archivedAt: archived ? { not: null } : null },
         orderBy: LIST_ORDER,
