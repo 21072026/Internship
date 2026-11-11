@@ -32,6 +32,7 @@ import {
   templatePreview,
   type MessageTemplateDto,
 } from '@/lib/messageTemplates';
+import { contentLang } from '@/lib/contentLanguage';
 
 interface Attachment {
   id: string;
@@ -816,7 +817,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
                       </div>
                     ) : (
                       <>
-                        {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
+                        {m.body && <p lang={contentLang(m.body)} className="whitespace-pre-wrap break-words">{m.body}</p>}
                         {m.attachments.map((a) =>
                           a.contentType.startsWith('image/') ? (
                             <button

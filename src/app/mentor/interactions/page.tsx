@@ -11,6 +11,7 @@ import { formatDate } from '@/lib/relativeTime';
 import { AutoLoggedBadge } from '@/components/AutoLoggedBadge';
 import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
 import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
+import { contentLang } from '@/lib/contentLanguage';
 
 interface Interaction {
   id: string;
@@ -142,7 +143,7 @@ export default function MentorInteractionsPage() {
                   {interaction.subject && (
                     <p className="text-sm font-medium text-gray-800">{interaction.subject}</p>
                   )}
-                  <p className="text-sm text-gray-600">{interaction.notes}</p>
+                  <p lang={contentLang(interaction.notes)} className="text-sm text-gray-600">{interaction.notes}</p>
                 </div>
                 <span className="text-xs text-gray-400 flex-shrink-0">
                   {formatDate(interaction.date, locale)}
