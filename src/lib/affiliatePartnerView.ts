@@ -13,7 +13,8 @@
 import { prisma } from '@/lib/prisma';
 import { affiliateRowScope } from '@/lib/affiliateContractRule';
 import { COMMISSION_STATUSES, listCommissions, type CommissionStatus } from '@/lib/affiliateCommissions';
-import { parseCommissionPlan } from '@/lib/affiliateCommissionRule';
+import { evaluatePartner, parseCommissionPlan } from '@/lib/affiliateCommissionRule';
+import { customerWindows, planHasPercent, readWindowNoticeDays, windowsEndingSoon, type CustomerWindow } from '@/lib/affiliateWindowNoticeRule';
 import { planTermsView } from '@/lib/affiliatePlanTerms';
 import { listPayouts } from '@/lib/affiliatePayouts';
 import { referralLink } from '@/lib/affiliateReferralRule';
@@ -107,6 +108,43 @@ export async function partnerFunnel(partner: GatedPartner, rawPeriod?: unknown) 
   };
 }
 
+/** A customer's window as the portal renders it: dates as ISO strings. */
+export type PortalWindow = { kind: 'none' } | { kind: 'unlimited' } | { kind: 'ends'; endsAt: string; ended: boolean };
+
+const portalWindow = (w: CustomerWindow | undefined): PortalWindow =>
+  !w || w.kind === 'none' ? { kind: 'none' } : w.kind === 'unlimited' ? w : { kind: 'ends', endsAt: w.endsAt.toISOString(), ended: w.ended };
+
+/**
+ * The partner's customers' commission windows (#3557), from the engine run over
+ * the partner's whole payment history — the same `windowEndsAt` the window-notice
+ * mail names (#3556), never a second calculation. `showColumn` is false when the
+ * plan has no percent phase (there is no window to show); `endingSoon` counts the
+ * windows the mail would announce within the programme's lead time.
+ */
+async function partnerWindows(scope: { orgId: string; partnerId: string }, now = new Date()) {
+  const [settings, row, payments] = await Promise.all([
+    prisma.affiliateProgramSettings.findUnique({ where: { orgId: scope.orgId }, select: { plan: true, windowNoticeDays: true } }),
+    prisma.affiliatePartner.findFirst({ where: { id: scope.partnerId, orgId: scope.orgId }, select: { noticeEffectiveAt: true } }),
+    prisma.affiliatePayment.findMany({
+      where: { orgId: scope.orgId, customer: { partnerId: scope.partnerId } },
+      select: { id: true, customerId: true, amountMinor: true, currency: true, receivedAt: true },
+    }),
+  ]);
+  const parsed = settings?.plan ? parseCommissionPlan(settings.plan) : null;
+  if (!parsed?.ok || !planHasPercent(parsed.plan)) return { showColumn: false, windows: new Map<string, CustomerWindow>(), endingSoon: 0, leadDays: 0 };
+  const facts = { noticeEffectiveAt: row?.noticeEffectiveAt ?? null };
+  const evaluation = evaluatePartner(parsed.plan, facts, payments);
+  const windows = customerWindows({ plan: parsed.plan, partner: facts, evaluation, now });
+  const leadDays = readWindowNoticeDays(settings?.windowNoticeDays);
+  return { showColumn: true, windows, endingSoon: windowsEndingSoon({ plan: parsed.plan, evaluation, windows, now, leadDays }), leadDays };
+}
+
+/** The home page's warning: how many customers' commission ends within the lead time (0 = no warning). */
+export async function partnerWindowsEndingSoon(partner: GatedPartner): Promise<{ count: number; leadDays: number }> {
+  const w = await partnerWindows(scopeOf(partner));
+  return { count: w.endingSoon, leadDays: w.leadDays };
+}
+
 const parseStatus = (raw: unknown): CustomerStatus | null =>
   (CUSTOMER_STATUSES as readonly unknown[]).includes(raw) ? (raw as CustomerStatus) : null;
 
@@ -120,7 +158,7 @@ export async function partnerCustomers(partner: GatedPartner, opts: { page?: unk
   const scope = scopeOf(partner);
   const page = boundedPage(opts.page);
   const status = parseStatus(opts.status);
-  const all = await partnerCustomerStatuses(scope.orgId, { partnerIds: [scope.partnerId] });
+  const [all, windows] = await Promise.all([partnerCustomerStatuses(scope.orgId, { partnerIds: [scope.partnerId] }), partnerWindows(scope)]);
   const matching = status ? all.filter((c) => c.status === status) : all;
   const slice = matching.slice((page - 1) * PORTAL_CUSTOMERS_PER_PAGE, page * PORTAL_CUSTOMERS_PER_PAGE);
   const ids = slice.map((c) => c.id);
@@ -158,11 +196,13 @@ export async function partnerCustomers(partner: GatedPartner, opts: { page?: unk
           payments: r._count.payments,
           earnedMinor: earnedBy.get(r.id) ?? 0,
           status: statusBy.get(r.id) as CustomerStatus,
+          window: portalWindow(windows.windows.get(r.id)),
         },
       ];
     }),
     total: matching.length,
     status,
+    showWindow: windows.showColumn,
     counts: Object.fromEntries(CUSTOMER_STATUSES.map((st) => [st, all.filter((c) => c.status === st).length])) as Record<CustomerStatus, number>,
     all: all.length,
     page,

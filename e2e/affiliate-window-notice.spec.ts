@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
-import { signInViaApi, MARKETING_HOST, asHost } from './helpers/auth';
+import { signInViaApi, signInAndSettle, MARKETING_HOST, asHost } from './helpers/auth';
+import { customerWindowEndsAt } from '../src/lib/affiliateCommissionRule';
 
 /**
  * The partner's window notice (#3556, docs/affiliate-module.md "Window notice").
@@ -11,7 +12,9 @@ import { signInViaApi, MARKETING_HOST, asHost } from './helpers/auth';
  * once about the customers whose percent window ends within the lead time —
  * never about one that ends later or has already ended, never a partner with no
  * account or a suspended one — and a second run sends nothing. A tenant admin
- * cannot move the job's clock.
+ * cannot move the job's clock. The partner's portal (#3557) shows each
+ * customer's window end — the date the mail names — and warns on its home page
+ * about the ones ending within the lead time.
  *
  * SYNTHETIC ONLY: a throwaway MARKETING org, example labels, XTS amounts.
  * Dates are built from the real "now", so the run needs no clock override.
@@ -156,4 +159,27 @@ test('one claim and one mail for the due customer only; a second run sends nothi
   // The partner without an account and the suspended one are skipped again — never claimed.
   expect((await again.json()).windowNotices).toMatchObject({ claimed: 0, mailed: 0, skipped: 2 });
   expect(await deliveries()).toHaveLength(1);
+});
+
+test('the portal shows each window end and warns about the ones ending soon (#3557)', async ({ page }) => {
+  await page.context().setExtraHTTPHeaders({ ...host, 'accept-language': 'en' });
+  await signInAndSettle(page, partnerEmail, PW, '/affiliate');
+
+  // Home: one customer (WIN-DUE, 10 days) within the 30-day lead time; WIN-LATER (60) and WIN-ENDED are not.
+  const warning = page.getByTestId('affiliate-window-ending-soon');
+  await expect(warning).toContainText('1 customer');
+  await expect(warning).toContainText('30 days');
+
+  await warning.getByRole('link').click();
+  await page.waitForURL('**/affiliate/customers');
+  const windowOf = (ref: string) => page.getByTestId(`affiliate-customer-${ref}`).getByTestId('affiliate-customer-window');
+  await expect(windowOf('WIN-DUE')).toHaveAttribute('data-window', 'ends');
+  await expect(windowOf('WIN-ENDED')).toHaveAttribute('data-window', 'ends');
+  await expect(windowOf('WIN-ENDED').getByTestId('affiliate-customer-window-ended')).toBeVisible();
+  await expect(windowOf('WIN-DUE').getByTestId('affiliate-customer-window-ended')).toHaveCount(0);
+
+  // The date is the engine's window end — the one the mail named for this customer.
+  const payment = await prisma.affiliatePayment.findFirst({ where: { customerId: customers['WIN-DUE'] }, select: { receivedAt: true } });
+  const end = customerWindowEndsAt({ windowMonths: PLAN.windowMonths }, payment!.receivedAt);
+  await expect(windowOf('WIN-DUE')).toHaveAttribute('data-ends-at', end!.toISOString());
 });

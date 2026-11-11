@@ -105,3 +105,71 @@ export function dueWindowNotices(input: {
   }
   return due.sort((a, b) => a.endsAt.getTime() - b.endsAt.getTime() || (a.customerId < b.customerId ? -1 : 1));
 }
+
+// ── The portal's view of the windows (#3557) ──────────────────────────────────
+//
+// The customer list shows each customer's window end and the home page warns
+// about the ones ending soon. Both read the engine's own `windowEndsAt` — the
+// value the notice mail names — so the portal and the mail can never disagree.
+
+export type CustomerWindow =
+  /** No window applies: no valid payment yet, or first paid after the termination. */
+  | { kind: 'none' }
+  /** The plan's percent phase has no limit (and no STOP_ALL termination cuts it). */
+  | { kind: 'unlimited' }
+  /**
+   * Earning stops at `endsAt` (exclusive): the window's end, or the termination
+   * under STOP_ALL when that comes first (`byNotice`). `ended` once it has passed.
+   */
+  | { kind: 'ends'; endsAt: Date; ended: boolean; byNotice: boolean };
+
+/** Whether the plan has a percent phase at all (no percent: the column says nothing and is not shown). */
+export function planHasPercent(plan: Pick<CommissionPlan, 'percentBps'>): boolean {
+  return plan.percentBps > 0;
+}
+
+/** Each of the partner's customers' window, by customer id (a customer missing from the map has none). */
+export function customerWindows(input: {
+  plan: CommissionPlan;
+  partner: PartnerFacts;
+  evaluation: PartnerEvaluation;
+  now: Date;
+}): Map<string, CustomerWindow> {
+  const { plan, partner, evaluation, now } = input;
+  const out = new Map<string, CustomerWindow>();
+  if (!planHasPercent(plan)) return out;
+  const stopsAt = plan.afterNotice === 'STOP_ALL' ? (partner.noticeEffectiveAt ?? null) : null;
+  for (const p of evaluation.payments) {
+    // Only an eligible customer (it has an ordinal) has a window; every payment of
+    // it carries the same end, so the first one seen decides.
+    if (p.customerOrdinal === null || out.has(p.customerId)) continue;
+    const windowEnd = p.windowEndsAt;
+    const byNotice = stopsAt !== null && (windowEnd === null || stopsAt.getTime() < windowEnd.getTime());
+    const endsAt = byNotice ? stopsAt : windowEnd;
+    out.set(p.customerId, endsAt === null ? { kind: 'unlimited' } : { kind: 'ends', endsAt, ended: endsAt.getTime() <= now.getTime(), byNotice });
+  }
+  return out;
+}
+
+/**
+ * How many customers' windows end within the lead time — the home page's
+ * warning. The same test as the notice mail (dueWindowNotices) without the
+ * "already told" stamp: after the switch, a window end still ahead and within
+ * `leadDays`, not cut earlier by a STOP_ALL termination. Nothing while the
+ * notice is off (`leadDays` 0).
+ */
+export function windowsEndingSoon(input: {
+  plan: CommissionPlan;
+  evaluation: PartnerEvaluation;
+  windows: ReadonlyMap<string, CustomerWindow>;
+  now: Date;
+  leadDays: number;
+}): number {
+  const { plan, evaluation, windows, now, leadDays } = input;
+  if (!planHasWindow(plan) || leadDays <= 0 || evaluation.switchedAt === null) return 0;
+  let n = 0;
+  for (const w of windows.values()) {
+    if (w.kind === 'ends' && !w.byNotice && windowNoticeDue({ endsAt: w.endsAt, now, leadDays, sentAt: null })) n += 1;
+  }
+  return n;
+}
