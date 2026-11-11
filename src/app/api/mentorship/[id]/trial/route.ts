@@ -88,7 +88,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         const body: unknown = await request.json().catch(() => null);
         const parsed = bodySchema.safeParse(body);
         if (!parsed.success) {
-          return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+          return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
         }
 
         if (relation.status !== 'ACTIVE') {

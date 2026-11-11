@@ -14,15 +14,13 @@ import { parseEndDate } from '@/lib/relationSchedule';
 // (user.write), the caller's tenant only, at most BENCH_BATCH_MAX people in
 // one call. One activity entry per person (`user.benched` / `user.unbenched`).
 
-const schema = z
-  .object({
-    userIds: z.array(z.string().min(1).max(64)).min(1).max(BENCH_BATCH_MAX).optional(),
-    cohortId: z.string().min(1).max(64).optional(),
-    benched: z.boolean(),
-    reason: z.string().max(TEXT_LIMITS.benchReason).optional(),
-    reEngageAt: z.string().max(40).refine((v) => parseEndDate(v) !== null, 'invalid date').optional(),
-  })
-  .strict()
+const schema = z.strictObject({
+  userIds: z.array(z.string().min(1).max(64)).min(1).max(BENCH_BATCH_MAX).optional(),
+  cohortId: z.string().min(1).max(64).optional(),
+  benched: z.boolean(),
+  reason: z.string().max(TEXT_LIMITS.benchReason).optional(),
+  reEngageAt: z.string().max(40).refine((v) => parseEndDate(v) !== null, 'invalid date').optional(),
+})
   .refine((b) => !!b.userIds !== !!b.cohortId, 'Send userIds or cohortId, not both');
 
 export async function POST(request: Request) {
@@ -30,7 +28,7 @@ export async function POST(request: Request) {
   if ('error' in gate) return gate.error;
   const { session } = gate;
   const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   const body = parsed.data;
   return withTenantScope(session, async () => {
     const tenant = await tenantWhere(session);

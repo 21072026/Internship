@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**zod 4 deprecations, part 1 (#3568):** every `parsed.error.flatten()` (91 sites) is now `z.flattenError(parsed.error)` and `ZodTypeAny` is `ZodType` — the zod 4 forms of the same calls (`flatten()` delegates to `flattenError()`, and `ZodTypeAny` is a plain alias). No response shape changes."
+}

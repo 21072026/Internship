@@ -20,7 +20,7 @@ import { sendWeeklyReportReminders } from '@/services/emailService';
 // A nudge, never an edit: nothing here touches report content (admins are
 // read-only on reports, src/app/api/weekly-reports/[id]).
 
-const bodySchema = z.object({ relationIds: z.array(z.string().min(1).max(64)).min(1).max(200) }).strict();
+const bodySchema = z.strictObject({ relationIds: z.array(z.string().min(1).max(64)).min(1).max(200) });
 
 export async function POST(request: Request) {
   const gate = await requirePermission('program.write', { request });
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   const capGate = await requireCapability(session.user.orgId, 'mentorship');
   if (capGate) return capGate;
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   const requested = [...new Set(parsed.data.relationIds)];
 
   return withTenantScope(session, async () => {

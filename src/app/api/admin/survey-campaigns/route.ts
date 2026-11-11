@@ -18,18 +18,16 @@ const TRIGGERS = ['STAGE_ENTERED', 'DAYS_AFTER_START', 'DAYS_BEFORE_END', 'DAYS_
 const AUDIENCES = ['MENTEE', 'MENTOR', 'BOTH'] as const;
 const oneOf = <T extends readonly string[]>(values: T) => z.string().refine((v): v is T[number] => (values as readonly string[]).includes(v), 'not allowed');
 
-const createSchema = z
-  .object({
-    surveyId: z.string().min(1).max(60),
-    name: z.string().trim().min(1).max(120),
-    trigger: oneOf(TRIGGERS),
-    stageKey: z.string().max(64).nullable().optional(),
-    dayOffset: z.number().int().min(0).max(730).nullable().optional(),
-    everyDays: z.number().int().min(7).max(365).nullable().optional(),
-    audience: oneOf(AUDIENCES).nullable().optional(),
-    active: z.boolean().optional(),
-  })
-  .strict()
+const createSchema = z.strictObject({
+  surveyId: z.string().min(1).max(60),
+  name: z.string().trim().min(1).max(120),
+  trigger: oneOf(TRIGGERS),
+  stageKey: z.string().max(64).nullable().optional(),
+  dayOffset: z.number().int().min(0).max(730).nullable().optional(),
+  everyDays: z.number().int().min(7).max(365).nullable().optional(),
+  audience: oneOf(AUDIENCES).nullable().optional(),
+  active: z.boolean().optional(),
+})
   .superRefine((v, ctx) => {
     const need = (field: 'stageKey' | 'dayOffset' | 'everyDays') => {
       if (v[field] == null) ctx.addIssue({ code: 'custom', path: [field], message: `${field} is required for ${v.trigger}` });

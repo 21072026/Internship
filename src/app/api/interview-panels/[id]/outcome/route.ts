@@ -22,14 +22,14 @@ import { onPathKeys } from '@/lib/pipeline';
 import { validateDropoffReason } from '@/lib/stageChange';
 import { recordStageMove, stageMoveData } from '@/lib/stageMove';
 
-const bodySchema = z.object({
+const bodySchema = z.strictObject({
   decision: z.string().trim().min(1).max(16),
   applicationId: z.string().trim().min(1).max(64),
   dispositionCode: z.string().trim().max(32).optional(),
   note: z.string().trim().max(1000).optional(),
   /** "Also move the pipeline stage": explicit, never implied (the convention of src/lib/offers.ts). */
   advancePipeline: z.boolean().optional(),
-}).strict();
+});
 
 class Refused extends Error {
   constructor(public readonly code: string) {

@@ -43,11 +43,11 @@ export async function GET() {
   });
 }
 
-const applySchema = z.object({
+const applySchema = z.strictObject({
   requisitionId: z.string().trim().min(1).max(64),
   coverNote: z.string().trim().max(SCREENING_LIMITS.coverNote).optional(),
   screeningAnswers: z.record(z.string(), z.union([z.string().max(SCREENING_LIMITS.textAnswer), z.boolean()])).optional(),
-}).strict();
+});
 
 // POST — a mentee applies to an open role (#1832). Free core: no plan or
 // entitlement anywhere on this path. The role must be visible on the job board

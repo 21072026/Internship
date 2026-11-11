@@ -67,12 +67,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   });
 }
 
-const createSchema = z.object({
+const createSchema = z.strictObject({
   claim: z.string().trim().min(1).max(191),
   matchValue: z.string().trim().min(1).max(191),
   role: z.string().min(1).max(20),
   priority: z.number().int().min(-100).max(100).default(0),
-}).strict();
+});
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -83,7 +83,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   }
   const { claim, matchValue, role, priority } = parsed.data;
   const offered = mappableRolesFor(verticalCapabilities(gate.org.vertical));
@@ -119,7 +119,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 }
 
-const patchSchema = z.object({ syncRole: z.boolean() }).strict();
+const patchSchema = z.strictObject({ syncRole: z.boolean() });
 
 // PATCH — the opt-in re-evaluation switch (Organization.ssoSyncRole).
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {

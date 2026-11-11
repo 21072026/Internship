@@ -39,13 +39,11 @@ export async function GET() {
   });
 }
 
-const inviteSchema = z
-  .object({
-    email: z.string().trim().email().max(TEXT_LIMITS.companyContactEmail),
-    seatRole: z.string().refine(isSeatRole, 'unknown seatRole'),
-    locale: z.string().max(5).optional(),
-  })
-  .strict();
+const inviteSchema = z.strictObject({
+  email: z.string().trim().email().max(TEXT_LIMITS.companyContactEmail),
+  seatRole: z.string().refine(isSeatRole, 'unknown seatRole'),
+  locale: z.string().max(5).optional(),
+});
 
 const REFUSAL_STATUS = { seat_limit_reached: 403, email_taken: 409, invitation_pending: 409, not_found: 404, last_owner: 409, not_yourself: 400 } as const;
 
@@ -57,7 +55,7 @@ export async function POST(request: Request) {
   const limited = enforceRateLimit(request, 'company-team-invite', { limit: 20, windowMs: 60 * 60 * 1000, subject: scope.session.user.id });
   if (limited) return limited;
   const parsed = inviteSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', code: 'validation_failed', details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', code: 'validation_failed', details: z.flattenError(parsed.error) }, { status: 400 });
   return withTenantScope(scope.session, async () => {
     const result = await inviteTeammate({
       orgId: scope.orgId,

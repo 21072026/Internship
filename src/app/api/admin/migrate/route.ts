@@ -30,17 +30,13 @@ const sheetText = z.string().max(1_500_000).optional();
 const mappingFor = (sheet: (typeof SHEETS)[number]) =>
   z.partialRecord(z.enum(SHEET_FIELDS[sheet].map((f) => f.field) as [string, ...string[]]), z.string().max(200)).optional();
 
-const bodySchema = z
-  .object({
-    sheets: z.object({ people: sheetText, pairs: sheetText, stageHistory: sheetText, interactions: sheetText }).strict(),
-    mapping: z
-      .object({ people: mappingFor('people'), pairs: mappingFor('pairs'), stageHistory: mappingFor('stageHistory'), interactions: mappingFor('interactions') })
-      .strict()
-      .optional(),
-    stageMap: z.record(z.string().max(200), z.string().max(64)).optional(),
-    confirm: z.boolean().optional(),
-  })
-  .strict();
+const bodySchema = z.strictObject({
+  sheets: z.strictObject({ people: sheetText, pairs: sheetText, stageHistory: sheetText, interactions: sheetText }),
+  mapping: z.strictObject({ people: mappingFor('people'), pairs: mappingFor('pairs'), stageHistory: mappingFor('stageHistory'), interactions: mappingFor('interactions') })
+    .optional(),
+  stageMap: z.record(z.string().max(200), z.string().max(64)).optional(),
+  confirm: z.boolean().optional(),
+});
 
 // GET — this organization's stages, so the screen can offer them as stage-map
 // targets before the first preview. Same gate as POST.

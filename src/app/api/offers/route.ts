@@ -221,7 +221,7 @@ export async function POST(request: Request) {
   return await withTenantScope(session, async () => {
     const parsed = createSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     }
     const { relationId, requisitionId, companyId, position, startDate, compensationNote, expiresAt } = parsed.data;
     // Structured compensation (#1851): whitelists and the "an amount needs a

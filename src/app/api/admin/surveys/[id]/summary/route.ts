@@ -33,7 +33,7 @@ import { requirePermission } from '@/lib/authz';
 //     the answers sent, and no per-person consent because no person is
 //     processed. When AI is unavailable the reply says why and the screen keeps
 //     the plain list (graceful degradation, never an error).
-const bodySchema = z.object({ questionKey: z.string().min(1).max(64), regenerate: z.boolean().optional() }).strict();
+const bodySchema = z.strictObject({ questionKey: z.string().min(1).max(64), regenerate: z.boolean().optional() });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const authz = await requirePermission('content.write', { request });

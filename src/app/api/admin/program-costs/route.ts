@@ -55,18 +55,16 @@ const categorySchema = z
 
 // The object before its cross-field refine: zod 4 keeps refinements on the
 // object itself, so the PATCH shape is derived from this, not from createSchema.
-const costShape = z
-  .object({
-    cohortId: z.string().min(1).max(60).nullable().optional(),
-    category: categorySchema,
-    label: z.string().trim().min(1).max(200),
-    amountMinor: z.number().int().min(-INT_MAX).max(INT_MAX),
-    currency: currencySchema,
-    periodStart: dateSchema,
-    periodEnd: dateSchema,
-    note: z.string().trim().max(2000).nullable().optional(),
-  })
-  .strict();
+const costShape = z.strictObject({
+  cohortId: z.string().min(1).max(60).nullable().optional(),
+  category: categorySchema,
+  label: z.string().trim().min(1).max(200),
+  amountMinor: z.number().int().min(-INT_MAX).max(INT_MAX),
+  currency: currencySchema,
+  periodStart: dateSchema,
+  periodEnd: dateSchema,
+  note: z.string().trim().max(2000).nullable().optional(),
+});
 
 const createSchema = costShape
   .refine((value) => toUtcDate(value.periodStart) <= toUtcDate(value.periodEnd), {
@@ -74,9 +72,9 @@ const createSchema = costShape
     path: ['periodEnd'],
   });
 
-const patchSchema = costShape.partial().extend({ id: z.string().min(1).max(60) }).strict();
+const patchSchema = costShape.partial().extend({ id: z.string().min(1).max(60) });
 
-const deleteSchema = z.object({ id: z.string().min(1).max(60) }).strict();
+const deleteSchema = z.strictObject({ id: z.string().min(1).max(60) });
 
 export async function GET(request: Request) {
   const gate = await requirePermission('analytics.read', { request });
@@ -117,7 +115,7 @@ export async function POST(request: Request) {
 
     const parsed = createSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     }
     const data = parsed.data;
 
@@ -169,7 +167,7 @@ export async function PATCH(request: Request) {
 
     const parsed = patchSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     }
     const { id, ...fields } = parsed.data;
 
@@ -229,7 +227,7 @@ export async function DELETE(request: Request) {
 
     const parsed = deleteSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     }
 
     // Deleting a cost line is safe in a way deleting a Placement is not: a cost

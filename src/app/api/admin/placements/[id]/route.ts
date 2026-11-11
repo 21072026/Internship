@@ -20,12 +20,10 @@ import { canChangeInvoiceState, isInvoiceState } from '@/lib/placementRule';
 // It never touches the stamp itself — placedAt, attribution, reversal are the
 // subscriber's (src/lib/placementLedger.ts).
 
-const patchSchema = z
-  .object({
-    invoiceState: z.string().refine(isInvoiceState, 'unknown invoiceState'),
-    invoiceRef: z.string().trim().max(64).nullable().optional(),
-  })
-  .strict();
+const patchSchema = z.strictObject({
+  invoiceState: z.string().refine(isInvoiceState, 'unknown invoiceState'),
+  invoiceRef: z.string().trim().max(64).nullable().optional(),
+});
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requirePermission('org.settings.write', { request });
@@ -40,7 +38,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     const parsed = patchSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     }
     const to = parsed.data.invoiceState as Parameters<typeof canChangeInvoiceState>[0]['to'];
     const invoiceRef = parsed.data.invoiceRef?.trim() || null;

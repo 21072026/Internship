@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     if (!sourceId) return NextResponse.json({ error: 'No source' }, { status: 403 });
 
     const parsed = schema.safeParse(await request.json());
-    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     const { fullName, email, university, department, skills } = parsed.data;
 
     // "Already exists" means IN THE SOURCE USER'S WORLD (#2590): the same

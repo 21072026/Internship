@@ -62,16 +62,14 @@ const id = z.string().min(1);
 const diffValue = z.union([z.string(), z.number(), z.boolean()]).nullable();
 const configChanges = z
   .array(
-    z
-      .object({
-        field: z.string().min(1),
-        from: diffValue,
-        to: diffValue,
-        redacted: z.literal(true).optional(),
-        fromFingerprint: z.string().nullable().optional(),
-        toFingerprint: z.string().nullable().optional(),
-      })
-      .strict(),
+    z.strictObject({
+      field: z.string().min(1),
+      from: diffValue,
+      to: diffValue,
+      redacted: z.literal(true).optional(),
+      fromFingerprint: z.string().nullable().optional(),
+      toFingerprint: z.string().nullable().optional(),
+    }),
   )
   .min(1);
 
@@ -82,7 +80,7 @@ export interface EventDefinition {
   subjectType: string;
   /** The payload field carrying the subject's id, when the payload has one. */
   subjectKey?: string;
-  payload: z.ZodTypeAny;
+  payload: z.ZodType;
   visibility: EventVisibility;
   /** One line, receiver-facing. */
   description: string;
@@ -96,7 +94,7 @@ export const EVENT_CATALOG = [
     subjectType: 'User',
     // The applicant's id is not in the v1 payload (/api/apply sends the name
     // and address it was given); a v2 would carry it and drop the PII.
-    payload: z.object({ mentorId: id, menteeName: z.string(), email: z.string() }).strict(),
+    payload: z.strictObject({ mentorId: id, menteeName: z.string(), email: z.string() }),
     visibility: 'public',
     description: 'Someone applied to a mentor through the public application form.',
   },
@@ -105,7 +103,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'MentorshipRelation',
     subjectKey: 'relationId',
-    payload: z.object({ relationId: id, from: z.string(), to: z.string() }).strict(),
+    payload: z.strictObject({ relationId: id, from: z.string(), to: z.string() }),
     visibility: 'public',
     description: "A mentorship moved to another pipeline stage (`from` and `to` are stage keys).",
   },
@@ -114,9 +112,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'MentorshipRelation',
     subjectKey: 'relationId',
-    payload: z
-      .object({ relationId: id, mentorId: id, menteeId: id, companyId: id.nullable() })
-      .strict(),
+    payload: z.strictObject({ relationId: id, mentorId: id, menteeId: id, companyId: id.nullable() }),
     visibility: 'public',
     description: 'A mentor was assigned to a mentee.',
   },
@@ -127,9 +123,7 @@ export const EVENT_CATALOG = [
     subjectKey: 'relationId',
     // Two producers: logged by hand (/api/interactions) and auto-logged from a
     // finished meeting (meetingAutoLog.ts, which adds `autoLogged: true`).
-    payload: z
-      .object({ relationId: id, type: z.string(), date: isoInstant, autoLogged: z.literal(true).optional() })
-      .strict(),
+    payload: z.strictObject({ relationId: id, type: z.string(), date: isoInstant, autoLogged: z.literal(true).optional() }),
     visibility: 'public',
     description: 'An interaction (meeting, feedback, e-mail …) was logged on a mentorship.',
   },
@@ -138,7 +132,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'MentorshipRelation',
     subjectKey: 'relationId',
-    payload: z.object({ relationId: id, type: z.string(), authorId: id }).strict(),
+    payload: z.strictObject({ relationId: id, type: z.string(), authorId: id }),
     visibility: 'public',
     description: 'An evaluation was submitted for a mentorship.',
   },
@@ -149,15 +143,13 @@ export const EVENT_CATALOG = [
     // Three producers, one name: the batch invite ({title, scheduledAt, count}),
     // the instant meeting (scheduledAt null, `instant: true`) and the recurring
     // series (`seriesId`). No meeting id in v1 — a batch is several meetings.
-    payload: z
-      .object({
-        title: z.string(),
-        scheduledAt: isoInstant.nullable(),
-        count: z.number().int().nonnegative(),
-        instant: z.literal(true).optional(),
-        seriesId: id.optional(),
-      })
-      .strict(),
+    payload: z.strictObject({
+      title: z.string(),
+      scheduledAt: isoInstant.nullable(),
+      count: z.number().int().nonnegative(),
+      instant: z.literal(true).optional(),
+      seriesId: id.optional(),
+    }),
     visibility: 'public',
     description: 'One or more meetings were scheduled (a batch, an instant meeting or a series occurrence).',
   },
@@ -166,9 +158,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Meeting',
     subjectKey: 'meetingId',
-    payload: z
-      .object({ meetingId: id, scheduledAt: isoInstant, previousScheduledAt: isoInstant.nullable() })
-      .strict(),
+    payload: z.strictObject({ meetingId: id, scheduledAt: isoInstant, previousScheduledAt: isoInstant.nullable() }),
     visibility: 'public',
     description: 'A meeting moved to another time.',
   },
@@ -177,9 +167,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Meeting',
     subjectKey: 'meetingId',
-    payload: z
-      .object({ meetingId: id, scheduledAt: isoInstant.nullable(), count: z.number().int().positive() })
-      .strict(),
+    payload: z.strictObject({ meetingId: id, scheduledAt: isoInstant.nullable(), count: z.number().int().positive() }),
     visibility: 'public',
     description: 'A meeting (or `count` meetings of one batch) was called off.',
   },
@@ -188,7 +176,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'InterviewPanel',
     subjectKey: 'panelId',
-    payload: z.object({ panelId: id, subjectId: id }).strict(),
+    payload: z.strictObject({ panelId: id, subjectId: id }),
     visibility: 'public',
     description: 'Every interviewer on a panel has scored, or an admin closed it.',
   },
@@ -197,9 +185,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'InterviewPanel',
     subjectKey: 'panelId',
-    payload: z
-      .object({ panelId: id, applicationId: id, outcome: z.enum(['ADVANCE', 'REJECT', 'OFFER']) })
-      .strict(),
+    payload: z.strictObject({ panelId: id, applicationId: id, outcome: z.enum(['ADVANCE', 'REJECT', 'OFFER']) }),
     visibility: 'public',
     description: "A closed panel's decision was recorded.",
   },
@@ -208,9 +194,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'InterviewRequest',
     subjectKey: 'requestId',
-    payload: z
-      .object({ requestId: id, meetingId: id, scheduledAt: isoInstant, panelId: id.nullable() })
-      .strict(),
+    payload: z.strictObject({ requestId: id, meetingId: id, scheduledAt: isoInstant, panelId: id.nullable() }),
     visibility: 'public',
     description: 'An approved interview request got a meeting.',
   },
@@ -219,7 +203,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'InterviewRequest',
     subjectKey: 'requestId',
-    payload: z.object({ requestId: id, meetingId: id.nullable() }).strict(),
+    payload: z.strictObject({ requestId: id, meetingId: id.nullable() }),
     visibility: 'public',
     description: 'An interview request was called off.',
   },
@@ -228,7 +212,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Offer',
     subjectKey: 'offerId',
-    payload: z.object({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }).strict(),
+    payload: z.strictObject({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }),
     visibility: 'public',
     description: 'The candidate accepted an offer.',
   },
@@ -237,7 +221,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Offer',
     subjectKey: 'offerId',
-    payload: z.object({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }).strict(),
+    payload: z.strictObject({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }),
     visibility: 'public',
     description: 'The candidate declined an offer.',
   },
@@ -247,7 +231,7 @@ export const EVENT_CATALOG = [
     subjectType: 'Requisition',
     subjectKey: 'requisitionId',
     // Raised once: by the acceptance that took the last opening.
-    payload: z.object({ requisitionId: id, offerId: id }).strict(),
+    payload: z.strictObject({ requisitionId: id, offerId: id }),
     visibility: 'public',
     description: 'An acceptance took the last opening of a requisition.',
   },
@@ -261,9 +245,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'MentorshipRelation',
     subjectKey: 'relationId',
-    payload: z
-      .object({ relationId: id, from: z.string(), to: z.string(), reasonCode: z.string().nullable() })
-      .strict(),
+    payload: z.strictObject({ relationId: id, from: z.string(), to: z.string(), reasonCode: z.string().nullable() }),
     visibility: 'public',
     description: 'A mentorship was paused, resumed, ended or reopened (`from` and `to` are lifecycle states).',
   },
@@ -277,7 +259,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Application',
     subjectKey: 'applicationId',
-    payload: z.object({ applicationId: id, requisitionId: id, from: z.string(), to: z.string() }).strict(),
+    payload: z.strictObject({ applicationId: id, requisitionId: id, from: z.string(), to: z.string() }),
     visibility: 'public',
     description: "A candidate's application for a requisition moved to another stage (`from` and `to` are stage keys, e.g. SHORTLISTED → INTERVIEW).",
   },
@@ -292,17 +274,15 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'MentorshipRelation',
     subjectKey: 'relationId',
-    payload: z
-      .object({
-        relationId: id,
-        previousRelationId: id.nullable(),
-        menteeId: id,
-        fromMentorId: id,
-        toMentorId: id,
-        mode: z.enum(['corrected', 'transferred']),
-        reasonCode: z.string(),
-      })
-      .strict(),
+    payload: z.strictObject({
+      relationId: id,
+      previousRelationId: id.nullable(),
+      menteeId: id,
+      fromMentorId: id,
+      toMentorId: id,
+      mode: z.enum(['corrected', 'transferred']),
+      reasonCode: z.string(),
+    }),
     visibility: 'public',
     description: "A mentee's mentor changed — corrected in place, or a new pairing that carries the stage over.",
   },
@@ -314,7 +294,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Offer',
     subjectKey: 'offerId',
-    payload: z.object({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }).strict(),
+    payload: z.strictObject({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }),
     visibility: 'public',
     description: 'An offer was sent to the candidate.',
   },
@@ -323,7 +303,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Offer',
     subjectKey: 'offerId',
-    payload: z.object({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }).strict(),
+    payload: z.strictObject({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }),
     visibility: 'public',
     description: 'A sent offer was withdrawn before the candidate decided.',
   },
@@ -332,7 +312,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Offer',
     subjectKey: 'offerId',
-    payload: z.object({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }).strict(),
+    payload: z.strictObject({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }),
     visibility: 'public',
     description: 'A sent offer passed its expiry date without a decision.',
   },
@@ -345,7 +325,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'InterviewRequest',
     subjectKey: 'requestId',
-    payload: z.object({ requestId: id, requisitionId: id, menteeId: id, companyId: id }).strict(),
+    payload: z.strictObject({ requestId: id, requisitionId: id, menteeId: id, companyId: id }),
     visibility: 'public',
     description: 'A company asked to interview a shortlisted candidate for a requisition.',
   },
@@ -354,7 +334,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'InterviewRequest',
     subjectKey: 'requestId',
-    payload: z.object({ requestId: id, requisitionId: id, menteeId: id }).strict(),
+    payload: z.strictObject({ requestId: id, requisitionId: id, menteeId: id }),
     visibility: 'public',
     description: 'The programme approved an interview request; scheduling comes next.',
   },
@@ -363,7 +343,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'InterviewRequest',
     subjectKey: 'requestId',
-    payload: z.object({ requestId: id, requisitionId: id, menteeId: id, reasonCode: z.string() }).strict(),
+    payload: z.strictObject({ requestId: id, requisitionId: id, menteeId: id, reasonCode: z.string() }),
     visibility: 'public',
     description: 'The programme declined an interview request (`reasonCode` is a decline code, never the note).',
   },
@@ -374,16 +354,14 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'CompanyInterest',
     subjectKey: 'interestId',
-    payload: z
-      .object({
-        interestId: id,
-        companyId: id,
-        menteeId: id,
-        requisitionId: id.nullable(),
-        from: z.string().nullable(),
-        to: z.string(),
-      })
-      .strict(),
+    payload: z.strictObject({
+      interestId: id,
+      companyId: id,
+      menteeId: id,
+      requisitionId: id.nullable(),
+      from: z.string().nullable(),
+      to: z.string(),
+    }),
     visibility: 'public',
     description: 'A company flagged a candidate as interesting, shortlisted or passed (`from` and `to` are interest states).',
   },
@@ -397,7 +375,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'WeeklyReport',
     subjectKey: 'reportId',
-    payload: z.object({ reportId: id, relationId: id, weekStart: isoInstant, resubmission: z.boolean() }).strict(),
+    payload: z.strictObject({ reportId: id, relationId: id, weekStart: isoInstant, resubmission: z.boolean() }),
     visibility: 'public',
     description: 'A mentee handed in a weekly report (`resubmission` after the mentor asked for changes).',
   },
@@ -408,16 +386,14 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Document',
     subjectKey: 'documentId',
-    payload: z
-      .object({
-        documentId: id,
-        ownerId: id.nullable(),
-        type: z.string(),
-        requirementId: id.nullable(),
-        version: z.number().int().positive(),
-        generated: z.boolean(),
-      })
-      .strict(),
+    payload: z.strictObject({
+      documentId: id,
+      ownerId: id.nullable(),
+      type: z.string(),
+      requirementId: id.nullable(),
+      version: z.number().int().positive(),
+      generated: z.boolean(),
+    }),
     visibility: 'public',
     description: 'A document was added to a person’s file — uploaded, or generated as a certificate.',
   },
@@ -428,7 +404,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Goal',
     subjectKey: 'goalId',
-    payload: z.object({ goalId: id, relationId: id }).strict(),
+    payload: z.strictObject({ goalId: id, relationId: id }),
     visibility: 'public',
     description: 'A shared goal of a mentorship was marked done.',
   },
@@ -440,16 +416,14 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'MeetingAttendance',
     subjectKey: 'attendanceId',
-    payload: z
-      .object({
-        attendanceId: id,
-        meetingId: id.nullable(),
-        seriesId: id.nullable(),
-        relationId: id.nullable(),
-        userId: id,
-        state: z.string(),
-      })
-      .strict(),
+    payload: z.strictObject({
+      attendanceId: id,
+      meetingId: id.nullable(),
+      seriesId: id.nullable(),
+      relationId: id.nullable(),
+      userId: id,
+      state: z.string(),
+    }),
     visibility: 'public',
     description: 'Attendance for one person at a meeting was recorded (`state`: attended, no-show, late cancel …).',
   },
@@ -462,7 +436,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'User',
     subjectKey: 'userId',
-    payload: z.object({ userId: id, role: z.string(), source: z.string() }).strict(),
+    payload: z.strictObject({ userId: id, role: z.string(), source: z.string() }),
     visibility: 'public',
     description: 'An account was created (`source`: register, invite, admin, import, sso, api …).',
   },
@@ -473,7 +447,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'MentorshipRelation',
     subjectKey: 'relationId',
-    payload: z.object({ relationId: id, expectedEndDate: z.string() }).strict(),
+    payload: z.strictObject({ relationId: id, expectedEndDate: z.string() }),
     visibility: 'public',
     description: 'A mentorship is within its reminder window before the agreed end date (`expectedEndDate`, YYYY-MM-DD).',
   },
@@ -483,7 +457,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'MentorshipRelation',
     subjectKey: 'relationId',
-    payload: z.object({ relationId: id, expectedEndDate: z.string(), extendedCount: z.number().int() }).strict(),
+    payload: z.strictObject({ relationId: id, expectedEndDate: z.string(), extendedCount: z.number().int() }),
     visibility: 'public',
     description: 'A mentorship\'s agreed end date was moved later (`expectedEndDate`, YYYY-MM-DD; `extendedCount` extensions so far).',
   },
@@ -498,7 +472,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Requisition',
     subjectKey: 'requisitionId',
-    payload: z.object({ requisitionId: id, from: z.string().nullable(), to: z.string() }).strict(),
+    payload: z.strictObject({ requisitionId: id, from: z.string().nullable(), to: z.string() }),
     visibility: 'public',
     description: 'A requisition was created or changed status (`from` is null on creation; DRAFT, OPEN, ON_HOLD, FILLED, CANCELLED).',
   },
@@ -518,7 +492,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Organization',
     subjectKey: 'orgId',
-    payload: z.object({ orgId: id, changes: configChanges }).strict(),
+    payload: z.strictObject({ orgId: id, changes: configChanges }),
     visibility: 'internal',
     description: "An organisation's configuration changed (a redacted before/after diff).",
   },
@@ -527,14 +501,12 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Setting',
     subjectKey: 'key',
-    payload: z
-      .object({
-        key: z.string().min(1),
-        scope: z.enum(['global', 'org', 'program']),
-        programId: id.nullable(),
-        changes: configChanges,
-      })
-      .strict(),
+    payload: z.strictObject({
+      key: z.string().min(1),
+      scope: z.enum(['global', 'org', 'program']),
+      programId: id.nullable(),
+      changes: configChanges,
+    }),
     visibility: 'internal',
     description: 'A setting was written or reverted to its inherited value, at one scope (a redacted before/after diff).',
   },
@@ -543,7 +515,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Webhook',
     subjectKey: 'webhookId',
-    payload: z.object({ webhookId: id, events: z.array(z.string()).min(1), changes: configChanges }).strict(),
+    payload: z.strictObject({ webhookId: id, events: z.array(z.string()).min(1), changes: configChanges }),
     visibility: 'internal',
     description: 'An admin registered a webhook receiver.',
   },
@@ -552,7 +524,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Webhook',
     subjectKey: 'webhookId',
-    payload: z.object({ webhookId: id, changes: configChanges }).strict(),
+    payload: z.strictObject({ webhookId: id, changes: configChanges }),
     visibility: 'internal',
     description: 'An admin re-pointed, re-scoped, paused or resumed a webhook receiver.',
   },
@@ -561,7 +533,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Webhook',
     subjectKey: 'webhookId',
-    payload: z.object({ webhookId: id, changes: configChanges }).strict(),
+    payload: z.strictObject({ webhookId: id, changes: configChanges }),
     visibility: 'internal',
     description: 'An admin deleted a webhook receiver.',
   },
@@ -570,7 +542,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'ApiKey',
     subjectKey: 'apiKeyId',
-    payload: z.object({ apiKeyId: id, changes: configChanges }).strict(),
+    payload: z.strictObject({ apiKeyId: id, changes: configChanges }),
     visibility: 'internal',
     description: 'An API key was minted.',
   },
@@ -579,7 +551,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'ApiKey',
     subjectKey: 'apiKeyId',
-    payload: z.object({ apiKeyId: id }).strict(),
+    payload: z.strictObject({ apiKeyId: id }),
     visibility: 'internal',
     description: 'An API key was revoked.',
   },
@@ -588,7 +560,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'MentorshipRelation',
     subjectKey: 'relationId',
-    payload: z.object({ relationId: id, mentorId: id, menteeId: id }).strict(),
+    payload: z.strictObject({ relationId: id, mentorId: id, menteeId: id }),
     visibility: 'internal',
     description: 'A mentorship relation row was created by any path (assignment, transfer, import).',
   },
@@ -597,7 +569,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'Meeting',
     subjectKey: 'meetingId',
-    payload: z.object({ meetingId: id, relationId: id.nullable() }).strict(),
+    payload: z.strictObject({ meetingId: id, relationId: id.nullable() }),
     visibility: 'internal',
     description: 'A meeting took place.',
   },
@@ -606,7 +578,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'InvitationToken',
     subjectKey: 'invitationId',
-    payload: z.object({ invitationId: id, role: z.string() }).strict(),
+    payload: z.strictObject({ invitationId: id, role: z.string() }),
     visibility: 'internal',
     description: 'An invitation was issued.',
   },
@@ -615,7 +587,7 @@ export const EVENT_CATALOG = [
     version: 1,
     subjectType: 'User',
     subjectKey: 'userId',
-    payload: z.object({ userId: id.nullable(), kind: z.enum(['hard', 'soft', 'complaint']) }).strict(),
+    payload: z.strictObject({ userId: id.nullable(), kind: z.enum(['hard', 'soft', 'complaint']) }),
     visibility: 'internal',
     description: 'A mail to an account bounced or was reported as spam.',
   },

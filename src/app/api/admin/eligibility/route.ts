@@ -105,8 +105,8 @@ export async function POST(request: Request) {
 }
 
 const patchSchema = z.union([
-  z.object({ programId: z.string().min(1).nullable().optional(), mode: z.string() }).strict(),
-  z.object({ ruleId: z.string().min(1), active: z.boolean() }).strict(),
+  z.strictObject({ programId: z.string().min(1).nullable().optional(), mode: z.string() }),
+  z.strictObject({ ruleId: z.string().min(1), active: z.boolean() }),
 ]);
 
 // PATCH { programId?, mode } — switch a scope OPEN/RULES; { ruleId, active } — pause a rule.

@@ -21,12 +21,10 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 // reason on a refusal, because "rejected" without one is not actionable —
 // through the notification router (catalogue entries `company.verification.*`).
 
-const bodySchema = z
-  .object({
-    action: z.string().refine(isVerificationAction, 'unknown action'),
-    reason: z.string().max(TEXT_LIMITS.companyVerificationReason).nullable().optional(),
-  })
-  .strict();
+const bodySchema = z.strictObject({
+  action: z.string().refine(isVerificationAction, 'unknown action'),
+  reason: z.string().max(TEXT_LIMITS.companyVerificationReason).nullable().optional(),
+});
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requirePermission('company.write', { request });
@@ -40,7 +38,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     if (blocked) return blocked;
 
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     const action = parsed.data.action as Parameters<typeof verificationTransition>[0]['action'];
 
     const company = await prisma.company.findFirst({ where: { id, orgId }, select: { id: true, name: true, verificationStatus: true } });

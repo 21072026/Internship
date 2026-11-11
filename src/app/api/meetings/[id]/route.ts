@@ -49,29 +49,27 @@ const MAX_BATCH_ROWS = 100;
 // The calendar withdrawal (#1986) runs BEFORE the rows are deleted and is
 // bounded — see `withdrawMeetings()` in src/lib/googleCalendarSync.ts.
 
-const patchSchema = z
-  .object({
-    // A wall clock ("2026-09-20T16:30") or a zone-qualified instant. Never fed
-    // to `new Date()` directly — see the parse below (#1061).
-    scheduledAt: z.string().min(1).optional(),
-    timeZone: z.string().max(80).optional(),
-    title: z.string().min(1).optional(),
-    meetLink: z.string().url().optional().or(z.literal('')),
-    // A new length (#1984); the mirror is re-pushed with the new end.
-    durationMinutes: durationMinutesField,
-    // Reminder lead (#1636): null = the programme default, 0 = no reminder,
-    // N = one reminder N minutes ahead (src/lib/meetingReminderLeads.ts).
-    reminderLeadMinutes: reminderLeadField,
-    // The only status this route writes. Un-cancelling is deliberately not a
-    // verb: the invitees were told it is off, so "on again" is a new meeting.
-    status: z.literal('CANCELLED').optional(),
-    cancelReason: z.string().max(1000).optional(),
-    // "this person" (default) vs "the whole session" — see `batchKey`.
-    scope: z.enum(['one', 'batch']).optional(),
-    // Move over a collision on purpose (#1995) — recorded in the audit log.
-    force: z.boolean().optional(),
-  })
-  .strict();
+const patchSchema = z.strictObject({
+  // A wall clock ("2026-09-20T16:30") or a zone-qualified instant. Never fed
+  // to `new Date()` directly — see the parse below (#1061).
+  scheduledAt: z.string().min(1).optional(),
+  timeZone: z.string().max(80).optional(),
+  title: z.string().min(1).optional(),
+  meetLink: z.string().url().optional().or(z.literal('')),
+  // A new length (#1984); the mirror is re-pushed with the new end.
+  durationMinutes: durationMinutesField,
+  // Reminder lead (#1636): null = the programme default, 0 = no reminder,
+  // N = one reminder N minutes ahead (src/lib/meetingReminderLeads.ts).
+  reminderLeadMinutes: reminderLeadField,
+  // The only status this route writes. Un-cancelling is deliberately not a
+  // verb: the invitees were told it is off, so "on again" is a new meeting.
+  status: z.literal('CANCELLED').optional(),
+  cancelReason: z.string().max(1000).optional(),
+  // "this person" (default) vs "the whole session" — see `batchKey`.
+  scope: z.enum(['one', 'batch']).optional(),
+  // Move over a collision on purpose (#1995) — recorded in the audit log.
+  force: z.boolean().optional(),
+});
 
 // Everything the route needs about a row, in one shape both verbs read.
 const targetSelect = {
@@ -189,7 +187,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const body = await request.json().catch(() => null);
   const parsed = patchSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   }
   const { scheduledAt, timeZone, title, meetLink, durationMinutes, reminderLeadMinutes, status, cancelReason, scope, force } = parsed.data;
   if (!scheduledAt && title === undefined && meetLink === undefined && durationMinutes === undefined && reminderLeadMinutes === undefined && !status) {

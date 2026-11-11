@@ -74,10 +74,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   });
 }
 
-const createSchema = z.object({
+const createSchema = z.strictObject({
   claim: z.string().trim().min(1).max(191),
   target: z.string().trim().min(1).max(80),
-}).strict();
+});
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -88,7 +88,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+    return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   }
   const { claim, target } = parsed.data;
   if (!isSyncTarget(target)) {
@@ -119,7 +119,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
 }
 
-const patchSchema = z.object({ authoritative: z.boolean() }).strict();
+const patchSchema = z.strictObject({ authoritative: z.boolean() });
 
 // PATCH — Organization.ssoAuthoritative: may the IdP overwrite a value the
 // user (or an admin) set? Off = it fills empty fields only.

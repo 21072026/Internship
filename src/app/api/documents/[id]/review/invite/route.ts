@@ -14,7 +14,7 @@ import { requirementLabel } from '@/lib/documentRequirements';
 import { sendDocumentReviewInviteEmail } from '@/services/emailService';
 import { isLocale } from '@/i18n/config';
 
-const bodySchema = z.object({ email: z.string().trim().toLowerCase().email().max(191) }).strict();
+const bodySchema = z.strictObject({ email: z.string().trim().toLowerCase().email().max(191) });
 
 // POST — send the current EXTERNAL step's link to the person who must decide it
 // (#1859): an employer supervisor, say, who has no account. The programme (an

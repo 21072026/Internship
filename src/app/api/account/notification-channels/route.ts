@@ -78,23 +78,18 @@ export async function GET() {
 
 const HHMM = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/);
 const channelRow = z
-  .object({ inApp: z.boolean().nullable(), email: z.boolean().nullable(), push: z.boolean().nullable() })
-  .partial()
-  .strict();
-const schema = z
-  .object({
-    // Sparse: a category or channel absent from the body is left as it is;
-    // `null` clears an override back to the catalogue default.
-    channels: z.partialRecord(z.enum(NOTIFICATION_CATEGORIES), channelRow).optional(),
-    quietHours: z
-      .object({ start: HHMM, end: HHMM, tz: z.string().max(64).optional() })
-      .strict()
-      .refine((q) => q.start !== q.end, { message: 'start and end must differ' })
-      .refine((q) => q.tz === undefined || isValidTimeZone(q.tz), { message: 'unknown time zone' })
-      .nullable()
-      .optional(),
-  })
-  .strict();
+  .strictObject({ inApp: z.boolean().nullable(), email: z.boolean().nullable(), push: z.boolean().nullable() })
+  .partial();
+const schema = z.strictObject({
+  // Sparse: a category or channel absent from the body is left as it is;
+  // `null` clears an override back to the catalogue default.
+  channels: z.partialRecord(z.enum(NOTIFICATION_CATEGORIES), channelRow).optional(),
+  quietHours: z.strictObject({ start: HHMM, end: HHMM, tz: z.string().max(64).optional() })
+    .refine((q) => q.start !== q.end, { message: 'start and end must differ' })
+    .refine((q) => q.tz === undefined || isValidTimeZone(q.tz), { message: 'unknown time zone' })
+    .nullable()
+    .optional(),
+});
 
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);

@@ -35,24 +35,20 @@ export class SurveyAnswerInvalid extends Error {
   }
 }
 
-const localized = z
-  .object({ en: z.string().trim().max(500).optional(), tr: z.string().trim().max(500).optional(), de: z.string().trim().max(500).optional() })
-  .strict()
+const localized = z.strictObject({ en: z.string().trim().max(500).optional(), tr: z.string().trim().max(500).optional(), de: z.string().trim().max(500).optional() })
   .refine((v) => !!(v.en || v.tr || v.de), 'at least one language');
 
-const optionSchema = z.object({ value: z.string().trim().min(1).max(80), labels: localized }).strict();
+const optionSchema = z.strictObject({ value: z.string().trim().min(1).max(80), labels: localized });
 
-const questionSchema = z
-  .object({
-    key: z.string().regex(QUESTION_KEY_RE),
-    type: z.string().refine(isSurveyQuestionType, 'unknown type'),
-    labels: localized,
-    helpText: localized.nullable().optional(),
-    options: z.array(optionSchema).max(30).nullable().optional(),
-    required: z.boolean().optional(),
-    sortOrder: z.number().int().min(0).max(1000).optional(),
-  })
-  .strict()
+const questionSchema = z.strictObject({
+  key: z.string().regex(QUESTION_KEY_RE),
+  type: z.string().refine(isSurveyQuestionType, 'unknown type'),
+  labels: localized,
+  helpText: localized.nullable().optional(),
+  options: z.array(optionSchema).max(30).nullable().optional(),
+  required: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(1000).optional(),
+})
   .refine((q) => (q.type === 'SELECT' || q.type === 'MULTI_SELECT' ? (q.options?.length ?? 0) > 0 : true), 'choice questions need options');
 
 const questionsSchema = z
@@ -67,33 +63,29 @@ const ANONYMITIES = ['IDENTIFIED', 'CONFIDENTIAL', 'ANONYMOUS'] as const;
 const STATUSES = ['DRAFT', 'OPEN', 'CLOSED'] as const;
 const oneOf = <T extends readonly string[]>(values: T) => z.string().refine((v): v is T[number] => (values as readonly string[]).includes(v), 'not allowed');
 
-export const createSurveySchema = z
-  .object({
-    key: z.string().regex(QUESTION_KEY_RE),
-    templateKey: z.string().max(80).nullable().optional(),
-    title: localized,
-    intro: localized.nullable().optional(),
-    audience: oneOf(AUDIENCES),
-    anonymity: oneOf(ANONYMITIES),
-    opensAt: z.string().datetime().nullable().optional(),
-    closesAt: z.string().datetime().nullable().optional(),
-    // Raised per survey, never below the default floor.
-    minResponses: z.number().int().min(SURVEY_MIN_RESPONSES).max(1000).optional(),
-    questions: questionsSchema,
-  })
-  .strict();
+export const createSurveySchema = z.strictObject({
+  key: z.string().regex(QUESTION_KEY_RE),
+  templateKey: z.string().max(80).nullable().optional(),
+  title: localized,
+  intro: localized.nullable().optional(),
+  audience: oneOf(AUDIENCES),
+  anonymity: oneOf(ANONYMITIES),
+  opensAt: z.string().datetime().nullable().optional(),
+  closesAt: z.string().datetime().nullable().optional(),
+  // Raised per survey, never below the default floor.
+  minResponses: z.number().int().min(SURVEY_MIN_RESPONSES).max(1000).optional(),
+  questions: questionsSchema,
+});
 
-export const updateSurveySchema = z
-  .object({
-    title: localized.optional(),
-    intro: localized.nullable().optional(),
-    status: oneOf(STATUSES).optional(),
-    opensAt: z.string().datetime().nullable().optional(),
-    closesAt: z.string().datetime().nullable().optional(),
-    minResponses: z.number().int().min(SURVEY_MIN_RESPONSES).max(1000).optional(),
-    questions: questionsSchema.optional(),
-  })
-  .strict();
+export const updateSurveySchema = z.strictObject({
+  title: localized.optional(),
+  intro: localized.nullable().optional(),
+  status: oneOf(STATUSES).optional(),
+  opensAt: z.string().datetime().nullable().optional(),
+  closesAt: z.string().datetime().nullable().optional(),
+  minResponses: z.number().int().min(SURVEY_MIN_RESPONSES).max(1000).optional(),
+  questions: questionsSchema.optional(),
+});
 
 type QuestionInput = z.infer<typeof questionSchema>;
 

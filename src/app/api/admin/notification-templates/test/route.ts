@@ -13,14 +13,12 @@ import { BODY_MAX, SUBJECT_MAX } from '@/lib/notifications/templateRender';
 // `.strict()`: a `to` (or anything else) in the body is REFUSED, not ignored.
 // The address is the signed-in admin's own and nothing else — an admin screen
 // that mails an arbitrary address is an open relay.
-const schema = z
-  .object({
-    eventKey: z.string().min(1).max(96),
-    locale: z.string().max(8),
-    subject: z.string().max(SUBJECT_MAX).optional(),
-    body: z.string().max(BODY_MAX).optional(),
-  })
-  .strict();
+const schema = z.strictObject({
+  eventKey: z.string().min(1).max(96),
+  locale: z.string().max(8),
+  subject: z.string().max(SUBJECT_MAX).optional(),
+  body: z.string().max(BODY_MAX).optional(),
+});
 
 /**
  * POST — send the draft (or the stored copy) to the caller's own address

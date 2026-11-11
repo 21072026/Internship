@@ -15,8 +15,8 @@ import { requirePermission } from '@/lib/authz';
 // simply send the row's real org. A requirement of an org the caller may not
 // manage is 404, exactly like a missing one, and is checked before any write.
 
-const labelsSchema = z.object({ en: z.string().trim().min(1).max(200), tr: z.string().trim().min(1).max(200), de: z.string().trim().min(1).max(200) }).strict();
-const patchSchema = z.object({
+const labelsSchema = z.strictObject({ en: z.string().trim().min(1).max(200), tr: z.string().trim().min(1).max(200), de: z.string().trim().min(1).max(200) });
+const patchSchema = z.strictObject({
   orgId: z.string().min(1),
   key: z.string().trim().min(1).max(80).regex(/^[A-Za-z0-9_-]+$/).optional(),
   labels: labelsSchema.optional(),
@@ -25,7 +25,7 @@ const patchSchema = z.object({
   mandatory: z.boolean().optional(), order: z.number().int().min(0).max(10000).optional(), active: z.boolean().optional(),
   // The review chain (#1859).
   ...reviewChainSchema,
-}).strict();
+});
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const authz = await requirePermission('content.write', { request });
@@ -33,7 +33,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { session } = authz;
   const { id } = await params;
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   const current = await prisma.documentRequirement.findUnique({ where: { id }, select: { id: true, orgId: true, key: true } });
   if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!(await mayManageOrgRequirements(session, current.orgId, 'PATCH /api/admin/document-requirements/[id]'))) {

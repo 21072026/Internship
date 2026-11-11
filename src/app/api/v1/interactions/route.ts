@@ -43,15 +43,13 @@ export async function GET(request: Request) {
 // `date` is a strict ISO-8601 instant here. The response carries the note body
 // only for a key that also holds `interactions:read_notes` — writing a note is
 // not reading notes.
-const createSchema = z
-  .object({
-    relationId: z.string().min(1).max(191),
-    type: z.enum(INTERACTION_TYPES),
-    date: z.string().datetime({ offset: true }),
-    subject: z.string().max(TEXT_LIMITS.interactionSubject).optional(),
-    notes: z.string().trim().min(1).max(TEXT_LIMITS.interactionNotes),
-  })
-  .strict();
+const createSchema = z.strictObject({
+  relationId: z.string().min(1).max(191),
+  type: z.enum(INTERACTION_TYPES),
+  date: z.string().datetime({ offset: true }),
+  subject: z.string().max(TEXT_LIMITS.interactionSubject).optional(),
+  notes: z.string().trim().min(1).max(TEXT_LIMITS.interactionNotes),
+});
 
 export async function POST(request: Request) {
   return withApiKey(request, 'interactions:write', (key) =>

@@ -104,7 +104,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { fields, image } = await readBody(request);
     const parsed = schema.safeParse(fields);
     if (!parsed.success) {
-      return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
     }
     const { link, imageAction } = parsed.data;
     // undefined = leave the description alone; '' (trimmed) = decorative.

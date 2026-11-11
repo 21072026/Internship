@@ -23,11 +23,11 @@ import { threadAiRefusal } from '@/lib/threadAiResponses';
 // Returns text; the send route (/api/mentor/email) is the only door out, and a
 // person presses it. Free for mentors, never plan-gated.
 
-const schema = z.object({
+const schema = z.strictObject({
   purpose: z.string().trim().min(3).max(BULK_PURPOSE_MAX),
   recipientCount: z.number().int(),
   locale: z.enum(locales),
-}).strict();
+});
 
 export async function POST(request: Request) {
   return withRequestScope(request, () => handlePost(request));

@@ -83,7 +83,7 @@ async function handlePost(request: Request) {
   const parsed = bodySchema.safeParse(raw);
   if (!parsed.success) {
     return NextResponse.json(
-      { code: 'invalid', error: 'Validation failed', details: parsed.error.flatten() },
+      { code: 'invalid', error: 'Validation failed', details: z.flattenError(parsed.error) },
       { status: 400 },
     );
   }
