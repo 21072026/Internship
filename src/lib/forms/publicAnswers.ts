@@ -23,7 +23,7 @@ import { validateResponse, type ValidationErrorKey } from '@/lib/forms/schema';
 
 /** The shape a public form posts its answers in. Absent = the client asked nothing. */
 export const publicAnswersSchema = z
-  .array(z.object({ definitionId: z.string().min(1).max(40), answers: z.record(z.string().max(80), z.unknown()) }).strict())
+  .array(z.strictObject({ definitionId: z.string().min(1).max(40), answers: z.record(z.string().max(80), z.unknown()) }))
   .max(10)
   .optional();
 

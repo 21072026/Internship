@@ -15,7 +15,7 @@ import { TRANSLATION_PURPOSES, type LocaleMap } from '@/lib/machineTranslation';
 // machine-written in every locale, and nothing is saved, published, queued or
 // sent until the admin does it themselves.
 
-const schema = z.object({ purpose: z.enum(TRANSLATION_PURPOSES), brief: z.string().trim().min(3).max(2000) }).strict();
+const schema = z.strictObject({ purpose: z.enum(TRANSLATION_PURPOSES), brief: z.string().trim().min(3).max(2000) });
 
 export async function POST(request: Request) {
   const gate = await requirePermission('org.settings.write', { request });

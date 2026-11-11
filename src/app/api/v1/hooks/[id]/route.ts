@@ -12,7 +12,7 @@ import { apiWrite, writeOk } from '@/lib/api/v1Write';
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return withApiKey(request, 'hooks:write', (key) =>
-    apiWrite(request, key, z.object({}).strict(), async () => {
+    apiWrite(request, key, z.strictObject({}), async () => {
       const removed = await prisma.webhook.deleteMany({ where: { id, apiKeyId: key.id, orgId: key.orgId } });
       if (removed.count === 0) return apiNotFound();
       return writeOk(apiOk({ id, deleted: true }), { action: 'api.hook.unsubscribe', targetType: 'webhook', targetId: id });

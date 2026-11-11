@@ -20,13 +20,11 @@ import { withRequestScope } from '@/lib/requestContext';
 //
 // Messaging is free for mentors and mentees — nothing here is plan-gated.
 
-const schema = z
-  .object({
-    archived: z.boolean().optional(),
-    pinned: z.boolean().optional(),
-    mute: z.enum(MUTE_CHOICES).nullable().optional(),
-  })
-  .strict()
+const schema = z.strictObject({
+  archived: z.boolean().optional(),
+  pinned: z.boolean().optional(),
+  mute: z.enum(MUTE_CHOICES).nullable().optional(),
+})
   .refine((d) => d.archived !== undefined || d.pinned !== undefined || d.mute !== undefined, { message: 'nothing to change' });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {

@@ -12,13 +12,13 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { utcWeekStart } from '@/lib/week';
 import { canReadWeeklyReports, reportOrganizationId, weeklyReportRelation } from '@/lib/weeklyReports';
 
-const createSchema = z.object({
+const createSchema = z.strictObject({
   relationId: z.string().min(1),
   summary: z.string().max(TEXT_LIMITS.weeklyReportSummary).default(''),
   hoursSpent: z.number().int().min(0).max(168).nullable().optional(),
   blockers: z.string().max(TEXT_LIMITS.weeklyReportBlockers).nullable().optional(),
   status: z.enum(['DRAFT', 'SUBMITTED']).default('DRAFT'),
-}).strict();
+});
 
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);

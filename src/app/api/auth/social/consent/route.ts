@@ -17,7 +17,7 @@ import { createSocialAccount, openConsentTicket, SOCIAL_CONSENT_COOKIE } from '@
 // sealed ticket, which only the callback mints after verifying the provider's
 // ID token. The session is still minted by the `magic` provider.
 
-const schema = z.object({ consent: z.literal(true), privacyVersion: z.string().max(32).optional() }).strict();
+const schema = z.strictObject({ consent: z.literal(true), privacyVersion: z.string().max(32).optional() });
 
 export async function POST(req: Request) {
   const limited = enforceRateLimit(req, 'social-consent', { limit: 20, windowMs: 10 * 60 * 1000 });

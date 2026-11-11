@@ -36,7 +36,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   });
 }
 
-const patchSchema = z.object({ visibility: z.enum(ARTIFACT_VISIBILITIES) }).strict();
+const patchSchema = z.strictObject({ visibility: z.enum(ARTIFACT_VISIBILITIES) });
 
 // PATCH { visibility } — share with the mentor (or the admin), or take it back.
 // Only the subject decides: it is their data. Recorded in the audit log.

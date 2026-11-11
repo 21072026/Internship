@@ -15,7 +15,7 @@ import { setChatWorkspaceEnabled, uninstallChatWorkspace } from '@/lib/chat/work
 // is refused with a denial row). A workspace of another org is 404 — the
 // filter is the caller's orgId, so the id is never confirmed.
 
-const patchSchema = z.object({ enabled: z.boolean() }).strict();
+const patchSchema = z.strictObject({ enabled: z.boolean() });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requirePermission('org.integrations.write', { request });

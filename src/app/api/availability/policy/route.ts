@@ -26,16 +26,14 @@ export async function GET(request: Request) {
 
 const bounded = (k: keyof typeof POLICY_LIMITS) => z.number().int().min(POLICY_LIMITS[k].min).max(POLICY_LIMITS[k].max).nullable();
 
-const putSchema = z
-  .object({
-    mentorId: z.string().min(1).optional(),
-    minNoticeMinutes: bounded('minNoticeMinutes'),
-    bufferMinutes: bounded('bufferMinutes'),
-    maxPerWeek: bounded('maxPerWeek'),
-    maxPerMonth: bounded('maxPerMonth'),
-    defaultSlotMinutes: bounded('defaultSlotMinutes'),
-  })
-  .strict()
+const putSchema = z.strictObject({
+  mentorId: z.string().min(1).optional(),
+  minNoticeMinutes: bounded('minNoticeMinutes'),
+  bufferMinutes: bounded('bufferMinutes'),
+  maxPerWeek: bounded('maxPerWeek'),
+  maxPerMonth: bounded('maxPerMonth'),
+  defaultSlotMinutes: bounded('defaultSlotMinutes'),
+})
   // A monthly cap below the weekly one would make the weekly one a lie.
   .refine((v) => v.maxPerWeek == null || v.maxPerMonth == null || v.maxPerMonth >= v.maxPerWeek, { path: ['maxPerMonth'], message: 'below_weekly' });
 

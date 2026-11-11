@@ -25,7 +25,7 @@ import { resolveProgramFilter } from '@/lib/programFilter';
 // reason.
 
 const day = z.string().max(40).optional();
-const bodySchema = z.object({ from: day, to: day, program: z.string().max(64).optional(), regenerate: z.boolean().optional() }).strict();
+const bodySchema = z.strictObject({ from: day, to: day, program: z.string().max(64).optional(), regenerate: z.boolean().optional() });
 
 export async function GET(request: Request) {
   const gate = await requirePermission('analytics.read', { request });

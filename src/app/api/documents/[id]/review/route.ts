@@ -10,11 +10,11 @@ import { logActivity } from '@/lib/activity';
 import { REVIEW_DECISIONS } from '@/lib/documentReview';
 import { decideStep, loadReviewDocument } from '@/lib/documentReviewStore';
 
-const bodySchema = z.object({
+const bodySchema = z.strictObject({
   step: z.number().int().min(1).max(10),
   decision: z.enum(REVIEW_DECISIONS),
   note: z.string().trim().max(2000).optional(),
-}).strict();
+});
 
 // POST — decide the current step of a document's review chain (#1859), as a
 // signed-in reviewer whose role matches that step (src/lib/documentReview.ts

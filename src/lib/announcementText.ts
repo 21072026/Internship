@@ -63,6 +63,23 @@ export function resolveAnnouncementText(
 }
 
 /**
+ * The language of the text `resolveAnnouncementText()` picks, when it is KNOWN:
+ * the locale the chosen translation was filed under (#3283, WCAG 3.1.2). The
+ * untranslated `text` of a single-language announcement has no recorded
+ * language, so it answers `null` and the caller falls back to detection
+ * (`contentLang()` in src/lib/contentLanguage.ts) — never to a guess.
+ */
+export function resolveAnnouncementLang(
+  announcement: { translations?: unknown },
+  language: string | null | undefined
+): Locale | null {
+  const translations = normalizeAnnouncementTranslations(announcement.translations);
+  if (isLocale(language) && translations[language]) return language;
+  if (translations[defaultLocale]) return defaultLocale;
+  return null;
+}
+
+/**
  * True when the reader is NOT getting their own language — the announcement was
  * never written in it, so what they see is a fallback. The UI says so rather
  * than silently presenting a foreign-language message as if it were meant for

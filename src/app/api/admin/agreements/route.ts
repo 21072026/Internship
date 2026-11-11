@@ -14,13 +14,11 @@ import { requirePermission } from '@/lib/authz';
 //           have accepted is never edited or removed. Save as a new version.
 
 const body = z.string().trim().max(20_000).optional();
-const publishSchema = z
-  .object({
-    bodies: z.object({ en: body, tr: body, de: body }).strict(),
-    authoritativeLocale: z.enum(AGREEMENT_LOCALES),
-    effectiveFrom: z.string().datetime().optional(),
-  })
-  .strict();
+const publishSchema = z.strictObject({
+  bodies: z.strictObject({ en: body, tr: body, de: body }),
+  authoritativeLocale: z.enum(AGREEMENT_LOCALES),
+  effectiveFrom: z.string().datetime().optional(),
+});
 
 
 export async function GET(request: Request) {

@@ -19,13 +19,13 @@ import {
 import { APPLICATION_SELECT, actorFlagsFor, moveApplicationStage, visibleApplicationsWhere } from '@/lib/applicationStage';
 import { stageTransaction } from '@/lib/applicationStageEvents';
 
-const bodySchema = z.object({
+const bodySchema = z.strictObject({
   toStage: z.string().trim().min(1).max(32),
   /** The stage the client is looking at — a stale one answers 409, never a lost update. */
   expectedStage: z.string().trim().min(1).max(32),
   note: z.string().trim().max(1000).optional(),
   dispositionCode: z.string().trim().max(32).optional(),
-}).strict();
+});
 
 const ACTING_ROLES = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY'];
 

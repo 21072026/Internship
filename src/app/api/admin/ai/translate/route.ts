@@ -19,14 +19,12 @@ import { TRANSLATION_PURPOSES, type LocaleMap } from '@/lib/machineTranslation';
 // mergeMachine (src/lib/machineTranslation.ts) refuses to overwrite a filled
 // one even if it did not.
 
-const schema = z
-  .object({
-    purpose: z.enum(TRANSLATION_PURPOSES),
-    from: z.enum(locales),
-    text: z.string().trim().min(1).max(20_000),
-    to: z.array(z.enum(locales)).min(1).max(locales.length),
-  })
-  .strict();
+const schema = z.strictObject({
+  purpose: z.enum(TRANSLATION_PURPOSES),
+  from: z.enum(locales),
+  text: z.string().trim().min(1).max(20_000),
+  to: z.array(z.enum(locales)).min(1).max(locales.length),
+});
 
 export async function POST(request: Request) {
   const gate = await requirePermission('org.settings.write', { request });

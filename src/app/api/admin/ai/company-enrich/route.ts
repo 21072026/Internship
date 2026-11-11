@@ -13,7 +13,7 @@ import { enrichCompany, type CompanyProposal } from '@/lib/ai/authoringAssist';
 // no website or profile is scraped. Returns a proposal; the admin accepts each
 // field into the form, and nothing is saved until they save it.
 
-const schema = z.object({ text: z.string().trim().min(20).max(12_000) }).strict();
+const schema = z.strictObject({ text: z.string().trim().min(20).max(12_000) });
 
 export async function POST(request: Request) {
   const gate = await requirePermission('org.settings.write', { request });

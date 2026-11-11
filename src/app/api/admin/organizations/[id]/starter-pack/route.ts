@@ -15,7 +15,7 @@ import { requirePermission } from '@/lib/authz';
 //
 // WHO: that organization's ADMIN, or a super admin of its world (orgAdminGate).
 
-const bodySchema = z.object({ sampleProgram: z.boolean().optional() }).strict();
+const bodySchema = z.strictObject({ sampleProgram: z.boolean().optional() });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

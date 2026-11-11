@@ -28,7 +28,7 @@ import { canRevoke, decisionTarget } from '@/lib/outreachRule';
 //
 // A row outside the caller's scope (outreachActorWhere) answers 404.
 
-const bodySchema = z.object({ action: z.enum(['approve', 'decline', 'revoke']) }).strict();
+const bodySchema = z.strictObject({ action: z.enum(['approve', 'decline', 'revoke']) });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);

@@ -29,13 +29,11 @@ import { canTransition } from '@/lib/stageGate';
 //   - the stage changed between the read and the write → 409 stage_conflict
 //     (a guarded updateMany, so two writers cannot both move it)
 // The stage it already has is a 200 with `changed: false` and no history row.
-const schema = z
-  .object({
-    stage: z.string().trim().min(1).max(60),
-    reasonCode: z.string().trim().max(40).optional(),
-    reasonNote: z.string().trim().max(2000).optional(),
-  })
-  .strict();
+const schema = z.strictObject({
+  stage: z.string().trim().min(1).max(60),
+  reasonCode: z.string().trim().max(40).optional(),
+  reasonNote: z.string().trim().max(2000).optional(),
+});
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

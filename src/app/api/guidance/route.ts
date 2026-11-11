@@ -13,12 +13,10 @@ import { TOURS, tourById, tourGuidanceKey } from '@/lib/tours';
 // `.strict()`, so a `userId` in it is a 400, an ADMIN's included. A tour id
 // must be one of the registry's; nothing else reaches the table.
 
-const postSchema = z
-  .object({
-    tourId: z.string().min(1).max(64),
-    outcome: z.enum(['completed', 'dismissed']),
-  })
-  .strict();
+const postSchema = z.strictObject({
+  tourId: z.string().min(1).max(64),
+  outcome: z.enum(['completed', 'dismissed']),
+});
 
 // GET — { tours: { "<tourId>": "new" | "completed" | "dismissed" } } for every
 // registered tour.

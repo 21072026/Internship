@@ -11,13 +11,11 @@ import { ORG_SLUG_MAX } from '@/lib/orgSlug';
 // with the denial row requirePermission writes. The rule — the default org's
 // slug is fixed, an SSO tenant's slug needs `force` — is orgLifecycleRule.ts.
 
-const bodySchema = z
-  .object({
-    name: z.string().max(ORG_NAME_MAX * 2).optional(),
-    slug: z.string().max(ORG_SLUG_MAX * 2).optional(),
-    force: z.boolean().optional(),
-  })
-  .strict();
+const bodySchema = z.strictObject({
+  name: z.string().max(ORG_NAME_MAX * 2).optional(),
+  slug: z.string().max(ORG_SLUG_MAX * 2).optional(),
+  force: z.boolean().optional(),
+});
 
 const ERRORS: Record<Exclude<RenameResult, { ok: true }>['code'], { status: number; error: string }> = {
   not_found: { status: 404, error: 'Organization not found' },

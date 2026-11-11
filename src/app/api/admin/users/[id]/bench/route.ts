@@ -13,14 +13,12 @@ import { parseEndDate } from '@/lib/relationSchedule';
 // changes nothing and reads as 404. A bench is not a deactivation: it never
 // touches isActive, sessionsValidFrom or consentAt (src/lib/bench.ts).
 
-const schema = z
-  .object({
-    benched: z.boolean(),
-    reason: z.string().max(TEXT_LIMITS.benchReason).optional(),
-    // When to write to them again — only with their own pool consent.
-    reEngageAt: z.string().max(40).refine((v) => parseEndDate(v) !== null, 'invalid date').optional(),
-  })
-  .strict();
+const schema = z.strictObject({
+  benched: z.boolean(),
+  reason: z.string().max(TEXT_LIMITS.benchReason).optional(),
+  // When to write to them again — only with their own pool consent.
+  reEngageAt: z.string().max(40).refine((v) => parseEndDate(v) !== null, 'invalid date').optional(),
+});
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requirePermission('user.write', { request });

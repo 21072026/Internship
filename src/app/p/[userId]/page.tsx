@@ -14,6 +14,7 @@ import { ProfileViewPing } from '@/components/ProfileViewPing';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { PublicContactForm } from '@/components/PublicContactForm';
+import { contentLang } from '@/lib/contentLanguage';
 
 // Public, PII-free profile. Only fields safe to share are selected — never
 // email, phone, whatsapp, or birth date.
@@ -178,7 +179,7 @@ export default async function PublicProfilePage({ params }: { params: Promise<{ 
             </div>
           </div>
 
-          {user.bio && <p className="text-sm text-gray-700 mb-6 whitespace-pre-line">{user.bio}</p>}
+          {user.bio && <p lang={contentLang(user.bio)} className="text-sm text-gray-700 mb-6 whitespace-pre-line">{user.bio}</p>}
 
           <dl className="space-y-3 text-sm">
             {!isMentor && user.university && (

@@ -33,45 +33,37 @@ export class FormWriteError extends Error {
   }
 }
 
-const localized = z
-  .object({ en: z.string().trim().max(500).optional(), tr: z.string().trim().max(500).optional(), de: z.string().trim().max(500).optional() })
-  .strict()
+const localized = z.strictObject({ en: z.string().trim().max(500).optional(), tr: z.string().trim().max(500).optional(), de: z.string().trim().max(500).optional() })
   .refine((v) => !!(v.en || v.tr || v.de), 'at least one language');
 
-const optionSchema = z.object({ value: z.string().trim().min(1).max(80), labels: localized }).strict();
+const optionSchema = z.strictObject({ value: z.string().trim().min(1).max(80), labels: localized });
 const oneOf = <T extends readonly string[]>(values: T) => z.string().refine((v): v is T[number] => (values as readonly string[]).includes(v), 'not allowed');
 
-export const fieldInputSchema = z
-  .object({
-    id: z.string().max(40).nullable().optional(),
-    key: z.string().regex(FORM_KEY_RE),
-    type: z.string().refine(isFormFieldType, 'unknown type'),
-    labels: localized,
-    helpText: localized.nullable().optional(),
-    options: z.array(optionSchema).max(50).nullable().optional(),
-    required: z.boolean().optional(),
-    matchable: z.boolean().optional(),
-    archived: z.boolean().optional(),
-  })
-  .strict()
+export const fieldInputSchema = z.strictObject({
+  id: z.string().max(40).nullable().optional(),
+  key: z.string().regex(FORM_KEY_RE),
+  type: z.string().refine(isFormFieldType, 'unknown type'),
+  labels: localized,
+  helpText: localized.nullable().optional(),
+  options: z.array(optionSchema).max(50).nullable().optional(),
+  required: z.boolean().optional(),
+  matchable: z.boolean().optional(),
+  archived: z.boolean().optional(),
+})
   .refine((f) => (f.type === 'SELECT' || f.type === 'MULTI_SELECT' ? (f.options?.length ?? 0) > 0 : true), 'choice fields need options');
 
-export const createFormSchema = z
-  .object({
-    key: z.string().regex(FORM_KEY_RE),
-    audience: oneOf(FORM_AUDIENCES),
-    surface: oneOf(FORM_SURFACES),
-    title: localized.nullable().optional(),
-    fields: z.array(fieldInputSchema).max(MAX_FORM_FIELDS),
-  })
-  .strict();
+export const createFormSchema = z.strictObject({
+  key: z.string().regex(FORM_KEY_RE),
+  audience: oneOf(FORM_AUDIENCES),
+  surface: oneOf(FORM_SURFACES),
+  title: localized.nullable().optional(),
+  fields: z.array(fieldInputSchema).max(MAX_FORM_FIELDS),
+});
 
-export const updateFormSchema = z
-  .object({
-    title: localized.nullable().optional(),
-    fields: z.array(fieldInputSchema).max(MAX_FORM_FIELDS),
-  })
-  .strict();
+export const updateFormSchema = z.strictObject({
+  title: localized.nullable().optional(),
+  fields: z.array(fieldInputSchema).max(MAX_FORM_FIELDS),
+});
 
 type FieldInput = Omit<z.infer<typeof fieldInputSchema>, 'type'> & { type: string };
 

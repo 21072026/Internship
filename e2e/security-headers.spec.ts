@@ -131,3 +131,43 @@ test("a real browser's violation report reaches the endpoint and is accepted", a
   const res = await (await report).response();
   expect(res?.status()).toBe(204);
 });
+
+// /auth/* pages are matched by the middleware since #1552 step 2, so the
+// sign-in pages get their nonce too. None of the middleware's redirects may
+// fire there: a remembered browser without a session is sent through
+// /auth/resume from every OTHER page, and /auth/resume itself is an /auth page —
+// were it redirected, the resume would loop. wantsResume() refuses /auth/*, and
+// the /en 308 and the language rewrite cover public pages only.
+const AUTH_PAGES = [
+  '/auth/signin',
+  '/auth/register',
+  '/auth/forgot',
+  '/auth/reset?token=x',
+  '/auth/magic?token=x',
+  '/auth/sso',
+  '/auth/verify',
+  '/auth/resume?next=%2Fportal',
+];
+
+test('/auth/* pages carry the nonce and are never redirected, even for a remembered browser', async ({ request }) => {
+  for (const path of AUTH_PAGES) {
+    const res = await request.get(path, {
+      maxRedirects: 0,
+      // A remembered browser with no session: what sends every other page to /auth/resume.
+      headers: { cookie: 'internship.remember=1; internship.remember-token=probe' },
+    });
+    expect(res.status(), path).toBeLessThan(300);
+    const nonce = nonceOf(res.headers()['content-security-policy-report-only']);
+    expect(nonce, path).toBeTruthy();
+    const tags = (await res.text()).match(/<script\b[^>]*>/g) ?? [];
+    const executable = tags.filter((t) => !t.includes('application/ld+json'));
+    expect(executable.filter((t) => !t.includes(`nonce="${nonce}"`)), path).toEqual([]);
+  }
+  // The control: the same browser on a page outside /auth IS sent through the resume.
+  const page = await request.get('/portal', {
+    maxRedirects: 0,
+    headers: { cookie: 'internship.remember=1; internship.remember-token=probe' },
+  });
+  expect(page.status()).toBe(307);
+  expect(page.headers()['location']).toContain('/auth/resume?next=%2Fportal');
+});
