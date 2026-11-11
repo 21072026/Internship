@@ -191,6 +191,7 @@ test('mentee declines an offer with a reason and sees a persistent declined stat
   try {
     const offer = await prisma.offer.create({
       data: {
+        orgId: s.org.id,
         relationId: s.relation.id,
         companyId: s.company.id,
         status: 'SENT',
@@ -224,7 +225,7 @@ test('an invalid state transition is rejected with 400', async ({ page }) => {
   const s = await seedScenario('inv');
   try {
     const draft = await prisma.offer.create({
-      data: { relationId: s.relation.id, companyId: s.company.id, status: 'DRAFT', position: 'QA Engineer', createdById: s.admin.id },
+      data: { orgId: s.org.id, relationId: s.relation.id, companyId: s.company.id, status: 'DRAFT', position: 'QA Engineer', createdById: s.admin.id },
     });
 
     await signInAndSettle(page, s.adminEmail, s.pw, '/admin');
@@ -248,7 +249,7 @@ test('a mentee cannot read another mentee\'s offer', async ({ page }) => {
   const otherMentee = await seedUser(otherMenteeEmail, s.pw, 'MENTEE', 'Other Mentee');
   try {
     const offer = await prisma.offer.create({
-      data: { relationId: s.relation.id, companyId: s.company.id, status: 'SENT', position: 'Data Analyst', sentAt: new Date(), createdById: s.admin.id },
+      data: { orgId: s.org.id, relationId: s.relation.id, companyId: s.company.id, status: 'SENT', position: 'Data Analyst', sentAt: new Date(), createdById: s.admin.id },
     });
 
     await signInAndSettle(page, otherMenteeEmail, s.pw, '/portal');
@@ -270,6 +271,7 @@ test('a mentee cannot list a DRAFT offer by asking for it explicitly', async ({ 
   try {
     const draft = await prisma.offer.create({
       data: {
+        orgId: s.org.id,
         relationId: s.relation.id,
         companyId: s.company.id,
         status: 'DRAFT',
@@ -302,6 +304,7 @@ test('an unauthorized/other role never receives compensationNote in the response
   try {
     const offer = await prisma.offer.create({
       data: {
+        orgId: s.org.id,
         relationId: s.relation.id,
         companyId: s.company.id,
         status: 'SENT',
@@ -379,7 +382,7 @@ test('admin can withdraw a sent offer', async ({ page }) => {
   const s = await seedScenario('wd');
   try {
     const offer = await prisma.offer.create({
-      data: { relationId: s.relation.id, companyId: s.company.id, status: 'SENT', position: 'DevOps Engineer', sentAt: new Date(), createdById: s.admin.id },
+      data: { orgId: s.org.id, relationId: s.relation.id, companyId: s.company.id, status: 'SENT', position: 'DevOps Engineer', sentAt: new Date(), createdById: s.admin.id },
     });
 
     await signInAndSettle(page, s.adminEmail, s.pw, '/admin');
@@ -403,6 +406,7 @@ test('the expiry cron transitions a due offer exactly once across two runs', asy
   try {
     const offer = await prisma.offer.create({
       data: {
+        orgId: s.org.id,
         relationId: s.relation.id,
         companyId: s.company.id,
         status: 'SENT',
