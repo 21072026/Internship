@@ -13,6 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Users, AlertTriangle } from 'lucide-react';
 import type { MentorAvailabilityStatus } from '@/lib/mentorAvailability';
 import { clipSkillLabel } from '@/lib/skills';
+import { contentLang } from '@/lib/contentLanguage';
 
 interface DirectoryMentor {
   id: string;
@@ -212,7 +213,7 @@ export default function MentorDirectoryPage() {
                 </div>
 
                 {mentor.bio && (
-                  <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 mb-3">{mentor.bio}</p>
+                  <p lang={contentLang(mentor.bio)} className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 mb-3">{mentor.bio}</p>
                 )}
 
                 {mentor.skills.length > 0 && (

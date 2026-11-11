@@ -8,7 +8,18 @@
 // to the server; suggestions are presented for review, never auto-applied.
 
 import mammoth from 'mammoth';
-import { PDFParse } from 'pdf-parse';
+
+// pdf-parse is loaded when a PDF is actually read, never at module load (#3590).
+// pdfjs-dist, under it, polyfills `DOMMatrix` from the native `@napi-rs/canvas`
+// binding as a side effect of being imported, and throws when that binding does
+// not load. `next build` imports every route module to collect its page data, so
+// a top-level import made the BUILD depend on a native binary that only the PDF
+// read needs: when the binding failed to load on a runner, "Collecting page
+// data" failed for every route importing this file. Reproduced deterministically
+// with NAPI_RS_NATIVE_LIBRARY_PATH=/nonexistent.
+async function loadPdfParse() {
+  return (await import('pdf-parse')).PDFParse;
+}
 
 export interface CvSuggestions {
   phone?: string;
@@ -35,6 +46,7 @@ export const SKILL_VOCABULARY: string[] = [
 export async function extractCvText(data: Buffer, contentType: string): Promise<string> {
   const ct = (contentType || '').toLowerCase();
   if (ct.includes('pdf')) {
+    const PDFParse = await loadPdfParse();
     const parser = new PDFParse({ data });
     try {
       const res = await parser.getText();

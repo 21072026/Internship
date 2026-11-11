@@ -13,6 +13,8 @@ interface AnnouncementItem {
   // Already resolved into this reader's language by the API (#1163) — the
   // per-locale bodies never travel to the browser.
   text: string;
+  /** Language of `text` when known or confidently detected (#3283). */
+  lang?: string | null;
   // True when the announcement was written in other languages but not this
   // reader's, so what they are looking at is a fallback.
   languageFallback?: boolean;
@@ -76,7 +78,7 @@ export default function AnnouncementsPage() {
           <div data-testid="announcements-full-list">
             {items.map((a) => (
               <div key={a.id} className="px-4 py-4 border-b border-gray-50 dark:border-gray-800 last:border-0">
-                <p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{a.text}</p>
+                <p lang={a.lang ?? undefined} className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{a.text}</p>
                 {/* Saying so beats silently presenting a foreign-language
                     message as though it had been written for this reader. The
                     dashboard card stays clean — it is a two-line digest, and

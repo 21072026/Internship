@@ -11,6 +11,8 @@ import { RelativeTime } from '@/components/ui/RelativeTime';
 interface AnnouncementItem {
   id: string;
   text: string;
+  /** Language of `text` when known or confidently detected (#3283). */
+  lang?: string | null;
   link: string | null;
   imageUrl: string | null;
   imageAlt?: string | null;
@@ -72,7 +74,7 @@ export function AnnouncementsCard() {
                   />
                 )}
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">{a.text}</p>
+                  <p lang={a.lang ?? undefined} className="text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2">{a.text}</p>
                   <p className="text-xs text-gray-400 mt-1">
                     <RelativeTime date={a.createdAt} />
                   </p>

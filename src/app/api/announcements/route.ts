@@ -3,7 +3,8 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { announcementImageUrl } from '@/lib/announcementImage';
-import { resolveAnnouncementText, isAnnouncementFallback } from '@/lib/announcementText';
+import { resolveAnnouncementText, resolveAnnouncementLang, isAnnouncementFallback } from '@/lib/announcementText';
+import { contentLang } from '@/lib/contentLanguage';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 // GET — paginated announcement history for the signed-in user. Admin
@@ -88,16 +89,22 @@ export async function GET(request: Request) {
     // `text` is resolved server-side into this reader's language (#1163), so
     // every client — the card, the archive — stays a plain string renderer and
     // the per-locale bodies never travel to a browser that cannot use them.
-    announcements: announcements.map(({ image, translations, ...a }) => ({
+    announcements: announcements.map(({ image, translations, ...a }) => {
+      const text = resolveAnnouncementText({ text: a.text, translations }, me.preferredLanguage);
+      return {
       ...a,
-      text: resolveAnnouncementText({ text: a.text, translations }, me.preferredLanguage),
+      text,
+      // The language of `text` for its `lang` attribute (#3283): the locale
+      // of the translation shown, else detected, else none.
+      lang: contentLang(text, resolveAnnouncementLang({ translations }, me.preferredLanguage)) ?? null,
       // True when this announcement was written in other languages but not the
       // reader's — the UI says so instead of silently presenting a foreign
       // message as if it had been meant for them.
       languageFallback: isAnnouncementFallback({ translations }, me.preferredLanguage),
       imageUrl: image ? announcementImageUrl(a.id) : null,
       imageAlt: image?.altText ?? null,
-    })),
+      };
+    }),
     total,
     page,
     pageSize,
