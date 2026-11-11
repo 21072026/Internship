@@ -81,13 +81,14 @@ export function interactionSelect(withNotes: boolean) {
     type: true,
     date: true,
     meetingId: true,
+    durationMinutes: true,
     updatedAt: true,
     notes: withNotes,
   } satisfies Prisma.InteractionLogSelect;
 }
 
 export function serializeInteraction(
-  i: { id: string; relationId: string; type: string; date: Date; meetingId: string | null; updatedAt: Date; notes?: string },
+  i: { id: string; relationId: string; type: string; date: Date; meetingId: string | null; durationMinutes: number | null; updatedAt: Date; notes?: string },
   withNotes: boolean,
 ) {
   return {
@@ -96,6 +97,8 @@ export function serializeInteraction(
     type: i.type,
     date: iso(i.date),
     meetingId: i.meetingId,
+    // Session length in minutes (#3521); null when nobody recorded one.
+    durationMinutes: i.durationMinutes,
     updatedAt: iso(i.updatedAt),
     ...(withNotes ? { notes: i.notes ?? '' } : {}),
   };

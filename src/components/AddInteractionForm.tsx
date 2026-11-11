@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { useT } from '@/i18n/client';
 import { INTERACTION_TYPES, type InteractionType } from '@/lib/interactionTypes';
+import { DURATION_MAX, DURATION_MIN, parseDurationInput } from '@/lib/interactionDuration';
 
 // Compact "log an interaction" form — admins on the candidate detail screen
 // (parity with what a mentor can do, #707) and a sales rep on their lead page
@@ -18,23 +19,31 @@ export function AddInteractionForm({ relationId, onAdded }: { relationId: string
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [subject, setSubject] = useState('');
   const [notes, setNotes] = useState('');
+  // Session length in minutes (#3521); empty = not recorded.
+  const [duration, setDuration] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!notes.trim()) return;
+    const minutes = parseDurationInput(duration);
+    if (minutes === undefined) {
+      setError(t.logInteraction.durationInvalid);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       const res = await fetch('/api/interactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ relationId, date, subject: subject || undefined, notes, type }),
+        body: JSON.stringify({ relationId, date, subject: subject || undefined, notes, type, ...(minutes ? { durationMinutes: minutes } : {}) }),
       });
       if (res.ok) {
         setSubject('');
         setNotes('');
+        setDuration('');
         setType('Meeting');
         setOpen(false);
         onAdded();
@@ -79,6 +88,19 @@ export function AddInteractionForm({ relationId, onAdded }: { relationId: string
           value={date}
           onChange={(e) => setDate(e.target.value)}
           className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+        />
+        <input
+          type="number"
+          inputMode="numeric"
+          min={DURATION_MIN}
+          max={DURATION_MAX}
+          step={1}
+          aria-label={t.logInteraction.duration}
+          placeholder={t.logInteraction.durationPlaceholder}
+          data-testid="add-interaction-duration"
+          value={duration}
+          onChange={(e) => setDuration(e.target.value)}
+          className="w-24 rounded-lg border border-gray-300 px-2 py-1 text-sm"
         />
       </div>
       <input

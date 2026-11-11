@@ -23,6 +23,8 @@ export async function createInteraction(opts: {
   type: InteractionType;
   notes: string;
   subject?: string | null;
+  /** Session length in minutes (#3521); null/absent when nobody said. */
+  durationMinutes?: number | null;
   /** The person logging it, or null for a machine (an API key) — never the mentee's own echo. */
   actorId: string | null;
 }) {
@@ -34,6 +36,7 @@ export async function createInteraction(opts: {
       subject: opts.subject || null,
       notes: opts.notes,
       type: opts.type,
+      durationMinutes: opts.durationMinutes ?? null,
     },
   });
 

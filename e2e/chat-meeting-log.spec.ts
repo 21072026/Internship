@@ -7,6 +7,7 @@ import { slackSignatureFor } from '@/lib/chat/slackSignature';
 import { setChatClientsForTests, type ChatPlatformClient, type CardButton } from '@/lib/chat/client';
 import { sealBotToken } from '@/lib/chat/tokens';
 import { logEndedMeetingInteractions } from '@/lib/meetingAutoLog';
+import { signInViaApi } from './helpers/auth';
 
 // Notes from the post-meeting card (#1953). The auto-log is run in process
 // with a RECORDING Slack client; the clicks go over HTTP through the one
@@ -17,7 +18,10 @@ import { logEndedMeetingInteractions } from '@/lib/meetingAutoLog';
 //  · "Add notes" asks for the text in a field; the typed note is written into
 //    the SAME row through the app's edit path — no second log for the session;
 //  · another mentor can neither open the field nor write the row; an empty
-//    note writes nothing.
+//    note writes nothing;
+//  · after the note the card offers the session length (#3521): a picked
+//    button writes `durationMinutes` on the same row through the same edit
+//    path the app's PUT uses, and the app writing it changes the same field.
 
 const SECRET = 'e2e-slack-signing-secret';
 const PW = 'ChatMeetLog123!';
@@ -43,7 +47,11 @@ function recordingClient(posts: Post[]): ChatPlatformClient {
   };
 }
 
-type Reply = { text?: string; replace_original?: boolean; blocks?: { type: string; block_id?: string; element?: { action_id?: string } }[] };
+type Reply = {
+  text?: string;
+  replace_original?: boolean;
+  blocks?: { type: string; block_id?: string; element?: { action_id?: string }; elements?: { action_id?: string; value?: string }[] }[];
+};
 
 test.beforeAll(() => {
   process.env.CHAT_APPS_ENABLED = '1';
@@ -139,6 +147,8 @@ test('post-meeting card: notes land in the meeting’s own log row, through the 
     expect(await logEndedMeetingInteractions(meeting.id)).toBe(1);
     const row = await prisma.interactionLog.findUniqueOrThrow({ where: { meetingId: meeting.id } });
     const placeholder = row.notes;
+    // The meeting stored no length, so the log has none — never a guessed default (#3521).
+    expect(row.durationMinutes).toBeNull();
     const mine = posts.filter((p) => p.target === `D-${ids.mentor}`);
     expect(mine).toHaveLength(1);
     expect(mine[0].text).toContain(title);
@@ -165,6 +175,34 @@ test('post-meeting card: notes land in the meeting’s own log row, through the 
     const after = await prisma.interactionLog.findUniqueOrThrow({ where: { id: row.id } });
     expect(after).toMatchObject({ notes: 'Went through the CV; next: two applications.', type: 'Meeting', meetingId: meeting.id, relationId: relation.id });
     expect(await prisma.interactionLog.count({ where: { relationId: relation.id } })).toBe(1);
+
+    // The session length (#3521): the saved reply offers the preset buttons for THIS row.
+    const durationValues = (saved.blocks ?? [])
+      .flatMap((b) => b.elements ?? [])
+      .filter((e) => e.action_id === 'interaction.duration')
+      .map((e) => e.value);
+    expect(durationValues).toEqual([15, 30, 45, 60, 90].map((m) => `${m}:${row.id}`));
+    const pick = (user: string, value: string) => send(user, { action_id: 'interaction.duration', value });
+    const lengthOf = async () => (await prisma.interactionLog.findUniqueOrThrow({ where: { id: row.id } })).durationMinutes;
+    // Another mentor's click, and a forged out-of-range value, write nothing.
+    await pick(ids.other, `45:${row.id}`);
+    expect(await lengthOf()).toBeNull();
+    await pick(ids.mentor, `999:${row.id}`);
+    expect(await lengthOf()).toBeNull();
+    // The mentor's click stores it on the same row — still one log.
+    const picked = await pick(ids.mentor, `45:${row.id}`);
+    expect(picked.replace_original).toBe(true);
+    expect(await lengthOf()).toBe(45);
+    expect(await prisma.interactionLog.count({ where: { relationId: relation.id } })).toBe(1);
+    // The app's edit door writes the very same field.
+    const app = await playwright.request.newContext({ baseURL });
+    try {
+      expect((await signInViaApi(app, emails.mentor, PW)).ok).toBe(true);
+      expect((await app.put(`/api/interactions/${row.id}`, { data: { durationMinutes: 60 } })).ok()).toBeTruthy();
+      expect(await lengthOf()).toBe(60);
+    } finally {
+      await app.dispose();
+    }
   } finally {
     await api.dispose();
     await new Promise((r) => sink.close(r));

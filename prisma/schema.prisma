@@ -5200,37 +5200,42 @@ model SessionAgendaItem {
 }
 
 model InteractionLog {
-  id         String          @id @default(cuid())
-  relationId String
-  date       DateTime
+  id              String          @id @default(cuid())
+  relationId      String
+  date            DateTime
   // Optional short topic/subject line — the free-form `notes` field carries
   // the detail; this is what a filtered list scans/displays at a glance.
-  subject    String?
+  subject         String?
   // TEXT, not the default VARCHAR(191): a meeting note is prose and overflowed
   // the 191-char default after ~three sentences, which surfaced as an opaque
   // 500 (Prisma P2000) *after* the mentor's email had already been sent.
-  notes      String          @db.Text
-  type       InteractionType
+  notes           String          @db.Text
+  type            InteractionType
+  // How long the session ran, in minutes (#3521). Nullable and never guessed:
+  // a hand-written log carries it when the person entered it, an auto-logged
+  // meeting only when the meeting's own length was stored. A log stays one
+  // contact whatever its length — counts and "last contact" never read this.
+  durationMinutes Int?
   // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
-  updatedAt  DateTime        @default(now()) @updatedAt
+  updatedAt       DateTime        @default(now()) @updatedAt
   // Written by the system rather than typed by a mentor (#1489) — a meeting
   // that took place is logged on its own, so the interaction history is the
   // history and not "whatever anybody remembered to re-type afterwards".
   // A plain boolean and not just `meetingId != null`: the link below is
   // SetNull, so deleting the meeting must not turn its log into a hand-written
   // one retroactively.
-  autoLogged Boolean         @default(false)
+  autoLogged      Boolean         @default(false)
   // Which meeting produced this log. Also the idempotency key: @unique means
   // one meeting can never write two logs, whichever path gets there first (the
   // "end meeting" click or the sweep that catches meetings nobody ended).
   // SetNull rather than Cascade — deleting the meeting row must not delete the
   // record that the meeting happened (same reasoning as PersonalNote).
-  meetingId  String?         @unique
+  meetingId       String?         @unique
   // Idempotency key of a log written from outside (#2809): `bcc:<hash>` for a
   // mail copied to the org's CRM address — a hash of its Message-ID, so one
   // mail delivered twice is still one log per funnel record. NULL for every
   // hand-written log; MySQL lets any number of NULLs share the unique below.
-  sourceRef  String?
+  sourceRef       String?
 
   relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
   meeting  Meeting?           @relation(fields: [meetingId], references: [id], onDelete: SetNull)

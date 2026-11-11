@@ -1,4 +1,5 @@
 import { getServerSession } from 'next-auth';
+import { formatDuration } from '@/lib/interactionDuration';
 import { redirect } from 'next/navigation';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { MentorAttentionQueue } from '@/components/MentorAttentionQueue';
@@ -50,6 +51,15 @@ async function getMentorData(mentorId: string) {
     orderBy: { startDate: 'desc' },
   });
 
+  // The time the logs add up to (#3521) — a separate figure beside the count,
+  // never part of it: a log is one contact whatever its length
+  // (docs/last-contact.md), and a log without a length adds nothing.
+  const loggedTime = await prisma.interactionLog.aggregate({
+    where: { relation: { mentorId } },
+    _sum: { durationMinutes: true },
+  });
+  const loggedMinutes = loggedTime._sum.durationMinutes ?? 0;
+
   const recentInteractions = await prisma.interactionLog.findMany({
     where: { relation: { mentorId } },
     include: {
@@ -70,7 +80,7 @@ async function getMentorData(mentorId: string) {
     relations.map((r) => ({ id: r.id, menteeId: r.menteeId })),
   );
 
-  return { relations, recentInteractions, lastContacts };
+  return { relations, recentInteractions, lastContacts, loggedMinutes };
 }
 
 export default async function MentorDashboard() {
@@ -101,7 +111,7 @@ export default async function MentorDashboard() {
   }
 
   const { t, locale } = await getServerDictionary();
-  const { relations, recentInteractions, lastContacts } = await getMentorData(session.user.id);
+  const { relations, recentInteractions, lastContacts, loggedMinutes } = await getMentorData(session.user.id);
   const attention = await getAttentionItems(session.user.id, { orgId: await settingsOrgOf(session) });
   // Private to this mentor, never compared; null (not rendered) with no
   // relations yet — see src/lib/mentorImpactRule.ts.
@@ -155,6 +165,11 @@ export default async function MentorDashboard() {
                 {relations.reduce((sum, r) => sum + r._count.interactions, 0)}
               </p>
               <p className="text-sm text-gray-500">{t.mentor.totalInteractions}</p>
+              {loggedMinutes > 0 && (
+                <p className="text-xs text-gray-400" data-testid="mentor-logged-time">
+                  {t.logInteraction.totalTime}: {formatDuration(loggedMinutes, { minutes: t.logInteraction.durationMinutes, hours: t.logInteraction.durationHours })}
+                </p>
+              )}
             </div>
           </div>
         </Card>

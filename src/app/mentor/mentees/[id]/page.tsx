@@ -1,5 +1,6 @@
 'use client';
 
+import { DURATION_MAX, DURATION_MIN, formatDuration, parseDurationInput } from '@/lib/interactionDuration';
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
@@ -67,6 +68,7 @@ interface InteractionLog {
   notes: string;
   type: string;
   autoLogged?: boolean;
+  durationMinutes?: number | null;
 }
 
 interface RelationDetail {
@@ -146,7 +148,7 @@ export default function MenteeDetailPage() {
   const [agreement, setAgreement] = useState<AgreementBlock | null>(null);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ date: '', subject: '', notes: '', type: 'Meeting' });
+  const [formData, setFormData] = useState({ date: '', subject: '', notes: '', type: 'Meeting', durationMinutes: '' });
   // The "set the next follow-up while logging" shortcut (#2563). Kept out of
   // formData: it is not part of the interaction and is written by another route.
   const [followUpDate, setFollowUpDate] = useState('');
@@ -190,7 +192,7 @@ export default function MenteeDetailPage() {
     fetchRelation();
   }, [fetchRelation]);
 
-  const emptyForm = { date: '', subject: '', notes: '', type: 'Meeting' };
+  const emptyForm = { date: '', subject: '', notes: '', type: 'Meeting', durationMinutes: '' };
 
   const openNewLog = () => {
     setEditing(null);
@@ -207,6 +209,7 @@ export default function MenteeDetailPage() {
       subject: interaction.subject ?? '',
       notes: interaction.notes,
       type: interaction.type,
+      durationMinutes: interaction.durationMinutes ? String(interaction.durationMinutes) : '',
     });
     setFollowUpDate('');
     setFormError('');
@@ -226,7 +229,14 @@ export default function MenteeDetailPage() {
       setFormError(t.mentor.dateAndNotesRequired);
       return;
     }
-    const changes: Record<string, string> = {};
+    // The session length (#3521): '' clears it, anything else must be a valid whole number.
+    const duration = parseDurationInput(formData.durationMinutes);
+    if (duration === undefined) {
+      setFormError(t.logInteraction.durationInvalid);
+      return;
+    }
+    const changes: Record<string, string | number | null> = {};
+    if (duration !== (original.durationMinutes ?? null)) changes.durationMinutes = duration;
     if (formData.date !== original.date.slice(0, 10)) changes.date = formData.date;
     if (formData.type !== original.type) changes.type = formData.type;
     if (formData.subject !== (original.subject ?? '')) changes.subject = formData.subject;
@@ -260,6 +270,11 @@ export default function MenteeDetailPage() {
       setFormError(t.mentor.dateAndNotesRequired);
       return;
     }
+    const duration = parseDurationInput(formData.durationMinutes);
+    if (duration === undefined) {
+      setFormError(t.logInteraction.durationInvalid);
+      return;
+    }
     setSubmitting(true);
     setFormError('');
     try {
@@ -280,7 +295,14 @@ export default function MenteeDetailPage() {
       const res = await fetch('/api/interactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ relationId: id, ...formData }),
+        body: JSON.stringify({
+          relationId: id,
+          date: formData.date,
+          subject: formData.subject,
+          notes: formData.notes,
+          type: formData.type,
+          ...(duration ? { durationMinutes: duration } : {}),
+        }),
       });
       if (!res.ok) {
         const body = await res.json();
@@ -739,6 +761,18 @@ export default function MenteeDetailPage() {
                   />
                 </div>
                 <Input
+                  label={t.logInteraction.duration}
+                  type="number"
+                  inputMode="numeric"
+                  min={DURATION_MIN}
+                  max={DURATION_MAX}
+                  step={1}
+                  data-testid="interaction-log-duration"
+                  value={formData.durationMinutes}
+                  onChange={(e) => setFormData((p) => ({ ...p, durationMinutes: e.target.value }))}
+                  placeholder={t.logInteraction.durationPlaceholder}
+                />
+                <Input
                   label={t.mentor.subject}
                   data-testid="interaction-log-subject"
                   value={formData.subject}
@@ -802,6 +836,11 @@ export default function MenteeDetailPage() {
                     <AutoLoggedBadge autoLogged={interaction.autoLogged} className="text-xs mt-1" />
                     <p className="text-xs text-gray-400 mt-1">
                       {formatDate(interaction.date, locale)}
+                      {interaction.durationMinutes ? (
+                        <span data-testid={`interaction-duration-${interaction.id}`}>
+                          {' · '}{formatDuration(interaction.durationMinutes, { minutes: t.logInteraction.durationMinutes, hours: t.logInteraction.durationHours })}
+                        </span>
+                      ) : null}
                     </p>
                   </div>
                   <button

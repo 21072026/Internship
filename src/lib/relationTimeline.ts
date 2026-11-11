@@ -102,6 +102,8 @@ export interface TimelineEntry {
    * it in the viewer's locale, like every other date on the row.
    */
   weekStart?: string | null;
+  /** Interaction rows only: the session length in minutes (#3521), when recorded. */
+  durationMinutes?: number | null;
   /** Optional link to the underlying object. */
   href?: string | null;
   /** True when the system wrote the row rather than a person. */
@@ -387,6 +389,7 @@ export async function buildRelationTimeline(req: TimelineRequest): Promise<Timel
         detail: trim(i.notes),
         status: i.type,
         automatic: i.autoLogged,
+        durationMinutes: i.durationMinutes,
       })
     ),
     ...timedMeetings.map((m) =>

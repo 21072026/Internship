@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Session length on interaction logs (#3521):** `InteractionLog.durationMinutes Int?` (additive, nullable). One bound and one shape for every door — `interactionFieldsSchema` (1…600 whole minutes, `null` clears on edit), written through `createInteraction()` / `updateInteraction()` by the app form, the edit route, `POST /api/v1/interactions` and the post-meeting chat card, which now asks for the length after the note with 15/30/45/60/90 buttons (`interaction.duration`, after `interactionAccess()`). An auto-logged meeting carries the meeting's own STORED length only — never `meetingDurationMinutes()`'s default. Shown on the mentor's log list, the relation timeline and as a separate \"time logged\" figure on the mentor dashboard; the interaction COUNT and last-contact rules are unchanged. `/api/v1` interactions and their export expose `durationMinutes`. The `interaction.logged` webhook payload is unchanged. Rule in `src/lib/interactionDuration.ts`; feature card `sessionDuration`.",
+  "notes": {
+    "en": ["Interaction logs can now record how long a session ran — in the form, or with one tap on the chat card after a meeting."],
+    "tr": ["Etkileşim kayıtları artık görüşmenin ne kadar sürdüğünü de tutabiliyor — formda ya da toplantıdan sonra sohbet kartında tek dokunuşla."],
+    "de": ["Interaktionseinträge können jetzt festhalten, wie lange ein Gespräch gedauert hat — im Formular oder mit einem Tipp auf die Chat-Karte nach einem Termin."]
+  }
+}

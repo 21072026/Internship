@@ -23,6 +23,7 @@ import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { useT, useLocale } from '@/i18n/client';
 import { useStageLabel } from '@/lib/pipelineStagesClient';
 import { formatDate, formatDateTime } from '@/lib/relativeTime';
+import { formatDuration } from '@/lib/interactionDuration';
 import type { TimelineEntry, TimelineKind } from '@/lib/relationTimeline';
 
 // The merged history of one pairing (#1702). Presentational only: the ordering,
@@ -273,6 +274,12 @@ function TimelineRow({
           {entry.kind === 'interaction' && entry.status && (
             <InteractionTypeBadge type={entry.status} className="text-[10px]" />
           )}
+
+          {entry.kind === 'interaction' && entry.durationMinutes ? (
+            <span className="text-[11px] text-gray-500" data-testid="timeline-duration">
+              {formatDuration(entry.durationMinutes, { minutes: t.logInteraction.durationMinutes, hours: t.logInteraction.durationHours })}
+            </span>
+          ) : null}
 
           {/* Two statuses earn a badge: a weekly report's review state, and the
               drop-off reason on a stage move (admin/mentor only — the endpoint

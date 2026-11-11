@@ -95,7 +95,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { relationId, date, subject, notes, type } = parsed.data;
+    const { relationId, date, subject, notes, type, durationMinutes } = parsed.data;
 
     const relation = await prisma.mentorshipRelation.findUnique({
       where: { id: relationId },
@@ -121,6 +121,7 @@ export async function POST(request: Request) {
       type,
       notes,
       subject,
+      durationMinutes: durationMinutes ?? null,
       actorId: session.user.id,
     });
     return NextResponse.json({ interaction }, { status: 201 });

@@ -46,6 +46,7 @@ import {
   Briefcase, NotebookPen, BriefcaseBusiness, CalendarCheck, Video, FlaskConical, Quote, MailMinus,
   MailQuestion, MailOpen, Fingerprint, Palette, Eye, HeartPulse, MailCheck, Accessibility, ScrollText, Repeat2,
   FolderKanban, BadgeEuro, Award, Send, ImagePlus, FileSignature, Presentation, BellRing, Puzzle, Compass,
+  Timer,
 } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -210,6 +211,10 @@ export function getFeatures(t: Dictionary): Feature[] {
     // #3111 — the affiliate programme: partners, commission plan, payouts, the
     // partner portal and the migration. It IS a module (`affiliate`), so the tag.
     { key: 'affiliate', category: 'companies', icon: Share2, color: 'purple', capability: 'affiliate', title: C.affiliate.t, desc: C.affiliate.d },
+    // #3521 — how long a session ran, on every interaction log: the app form, the
+    // auto-logged meeting (only when its length was stored) and the chat card. A
+    // CRM call log has a length in every vertical, so no tag.
+    { key: 'sessionDuration', category: 'tracking', icon: Timer, color: 'teal', title: C.sessionDuration.t, desc: C.sessionDuration.d },
     { key: 'rematch', category: 'collaboration', icon: Repeat2, color: 'amber', capability: 'mentorship', title: C.rematch.t, desc: C.rematch.d },
     { key: 'pricing', category: 'trust', icon: BadgeEuro, color: 'green', capability: 'mentorship', title: C.pricing.t, desc: C.pricing.d },
     // Light gamification: the mentee portal's profile completeness meter. Lives

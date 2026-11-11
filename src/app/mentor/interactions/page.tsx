@@ -1,4 +1,5 @@
 'use client';
+import { formatDuration } from '@/lib/interactionDuration';
 import { useT, useLocale } from "@/i18n/client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -19,6 +20,7 @@ interface Interaction {
   notes: string;
   type: string;
   autoLogged?: boolean;
+  durationMinutes?: number | null;
   relation: {
     mentee: { fullName: string };
     mentor: { fullName: string };
@@ -144,8 +146,13 @@ export default function MentorInteractionsPage() {
                   )}
                   <p className="text-sm text-gray-600">{interaction.notes}</p>
                 </div>
-                <span className="text-xs text-gray-400 flex-shrink-0">
+                <span className="text-xs text-gray-400 flex-shrink-0 text-right">
                   {formatDate(interaction.date, locale)}
+                  {interaction.durationMinutes ? (
+                    <span className="block" data-testid={`interaction-row-duration-${interaction.id}`}>
+                      {formatDuration(interaction.durationMinutes, { minutes: t.logInteraction.durationMinutes, hours: t.logInteraction.durationHours })}
+                    </span>
+                  ) : null}
                 </span>
               </div>
             ))}

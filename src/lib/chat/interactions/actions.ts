@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { CHAT_DURATION_PRESETS, decodeDurationChoice, encodeDurationChoice } from '@/lib/interactionDuration';
 import { getDictionary } from '@/i18n/dictionaries';
 import { formatInTimeZone } from '@/lib/timezone';
 import { intlLocaleFor } from '@/lib/interviewRequests';
@@ -400,7 +401,35 @@ registerChatAction('interaction.note.save', async ({ user, value, input }) => {
   const row = await editableInteraction(user, value);
   if (!row) return { text: t.unavailable };
   await updateInteraction(row.id, parsed.data);
-  return { text: interpolate(t.noteSaved, { subject: noteSubject(row) }), replaceOriginal: true };
+  // The session length is the card's second question (#3521): offered as
+  // buttons, written through the same updateInteraction() as the note.
+  return {
+    text: `${interpolate(t.noteSaved, { subject: noteSubject(row) })}\n${t.durationAsk}`,
+    buttons: CHAT_DURATION_PRESETS.map((minutes) => ({
+      label: interpolate(t.durationButton, { n: String(minutes) }),
+      actionId: 'interaction.duration',
+      value: encodeDurationChoice(row.id, minutes),
+    })),
+    replaceOriginal: true,
+  };
+});
+
+/**
+ * `interaction.duration` — the picked length replaces the row's
+ * durationMinutes (#3521), validated by the edit route's own schema and
+ * written through updateInteraction() after interactionAccess(). A rerun
+ * writes the same value again.
+ */
+registerChatAction('interaction.duration', async ({ user, value }) => {
+  const t = getDictionary(user.locale).chatInteraction;
+  const choice = decodeDurationChoice(value);
+  if (!choice) return { text: t.unavailable };
+  const parsed = updateInteractionSchema.pick({ durationMinutes: true }).safeParse({ durationMinutes: choice.minutes });
+  if (!parsed.success) return { text: t.unavailable };
+  const row = await editableInteraction(user, choice.interactionId);
+  if (!row) return { text: t.unavailable };
+  await updateInteraction(row.id, parsed.data);
+  return { text: interpolate(t.durationSaved, { subject: noteSubject(row), n: String(choice.minutes) }), replaceOriginal: true };
 });
 
 // ── Commands (#1956) ────────────────────────────────────────────────────────

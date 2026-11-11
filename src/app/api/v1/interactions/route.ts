@@ -4,6 +4,7 @@ import { KEYSET_ORDER, apiNotFound, apiOk, keysetWhere, paginate, parseListQuery
 import { apiWrite, writeOk } from '@/lib/api/v1Write';
 import { interactionSelect, serializeInteraction } from '@/lib/api/v1Resources';
 import { createInteraction } from '@/lib/interactionWrite';
+import { interactionFieldsSchema } from '@/lib/interactionSchema';
 import { INTERACTION_TYPES } from '@/lib/interactionTypes';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { z } from 'zod';
@@ -49,6 +50,8 @@ const createSchema = z.strictObject({
   date: z.string().datetime({ offset: true }),
   subject: z.string().max(TEXT_LIMITS.interactionSubject).optional(),
   notes: z.string().trim().min(1).max(TEXT_LIMITS.interactionNotes),
+  // The app's own bound (#3521, src/lib/interactionSchema.ts).
+  durationMinutes: interactionFieldsSchema.shape.durationMinutes,
 });
 
 export async function POST(request: Request) {
@@ -65,6 +68,7 @@ export async function POST(request: Request) {
         type: body.type,
         notes: body.notes,
         subject: body.subject,
+        durationMinutes: body.durationMinutes ?? null,
         actorId: null,
       });
       const withNotes = key.scopes.includes('interactions:read_notes');

@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { isValidDuration } from '@/lib/interactionDuration';
 import { emit } from '@/lib/events/emit';
 import { isLocale, defaultLocale, type Locale } from '@/i18n/config';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -73,6 +74,8 @@ type LoggableMeeting = {
   id: string;
   title: string;
   scheduledAt: Date | null;
+  /** The meeting's own stored length (#1984); absent/null when nobody set one. */
+  durationMinutes?: number | null;
   relationId: string | null;
   relation: { orgId: string | null; mentorId: string; mentor: { preferredLanguage: string | null } } | null;
   /** The pair's minutes for this meeting, newest first (#1849); absent or empty → placeholder. */
@@ -83,6 +86,7 @@ const loggableSelect = {
   id: true,
   title: true,
   scheduledAt: true,
+  durationMinutes: true,
   relationId: true,
   relation: { select: { orgId: true, mentorId: true, mentor: { select: { preferredLanguage: true } } } },
   sessionNotes: { select: { body: true }, orderBy: { createdAt: 'desc' as const }, take: 1 },
@@ -115,6 +119,9 @@ export async function logMeetingInteraction(meeting: LoggableMeeting): Promise<b
         subject: meeting.title.slice(0, TEXT_LIMITS.interactionSubject) || null,
         notes: notesFor(meeting),
         type: 'Meeting',
+        // The session length only when the meeting STORED one (#3521) — never
+        // meetingDurationMinutes(), whose default would be a guess.
+        durationMinutes: isValidDuration(meeting.durationMinutes) ? meeting.durationMinutes : null,
         autoLogged: true,
         meetingId: meeting.id,
       },
