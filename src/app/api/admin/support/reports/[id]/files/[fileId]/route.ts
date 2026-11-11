@@ -3,6 +3,7 @@ import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { reportAdminOrg } from '@/lib/supportReportAccess';
+import { contentDisposition } from '@/lib/download';
 
 // The bytes of one report file (#3130) — the screenshot or an attachment.
 // Reached through its report, so the org check is the report's.
@@ -21,7 +22,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return new NextResponse(Buffer.from(file.data), {
       headers: {
         'Content-Type': file.contentType,
-        'Content-Disposition': `${disposition}; filename="${file.filename.replace(/["\r\n]/g, '')}"`,
+        'Content-Disposition': contentDisposition(file.filename, disposition),
         'Content-Length': String(file.size),
         'Cache-Control': 'private, no-store',
         'X-Content-Type-Options': 'nosniff',

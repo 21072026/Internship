@@ -5,6 +5,7 @@ import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
+import { contentDisposition } from '@/lib/download';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
@@ -34,7 +35,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return new NextResponse(Buffer.from(attachment.data), {
     headers: {
       'Content-Type': attachment.contentType,
-      'Content-Disposition': `${disposition}; filename="${attachment.filename.replace(/["\r\n]/g, '')}"`,
+      'Content-Disposition': contentDisposition(attachment.filename, disposition),
       'Content-Length': String(attachment.size),
       'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff',
