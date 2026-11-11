@@ -4,8 +4,8 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { signInViaApi } from './helpers/auth';
 
 // Interview panels stay inside the caller's org (#3588). The tenant middleware
-// is off in every deployment (and in this project), and `assertSameOrg()` is a
-// no-op with it — so each panel route scopes its own lookups. An admin of org A
+// is off in every deployment (and in this project), and `assertSameOrg()` was a
+// no-op with it until #3588 — so each panel route scopes its own lookups. An admin of org A
 // must not list, open, edit, close or reopen org B's panel, convene one about
 // B's candidate, or seat B's people on A's panel.
 

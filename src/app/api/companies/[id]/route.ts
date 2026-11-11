@@ -20,7 +20,8 @@ import { ensureEmployerSlug } from '@/lib/employerPageStore';
 // `withinTenant({ id }, await tenantWhere(session))`, so another tenant's company is a
 // 404 — the same answer as an id that does not exist. Hand-written on purpose:
 // the central middleware only engages with MT_ENFORCE_ISOLATION on, which it
-// is nowhere today, and `assertSameOrg()` is a no-op for the same reason.
+// is nowhere today, and `assertSameOrg()` was a no-op for the same reason
+// until #3588.
 
 const updateCompanySchema = z.object({
   name: z.string().min(1).max(TEXT_LIMITS.companyName).optional(),
