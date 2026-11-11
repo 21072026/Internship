@@ -46,6 +46,18 @@ Browsers post violations to `POST /api/csp-report`, in either the legacy
 
 Turn the header off with `CSP_REPORT_ONLY=0`.
 
+**Zod's `eval` probe (#3642).** Zod 4 probes `new Function("")` once per page to
+decide whether it may compile schemas; under the strict policy (no
+`'unsafe-eval'` in production) that probe is a `blocked: eval` report even though
+zod catches the throw. It was every `eval` report the stream carried — the
+sign-in page above all — and in CI the reports filled the endpoint's per-IP
+limit, so later reports got 429 and the smoke test read the browser's console
+error as a failure. The browser therefore runs zod `jitless`
+(`src/lib/zodBrowserConfig.ts`, installed in `src/instrumentation-client.ts`,
+which runs before any app module: zod probes while a `z.object()` is
+*constructed*, and schemas are built at module load); the server keeps the JIT. `scripts/test/zod-browser-config.test.mjs` pins that a
+browser-configured parse never calls `new Function`.
+
 ## Steps
 
 1. **Report-only, nonce, endpoint** — this change. The print popup of the document
