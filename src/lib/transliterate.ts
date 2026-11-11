@@ -21,3 +21,14 @@ export function slugify(input: string): string {
     .replace(/[^a-z0-9]+/g, '.')
     .replace(/^\.|\.$/g, '');
 }
+
+// A hyphenated URL slug (#1867, the public employer page): transliterate,
+// lowercase, non-alphanumerics → '-', capped at `max` without a trailing '-'.
+export function kebabSlug(input: string, max: number): string {
+  return transliterate(input)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, max)
+    .replace(/-+$/g, '');
+}

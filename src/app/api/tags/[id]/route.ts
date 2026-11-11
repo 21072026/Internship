@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 import { isValidTagName, normalizeTagName, tagKey } from '@/lib/tags';
@@ -21,14 +20,16 @@ const patchSchema = z.object({
 // every saved view that filters on it keeps working. Fixing a typo must not
 // silently empty somebody's saved segment.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
-    const orgId = resolveOrgId(session);
-    const tag = await prisma.tag.findFirst({ where: { id, orgId: orgId ?? undefined }, select: { id: true, name: true } });
+    // Never `undefined` (#3603): an org-less session (a token minted before the
+    // backfill) is the default org's — `orgId ?? undefined` dropped the filter
+    // and let it act on every org's tags. Tag.orgId is required, so strict.
+    const orgId = await settingsOrgOf(session);
+    const tag = await prisma.tag.findFirst({ where: { id, orgId }, select: { id: true, name: true } });
     if (!tag) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const parsed = patchSchema.safeParse(await request.json().catch(() => ({})));
@@ -49,7 +50,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       // is tagKey() (Turkish-aware lowercase), which MySQL's collation does not
       // reproduce — `İ` and `I` are the case that breaks a naive comparison.
       const siblings = await prisma.tag.findMany({
-        where: { orgId: orgId ?? undefined, id: { not: tag.id } },
+        where: { orgId, id: { not: tag.id } },
         select: { id: true, name: true },
       });
       const clash = siblings.find((t) => tagKey(t.name) === tagKey(name)) ?? null;
@@ -96,16 +97,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 // do; removing one from the org's whole vocabulary erases it from every person
 // at once, which is an admin decision.
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
-    const orgId = resolveOrgId(session);
+    // Never `undefined` (#3603): an org-less session (a token minted before the
+    // backfill) is the default org's — `orgId ?? undefined` dropped the filter
+    // and let it act on every org's tags. Tag.orgId is required, so strict.
+    const orgId = await settingsOrgOf(session);
     // Scoped lookup, not a bare findUnique: an id from another tenant must read
     // as "not found", never as "deleted".
-    const tag = await prisma.tag.findFirst({ where: { id, orgId: orgId ?? undefined }, select: { id: true, name: true } });
+    const tag = await prisma.tag.findFirst({ where: { id, orgId }, select: { id: true, name: true } });
     if (!tag) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const removed = await prisma.userTag.count({ where: { tagId: tag.id } });

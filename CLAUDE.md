@@ -52,7 +52,9 @@ when every path is `docs/**`, `releases/unreleased/**`, `*.md` or a root `.HANDO
 other path (a rename counts by both names) runs it, and a failed detection runs it too.
 Don't reintroduce a `paths:`/`paths-ignore:` filter on a workflow that carries a required check. The gate runs as **parallel jobs**: Playwright `--shard` 1/2, 2/2 over the `@smoke` set plus
 the a11y baseline scan as a fifth job, each on its own runner with its own MySQL (so `workers: 1`
-stays — specs were never written to share one DB concurrently). The required `Playwright smoke`
+stays — specs were never written to share one DB concurrently). They do not build: one
+`Build app for E2E` job runs `next build` once and hands `.next` over as an artifact named after
+the commit, which each job checks before `next start` (#3509). The required `Playwright smoke`
 check is a small aggregator job over them; never rename it or make the matrix job carry that
 name. The smoke job installs Chromium **without** `--with-deps` (that only added fonts, ~4 min
 of apt per run). The **smoke set** is the tests
@@ -68,7 +70,8 @@ deployed env instead.
 After switching branches, run `npx prisma generate` so the client matches the schema —
 a stale client causes schema-drift 500s (the smoke test will catch these).
 The **full suite** also runs on a schedule, 4× a day at 03/09/15/21 UTC
-(`.github/workflows/e2e-full.yml`, 4-way sharded, GitHub-hosted). A drift gate skips the
+(`.github/workflows/e2e-full.yml`, 4-way sharded, GitHub-hosted; one shared `Build app for E2E`
+job like the PR gate, #3509). A drift gate skips the
 scheduled firing when the commit already has a **green** run (#2374 — it used to accept the
 last *completed* run of any conclusion, so one red run masked itself green 4× a day forever;
 a red commit is now re-tested until it passes or a new commit lands), and the skip path says
@@ -342,6 +345,12 @@ marketing names redirect there, and their apex now serves **mail only**.
   both ways. `npm run check:i18n -- --leaks[=locale]` lists the offending keys. E-mail copy
   goes through `emailDictionary(locale, orgId)` (`src/i18n/emailDictionary.ts`), never a bare
   `getDictionary()`, so the recipient org's vertical reaches the mail.
+- **The locale list is written once** (`src/i18n/config.ts`; [`docs/i18n.md`](docs/i18n.md), #2082):
+  read `locales` / `Locale` / `isLocale()` from there, never spell out `['en', 'tr', 'de']` or
+  `'en' | 'tr' | 'de'` — a hand copy (a `z.enum` on a route above all) silently refuses the next
+  language. `npm run check:locale-list` (CI) fails on a new copy; the older ones are pinned in
+  `scripts/locale-list-baseline.json` (only shrinks, `-- --shrink`). Translators work through
+  `npm run i18n:export` / `i18n:import` (a new locale: `--create`), never in `dictionaries.ts`.
 - **The browser gets the dictionary per segment** (#2987): the root layout ships only
   `SHELL_NAMESPACES`; every top-level directory of `src/app` (route groups too) mounts
   `<I18nScope scope="<dir>">` (`src/i18n/scope.tsx`) around its WHOLE layout, and the root page
@@ -350,7 +359,7 @@ marketing names redirect there, and their apex now serves **mail only**.
   `.ns` / `'ns…'`) on `npm install` (postinstall), `npm run dev` and `npm run build` — it is
   **gitignored, never committed**, so parallel PRs cannot conflict on it or leave it stale.
   `npm run check:i18n-scopes` (CI) fails on an unmounted scope. A new
-  top-level directory therefore needs a layout with its `<I18nScope>`. Never trim by path in the
+  top-level directory therefore needs a layout with its `<I18nScope>`. `admin` is split one level deeper (#3599, `NESTED` in the script): `scope="admin"` is only its chrome (layout/error/loading), every `src/app/admin/<section>/layout.tsx` mounts `scope="admin/<section>"` and the dashboard page mounts `admin/index` — so a new admin section needs that layout too (the check names it). A file whose namespace-looking strings are something else (nav keys, permission names) may say `// i18n-scopes: no-dictionary`; the scan refuses that line on a file that reads the dictionary. Never trim by path in the
   root layout — it survives client navigations, so a trimmed root dict outlives its page. Server
   components are unaffected (`getServerDictionary()` is still the whole dictionary). A namespace
   picked dynamically (`t[name]`) is invisible to the scan: write `t.ns` or `'ns.key'`.
@@ -450,8 +459,30 @@ marketing names redirect there, and their apex now serves **mail only**.
   `sha256(userAgent)`, a notice is due only when the sign-in **created** the `SignInDevice` row
   and the account already had one — the first browser is the baseline, so rollout mails nobody.
   A notice never carries a token, hash, code, raw user-agent or geolocation; an admin-side
-  notice passes no `request` (the browser/IP would be the admin's). The router's e-mail
-  channel is still a stub (a job no worker consumes), which is why the mail is sent inline.
+  notice passes no `request` (the browser/IP would be the admin's). The mail is sent inline,
+  not through the router's e-mail channel: that channel renders the event's template, and a
+  notice needs the device, the local time and the "not you?" block.
+- **The router's channels are adapters** (#1711, `src/lib/notifications/adapters/`): one
+  `ChannelAdapter` port, one entry per channel in `adapters/index.ts` — the router decides
+  (preferences, then the ledger claim, `ledger.ts`) and the adapter only delivers. A new
+  channel is an adapter plus one registry line, never a router edit. The e-mail adapter only
+  enqueues the keyed `notification.email` job; its consumer is `emailJob.ts` (#1719).
+  `npm run check:notify` (CI) fails on a raw `sendEmail(` / `sendPushToUser(` /
+  `prisma.notification.create` outside `src/lib/notifications/`; the sites not moved yet are pinned
+  in `scripts/notify-baseline.json` (only shrinks, `-- --shrink`), and the ones that stay by
+  decision (newsletter dispatch, security notices, operator alerts, admin test mails) sit in its
+  `allowed` block with their reason.
+  A site moves behind the router **without changing its copy** by passing the mail it already
+  builds: `notifyEvent(…, { email: { subject, html, category } })` — sealed in the job payload
+  (`src/lib/notifications/sealedEmail.ts`), sent as-is by `emailJob.ts`; then `-- --shrink`.
+- **Channel matrix and quiet hours are router rules** ([`docs/notification-channels.md`](docs/notification-channels.md),
+  #1714): `notificationPrefs.channels` (sparse per-category `inApp`/`email`/`push` overrides) and
+  `notificationPrefs.quietHours` are read only through `src/lib/notificationChannelPrefs.ts` and
+  enforced only in `channelAllowed()` / `notifyEvent()`. An off channel is recorded `SKIPPED
+  channel_off` (never filtered out), only push can be added, and e-mail/push/chat inside a quiet
+  window or an org blackout day are HELD as a keyed `notification.deferred` job that re-reads the
+  preferences — never dropped. `account_security` ignores all of it. `PUT /api/profile` must keep
+  carrying the two keys over (it replaces the column).
 - **Pasif ilk temaslar** (`docs/dormant-first-contacts.md`, #1499/#1508): biri pipeline'ın
   ilk aşamasında takılı, kendisine yazılmış ve 14 gündür yanıt vermemişse "pasif" sayılır —
   mentor kuyruğundan ve hatırlatma e-postasından düşer, `dormantSince` damgalanır ve
@@ -503,6 +534,11 @@ marketing names redirect there, and their apex now serves **mail only**.
   (`capabilityGate.ts`, the per-vertical product gate). `platform.*` is held only by the per-world
   super admin (`isSuperAdmin`) — there is no SUPER_ADMIN tier — and no tenant permission crosses an
   org, the super admin's included. A PROGRAM_ADMIN with no grant gets nothing.
+  A route never compares `session.user.role` to `'ADMIN'` and never defines a private
+  `requireAdmin()`: `npm run check:authz` (CI, #1571) fails on a new one, and the sites not
+  moved yet are pinned in `scripts/authz-baseline.json`, which only shrinks (`-- --shrink`).
+  A route that also serves MENTOR/COMPANY/… uses `requireRoleOrPermission(roles, permission)`;
+  a single admin branch inside a shared route asks `can(actor, permission, subject, session)`.
 - **Goal sharing scope is a route-level rule** (`src/lib/goalVisibilityRule.ts`, #1858): `Goal.visibility`
   is `PAIR` (default; the pair and the programme's admins — exactly who could read every goal
   before the column existed) | `PROGRAM` | `PRIVATE` (author only, `createdById`, falling back to
@@ -751,7 +787,10 @@ marketing names redirect there, and their apex now serves **mail only**.
   failed-login bucket would lock the runner's IP out), never an endpoint that mails, calls
   an AI provider or increments a counter, and **never a rate-limited route** (all VUs share
   the runner's single IP, so `/api/public/stats` at 60/10min and `/api/v1/*` at 120/min are
-  excluded — a 429 in a report means the mix drifted, not that the app is sick). Keep the
+  excluded — a 429 in a report means the mix drifted, not that the app is sick). The ONE
+  exception is the demo-only pair `k6/authenticated-load.js` / `k6/sse-load.js` (#1612): they
+  sign in and write, and `k6/lib/demoTarget.js` makes `setup()` refuse every host but the demo —
+  any new authenticated scenario imports that guard. Keep the
   files **`.js`**: a `.ts` under `k6/` is pulled into `npx tsc --noEmit` and fails on the
   missing `k6/*` module types — deliberately left un-excluded in `tsconfig.json` so the rule
   enforces itself. The `.js` files themselves are linted and typechecked by **nothing**

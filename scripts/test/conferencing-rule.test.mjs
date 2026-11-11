@@ -61,7 +61,7 @@ test('conferencingPolicyOf reads unknown values as BUILTIN', () => {
 });
 
 test('a pasted link always wins, under every policy', () => {
-  for (const policy of ['BUILTIN', 'PREFER_PERSONAL', 'REQUIRE_EXTERNAL']) {
+  for (const policy of ['BUILTIN', 'PREFER_PERSONAL', 'REQUIRE_EXTERNAL', 'GENERATE_PROVIDER']) {
     assert.deepEqual(
       chooseMeetingLinkSource({ policy, pasted: ' https://zoom.us/j/9 ', personal: 'https://meet.google.com/p' }),
       { source: 'pasted', link: 'https://zoom.us/j/9' },
@@ -94,6 +94,24 @@ test('REQUIRE_EXTERNAL uses the saved room, and refuses rather than mint a room 
   assert.deepEqual(chooseMeetingLinkSource({ policy: 'REQUIRE_EXTERNAL', pasted: '', personal: '  ' }), {
     refused: 'external_link_required',
   });
+});
+
+test('GENERATE_PROVIDER asks for a generated room only when one can be made, and never refuses (#2009)', () => {
+  // Pasted still wins; an available provider comes next — ahead of a saved room.
+  assert.deepEqual(chooseMeetingLinkSource({ policy: 'GENERATE_PROVIDER', pasted: 'https://zoom.us/j/1', providerAvailable: true }), {
+    source: 'pasted',
+    link: 'https://zoom.us/j/1',
+  });
+  assert.deepEqual(chooseMeetingLinkSource({ policy: 'GENERATE_PROVIDER', personal: 'https://zoom.us/my/r', providerAvailable: true }), { source: 'provider' });
+  // No connected calendar (or Google failed): exactly PREFER_PERSONAL — the saved room, else ours.
+  assert.deepEqual(chooseMeetingLinkSource({ policy: 'GENERATE_PROVIDER', personal: 'https://zoom.us/my/r' }), {
+    source: 'personal',
+    link: 'https://zoom.us/my/r',
+  });
+  assert.deepEqual(chooseMeetingLinkSource({ policy: 'GENERATE_PROVIDER', providerAvailable: false }), { source: 'builtin' });
+  // The flag means nothing under any other policy.
+  assert.deepEqual(chooseMeetingLinkSource({ policy: 'BUILTIN', providerAvailable: true }), { source: 'builtin' });
+  assert.equal(conferencingPolicyOf('GENERATE_PROVIDER'), 'GENERATE_PROVIDER');
 });
 
 test('meetingProviderName names the common providers and falls back to the hostname', () => {

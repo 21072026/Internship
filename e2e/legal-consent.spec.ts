@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dismissConsentBanner } from './helpers/consent';
 
 // This spec needs the banner to actually show, so start from a clean slate
 // (the global default pre-seeds consent for every other spec).
@@ -28,7 +29,7 @@ test('registration requires accepting privacy and terms', async ({ page }) => {
   await page.context().clearCookies();
   await page.goto('/auth/register');
   // Dismiss the cookie banner so it doesn't overlap the form.
-  await page.getByRole('button', { name: /Necessary only/i }).click().catch(() => {});
+  await dismissConsentBanner(page);
 
   await page.fill('input[name="fullName"]', 'Consent Tester');
   await page.fill('input[name="email"]', `consent-${Date.now()}@example.com`);

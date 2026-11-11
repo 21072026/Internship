@@ -2,9 +2,8 @@ import { NextResponse } from 'next/server';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { parseRequired } from '@/lib/mentorScreeningRule';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
+import { locales } from '@/i18n/config';
 import { prisma } from '@/lib/prisma';
 import { enforceRateLimit, rateLimit } from '@/lib/rateLimit';
 import { notify } from '@/lib/notify';
@@ -13,6 +12,7 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { requireCapability } from '@/lib/capabilityGate';
+import { requirePermission } from '@/lib/authz';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { capSkills } from '@/lib/skills';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
@@ -20,6 +20,7 @@ import { sendMentorApplicationReceivedEmail } from '@/services/emailService';
 import { resolveRequestVertical } from '@/i18n/server';
 import { verticalHasCapability } from '@/lib/verticals';
 import type { Prisma } from '@prisma/client';
+import { checkPublicAnswers, publicAnswersSchema } from '@/lib/forms/publicAnswers';
 
 // Public "become a mentor" applications (#904): anyone can apply without an
 // account; an admin reviews the queue (#905/#933). Deliberately does NOT
@@ -39,13 +40,15 @@ const applySchema = z.object({
   motivation: z.string().max(TEXT_LIMITS.mentorApplicationMotivation).optional(),
   capacity: z.number().int().min(1).optional(),
   linkedinUrl: z.string().url().max(TEXT_LIMITS.profileUrl).optional().or(z.literal('')),
-  locale: z.enum(['en', 'tr', 'de']).optional(),
+  locale: z.enum(locales).optional(),
   // Anti-spam (mirrors the public-contact form, src/app/api/public-contact/[userId]/route.ts):
   // a hidden honeypot field bots fill in, and a client-stamped render time to
   // reject implausibly fast submits. Accept any value so a filled trap still
   // passes validation — a 400 here would tip bots off.
   website: z.string().max(500).optional(),
   renderedAt: z.number().int().optional(),
+  // Answers to the org's REGISTRATION questions for mentors (#1803), staged on the row.
+  formAnswers: publicAnswersSchema,
 });
 
 // POST — public application to become a mentor.
@@ -113,6 +116,12 @@ export async function POST(request: Request) {
   // filed in the default org (the INTERNSHIP world — see the account check
   // above). The admin list below and the fan-out read this same org.
   const orgId = await defaultOrgId();
+  // The org's own questions (#1803): no account exists yet, so the checked
+  // answers are staged on the application and carried over when one does.
+  const answers = await checkPublicAnswers(orgId, 'MENTOR', parsed.data.formAnswers);
+  if (!answers.ok) {
+    return NextResponse.json({ error: 'invalid_answers', code: 'invalid_answers', errors: answers.errors }, { status: 400 });
+  }
   await prisma.mentorApplication.create({
     data: {
       orgId,
@@ -128,6 +137,7 @@ export async function POST(request: Request) {
       linkedinUrl: linkedinUrl || null,
       locale: locale || null,
       consentAt: new Date(),
+      ...(answers.staged.length > 0 ? { formAnswers: answers.staged as Prisma.InputJsonValue } : {}),
     },
   });
 
@@ -156,9 +166,9 @@ export async function POST(request: Request) {
 
 // GET — admin-only list of applications, filterable by status, paginated.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('user.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // Mentor recruiting is a mentorship module (the nav tags it so): a vertical
   // without it gets the same refusal a direct URL would on a write.
   const capGate = await requireCapability(session.user.orgId, 'mentorship');

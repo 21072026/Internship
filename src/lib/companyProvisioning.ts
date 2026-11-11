@@ -288,3 +288,89 @@ export async function convertInquiryToCompanyAccount(
     emailSent,
   };
 }
+
+// ── Self-signup (#1865, docs/company-verification.md) ───────────────────────
+//
+// The same shape as a conversion, without the enquiry: Company + the login's
+// invitation in ONE transaction, mail and audit after the commit. The company
+// is created PENDING and reaches no candidate until it is verified. Nobody
+// invited it, so the invitation's sender is null rather than a stand-in admin.
+//
+// The refusals are for the ROUTE to swallow: the public form answers the same
+// "check your inbox" for a taken address as for a new one, so an anonymous
+// caller cannot probe who already has an account.
+
+export interface SelfSignupInput {
+  orgId: string;
+  companyName: string;
+  contactFullName: string;
+  email: string;
+  /** The work address's domain, already checked against the free-mail list. */
+  domain: string;
+  industry?: string | null;
+  size?: string | null;
+  locale?: string | null;
+  request?: Request;
+}
+
+export type SelfSignupResult =
+  | { ok: true; companyId: string; companyName: string; invitationId: string; emailSent: boolean }
+  | { ok: false; code: 'email_taken' | 'invitation_pending' };
+
+export async function provisionSelfSignupCompany(input: SelfSignupInput): Promise<SelfSignupResult> {
+  const email = input.email.trim().toLowerCase();
+  // Asked in the world of the org being provisioned (#2590), like a conversion.
+  if (await findUserInWorld(email, await worldOfOrg(input.orgId), { id: true })) return { ok: false, code: 'email_taken' };
+  const pending = await prisma.invitationToken.findFirst({
+    where: { email, ...(await invitationOrgWhere(input.orgId)), used: false, revokedAt: null, expiresAt: { gt: new Date() } },
+    select: { id: true },
+  });
+  if (pending) return { ok: false, code: 'invitation_pending' };
+
+  const invitationInput: CreateInvitationInput = {
+    actor: { id: null, email: null },
+    orgId: input.orgId,
+    email,
+    label: input.contactFullName.trim() || null,
+    role: 'COMPANY',
+    locale: input.locale ?? null,
+    request: input.request,
+  };
+
+  const created = await prisma.$transaction(async (tx) => {
+    const company = await tx.company.create({
+      data: {
+        orgId: input.orgId,
+        name: input.companyName.trim(),
+        contactEmail: email,
+        industry: input.industry?.trim() || null,
+        size: input.size?.trim() || null,
+        // The gate (src/lib/companyVerification.ts): invisible to every
+        // candidate until an admin or a domain proof clears it.
+        verificationStatus: 'PENDING',
+        signupDomain: input.domain,
+      },
+      select: { id: true, name: true },
+    });
+    const persisted = await persistInvitation({ ...invitationInput, companyId: company.id }, tx);
+    return { companyId: company.id, companyName: company.name, invitationId: persisted.invitationId, token: persisted.token, tokenLocale: persisted.locale };
+  });
+
+  await logInvitationCreated({ ...invitationInput, companyId: created.companyId }, created.invitationId);
+  const { emailSent } = await deliverInvitation(invitationInput, {
+    invitationId: created.invitationId,
+    token: created.token,
+    locale: created.tokenLocale,
+  });
+  await logActivity({
+    orgId: input.orgId,
+    action: 'company.signup.self',
+    actorId: null,
+    actorEmail: null,
+    targetType: 'company',
+    targetId: created.companyId,
+    detail: emailSent ? `${created.companyName} · @${input.domain}` : `${created.companyName} · @${input.domain} · invitation email failed to send`,
+    request: input.request,
+  });
+  return { ok: true, companyId: created.companyId, companyName: created.companyName, invitationId: created.invitationId, emailSent };
+}

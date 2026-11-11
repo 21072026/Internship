@@ -30,17 +30,20 @@ export function CohortComparison() {
   const t = useT();
   const c = t.analytics;
   const [rows, setRows] = useState<CohortRow[] | null>(null);
+  // Relations with no programme (#1652), so the rows add up to the tenant total.
+  const [unassigned, setUnassigned] = useState<CohortRow | null>(null);
   // What this tenant calls the stage the "hired" column counted (#1882). Only
   // used when the tenant actually renamed it — otherwise the translated
   // built-in heading stays, so a default-catalogue tenant sees no change.
   const [outcomeName, setOutcomeName] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/admin/analytics/cohorts')
+    fetch('/api/admin/analytics/programs')
       .then(async (r) => {
         if (!r.ok) return;
         const body = await r.json();
-        setRows(body.cohorts ?? []);
+        setRows(body.programs ?? []);
+        setUnassigned(body.unassigned && body.unassigned.total > 0 ? body.unassigned : null);
         setOutcomeName(body.finishedLabelIsCustom ? (body.finishedLabel as string) || null : null);
       })
       .catch(() => {});
@@ -73,7 +76,7 @@ export function CohortComparison() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50 dark:divide-gray-800">
-              {rows.map((r) => (
+              {[...rows, ...(unassigned ? [{ ...unassigned, name: c.unassignedProgram }] : [])].map((r) => (
                 <tr key={r.id}>
                   <td className="py-2 pr-3 font-medium text-gray-900 dark:text-gray-100">
                     {r.name}{r.term ? <span className="text-xs text-gray-400 ml-1">({r.term})</span> : null}

@@ -33,6 +33,12 @@ export const TEXT_LIMITS = {
   companyDescription: 2000,
   /** Company.address — VARCHAR(191) */
   companyAddress: 191,
+  /** Company.about — @db.Text, the employer page's copy (#1867) */
+  companyAbout: 2000,
+  /** Company.websiteUrl — VARCHAR(191) */
+  companyWebsiteUrl: 191,
+  /** Company.rejectionReason — @db.Text; the same number as VERIFICATION_REASON_MAX (src/lib/companyVerification.ts, #1865) */
+  companyVerificationReason: 1000,
   /** Company.industry — VARCHAR(191) */
   companyIndustry: 191,
   /** Company.logoUrl — VARCHAR(191) */
@@ -102,6 +108,8 @@ export const TEXT_LIMITS = {
   companyInterestNote: 1000,
   /** Message.body (conversation + support reply) — @db.Text */
   messageBody: 5000,
+  /** MessageAttachment.altText — VarChar(500): what an attached image shows (#2864). */
+  imageAltText: 500,
   /** SupportMessage.body — @db.Text */
   supportMessageBody: 5000,
   /** User.bio — @db.Text */
@@ -116,6 +124,8 @@ export const TEXT_LIMITS = {
   mentorScreeningReference: 191,
   /** MentorApplication.referenceOutcome — @db.Text (#1807) */
   mentorScreeningReferenceOutcome: 2000,
+  /** MentorOffer.message — @db.Text (#1809) */
+  mentorOfferMessage: 1000,
   /** WeeklyReport.summary — @db.Text */
   weeklyReportSummary: 10000,
   /** WeeklyReport.blockers — @db.Text */
@@ -193,6 +203,8 @@ export const TEXT_LIMITS = {
   agendaItemText: 2000,
   /** SessionNote.body — @db.Text (#1847); the pair's shared minutes */
   sessionNoteBody: 10000,
+  /** Kudo.reason — @db.Text (#1868); a written thank-you */
+  kudoReason: 1000,
   /** AgendaTemplate.summary — a locale entry of the JSON column (#1843) */
   agendaSummary: 500,
   /** AgendaTemplateItem.guidance — @db.Text (#1843) */
@@ -227,6 +239,13 @@ export const TEXT_LIMITS = {
    * room for spacing without letting a paragraph reach the parser.
    */
   orgBrandPalette: 200,
+  /** Organization.welcomeTitle — VARCHAR(120) (#1664): a headline, not a paragraph */
+  orgWelcomeTitle: 120,
+  /**
+   * Organization.welcomeBody — @db.Text (#1664). A few short paragraphs on a
+   * public page; 2 000 is generous for that and far inside the TEXT column.
+   */
+  orgWelcomeBody: 2000,
   /** Organization.ssoIssuer — VARCHAR(191) */
   orgSsoIssuer: 191,
   /**
@@ -247,6 +266,12 @@ export const TEXT_LIMITS = {
   userEmail: 191,
   /** User.phone — VARCHAR(191); capped like `companyContactPhone` (a number, not a paste) */
   userPhone: 40,
+  /**
+   * User.benchedReason — VARCHAR(500): the admin's reason for a bench (#1778).
+   * A line, not a paste: kept under the 250-character bar every single-line
+   * reason here meets (e2e/text-limits-columns.unit.spec.ts).
+   */
+  benchReason: 240,
 } as const;
 
 export type TextLimitKey = keyof typeof TEXT_LIMITS;

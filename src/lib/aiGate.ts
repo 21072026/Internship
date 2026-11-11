@@ -52,6 +52,7 @@ import { findCachedArtifact, type ArtifactVisibility } from '@/lib/ai/artifacts'
 //   content_draft         operator     admin authoring from a brief            required
 //   company_enrich        operator     admin company record from pasted text   required
 //   requisition_fit       operator     the company's applicant board (#2042)  required
+//   profile_digest        operator     a person's cached match themes (#2038)  required
 //
 // `participant` is the free core: the gate never runs the entitlement query
 // on that path (no extra read, no paywall — the denial copy stays the neutral

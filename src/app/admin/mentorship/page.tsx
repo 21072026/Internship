@@ -1,5 +1,6 @@
 'use client';
 import { useT, useLocale } from "@/i18n/client";
+import { UNASSIGNED_PROGRAM } from '@/lib/programFilterRule';
 import { mentorshipAssignmentError } from "@/lib/mentorshipAssignmentError";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { parseGateBody, type GateInfo } from "@/lib/upgradePrompt";
@@ -13,6 +14,10 @@ import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { MentorshipRequestQueue } from '@/components/admin/MentorshipRequestQueue';
+import { GroupRelationDialog } from '@/components/admin/GroupRelationDialog';
+import { RelationParticipantsPanel } from '@/components/admin/RelationParticipantsPanel';
+import { PersonPicker, type PickedPerson } from '@/components/ui/PersonPicker';
+import { PICKER_ROLES } from '@/lib/userPickerQuery';
 import { Select } from '@/components/ui/Select';
 import { SavedViews } from '@/components/SavedViews';
 import { SkeletonRows } from '@/components/ui/Skeleton';
@@ -24,6 +29,11 @@ import type { MentorAvailability } from '@/lib/mentorAvailability';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { RelationLifecycleControls } from '@/components/RelationLifecycleControls';
 import { effectiveLifecycleState } from '@/lib/relationLifecycle';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
+
+const STATUS_FILTERS = ['ALL', 'ACTIVE', 'PAUSED', 'COMPLETED', 'ENDED'] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
+import { CADENCE_PRESETS_WEEKS, DURATION_PRESETS_MONTHS, cadenceLabel, monthsLabel } from '@/lib/relationSchedule';
 import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 // The assign dropdowns show a name plus capacity/availability (#942), so this
@@ -52,6 +62,10 @@ interface MentorshipRelation {
   // finished and a row that renders both as "Completed" is the falsehood these
   // workflows exist to remove.
   lifecycleState?: string | null;
+  // ONE_TO_ONE | GROUP | … (#1804); a GROUP shows its members below the card.
+  relationType?: string;
+  // Why it ended (#1774): the badge's tooltip.
+  endReasonCode?: string | null;
   mentor: { id: string; fullName: string; email: string };
   mentee: { id: string; fullName: string; email: string };
   company: { id: string; name: string } | null;
@@ -90,19 +104,27 @@ export default function MentorshipPage() {
   const [relations, setRelations] = useState<MentorshipRelation[]>([]);
   const [total, setTotal] = useState(0);
   const [mentors, setMentors] = useState<User[]>([]);
-  const [mentees, setMentees] = useState<User[]>([]);
+  // The mentee field searches the server (#1437); this is the one it picked.
+  const [pickedMentee, setPickedMentee] = useState<PickedPerson | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
+  // The org's programmes (#1626): the list filter and the assignment field.
+  // Empty when the caller may not list them (a PROGRAM_ADMIN today) — then
+  // neither control renders, and the server scope still decides what is seen.
+  const [programs, setPrograms] = useState<{ id: string; name: string }[]>([]);
+  const [programFilter, setProgramFilter] = useState('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const assignDialogRef = useModalFocus<HTMLDivElement>(showForm, () => setShowForm(false));
-  const [formData, setFormData] = useState({ mentorId: '', menteeId: '', companyId: '' });
+  const [formData, setFormData] = useState({ mentorId: '', menteeId: '', companyId: '', cohortId: '', durationMonths: '', cadenceWeeks: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
   // The plan's active-mentorship cap renders the upgrade prompt (#1745).
   const [formGate, setFormGate] = useState<GateInfo | null>(null);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'COMPLETED'>('ALL');
+  // ACTIVE is the coarse live status (paused included); COMPLETED, PAUSED and
+  // ENDED are lifecycle states (#1774) — a completion is never an early end.
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [agreementFilter, setAgreementFilter] = useState<AgreementStatus | ''>('');
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 20;
@@ -134,9 +156,11 @@ export default function MentorshipPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (statusFilter !== 'ALL') params.set('status', statusFilter);
+      if (statusFilter === 'ACTIVE') params.set('status', 'ACTIVE');
+      else if (statusFilter !== 'ALL') params.set('lifecycle', statusFilter);
       if (search) params.set('search', search);
       if (agreementFilter) params.set('agreement', agreementFilter);
+      if (programFilter) params.set('program', programFilter);
       params.set('page', String(page));
       params.set('pageSize', String(PAGE_SIZE));
       const res = await fetch(`/api/mentorship?${params}`);
@@ -148,24 +172,29 @@ export default function MentorshipPage() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, search, agreementFilter, page, t.mentorships.loadFailed]);
+  }, [statusFilter, search, agreementFilter, programFilter, page, t.mentorships.loadFailed]);
 
   const fetchPickers = async () => {
     try {
       const [usersRes, companiesRes] = await Promise.all([
-        fetch('/api/users?view=mentorAvailability'),
+        // The mentor pickers only (#1437): admins and mentors, a handful of
+        // rows. The mentee side is a server-side search — this used to download
+        // every user in the tenant, COMPANY/SOURCE included, to fill both lists.
+        fetch('/api/users?view=mentorAvailability&roles=ADMIN,MENTOR'),
         // `all=1`: the company picker offers every company, not one page (#2437).
         fetch('/api/companies?all=1'),
       ]);
+      // The programmes (#1626) — best effort: a caller who may not list them
+      // simply gets no programme controls.
+      fetch('/api/cohorts')
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => setPrograms(Array.isArray(d?.cohorts) ? d.cohorts.map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })) : []))
+        .catch(() => setPrograms([]));
       const [usersData, companiesData] = await Promise.all([usersRes.json(), companiesRes.json()]);
-      // Both pickers hold the same people (#1141): admins mentor, and a mentor
-      // can be mentored in turn. `sortForPicker` keeps each list's usual role
-      // first, so the common case still reads as "pick a mentor / pick a mentee".
-      const participants = (usersData.users || []).filter((u: User) =>
-        ['ADMIN', 'MENTOR', 'MENTEE'].includes(u.role)
-      );
-      setMentors(sortForPicker(participants, 'MENTOR'));
-      setMentees(sortForPicker(participants, 'MENTEE'));
+      // Admins mentor too (#1141); `sortForPicker` keeps mentors first. The
+      // mentee picker offers admins and mentors as well (a mentor can be
+      // mentored in turn), with mentees first — see the PersonPicker below.
+      setMentors(sortForPicker(usersData.users || [], 'MENTOR'));
       setCompanies(companiesData.companies || []);
     } catch {
       setError(t.mentorships.loadFailed);
@@ -207,7 +236,7 @@ export default function MentorshipPage() {
   // Any filter change returns to the first page.
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter, agreementFilter]);
+  }, [search, statusFilter, agreementFilter, programFilter]);
 
   const handleCreate = async () => {
     if (!formData.mentorId || !formData.menteeId) {
@@ -226,6 +255,10 @@ export default function MentorshipPage() {
           mentorId: formData.mentorId,
           menteeId: formData.menteeId,
           companyId: formData.companyId || undefined,
+          cohortId: formData.cohortId || undefined,
+          // The agreed duration and rhythm (#1784); left out → the org's defaults.
+          ...(formData.durationMonths ? { durationMonths: Number(formData.durationMonths) } : {}),
+          ...(formData.cadenceWeeks ? { expectedMeetingIntervalWeeks: Number(formData.cadenceWeeks) } : {}),
         }),
       });
       if (!res.ok) {
@@ -250,7 +283,8 @@ export default function MentorshipPage() {
       }
       await fetchRelations();
       setShowForm(false);
-      setFormData({ mentorId: '', menteeId: '', companyId: '' });
+      setFormData({ mentorId: '', menteeId: '', companyId: '', cohortId: '', durationMonths: '', cadenceWeeks: '' });
+      setPickedMentee(null);
     } catch {
       setFormError(t.mentorships.assignFailed);
     } finally {
@@ -369,9 +403,6 @@ export default function MentorshipPage() {
       value: m.id,
       label: `${m.fullName}${roleSuffix(m.role, 'MENTOR')} · ${formatMentorAvailability(m, t.mentorAvailability)}`,
     }));
-  const menteeOptions = mentees
-    .filter((m) => m.id !== formData.mentorId)
-    .map((m) => ({ value: m.id, label: m.fullName + roleSuffix(m.role, 'MENTEE') }));
   const companyOptions = [
     { value: '', label: t.mentorships.noCompany },
     ...companies.map((c) => ({ value: c.id, label: c.name })),
@@ -413,6 +444,8 @@ export default function MentorshipPage() {
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.mentorships.title}</h1>
           <p className="text-gray-500 mt-1">{t.mentorships.subtitle}</p>
         </div>
+        <div className="flex flex-wrap gap-2">
+        <GroupRelationDialog mentors={mentors} onCreated={fetchRelations} />
         <Button
           onClick={() => {
             // A stale refusal from the last attempt must not greet the next one.
@@ -425,6 +458,7 @@ export default function MentorshipPage() {
           <Plus className="h-4 w-4" />
           {t.mentorships.assign}
         </Button>
+        </div>
       </div>
 
       {error && (
@@ -483,8 +517,7 @@ export default function MentorshipPage() {
                       {
                         relationId: assignBlocked.relationId,
                         menteeId: formData.menteeId || null,
-                        menteeName:
-                          mentees.find((m) => m.id === formData.menteeId)?.fullName ?? t.mentorships.mentee,
+                        menteeName: pickedMentee?.fullName ?? t.mentorships.mentee,
                         // Unknown from a 409 body — see TransferTarget. The
                         // picker therefore cannot pre-drop the current mentor,
                         // and the server answers `same_mentor` if they are picked.
@@ -510,13 +543,21 @@ export default function MentorshipPage() {
                 value={formData.mentorId}
                 onChange={(e) => setFormData((p) => ({ ...p, mentorId: e.target.value }))}
               />
-              <Select
+              <PersonPicker
                 label={t.mentorships.mentee}
+                testId="assign-mentee"
                 required
-                options={menteeOptions}
+                roles={PICKER_ROLES}
+                preferRole="MENTEE"
                 placeholder={t.mentorships.selectMentee}
                 value={formData.menteeId}
-                onChange={(e) => setFormData((p) => ({ ...p, menteeId: e.target.value }))}
+                selectedName={pickedMentee?.fullName}
+                excludeIds={formData.mentorId ? [formData.mentorId] : []}
+                describe={(m) => roleSuffix(m.role, 'MENTEE')}
+                onChange={(m) => {
+                  setPickedMentee(m);
+                  setFormData((p) => ({ ...p, menteeId: m?.id ?? '' }));
+                }}
               />
               <Select
                 label={t.mentorships.companyOptional}
@@ -524,6 +565,37 @@ export default function MentorshipPage() {
                 value={formData.companyId}
                 onChange={(e) => setFormData((p) => ({ ...p, companyId: e.target.value }))}
               />
+              {programs.length > 0 && (
+                <Select
+                  label={t.mentorships.programOptional}
+                  options={[{ value: '', label: t.mentorships.noProgram }, ...programs.map((c) => ({ value: c.id, label: c.name }))]}
+                  value={formData.cohortId}
+                  onChange={(e) => setFormData((p) => ({ ...p, cohortId: e.target.value }))}
+                  data-testid="assign-program"
+                />
+              )}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Select
+                  label={t.relationSchedule.duration}
+                  options={[
+                    { value: '', label: t.relationSchedule.useDefault },
+                    ...DURATION_PRESETS_MONTHS.map((n) => ({ value: String(n), label: monthsLabel(t.relationSchedule, n) })),
+                  ]}
+                  value={formData.durationMonths}
+                  onChange={(e) => setFormData((p) => ({ ...p, durationMonths: e.target.value }))}
+                  data-testid="assign-duration"
+                />
+                <Select
+                  label={t.relationSchedule.cadence}
+                  options={[
+                    { value: '', label: t.relationSchedule.useDefault },
+                    ...CADENCE_PRESETS_WEEKS.map((n) => ({ value: String(n), label: cadenceLabel(t.relationSchedule, n) })),
+                  ]}
+                  value={formData.cadenceWeeks}
+                  onChange={(e) => setFormData((p) => ({ ...p, cadenceWeeks: e.target.value }))}
+                  data-testid="assign-cadence"
+                />
+              </div>
             </div>
             <div className="flex justify-end gap-3 mt-6">
               <Button variant="outline" onClick={() => setShowForm(false)}>{t.common.cancel}</Button>
@@ -624,15 +696,24 @@ export default function MentorshipPage() {
 
       {/* Search + status filter */}
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        {(['ALL', 'ACTIVE', 'COMPLETED'] as const).map((sf) => (
+        {STATUS_FILTERS.map((sf) => (
           <button
             key={sf}
+            data-testid={`mentorship-filter-${sf.toLowerCase()}`}
             onClick={() => setStatusFilter(sf)}
             className={`min-h-11 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               statusFilter === sf ? 'bg-blue-600 text-white' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
             }`}
           >
-            {sf === 'ALL' ? t.usersAdmin.all : sf === 'ACTIVE' ? t.mentorships.active : t.mentorships.completed}
+            {sf === 'ALL'
+              ? t.usersAdmin.all
+              : sf === 'ACTIVE'
+                ? t.mentorships.active
+                : sf === 'COMPLETED'
+                  ? t.mentorships.completed
+                  : sf === 'PAUSED'
+                    ? t.relationLifecycle.states.PAUSED
+                    : t.relationLifecycle.endedFilter}
           </button>
         ))}
         {/* Filter by agreement status (#1792). A report, not a gate. */}
@@ -646,6 +727,21 @@ export default function MentorshipPage() {
           <option value="">{t.agreementCard.column}: {t.agreementCard.filterAll}</option>
           {AGREEMENT_STATUSES.map((a) => <option key={a} value={a}>{t.agreementCard.status[a]}</option>)}
         </select>
+        {/* Filter by programme (#1626). Only the org's own programmes are offered;
+            the server ANDs it with the caller's scope, so it can only narrow. */}
+        {programs.length > 0 && (
+          <select
+            aria-label={t.mentorships.programFilter}
+            data-testid="program-filter"
+            value={programFilter}
+            onChange={(e) => setProgramFilter(e.target.value)}
+            className="min-h-11 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm"
+          >
+            <option value="">{t.mentorships.programFilter}: {t.mentorships.allPrograms}</option>
+            {programs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value={UNASSIGNED_PROGRAM}>{t.mentorships.noProgram}</option>
+          </select>
+        )}
         <input
           type="search"
           data-testid="mentorship-search"
@@ -662,7 +758,7 @@ export default function MentorshipPage() {
           current={{ search, statusFilter }}
           onApply={(f) => {
             setSearch(f.search || '');
-            setStatusFilter((f.statusFilter as 'ALL' | 'ACTIVE' | 'COMPLETED') || 'ALL');
+            setStatusFilter(STATUS_FILTERS.find((sf) => sf === f.statusFilter) ?? 'ALL');
           }}
         />
       </div>
@@ -690,23 +786,17 @@ export default function MentorshipPage() {
                       <PersonHoverCard personId={rel.mentor.id} name={rel.mentor.fullName} role="MENTOR" />
                     </span>
                     <StatusBadge status={rel.status} />
+                    {rel.relationType === 'GROUP' && (
+                      <Badge variant="info" data-testid={`relation-type-${rel.id}`}>{t.relationGroups.chip}</Badge>
+                    )}
                     <RelationHealthBadge health={health[rel.id]} testId={`relation-health-${rel.id}`} />
                     {/* A pairing the mentee left did not finish. Rendering both
                         as plain "Completed" is the record #1801/#2289 exist to
                         stop being written. */}
-                    {(effectiveLifecycleState(rel) === 'PAUSED' || effectiveLifecycleState(rel) === 'ENDED_EARLY') && (
-                      <Badge variant="warning" data-testid="lifecycle-state-badge">
-                        {t.relationLifecycle.states[effectiveLifecycleState(rel)]}
-                      </Badge>
-                    )}
-                    {(rel.lifecycleState === 'ENDED_REASSIGNED' ||
-                      rel.lifecycleState === 'ENDED_REMATCHED') && (
-                      <Badge variant="warning" data-testid="lifecycle-badge">
-                        {rel.lifecycleState === 'ENDED_REASSIGNED'
-                          ? t.changeMentor.badgeReassigned
-                          : t.rematchRequest.badge}
-                      </Badge>
-                    )}
+                    {/* Where the pairing stands (#1774): paused, completed or
+                        ended early / re-matched / reassigned / won back — the
+                        end reason on hover. A live pair already says "Active". */}
+                    <RelationLifecycleBadge relation={rel} hideLive />
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
                     {rel.company && (
@@ -720,6 +810,12 @@ export default function MentorshipPage() {
                       </Badge>
                     )}
                   </div>
+                  {rel.relationType === 'GROUP' && (
+                    <RelationParticipantsPanel
+                      relationId={rel.id}
+                      active={rel.status === 'ACTIVE'}
+                    />
+                  )}
                 </div>
                 <div className="flex flex-col gap-2 w-full sm:w-auto sm:items-end sm:shrink-0">
                   <Select

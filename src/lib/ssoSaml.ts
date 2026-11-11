@@ -7,7 +7,8 @@
 // signed assertion posted back (ACS route). Identity → user mapping is handled by
 // provisionSsoUser (src/lib/ssoProvisioning.ts).
 
-import { SAML, ValidateInResponseTo } from '@node-saml/node-saml';
+import { SAML, ValidateInResponseTo, type CacheProvider } from '@node-saml/node-saml';
+import { idpCertificates } from '@/lib/ssoCertificates';
 
 function appBase(): string {
   return (
@@ -68,24 +69,34 @@ function escapeXml(value: string): string {
 // AssertionConsumerService, or a strict validator rejects the document.
 //
 // Single Logout (#1952) adds two things, in the schema's order (KeyDescriptor,
-// then SingleLogoutService, both before NameIDFormat): our signing certificate,
-// which the IdP verifies our LogoutRequest/LogoutResponse with, and the SLO
-// endpoint in both bindings we accept. AuthnRequestsSigned stays false — the
-// AuthnRequest is unchanged; only the logout messages are signed.
-export function spMetadataXml(slug: string, signingCertificatePem?: string | null): string {
+// then SingleLogoutService, both before NameIDFormat): our certificate and the
+// SLO endpoint in both bindings we accept. Since #1955 the same certificate is
+// published twice — `use="signing"` (our LogoutRequest/Response and, when the
+// tenant switched it on, our AuthnRequest) and `use="encryption"` (what an IdP
+// encrypts assertions to). AuthnRequestsSigned follows the tenant's switch.
+export function spMetadataXml(
+  slug: string,
+  signingCertificatePem?: string | null,
+  opts: { authnRequestsSigned?: boolean } = {},
+): string {
   const entityId = escapeXml(spEntityId(slug));
   const acs = escapeXml(acsUrl(slug));
   const slo = escapeXml(sloUrl(slug));
   const certBody = (signingCertificatePem ?? '').replace(/-----[A-Z ]+-----/g, '').replace(/\s+/g, '');
+  const keyInfo = `<ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:X509Data><ds:X509Certificate>${escapeXml(certBody)}</ds:X509Certificate></ds:X509Data></ds:KeyInfo>`;
   const keyDescriptor = certBody
     ? `
     <md:KeyDescriptor use="signing">
-      <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:X509Data><ds:X509Certificate>${escapeXml(certBody)}</ds:X509Certificate></ds:X509Data></ds:KeyInfo>
+      ${keyInfo}
+    </md:KeyDescriptor>
+    <md:KeyDescriptor use="encryption">
+      ${keyInfo}
     </md:KeyDescriptor>`
     : '';
+  const signed = opts.authnRequestsSigned ? 'true' : 'false';
   return `<?xml version="1.0" encoding="UTF-8"?>
 <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="${entityId}">
-  <md:SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol" AuthnRequestsSigned="false" WantAssertionsSigned="true">${keyDescriptor}
+  <md:SPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol" AuthnRequestsSigned="${signed}" WantAssertionsSigned="true">${keyDescriptor}
     <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="${slo}"/>
     <md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="${slo}"/>
     <md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
@@ -101,27 +112,61 @@ export interface OrgSamlConfig {
   ssoCertificate: string | null;
 }
 
+export { idpCertificates } from '@/lib/ssoCertificates';
+
+const idpCertOption = (stored: string | null | undefined): string | string[] => {
+  const certs = idpCertificates(stored);
+  return certs.length > 1 ? certs : (certs[0] ?? '');
+};
+
+/** What the sign-in exchange may use beyond the stored IdP config (#1955). */
+export interface SamlLoginOptions {
+  /** Our SP private key: decrypts encrypted assertions; signs AuthnRequests when `signRequests`. */
+  spPrivateKeyPem?: string | null;
+  signRequests?: boolean;
+  /** The request store (SamlRequestStore); without one nothing is correlated. */
+  requestStore?: CacheProvider | null;
+  /** `always` instead of `ifPresent` — refuses IdP-initiated sign-in. */
+  requireInResponseTo?: boolean;
+}
+
 // Build a node-saml instance for a tenant. Assumes the config is complete
-// (callers gate on isSsoActive first).
-export function samlForOrg(slug: string, cfg: OrgSamlConfig): SAML {
+// (callers gate on isSsoActive first). With no options this is exactly the
+// pre-#1955 instance — unsigned requests, no decryption, no correlation — which
+// is what "Test connection" still uses; the login and ACS routes build theirs
+// through samlLoginForOrg() (src/lib/ssoSamlLogin.ts).
+export function samlForOrg(slug: string, cfg: OrgSamlConfig, opts: SamlLoginOptions = {}): SAML {
+  const key = opts.spPrivateKeyPem || undefined;
   return new SAML({
     callbackUrl: acsUrl(slug),
     entryPoint: cfg.ssoEntryPoint ?? '',
     issuer: spEntityId(slug),
-    idpCert: cfg.ssoCertificate ?? '',
+    idpCert: idpCertOption(cfg.ssoCertificate),
     audience: spEntityId(slug),
     // Most IdPs (incl. mocksaml, Okta default) sign the assertion, not always the
     // whole response — require the assertion signature, which is what protects
-    // the identity claims.
+    // the identity claims. It stays the anchor whatever else is switched on.
     wantAssertionsSigned: true,
     wantAuthnResponseSigned: false,
     disableRequestedAuthnContext: true,
     acceptedClockSkewMs: 5000,
     identifierFormat: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
-    // We run stateless (serverless) with no shared AuthnRequest-id cache, so we
-    // don't validate InResponseTo — this also allows IdP-initiated login. The
-    // assertion signature + audience/recipient checks remain the security anchor.
-    validateInResponseTo: ValidateInResponseTo.never,
+    // Signed AuthnRequests (#1955): only when the tenant switched them on — an
+    // IdP that does not yet trust our certificate refuses a signed request.
+    ...(key && opts.signRequests ? { privateKey: key, signatureAlgorithm: 'sha256' as const } : {}),
+    // Encrypted assertions: receive-side only, safe whenever the key exists.
+    ...(key ? { decryptionPvk: key } : {}),
+    // InResponseTo (#1955): with a request store, a response that names a
+    // request must name a live, unused one of ours (`ifPresent`, so IdP-
+    // initiated sign-in still works); `always` is the tenant's opt-in. Without
+    // a store — "Test connection" — nothing is correlated, as before.
+    ...(opts.requestStore
+      ? {
+          cacheProvider: opts.requestStore,
+          validateInResponseTo: opts.requireInResponseTo ? ValidateInResponseTo.always : ValidateInResponseTo.ifPresent,
+          requestIdExpirationPeriodMs: 10 * 60 * 1000,
+        }
+      : { validateInResponseTo: ValidateInResponseTo.never }),
   });
 }
 
@@ -142,7 +187,7 @@ export function samlLogoutForOrg(slug: string, cfg: OrgSamlLogoutConfig, private
     logoutUrl: cfg.ssoLogoutUrl ?? undefined,
     logoutCallbackUrl: sloUrl(slug),
     issuer: spEntityId(slug),
-    idpCert: cfg.ssoCertificate ?? '',
+    idpCert: idpCertOption(cfg.ssoCertificate),
     audience: spEntityId(slug),
     privateKey: privateKeyPem,
     signatureAlgorithm: 'sha256',

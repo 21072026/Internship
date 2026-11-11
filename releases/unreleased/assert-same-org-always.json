@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Security:** `assertSameOrg()` (`src/lib/orgScope.ts`) now guards whatever `MT_ENFORCE_ISOLATION` says — it used to be a no-op with the flag off, which is every deployment. It takes the default org's id and reads NULL on either side as the default org's (the `sameTenant()` rule), so not-yet-backfilled rows and org-less sessions are not locked out (#3588)."
+}

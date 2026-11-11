@@ -20,6 +20,11 @@ import { shellCapabilities } from '@/lib/shellCapabilities';
 import { COMPLIANCE_RELATION_SELECT, INTERNED_WHERE, complianceRows } from '@/lib/weeklyReportComplianceQuery';
 import { cohortComparison, mentorWorkload, sourceConversion, type AnalyticsScope } from '@/lib/analyticsReports';
 import { slaCompliance } from '@/lib/slaQueue';
+import { loadInvitationFunnel } from '@/lib/invitationFunnel';
+import { funnelRate } from '@/lib/invitationFunnelRule';
+import { announcementReach } from '@/lib/announcementReach';
+import { announcementSentAt } from '@/lib/announcementReachRule';
+import { resolveAnnouncementText } from '@/lib/announcementText';
 import type { Prisma } from '@prisma/client';
 import { attributeLabel } from '@/lib/orgAttributesRule';
 import { attributedLeadWhere } from '@/lib/leadAttribution';
@@ -45,6 +50,13 @@ export interface ReportContext {
    * unsliced report, never to an error.
    */
   segment?: { by: string; value?: string | null } | null;
+  /**
+   * The analytics screen's programme filter (#1652), for the workbook exported
+   * from a filtered view: every loader that counts RELATIONS narrows to it, so
+   * the file says what the screen says. Absent for subscriptions and the
+   * registry route — their numbers do not change.
+   */
+  relation?: Prisma.MentorshipRelationWhereInput;
 }
 
 /** What a loader receives: the context plus, when sliced, the subject-person filter. */
@@ -61,11 +73,16 @@ async function scopeOf(ctx: LoaderContext): Promise<AnalyticsScope> {
     tenant: await orgWhere(ctx.orgId),
     locale: ctx.locale,
     ...(ctx.person ? { person: ctx.person } : {}),
+    ...(ctx.relation ? { relation: ctx.relation } : {}),
   };
 }
 
 /** A relation filter for a sliced loader: its mentee is in the segment. */
-const menteeIn = (ctx: LoaderContext): Prisma.MentorshipRelationWhereInput => (ctx.person ? { mentee: { is: ctx.person } } : {});
+const menteeIn = (ctx: LoaderContext): Prisma.MentorshipRelationWhereInput => ({
+  ...(ctx.person ? { mentee: { is: ctx.person } } : {}),
+  // The programme filter (#1652) narrows the same relations.
+  ...(ctx.relation ?? {}),
+});
 
 /** A report the caller cannot have (capability, entitlement) — the route answers with this status. */
 export class ReportUnavailable extends Error {
@@ -95,7 +112,7 @@ const LOADERS: Record<string, (ctx: LoaderContext) => Promise<Row[]>> = {
       prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: withinTenant(menteeIn(ctx), tenant), _count: { _all: true } }),
       prisma.mentorshipRelation.count({ where: withinTenant({ startDate: { gte: weekAgo }, ...menteeIn(ctx) }, tenant) }),
       prisma.interactionLog.count({
-        where: { date: { gte: weekAgo }, ...interactionInTenant(tenant), ...(ctx.person ? { AND: [{ relation: { is: menteeIn(ctx) } }] } : {}) },
+        where: { date: { gte: weekAgo }, ...interactionInTenant(tenant), ...(ctx.person || ctx.relation ? { AND: [{ relation: { is: menteeIn(ctx) } }] } : {}) },
       }),
     ]);
     // "Reached the final stage" is the tenant's own finished set (#1882).
@@ -165,7 +182,8 @@ const LOADERS: Record<string, (ctx: LoaderContext) => Promise<Row[]>> = {
     const { tenant } = await scopeOf(ctx);
     const groups = await prisma.placement.groupBy({
       by: ['companyId'],
-      where: withinTenant(ctx.person ? { mentee: { is: ctx.person } } : {}, tenant),
+      // A reversed placement (#1765) is a hire that was undone.
+      where: withinTenant({ reversedAt: null, ...(ctx.person ? { mentee: { is: ctx.person } } : {}) }, tenant),
       _count: { _all: true, valueMinor: true },
     });
     const ids = groups.map((g) => g.companyId).filter((id): id is string => !!id);
@@ -180,7 +198,7 @@ const LOADERS: Record<string, (ctx: LoaderContext) => Promise<Row[]>> = {
   async 'weekly-report-compliance'(ctx) {
     const { tenant } = await scopeOf(ctx);
     const relations = await prisma.mentorshipRelation.findMany({
-      where: withinTenant(ctx.person ? { AND: [INTERNED_WHERE, menteeIn(ctx)] } : INTERNED_WHERE, tenant),
+      where: withinTenant(ctx.person || ctx.relation ? { AND: [INTERNED_WHERE, menteeIn(ctx)] } : INTERNED_WHERE, tenant),
       select: COMPLIANCE_RELATION_SELECT,
       orderBy: [{ mentee: { fullName: 'asc' } }, { id: 'asc' }],
       take: MAX_ROWS,
@@ -196,7 +214,48 @@ const LOADERS: Record<string, (ctx: LoaderContext) => Promise<Row[]>> = {
       rate: compliance.rate === null ? null : Math.round(compliance.rate * 100),
     }));
   },
+
+  async 'invitation-funnel'(ctx) {
+    const { tenant } = await scopeOf(ctx);
+    const roles = getDictionary(ctx.locale).reports.role as Record<string, string>;
+    return (await loadInvitationFunnel(tenant)).byRole.map((r) => ({
+      role: roles[r.role] ?? r.role,
+      sent: r.sent,
+      opened: r.opened,
+      registered: r.registered,
+      activated: r.activated,
+      activation: funnelRate(r.activated, r.sent),
+    }));
+  },
+
+  async 'announcement-reach'(ctx) {
+    const { tenant } = await scopeOf(ctx);
+    const rows = await prisma.announcement.findMany({
+      where: withinTenant({ status: 'SENT' as const }, tenant),
+      orderBy: { createdAt: 'desc' },
+      take: ANNOUNCEMENT_REACH_ROWS,
+      select: { id: true, status: true, scheduledAt: true, createdAt: true, text: true, translations: true, targeted: true, recipientCount: true, emailedCount: true },
+    });
+    const reach = await announcementReach(rows, ctx.orgId);
+    const A = getDictionary(ctx.locale).reports.announcementReach;
+    return rows.map((a) => {
+      const text = resolveAnnouncementText(a, ctx.locale).replace(/\s+/g, ' ').trim();
+      const r = reach.get(a.id);
+      return {
+        sentAt: announcementSentAt(a).toISOString().slice(0, 10),
+        announcement: text.length > 80 ? `${text.slice(0, 79)}…` : text,
+        audience: a.targeted ? A.targeted : A.everyone,
+        recipients: a.recipientCount,
+        emailed: a.emailedCount,
+        read: r?.read ?? null,
+        readRate: r?.rate ?? null,
+      };
+    });
+  },
 };
+
+/** The announcement history a report carries: the most recent ones, not the archive. */
+const ANNOUNCEMENT_REACH_ROWS = 200;
 
 export interface LoadedSegment {
   /** The attribute's key and its label in the reader's language. */

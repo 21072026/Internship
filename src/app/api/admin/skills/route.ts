@@ -1,22 +1,20 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { createSkill, listSkills } from '@/lib/skillCuration';
+import { requirePermission } from '@/lib/authz';
 
 // The org's canonical skill vocabulary (#1817). ADMIN only, checked here; the
 // org always comes from the session.
 const STATUSES = new Set(['ACTIVE', 'RETIRED', 'MERGED', 'ALL']);
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // The skill vocabulary feeds mentor and requisition matching — an internship module.
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
@@ -43,10 +41,9 @@ const createSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // The skill vocabulary feeds mentor and requisition matching — an internship module.
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;

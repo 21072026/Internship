@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { withApiKey } from '@/lib/apiKey';
+import { companyOnly, withApiKey } from '@/lib/apiKey';
 import { apiNotFound, apiOk } from '@/lib/api/v1';
 import { requisitionSelect, serializeRequisition } from '@/lib/api/v1Resources';
 
@@ -9,10 +9,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const { id } = await params;
   return withApiKey(request, 'hiring:read', async (key) => {
     const row = await prisma.requisition.findFirst({
-      where: { AND: [{ id }, { orgId: key.orgId }] },
+      where: { AND: [{ id }, { orgId: key.orgId }, companyOnly(key)] },
       select: requisitionSelect,
     });
     if (!row) return apiNotFound();
     return apiOk(serializeRequisition(row));
-  });
+  }, { companyScoped: true });
 }

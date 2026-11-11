@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createUser } from '@/lib/userCreate';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
     }
 
     const password = await bcrypt.hash(randomBytes(18).toString('hex'), 10);
-    const mentee = await prisma.user.create({
+    const mentee = await createUser(prisma, {
       data: {
         email: email.toLowerCase(),
         fullName,
@@ -108,7 +109,7 @@ export async function POST(request: Request) {
         password,
       },
       select: { id: true, fullName: true, email: true, orgId: true, skills: true },
-    });
+    }, { source: 'source', actorId: session.user.id });
     // Dual-write the canonical twin of the skill list (#1818).
     await syncUserSkills(mentee.id, mentee.orgId, Array.isArray(mentee.skills) ? (mentee.skills as string[]) : []);
     await logActivity({ action: 'source.mentee_added', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'user', targetId: mentee.id });

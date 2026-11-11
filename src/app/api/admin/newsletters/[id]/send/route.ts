@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
@@ -22,6 +20,7 @@ import {
 } from '@/lib/newsletterDispatch';
 import { mailQueueNotice } from '@/lib/mailOutbox';
 import { resolveOrgId } from '@/lib/orgScope';
+import { requirePermission } from '@/lib/authz';
 
 const schema = z.object({
   // 'now' sends the issue to its audience. 'test' sends one copy to the admin
@@ -49,8 +48,9 @@ const schema = z.object({
  * making the admin remember to come back.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
 
@@ -66,7 +66,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     where: withinTenant({ id }, await tenantWhere(session)),
     select: {
       id: true, status: true, audience: true, content: true,
-      image: { select: { contentType: true, data: true } },
+      image: { select: { contentType: true, data: true, altText: true } },
     },
   });
   if (!issue) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -91,6 +91,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       role: me.role,
       preferredLanguage: me.preferredLanguage,
       imageSrc: issue.image ? `cid:${NEWSLETTER_IMAGE_CID}` : null,
+      imageAlt: issue.image?.altText ?? null,
       // No unsubscribe link: it is a test copy, not a subscription, and a
       // working unsubscribe here would let an admin silence themselves by
       // reflex while checking their own formatting.

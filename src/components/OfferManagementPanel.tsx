@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { OfferWizardModal, type OfferDraftFields } from '@/components/OfferWizardModal';
-import { Plus, History, ChevronDown, ChevronUp, ArrowRight } from 'lucide-react';
+import { Plus, History, ChevronDown, ChevronUp, ArrowRight, FileText } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { formatDate } from '@/lib/relativeTime';
@@ -258,6 +258,15 @@ export function OfferManagementPanel({
                       {t.offers.actions.withdraw}
                     </Button>
                   )}
+                  {/* The letter (#1857): ADMIN reads a draft as a live preview. */}
+                  <a
+                    href={`/api/offers/${o.id}/letter`}
+                    className="inline-flex items-center rounded-lg px-2 py-1 text-sm text-blue-600 hover:underline"
+                    data-testid={`offer-letter-download-${o.id}`}
+                  >
+                    <FileText className="h-4 w-4 mr-1" />
+                    {t.offers.letter.download}
+                  </a>
                   <Button size="sm" variant="ghost" onClick={() => toggleHistory(o.id)}>
                     <History className="h-4 w-4 mr-1" />
                     {historyOpenId === o.id ? t.offers.actions.hideHistory : t.offers.actions.viewHistory}

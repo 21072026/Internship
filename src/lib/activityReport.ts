@@ -1,3 +1,4 @@
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { menteeRelationWhere } from '@/lib/menteeRelation';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
@@ -42,13 +43,17 @@ function daysBetween(from: Date, to: Date): number {
   return Math.floor((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000));
 }
 
-// Build the activity summary for one mentee over [since, now].
+// Build the activity summary for one mentee over [since, until]. `until`
+// defaults to now; the mentee's own report passes a date range's end (#1909).
+// "Goals open" is a current count, not a period one, so it ignores both.
 export async function getMenteeActivity(
   mentee: { id: string; fullName: string; lastLoginAt: Date | null; lastSeenAt: Date | null },
   relationIds: string[],
-  since: Date
+  since: Date,
+  until?: Date
 ): Promise<MenteeActivity> {
   const now = new Date();
+  const period = { gte: since, lte: until ?? now };
   const relFilter = { relationId: { in: relationIds.length ? relationIds : ['__none__'] } };
 
   const [
@@ -63,27 +68,27 @@ export async function getMenteeActivity(
     messagesReceived,
   ] = await Promise.all([
     prisma.pageView.aggregate({
-      where: { userId: mentee.id, createdAt: { gte: since } },
+      where: { userId: mentee.id, createdAt: period },
       _sum: { durationSec: true },
       _count: true,
     }),
     prisma.pageView.groupBy({
       by: ['path'],
-      where: { userId: mentee.id, createdAt: { gte: since } },
+      where: { userId: mentee.id, createdAt: period },
       _count: { path: true },
       _sum: { durationSec: true },
       orderBy: { _count: { path: 'desc' } },
       take: 5,
     }),
-    prisma.goal.count({ where: { ...relFilter, completedAt: { gte: since } } }),
+    prisma.goal.count({ where: { ...relFilter, completedAt: period } }),
     prisma.goal.count({ where: { ...relFilter, status: 'OPEN' } }),
-    prisma.interactionLog.count({ where: { ...relFilter, date: { gte: since } } }),
-    prisma.meeting.count({ where: { ...relFilter, createdAt: { gte: since } } }),
+    prisma.interactionLog.count({ where: { ...relFilter, date: period } }),
+    prisma.meeting.count({ where: { ...relFilter, createdAt: period } }),
     // Real moves only (#2264): an old no-op row would be reported to the
     // mentee as a stage they moved through.
-    prisma.statusChange.count({ where: { ...relFilter, ...REAL_STAGE_MOVE, createdAt: { gte: since } } }),
-    prisma.message.count({ where: { ...relFilter, senderId: mentee.id, createdAt: { gte: since } } }),
-    prisma.message.count({ where: { ...relFilter, senderId: { not: mentee.id }, createdAt: { gte: since } } }),
+    prisma.statusChange.count({ where: { ...relFilter, ...REAL_STAGE_MOVE, createdAt: period } }),
+    prisma.message.count({ where: { ...relFilter, senderId: mentee.id, createdAt: period } }),
+    prisma.message.count({ where: { ...relFilter, senderId: { not: mentee.id }, createdAt: period } }),
   ]);
 
   const topPages: PageStat[] = topPagesRaw.map((r) => ({
@@ -136,9 +141,14 @@ export async function getMentorMenteeActivity(mentorId: string, since: Date): Pr
 // tenant's mentees, and this report used to mail one product's mentee names to
 // the other product's admins. Pass `tenantWhere(session)` from a request, or
 // `orgWhere(orgId)` from a cron (both in src/lib/tenantFilter.ts).
-export async function getSystemMenteeActivity(since: Date, tenant: TenantWhere): Promise<MenteeActivity[]> {
+export async function getSystemMenteeActivity(
+  since: Date,
+  tenant: TenantWhere,
+  // A PROGRAM_ADMIN's relations only (#1577); `{}` reads the whole tenant.
+  scope: Prisma.MentorshipRelationWhereInput = {},
+): Promise<MenteeActivity[]> {
   const relations = await prisma.mentorshipRelation.findMany({
-    where: withinTenant({}, tenant),
+    where: withinTenant<Prisma.MentorshipRelationWhereInput>(scope, tenant),
     select: {
       id: true,
       menteeId: true,
@@ -153,7 +163,7 @@ export async function getSystemMenteeActivity(since: Date, tenant: TenantWhere):
 // never a request parameter: a self-view that takes an id is an IDOR waiting to
 // happen. Scoped with `menteeRelationWhere` so the portal's archive rule holds
 // here too — a finished mentorship is still their record (#1408).
-export async function getOwnMenteeActivity(userId: string, since: Date): Promise<MenteeActivity | null> {
+export async function getOwnMenteeActivity(userId: string, since: Date, until?: Date): Promise<MenteeActivity | null> {
   const me = await prisma.user.findUnique({
     where: { id: userId },
     select: { id: true, fullName: true, lastLoginAt: true, lastSeenAt: true },
@@ -163,7 +173,7 @@ export async function getOwnMenteeActivity(userId: string, since: Date): Promise
     where: menteeRelationWhere(userId),
     select: { id: true },
   });
-  return getMenteeActivity(me, relations.map((r) => r.id), since);
+  return getMenteeActivity(me, relations.map((r) => r.id), since, until);
 }
 
 // Group relations by mentee (a mentee may have more than one), then summarize.

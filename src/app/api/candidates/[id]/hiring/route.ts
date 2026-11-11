@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { seatScopedActor } from '@/lib/companySeatGate';
 import type { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
@@ -28,20 +28,18 @@ import { interviewRequestActorWhere } from '@/lib/interviewRequests';
 // — another org, not the mentor's mentee, a company with no row on them — is a
 // 404, never an empty 200 that confirms the id. The company's free-text notes
 // go to ADMIN and to the company that wrote them, never to a mentor.
-const ROLES = ['ADMIN', 'MENTOR', 'COMPANY'];
-
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const gate = await requireRoleOrPermission(['MENTOR', 'COMPANY'], 'company.read', { request });
+    if ('error' in gate) return gate.error;
+    const { session, admin } = gate;
     const role = session.user.role;
-    if (!ROLES.includes(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const capGate = await requireCapability(session.user.orgId, 'placements');
     if (capGate) return capGate;
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
     const companyId = session.user.companyId ?? null;
-    const appScope = visibleApplicationsWhere({ id: session.user.id, role, orgId, companyId });
+    const appScope = visibleApplicationsWhere(await seatScopedActor({ id: session.user.id, role, orgId, companyId }));
     const irScope = interviewRequestActorWhere({ role, userId: session.user.id, orgId, companyId });
     if (!appScope || !irScope) return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
     const { id } = await params;
@@ -56,7 +54,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
       const interestScope: Prisma.CompanyInterestWhereInput =
         role === 'COMPANY' ? { companyId: companyId! } : { company: { orgId } };
-      const withNotes = role === 'ADMIN' || role === 'COMPANY';
+      const withNotes = admin || role === 'COMPANY';
 
       const [applications, interests, interviewRequests] = await Promise.all([
         prisma.application.findMany({

@@ -1,19 +1,17 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { logActivity } from '@/lib/activity';
 import { resolveOrgId } from '@/lib/orgScope';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
-import { planLimits, isOrgPlan } from '@/lib/orgPlans';
 import { findPossibleDuplicates } from '@/lib/duplicateDetection';
 import { createInvitation, discardInvitation, invitationOrgWhere } from '@/lib/inviteCreate';
 import { worldOfOrg, worldUserWhere } from '@/lib/userWorld';
 import { locales } from '@/i18n/config';
 import { mailQueueNotice } from '@/lib/mailOutbox';
 import { bulkInvitationLane, fanOutWidth, mailPolicy } from '@/lib/mailWorkerRule';
+import { requirePermission } from '@/lib/authz';
 import {
   BULK_INVITE_MAX_CHARS,
   BULK_INVITE_ROLES,
@@ -59,27 +57,13 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-/** Seats left under the tenant's plan; null = unlimited (or no org resolved). */
-async function seatsAvailable(orgId: string | null): Promise<number | null> {
-  if (!orgId) return null;
-  const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { plan: true } });
-  const plan = org && isOrgPlan(org.plan) ? org.plan : null;
-  if (!plan) return null;
-  const limit = planLimits(plan).maxUsers;
-  if (limit == null) return null;
-  const usage = await prisma.user.count({ where: { orgId } });
-  return Math.max(0, limit - usage);
-}
-
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     // Checked in the handler, not in middleware: inviting a whole roster is an
     // admin act, and a MENTOR (who may invite a single mentee) gets a 403 here.
-    if (session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    const gate = await requirePermission('org.invite', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     // Per user, not just per IP: several admins behind one office NAT should
     // not spend each other's budget, and one admin cannot loop the send.
@@ -142,7 +126,6 @@ export async function POST(request: Request) {
         defaultRole,
         existingUserEmails,
         pendingInviteEmails,
-        seatsAvailable: await seatsAvailable(orgId),
       });
 
       // Warn-only look-alike check (#841), same as the CSV importer.

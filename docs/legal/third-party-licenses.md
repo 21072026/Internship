@@ -2,7 +2,7 @@
 
 <!-- GENERATED FILE — do not edit by hand.
      Regenerate with: npm run check:licenses -- --write
-     license-inventory-signature: 074ade56d6b1fd92 -->
+     license-inventory-signature: 23d45d16dcdd6714 -->
 
 > Not legal advice. This is the machine-checked inventory a procurement
 > questionnaire asks for, and the input to a lawyer’s review — not a
@@ -22,7 +22,7 @@ package, by `npm run check:licenses` on every pull request.
 described by that build’s CycloneDX SBOM at `/sbom.cdx.json` (both read this
 one source, so the two documents cannot disagree).
 
-**Development dependencies** (368 packages) are not listed here and do not
+**Development dependencies** (370 packages) are not listed here and do not
 gate the build: nothing imports them at runtime, so no licence obligation
 attaches to them through this application. Worth stating plainly rather than
 waving through, though — the container image does physically contain them,
@@ -88,7 +88,7 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `@anthropic-ai/sdk` | 0.137.0 | `MIT` | ok |
 | `@babel/runtime` | 7.29.2 | `MIT` | ok |
 | `@emnapi/runtime` | 1.11.3 | `MIT` | ok |
-| `@hookform/resolvers` | 3.10.0 | `MIT` | ok |
+| `@hookform/resolvers` | 5.9.2 | `MIT` | ok |
 | `@img/colour` | 1.1.0 | `MIT` | ok |
 | `@img/sharp-darwin-arm64` | 0.35.5 | `Apache-2.0` | ok |
 | `@img/sharp-darwin-x64` | 0.35.5 | `Apache-2.0` | ok |
@@ -116,6 +116,7 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `@img/sharp-win32-arm64` | 0.35.5 | `Apache-2.0 AND LGPL-3.0-or-later` | ok · weak copyleft |
 | `@img/sharp-win32-ia32` | 0.35.5 | `Apache-2.0 AND LGPL-3.0-or-later` | ok · weak copyleft |
 | `@img/sharp-win32-x64` | 0.35.5 | `Apache-2.0 AND LGPL-3.0-or-later` | ok · weak copyleft |
+| `@microsoft/teams-js` | 2.59.0 | `MIT` | ok |
 | `@napi-rs/canvas` | 0.1.80 | `MIT` | ok |
 | `@napi-rs/canvas-android-arm64` | 0.1.80 | `MIT` | ok |
 | `@napi-rs/canvas-darwin-arm64` | 0.1.80 | `MIT` | ok |
@@ -127,30 +128,31 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `@napi-rs/canvas-linux-x64-gnu` | 0.1.80 | `MIT` | ok |
 | `@napi-rs/canvas-linux-x64-musl` | 0.1.80 | `MIT` | ok |
 | `@napi-rs/canvas-win32-x64-msvc` | 0.1.80 | `MIT` | ok |
-| `@next/env` | 15.5.28 | `MIT` | ok |
-| `@next/swc-darwin-arm64` | 15.5.28 | `MIT` | ok |
-| `@next/swc-darwin-x64` | 15.5.28 | `MIT` | ok |
-| `@next/swc-linux-arm64-gnu` | 15.5.28 | `MIT` | ok |
-| `@next/swc-linux-arm64-musl` | 15.5.28 | `MIT` | ok |
-| `@next/swc-linux-x64-gnu` | 15.5.28 | `MIT` | ok |
-| `@next/swc-linux-x64-musl` | 15.5.28 | `MIT` | ok |
-| `@next/swc-win32-arm64-msvc` | 15.5.28 | `MIT` | ok |
-| `@next/swc-win32-x64-msvc` | 15.5.28 | `MIT` | ok |
-| `@node-saml/node-saml` | 5.1.0 | `MIT` | ok |
+| `@next/env` | 15.5.29 | `MIT` | ok |
+| `@next/swc-darwin-arm64` | 15.5.29 | `MIT` | ok |
+| `@next/swc-darwin-x64` | 15.5.29 | `MIT` | ok |
+| `@next/swc-linux-arm64-gnu` | 15.5.29 | `MIT` | ok |
+| `@next/swc-linux-arm64-musl` | 15.5.29 | `MIT` | ok |
+| `@next/swc-linux-x64-gnu` | 15.5.29 | `MIT` | ok |
+| `@next/swc-linux-x64-musl` | 15.5.29 | `MIT` | ok |
+| `@next/swc-win32-arm64-msvc` | 15.5.29 | `MIT` | ok |
+| `@next/swc-win32-x64-msvc` | 15.5.29 | `MIT` | ok |
+| `@node-saml/node-saml` | 5.2.0 | `MIT` | ok |
 | `@opentelemetry/api` | 1.10.0 | `Apache-2.0` | ok |
 | `@panva/hkdf` | 1.2.1 | `MIT` | ok |
 | `@pdf-lib/standard-fonts` | 1.0.0 | `MIT` | ok |
 | `@pdf-lib/upng` | 1.0.1 | `MIT` | ok |
 | `@pinojs/redact` | 0.4.0 | `MIT` | ok |
 | `@prisma/client` | 5.22.0 | `Apache-2.0` | ok |
-| `@rrweb/packer` | 2.1.7 | `MIT` | ok |
-| `@rrweb/record` | 2.1.7 | `MIT` | ok |
-| `@rrweb/replay` | 2.1.7 | `MIT` | ok |
-| `@rrweb/types` | 2.1.7 | `MIT` | ok |
-| `@rrweb/utils` | 2.1.7 | `MIT` | ok |
+| `@rrweb/packer` | 2.2.0 | `MIT` | ok |
+| `@rrweb/record` | 2.2.0 | `MIT` | ok |
+| `@rrweb/replay` | 2.2.0 | `MIT` | ok |
+| `@rrweb/types` | 2.2.0 | `MIT` | ok |
+| `@rrweb/utils` | 2.2.0 | `MIT` | ok |
 | `@scarf/scarf` | 1.4.0 | `Apache-2.0` | ok |
 | `@selderee/plugin-htmlparser2` | 0.12.0 | `MIT` | ok |
 | `@stablelib/base64` | 1.0.1 | `MIT` | ok |
+| `@standard-schema/utils` | 0.3.0 | `MIT` | ok |
 | `@swc/helpers` | 0.5.15 | `Apache-2.0` | ok |
 | `@tsconfig/svelte` | 1.0.13 | `MIT` | ok |
 | `@types/css-font-loading-module` | 0.0.7 | `MIT` | ok |
@@ -165,9 +167,7 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `@types/d3-shape` | 3.1.7 | `MIT` | ok |
 | `@types/d3-time` | 3.0.0 | `MIT` | ok |
 | `@types/d3-time-format` | 2.1.0 | `MIT` | ok |
-| `@types/debug` | 4.1.13 | `MIT` | ok |
 | `@types/geojson` | 7946.0.16 | `MIT` | ok |
-| `@types/ms` | 2.1.0 | `MIT` | ok |
 | `@types/node` | 20.19.43 | `MIT` | ok |
 | `@types/qs` | 6.15.1 | `MIT` | ok |
 | `@types/xml-encryption` | 1.2.4 | `MIT` | ok |
@@ -181,7 +181,7 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `@xmldom/is-dom-node` | 1.0.1 | `MIT` | ok |
 | `@xmldom/xmldom` | 0.8.15, 0.9.12 | `MIT` | ok |
 | `@xstate/fsm` | 1.6.5 | `MIT` | ok |
-| `@zone-eu/mailsplit` | 5.4.16, 5.4.29 | `(MIT OR EUPL-1.1+)` | ok |
+| `@zone-eu/mailsplit` | 5.4.16, 5.4.30 | `(MIT OR EUPL-1.1+)` | ok |
 | `adler-32` | 1.3.1 | `Apache-2.0` | ok |
 | `agent-base` | 7.1.4 | `MIT` | ok |
 | `ansi-regex` | 5.0.1 | `MIT` | ok |
@@ -232,7 +232,7 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `duck` | 0.1.12 | `BSD` | ok · allowlisted |
 | `ecdsa-sig-formatter` | 1.0.11 | `Apache-2.0` | ok |
 | `emoji-regex` | 8.0.0 | `MIT` | ok |
-| `encoding-japanese` | 2.3.0, 2.4.0 | `MIT` | ok |
+| `encoding-japanese` | 2.3.0, 2.5.0 | `MIT` | ok |
 | `entities` | 4.5.0, 7.0.1 | `BSD-2-Clause` | ok |
 | `escape-html` | 1.0.3 | `MIT` | ok |
 | `fast-sha256` | 1.3.0 | `Unlicense` | ok |
@@ -261,7 +261,7 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `jws` | 4.0.1 | `MIT` | ok |
 | `leac` | 0.7.0 | `MIT` | ok |
 | `libbase64` | 1.3.0, 1.4.1 | `MIT` | ok |
-| `libmime` | 5.4.3, 5.6.3 | `MIT` | ok |
+| `libmime` | 5.4.3, 5.6.4 | `MIT` | ok |
 | `libqp` | 2.1.1, 3.0.1 | `MIT` | ok |
 | `lie` | 3.3.0 | `MIT` | ok |
 | `linkify-it` | 5.0.2 | `MIT` | ok |
@@ -269,7 +269,7 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `lop` | 0.4.2 | `BSD-2-Clause` | ok |
 | `lru-cache` | 6.0.0 | `ISC` | ok |
 | `lucide-react` | 0.577.0 | `ISC` | ok |
-| `mailparser` | 3.12.4 | `MIT` | ok |
+| `mailparser` | 3.14.2 | `MIT` | ok |
 | `mammoth` | 1.13.0 | `BSD-2-Clause` | ok |
 | `minimalistic-assert` | 1.0.1 | `ISC` | ok |
 | `minimist` | 1.2.8 | `MIT` | ok |
@@ -277,10 +277,10 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `modern-screenshot` | 4.7.0 | `MIT` | ok |
 | `ms` | 2.1.3 | `MIT` | ok |
 | `nanoid` | 3.3.18 | `MIT` | ok |
-| `next` | 15.5.28 | `MIT` | ok |
+| `next` | 15.5.29 | `MIT` | ok |
 | `next-auth` | 4.24.15 | `ISC` | ok |
 | `node-cron` | 3.0.3 | `ISC` | ok |
-| `nodemailer` | 10.2.1 | `MIT-0` | ok |
+| `nodemailer` | 10.3.1 | `MIT-0` | ok |
 | `oauth` | 0.9.15 | `MIT` | ok |
 | `object-hash` | 2.2.0 | `MIT` | ok |
 | `oidc-token-hash` | 5.2.0 | `MIT` | ok |
@@ -313,16 +313,16 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `quick-format-unescaped` | 4.0.4 | `MIT` | ok |
 | `react` | 19.3.1 | `MIT` | ok |
 | `react-dom` | 19.3.1 | `MIT` | ok |
-| `react-hook-form` | 7.90.0 | `MIT` | ok |
+| `react-hook-form` | 7.91.0 | `MIT` | ok |
 | `readable-stream` | 2.3.8 | `MIT` | ok |
 | `real-require` | 0.2.0, 1.0.0 | `MIT` | ok |
 | `require-directory` | 2.1.1 | `MIT` | ok |
 | `require-main-filename` | 2.0.0 | `ISC` | ok |
 | `robust-predicates` | 3.0.3 | `Unlicense` | ok |
-| `rrdom` | 2.1.7 | `MIT` | ok |
-| `rrweb` | 2.1.7 | `MIT` | ok |
-| `rrweb-player` | 2.1.7 | `MIT` | ok |
-| `rrweb-snapshot` | 2.1.7 | `MIT` | ok |
+| `rrdom` | 2.2.0 | `MIT` | ok |
+| `rrweb` | 2.2.0 | `MIT` | ok |
+| `rrweb-player` | 2.2.0 | `MIT` | ok |
+| `rrweb-snapshot` | 2.2.0 | `MIT` | ok |
 | `safe-buffer` | 5.1.2 | `MIT` | ok |
 | `safe-stable-stringify` | 2.5.0 | `MIT` | ok |
 | `safer-buffer` | 2.1.2 | `MIT` | ok |
@@ -345,7 +345,7 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `string-width` | 4.2.3 | `MIT` | ok |
 | `strip-ansi` | 6.0.1 | `MIT` | ok |
 | `styled-jsx` | 5.1.6 | `MIT` | ok |
-| `swagger-ui-dist` | 5.34.0 | `Apache-2.0` | ok |
+| `swagger-ui-dist` | 5.34.1 | `Apache-2.0` | ok |
 | `tailwind-merge` | 2.6.1 | `MIT` | ok |
 | `thread-stream` | 4.2.0 | `MIT` | ok |
 | `tlds` | 1.261.0 | `MIT` | ok |
@@ -362,16 +362,16 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `word` | 0.3.0 | `Apache-2.0` | ok |
 | `wrap-ansi` | 6.2.0 | `MIT` | ok |
 | `xlsx` | 0.18.5 | `Apache-2.0` | ok |
-| `xml-crypto` | 6.1.2 | `MIT` | ok |
+| `xml-crypto` | 6.4.0 | `MIT` | ok |
 | `xml-encryption` | 3.1.0 | `MIT` | ok |
 | `xml2js` | 0.6.2 | `MIT` | ok |
 | `xmlbuilder` | 10.1.1, 11.0.1, 15.1.1 | `MIT` | ok |
-| `xpath` | 0.0.32, 0.0.33, 0.0.34 | `MIT` | ok |
+| `xpath` | 0.0.32, 0.0.33, 0.0.35 | `MIT` | ok |
 | `y18n` | 4.0.3 | `ISC` | ok |
 | `yallist` | 4.0.0 | `ISC` | ok |
 | `yargs` | 15.4.1 | `MIT` | ok |
 | `yargs-parser` | 18.1.3 | `ISC` | ok |
-| `zod` | 3.25.76 | `MIT` | ok |
+| `zod` | 4.6.7 | `MIT` | ok |
 
 ## How this file is produced and kept honest
 

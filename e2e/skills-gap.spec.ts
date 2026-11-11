@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
-import { signInViaApi } from './helpers/auth';
+import { gotoSettled, signInAndSettle, signInViaApi } from './helpers/auth';
 
 // The skills-gap report (#1823): supply (what the org's mentees hold) against
 // demand (what HIRING requisitions require), and the role gate that keeps it
@@ -22,6 +22,7 @@ test.beforeAll(async () => {
   orgId = org.id;
   otherOrgId = other.id;
   await setOrgFeature(orgId, 'ADVANCED_ANALYTICS', true);
+  await setOrgFeature(orgId, 'REPORT_EXPORT', true);
   const skill = (key: string, label: string, inOrg = orgId) =>
     prisma.skill.create({ data: { orgId: inOrg, key, labelEn: label, labelTr: label, labelDe: label } });
   const [react, k8s, excel] = await Promise.all([skill('react', 'React'), skill('kubernetes', 'Kubernetes'), skill('excel', 'Excel')]);
@@ -113,6 +114,23 @@ test('skills-gap: every non-admin role is refused by the route', async ({ playwr
       await ctx.dispose();
     }
   }
+});
+
+test('skills-gap: the analytics card names the gap and the export carries every row', async ({ page }) => {
+  await signInAndSettle(page, emails.admin, PW, '/admin');
+  await gotoSettled(page, '/admin/analytics');
+  const card = page.getByTestId('skills-gap');
+  await expect(card).toBeVisible({ timeout: 20_000 });
+  await expect(card.getByTestId('skills-gap-under')).toContainText('Kubernetes');
+  await expect(card.getByTestId('skills-gap-unused')).toContainText('Excel');
+  await expect(card.getByTestId('skills-gap-coverage')).toContainText('0 of 1');
+
+  const res = await page.request.get('/api/admin/export/skills-gap');
+  expect(res.status()).toBe(200);
+  const { sheets } = await res.json();
+  expect(sheets).toHaveLength(1);
+  const names = sheets[0].rows.map((r: (string | number)[]) => r[0]).sort();
+  expect(names).toEqual(['Excel', 'Kubernetes', 'React']);
 });
 
 test('skills-gap: without ADVANCED_ANALYTICS the report is locked', async ({ playwright, baseURL }) => {

@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -10,6 +8,7 @@ import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
 import { ATTRIBUTE_IMPORT_MAX_CHARS, ATTRIBUTE_IMPORT_MAX_ROWS } from '@/lib/attributeImport';
 import { AttributeImportError, runAttributeImport } from '@/lib/attributeImportStore';
+import { requirePermission } from '@/lib/authz';
 
 // POST /api/admin/attributes/import — attribute values by CSV (#1920, part 2).
 // One row per person, matched on `email` within the admin's org; every other
@@ -36,8 +35,9 @@ export async function POST(request: Request) {
 }
 
 async function handlePost(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const limited = enforceRateLimit(request, 'attribute-import', { ...RATE_LIMIT, subject: session.user.id });
   if (limited) return limited;
   const declared = Number(request.headers.get('content-length'));

@@ -152,7 +152,7 @@ test('missing state is derived from requirement links and preserves both version
     await signIn(page, foreignEmail); await page.waitForURL((url) => url.pathname.startsWith('/portal'));
     // Another org's document is 404, not 403 — a 403 would confirm the id (#2542).
     expect((await page.request.get(`/api/documents/${linkedId}`)).status()).toBe(404);
-    expect((await page.request.get(`/api/admin/document-requirements?orgId=${org.id}`)).status()).toBe(401);
+    expect((await page.request.get(`/api/admin/document-requirements?orgId=${org.id}`)).status()).toBe(403);
 
     await page.goto('/portal');
     await expect(page.getByTestId('missing-documents-card')).toHaveCount(0);
@@ -219,7 +219,10 @@ test('portal warning and weekly reminders are missing-driven and deduped by UTC 
     expect(await prisma.documentRequirementReminder.count({ where: { requirementId: requirement.id, menteeId: mentee.id } })).toBe(3);
     expect(await prisma.notification.count({ where: { userId: { in: [mentee.id, mentor.id, optedOutMentor.id] }, type: { startsWith: 'missing_document.' } } })).toBe(3);
     expect(await prisma.notification.count({ where: { userId: { in: [inactiveMentor.id, completedMentor.id] }, type: { startsWith: 'missing_document.' } } })).toBe(0);
-    expect(await prisma.emailLog.count({ where: { to: { in: [menteeEmail, mentorEmail] }, category: 'document-reminder' } })).toBe(2);
+    // The mail leaves through the router's e-mail job (#1711), drained by the
+    // worker on its own schedule — polled, not read at once.
+    const docMails = () => prisma.emailLog.count({ where: { to: { in: [menteeEmail, mentorEmail] }, category: 'document-reminder' } });
+    await expect.poll(docMails, { timeout: 60_000 }).toBe(2);
     expect(await prisma.emailLog.count({ where: { to: optedOutMentorEmail, category: 'document-reminder' } })).toBe(0);
     expect((await prisma.emailLog.findFirstOrThrow({ where: { to: menteeEmail, category: 'document-reminder' } })).subject).toContain('Erinnerung an fehlendes Dokument');
     expect((await prisma.emailLog.findFirstOrThrow({ where: { to: mentorEmail, category: 'document-reminder' } })).subject).toContain('Eksik belge hatırlatması');
@@ -227,7 +230,7 @@ test('portal warning and weekly reminders are missing-driven and deduped by UTC 
     await prisma.documentRequirementReminder.updateMany({ where: { requirementId: requirement.id }, data: { weekStart: new Date('2020-01-06T00:00:00.000Z') } });
     expect((await page.request.get('/api/cron?job=missing-documents')).ok()).toBeTruthy();
     expect(await prisma.documentRequirementReminder.count({ where: { requirementId: requirement.id, menteeId: mentee.id } })).toBe(6);
-    expect(await prisma.emailLog.count({ where: { to: { in: [menteeEmail, mentorEmail] }, category: 'document-reminder' } })).toBe(4);
+    await expect.poll(docMails, { timeout: 60_000 }).toBe(4);
 
     await prisma.document.create({ data: { ownerId: mentee.id, uploaderId: mentee.id, requirementId: requirement.id, type: 'OTHER', title: 'Permit', filename: 'permit.pdf', contentType: 'application/pdf', size: 8, data: Buffer.from('%PDF-1.4') } });
     await prisma.documentRequirementReminder.updateMany({ where: { requirementId: requirement.id, weekStart: { gt: new Date('2021-01-01T00:00:00.000Z') } }, data: { weekStart: new Date('2020-01-13T00:00:00.000Z') } });

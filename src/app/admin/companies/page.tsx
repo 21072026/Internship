@@ -1,5 +1,7 @@
 'use client';
 import { useT } from "@/i18n/client";
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { parseGateBody, type GateInfo } from '@/lib/upgradePrompt';
 
 import { useCallback, useRef, useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -15,6 +17,8 @@ import { COMPANY_SORT_KEYS, DEFAULT_COMPANY_SORT, type CompanySort } from '@/lib
 import { CompanyForm } from '@/components/forms/CompanyForm';
 import { CompanyEntitlements } from '@/components/admin/CompanyEntitlements';
 import { NewMarketingLeadDialog } from '@/components/admin/NewMarketingLeadDialog';
+import { CompanyVerificationControl } from '@/components/admin/CompanyVerificationControl';
+import { COMPANY_VERIFICATION_STATUSES, isCompanyVerificationStatus } from '@/lib/companyVerification';
 import { useVertical } from '@/lib/verticalClient';
 import { marketingEmailAllowed, type PermissionRow } from '@/lib/contactPermissionRule';
 import { Building2, Plus, Pencil, Trash2, Search, Sparkles, UserPlus, Download } from 'lucide-react';
@@ -33,6 +37,9 @@ interface Company {
   _count: { mentorships: number };
   // The EMAIL row only (#2577), for the permission badge.
   contactPermissions?: PermissionRow[];
+  // Employer verification (#1865).
+  verificationStatus?: string;
+  rejectionReason?: string | null;
 }
 
 type PermissionFilter = 'all' | 'email';
@@ -72,6 +79,13 @@ export default function CompaniesPage() {
   // "From Klaviyo" (docs/integrations/klaviyo.md) — MARKETING only, server-side
   // like the other filters. Pre-set by the new-leads bell's ?source=klaviyo link.
   const [source, setSource] = useState<'all' | 'klaviyo'>('all');
+  // The verification queue filter (#1865), seeded from `?verification=` so the
+  // review list can be linked to.
+  const [verification, setVerification] = useState<string>('all');
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get('verification');
+    if (isCompanyVerificationStatus(fromUrl)) setVerification(fromUrl);
+  }, []);
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('source') === 'klaviyo') setSource('klaviyo');
   }, []);
@@ -95,6 +109,8 @@ export default function CompaniesPage() {
   const editForRef = useRef<string | null>(null);
   const [entitlingCompany, setEntitlingCompany] = useState<Company | null>(null);
   const [error, setError] = useState('');
+  // The plan's company band (#1752): the upgrade prompt above the list.
+  const [gate, setGate] = useState<GateInfo | null>(null);
   const [clCompanyId, setClCompanyId] = useState('');
   const [clEmail, setClEmail] = useState('');
   const [clName, setClName] = useState('');
@@ -176,6 +192,7 @@ export default function CompaniesPage() {
       if (permission === 'email') params.set('permission', 'email');
       if (owner === 'me') params.set('owner', 'me');
       if (source === 'klaviyo') params.set('source', 'klaviyo');
+      if (verification !== 'all') params.set('verification', verification);
       const res = await fetch(`/api/companies?${params}`);
       const data = await res.json();
       setCompanies(data.companies || []);
@@ -185,7 +202,7 @@ export default function CompaniesPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, sort, permission, owner, source, t]);
+  }, [page, search, sort, permission, owner, source, verification, t]);
 
   const fetchAllCompanies = useCallback(async () => {
     try {
@@ -235,8 +252,11 @@ export default function CompaniesPage() {
     });
     if (!res.ok) {
       const body = await res.json();
-      throw new Error(body.error || t.companiesPage.createFailed);
+      const wall = parseGateBody(body);
+      setGate(wall);
+      throw new Error(wall ? t.companiesPage.createFailed : body.error || t.companiesPage.createFailed);
     }
+    setGate(null);
     await Promise.all([fetchCompanies(), refreshPickerIfLoaded()]);
     setShowForm(false);
   };
@@ -362,6 +382,7 @@ export default function CompaniesPage() {
         />
       )}
 
+      {gate && <UpgradePrompt gate={gate} viewer="admin" className="mb-4" />}
       {error && (
         <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
           {error}
@@ -553,6 +574,23 @@ export default function CompaniesPage() {
           <option value="all">{t.companiesPage.permissionFilter.all}</option>
           <option value="email">{t.companiesPage.permissionFilter.email}</option>
         </select>
+        {/* The employer verification queue (#1865): ?verification=PENDING is
+            the admin's review list, linkable. Internship only — a MARKETING
+            account is not an employer. */}
+        {!isMarketing && (
+          <select
+            data-testid="companies-verification-filter"
+            aria-label={t.companiesPage.verification.filterLabel}
+            value={verification}
+            onChange={(e) => { setVerification(e.target.value); setPage(1); }}
+            className="px-3 py-2.5 border border-gray-300 rounded-lg text-sm"
+          >
+            <option value="all">{t.companiesPage.verification.all}</option>
+            {COMPANY_VERIFICATION_STATUSES.map((s) => (
+              <option key={s} value={s}>{t.companiesPage.verification.statuses[s]}</option>
+            ))}
+          </select>
+        )}
         {isMarketing && (
           <select
             data-testid="companies-owner-filter"
@@ -686,6 +724,15 @@ export default function CompaniesPage() {
                   </div>
                 </div>
               </CardHeader>
+
+              {!isMarketing && company.verificationStatus && (
+                <CompanyVerificationControl
+                  companyId={company.id}
+                  status={company.verificationStatus}
+                  reason={company.rejectionReason}
+                  onChanged={() => void fetchCompanies()}
+                />
+              )}
 
               {company.description && (
                 <p className="text-sm text-gray-600 mb-4 line-clamp-2">{company.description}</p>

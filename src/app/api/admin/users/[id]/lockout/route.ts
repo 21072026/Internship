@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { resolveOrgId } from '@/lib/orgScope';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
@@ -8,6 +6,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { clearLockoutForUser } from '@/lib/accountLockout';
+import { requirePermission } from '@/lib/authz';
 
 // DELETE — clear a user's brute-force lockout (#1541).
 //
@@ -19,10 +18,9 @@ import { clearLockoutForUser } from '@/lib/accountLockout';
 // POST /api/admin/users/[id]/reset-password): ADMIN only, tenant-scoped, never
 // a peer admin, never from an impersonation session, audited under the caller.
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('user.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   if (session.user.impersonatorId) {
     return NextResponse.json({ error: 'Cannot unlock an account while impersonating' }, { status: 400 });

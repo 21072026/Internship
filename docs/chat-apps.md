@@ -26,9 +26,148 @@ with `workspaceId` nulled and is pruned after 90 days (`chatDelivery` in the
 retention registry). The one writer is `src/lib/chat/workspaces.ts`
 (`recordChatInstall()` is what the OAuth callback will call). The e2e server
 runs with `CHAT_APPS_STUB_CLIENT=1` — a no-network platform stand-in no
-deployment sets. Still to come: the OAuth install (#1935), identity linking
-(#1937), the per-category channel matrix (#1707) and the delivery ledger table
-(#1960).
+deployment sets. The
+**delivery ledger** is readable too (#1960): "Recent deliveries" under each
+workspace (`GET /api/admin/integrations/chat/deliveries?workspaceId=…`, the last
+50 attempts — event key, recipient name, outcome, reason; never the card body or
+a token). A failed row offers **Retry** (`POST …/deliveries/[id]/retry`,
+`org.integrations.write`), which goes through the router
+(`retryChatDelivery()`), rebuilds the card from the person's in-app
+notification of that event and **appends** a row — the failed one is never
+rewritten, a second retry of it is `409 already_retried`, and a retry whose
+source notification is gone is `409 source_gone` rather than a guess. **Identity
+linking** exists too (#1937, `src/lib/chat/identity.ts`): "Find people" on a
+workspace (`POST /api/admin/integrations/chat/[id]/propose`) reads the Slack
+directory (`users.list`, `users:read.email`) and **proposes** a link for each
+member whose address matches a **verified, active** account of the same org — an
+unmatched or unverified address creates nothing, and no member ever becomes a
+user. The person confirms (or rejects) on their account page ("Chat apps" card,
+`GET/POST/DELETE /api/integrations/chat/identity`, own identities only; an ADMIN
+may remove any link of their org). Only a confirmed identity is delivered to;
+disconnecting stops chat and leaves e-mail and the bell untouched. For Teams the
+directory is read through Microsoft Graph (#3327), **only with
+`TEAMS_GRAPH_DIRECTORY_ENABLED=1`** — it needs the `User.Read.All` application
+permission on the app registration with the tenant admin's consent: a
+client-credentials token for the workspace's tenant
+(`<TEAMS_LOGIN_BASE>/<tenant>/oauth2/v2.0/token`), then `GET /v1.0/users`
+paged, a `@odata.nextLink` followed only on the Graph host. Enabled users with
+a `mail` are matched on that tenant-managed address (never the
+`userPrincipalName`). Without the flag Teams answers `not_supported`.
+Account erasure deletes the person's chat identities. Still to come: the
+per-category channel matrix (#1707).
+
+**Interactions** exist too (#1948): every Slack/Teams button reaches ONE public
+route, `POST /api/integrations/chat/[platform]/interactions` (Teams Universal
+Actions may also arrive on the bot's `…/teams/messages` endpoint, which hands
+them to the same function). Order, strictly: raw body read once → platform
+signature (`verifySlackSignature` / `verifyBotFrameworkRequest`) → replay window
+(±5 min; a Slack signature is accepted once) → rate limit per (workspace,
+member) → parse → dispatch — every refusal before the parse is the same opaque
+401. The dispatcher (`src/lib/chat/interactions/dispatch.ts`) re-derives the
+person on every click: an **enabled** workspace for `(platform, teamId)`, a
+`ChatIdentity` the person **confirmed**, an **active** user of the workspace's
+org. A payload's member id is only that lookup key; an unlinked or unconfirmed
+member gets an ephemeral "link your account first" reply and no handler runs.
+A new action is a `registerChatAction('<id>', handler)` in
+`src/lib/chat/interactions/actions.ts` — the handler gets the resolved user,
+runs under `runWithOrg`, asks the same rule the app's route asks and must be
+rerun-safe. Slack is acknowledged at once and answered on its `response_url`
+(hooks.slack.com only, SSRF-checked; `CHAT_RESPONSE_URL_ALLOW_INSECURE_STUB=1`
+is the e2e sink's switch and is never set on a deployment); Teams is answered
+in the invoke response. The rate limit and the replay memory use
+`src/lib/rateLimit.ts` — per process unless `RATE_LIMIT_REDIS_URL` is set.
+
+**Booking from chat** (#1951) is the first flow on it. A mentee's "my next
+meetings" reply carries a **Book** button; `meeting.book` answers with the next
+three times that work for both (`suggestedTimesFor()` — the app's own
+suggested-times answer, on the clicker's clock); `meeting.book.pick` opens a
+**MeetingRequest** through `createMeetingRequest()`; the mentor's chat card for
+that request carries **Accept/Decline**, which call `decideMeetingRequest()`.
+Those three services ARE the bodies of `GET /api/meetings/suggested-times`,
+`POST /api/meeting-requests` and `PATCH /api/meeting-requests/[id]`, moved
+out so the routes and the chat handlers share one write path each; a handler
+builds a Session-shaped view of the person the dispatcher verified (never a
+sign-in) and calls them as that person. Chat adds **no new right** (decided on
+#1951): a mentee requests, the mentor confirms — a pick never writes a Meeting.
+
+**Answering on the card** (#1949): the meeting-invite card (and a move, which
+rewrites it) carries Yes / I can't make it (`meeting.rsvp.yes|no`, value = the
+Meeting row's id), answered only by the row's invitee through
+`recordMeetingRsvp()` — the same write `POST /api/rsvp` does, guarded on the
+answer changing so a second click writes and notifies nothing. A company's
+interview request now tells the mentee's active mentor (`interview_request.received`,
+in-app + chat) with Approve / Decline (`interview_request.approve|decline`);
+both go through `decideInterviewRequest()`, the route's own body, and Decline
+first asks for one of `INTERVIEW_DECLINE_REASON_CODES` (`…decline.reason`, value
+`<id>|<code>`) because the company sees the reason. A decided card is replaced.
+
+**Check-ins in chat** (#1953): a survey campaign's invitation is also offered
+as a chat card (`survey.invited`, chat only, under the `surveys` opt-out group;
+the mail still goes). **Answer now** (`survey.start`, value = the invitation id)
+asks the questions one at a time as buttons — SELECT (≤ 11 options), BOOLEAN,
+SCALE, NPS — and an optional question gets Skip. Nothing is stored until the
+last click: the answers so far ride in the next button's value
+(`src/lib/chat/surveyFlow.ts`, `<invitationId>|<next>|<base64url JSON>`) and the
+last click hands the whole response to `submitSurveyResponse()` — the engine's
+own validation, invitation claim and ANONYMOUS rule (no invitation, respondent
+or relation stored), so a reminder after it is refused as `responded` and a
+replayed last click is "already answered". Only the invitation's own person can
+answer it. A survey with any free-text, number, date or multi-select question
+is not answered in chat: the card links to the survey page.
+
+**The pairing DM and the dormant check-in** (#1946): when a pair is created
+(`announceNewRelation()`, in a vertical with `mentorship`), each side who linked
+a chat identity gets one card in their own language
+(`introducePairInChat()`, `src/lib/chat/pairingInChat.ts`). The mentee's card
+has a **Book a session** button for that relation (`meeting.book`). The
+mentor's card carries the mentee's top three skills, which the app's mentee
+page already shows; nothing else of either profile travels. The pairing mail's
+own opt-out withholds the card. The "still interested?" check-in
+(docs/dormant-first-contacts.md) goes on chat **instead of** the mail, from the
+same claimed nudge, so a person's two-message cap counts both channels together.
+
+**Commands** (#1956): `/interncrm status|book|log|help` on Slack (the slash
+command's Request URL is the interaction endpoint itself) and the same words
+typed to the Teams bot (its messaging endpoint; a leading @mention is stripped).
+Each becomes an envelope whose action is `command.<name>` and runs through the
+SAME dispatcher as a card button — signature, replay window, rate limit, the
+verified ChatIdentity, `runWithOrg` — so an unlinked member gets the link
+prompt and nothing else. `status` reads the relations the app's own
+`scopeForRole(…, 'relation')` allows (a mentee their stage, a mentor their
+pairs, an admin a count); `book` is the `meeting.book` answer
+(`suggestedTimesFor()`); `log` lists the mentor's recent auto-logged sessions
+with "Add notes" (`interaction.note`). Slack is acknowledged at once and
+answered on `response_url`; Teams is answered by posting into the activity's
+conversation after the 200. The list lives in ONE file,
+`src/lib/chat/chatApp.json`, which the dispatcher, the Slack install's scopes
+and the manifest generator all read.
+
+**The app manifests are generated** (#1956): `npm run gen:chat-manifest` writes
+`apps/chat/teams/manifest.json` (v1.17) and `apps/chat/slack/manifest.json` from
+`chatApp.json`, for the default base URL; `npm run check:chat-manifest` (CI)
+regenerates them, checks the schema limits a reviewer rejects first, and fails
+when the committed copies are stale. A deployment's package is the same
+generator with its own environment —
+`CHAT_MANIFEST_BASE_URL=<origin> TEAMS_APP_ID=<guid> node scripts/chat-manifest.mjs --out <dir>`.
+The Teams package also needs `color.png` (192×192) and `outline.png` (32×32,
+white on transparent) next to the manifest, zipped together; those are not in
+the repo. No `staticTabs` yet: the `/embed` tab is #1954, and the generator
+gains the entry with it.
+
+**Notes from the post-meeting card** (#1953): when a relation meeting that took
+place is auto-logged with the placeholder note (`src/lib/meetingAutoLog.ts`,
+either path — the end click or the sweep), its mentor gets one chat card
+(`meeting.logPrompt`, chat only, `task_reminders` group; none when the pair's
+minutes already filled the log). **Add notes** (`interaction.note`, value = the
+log row's id) answers with a text field — Slack: an `input` block that
+dispatches on Enter, the row id as its `block_id`; Teams: an `Input.Text` and a
+Save `Action.Execute` — and the typed note (`interaction.note.save`, the
+envelope's `input`) replaces that row's notes through `updateInteraction()`
+after `interactionAccess()`, the same body and rule as `PUT
+/api/interactions/[id]`. The session's log is the meeting's log: chat never
+writes a second row. Type stays `Meeting` and there is no duration — the
+InteractionLog the app writes has no duration column, and a field only chat
+could fill would make the two shapes differ.
 
 This document is therefore written **ahead of the code, on purpose**: the env
 contract, the credentials an operator has to obtain from each provider, the
@@ -99,7 +238,7 @@ Calendar — `isGoogleCalendarConfigured()` vs `isGoogleCalendarEnabled()` in
 | `TEAMS_TENANT_ID` | Teams | the **Directory (tenant) ID**. Set it for a single-tenant app; leave it unset for a multi-tenant one. | single-tenant only |
 | `CHAT_OAUTH_REDIRECT_URI` | both | Optional override. Defaults to `<NEXTAUTH_URL>/api/integrations/chat/<platform>/callback`, the same derivation `googleRedirectUri()` uses. Set it only when the public URL differs from `NEXTAUTH_URL`. | no |
 | `CHAT_APPS_ENABLED` | both | The master switch. Unset or `0`: no install button, no delivery, inbound endpoints answer 404. | to deliver |
-| `SLACK_API_BASE` / `TEAMS_API_BASE` | both | **Test/staging only** — point the platform APIs at a local stub. Never set in a real deployment. | no |
+| `SLACK_API_BASE` / `SLACK_OAUTH_AUTHORIZE_URL` / `TEAMS_LOGIN_BASE` | both | **Test/staging only** — point the platform endpoints at a local stub. Never set in a real deployment. | no |
 
 Rules that are not negotiable: a bot or refresh token is sealed with
 `src/lib/secretBox.ts` (`seal()` / `open()`), never stored in the clear, never
@@ -165,6 +304,48 @@ That is #1923's Story 4, not an operator setting.
    derived from it. A chat member id is an identifier, never a credential —
    authorization is re-derived server-side from the linked CRM user.
 
+### What the install does (#1935)
+
+- **Connect** — `GET /api/integrations/chat/<slack|teams>/connect`: needs
+  `org.integrations.write` on the route (anyone else gets 403), and with no
+  credentials or no `CHAT_APPS_ENABLED=1` it sends the browser back to
+  `/admin/integrations?chat=unavailable` instead of failing. It redirects to
+  Slack's `oauth/v2/authorize` (scopes `chat:write`, `im:write`, `users:read`,
+  `users:read.email`, `commands`) or to Entra ID admin consent
+  (`<tenant or organizations>/adminconsent`).
+- **State** — `src/lib/chat/oauthState.ts` signs platform + org + user + a
+  10-minute expiry, so a callback replayed into another admin's session, a Slack
+  code on the Teams callback or an install aimed at another org installs nothing
+  (`?chat=failed`).
+- **Callback** — `GET …/callback` exchanges the Slack code server-side
+  (`oauth.v2.access`) and hands the tokens to `recordChatInstall()`, which seals
+  them and writes `CHAT_INSTALL`. Teams admin consent returns the tenant and no
+  token (the bot uses its own app credentials). A Slack team already installed
+  in another org is refused (`?chat=conflict`).
+- **Platform uninstall** — `POST /api/integrations/chat/slack/uninstall` is
+  Slack's Events API request URL for `app_uninstalled` / `tokens_revoked`,
+  authenticated by `SLACK_SIGNING_SECRET` over the raw body (±5 minutes). It
+  switches the workspace off, clears its sealed tokens and writes
+  `CHAT_PLATFORM_UNINSTALL`; the row stays for the admin to remove or reinstall.
+  Point **Event Subscriptions → Request URL** at it and subscribe to those two
+  bot events.
+- **Teams removal** (#3322) — the bot's **messaging endpoint** is
+  `POST /api/integrations/chat/teams/messages` (Azure Bot → Configuration →
+  Messaging endpoint). Every activity there must carry the Bot Framework's RS256
+  JWT: signature against the keys behind its OpenID metadata
+  (`TEAMS_OPENID_METADATA_URL`, real default; keys cached an hour, refetched on
+  an unknown `kid`, an unreachable JWKS refuses — fail closed), `iss`
+  `https://api.botframework.com`, `aud` = `TEAMS_APP_ID`, `nbf`/`exp` (±5 min) and
+  a `serviceUrl` claim equal to the activity's (`src/lib/chat/botFrameworkAuth.ts`).
+  A verified `installationUpdate` / `remove` switches that tenant's workspace off
+  and clears it (`CHAT_PLATFORM_UNINSTALL`); every other activity is a 200 that
+  does nothing yet. The e2e signs its tokens with `e2e/support/botframework-mock.mjs`.
+- **Token rotation** — `src/lib/chat/tokenRefresh.ts` trades a rotating Slack
+  install's refresh token a minute before the bot token expires, before each
+  send; a failed refresh is the workspace's `lastError`.
+- The flow does not forward a callback across served hosts (Google does,
+  #2494): installing is an admin task on the internship host.
+
 ### Verifying, in this order
 
 1. Do the setup above on **preview**, with the preview URLs.
@@ -186,22 +367,17 @@ is not an uninstall.
 
 ## Running the local stub
 
-**The stub does not exist yet.** It is owned by the story that ships delivery
-(#1925), and it is the thing that will make this epic testable at all — the same
-lesson as Google Calendar, where the token exchange sat unfinished for months
-precisely because it was reachable only through live Google.
-
-The shape to copy is already in the repo: `e2e/support/google-mock.mjs`, wired in
-`playwright.config.ts` and reached through the test-only
-`GOOGLE_OAUTH_TOKEN_URL` / `GOOGLE_OAUTH_REVOKE_URL` / `GOOGLE_CALENDAR_API_BASE`
-overrides (see `.env.example`). For chat that means:
-
-- `e2e/support/chat-mock.mjs` — a small local HTTP server answering the OAuth
-  code exchange, `chat.postMessage` / the Bot Framework send, and `users.info`;
-- `SLACK_API_BASE` / `TEAMS_API_BASE` pointed at it, set **only** by
-  `playwright.config.ts`;
-- placeholder credentials plus `CHAT_APPS_ENABLED=1` in the test env, so the e2e
-  exercises the enabled path while every real deployment stays dormant.
+The Slack half exists (#1935): `e2e/support/slack-mock.mjs` (port 4606) answers
+`oauth.v2.access` — a code starting with `good-` installs team `T<rest>`, anything
+else is `invalid_code`, and `grant_type=refresh_token` rotates — and records every
+exchange so the spec can assert the client secret was sent and the
+`redirect_uri` matched. `playwright.config.ts` points `SLACK_API_BASE` and
+`SLACK_OAUTH_AUTHORIZE_URL` at it, sets synthetic credentials
+(`e2e-slack-client`, `e2e-slack-signing-secret`, `e2e-teams-app`) and
+`CHAT_APPS_ENABLED=1`; message sends and revokes go to the in-process
+`CHAT_APPS_STUB_CLIENT=1` stand-in. Teams admin consent is a redirect only, so it
+needs no stub. `e2e/chat-install.spec.ts` drives connect → callback → platform
+uninstall against it.
 
 What a stub can prove: the install round-trip, that a tampered signature is
 refused, that tokens are sealed at rest (assert the plaintext is **not** in the
@@ -226,6 +402,8 @@ no listing at all, so treat submission as a later, separate decision.
 | Publisher identity | app owner details | **Microsoft Partner Center account + publisher verification** |
 | Scope / permission justification | one sentence per scope; reviewers do push back on `users:read.email` | permissions declared in the manifest |
 | Screenshots + short/long description | required | required |
+| Manifest | `apps/chat/slack/manifest.json` (generated) | `apps/chat/teams/manifest.json` + two icons, zipped (generated) |
+| Commands described | `/interncrm` usage hint in the manifest | `commandLists` in the manifest |
 | Working **uninstall** that revokes and deletes | required | required |
 | Localisation | the listing is EN, but the app must not break in TR/DE | same |
 | Accessibility | — | reviewed |

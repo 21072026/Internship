@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useToast } from '@/components/ui/Toast';
 import { useLocale, useT } from '@/i18n/client';
@@ -13,10 +14,15 @@ import { formatMinorAmount } from '@/lib/money';
 import { formatDate } from '@/lib/relativeTime';
 import { interpolate } from '@/lib/notificationText';
 import { AffiliateTabs } from '../AffiliateTabs';
+import { CustomerName } from '@/components/affiliate/CustomerName';
 
 // Payouts (docs/affiliate-module.md, #3116): after the bank transfer, record it —
 // the selected APPROVED commissions of one partner become PAID together, or
 // nothing does (the writer decides, under the partner's lock).
+//
+// A partner without payout details can still be paid (#3351): the transfer
+// happens outside the CRM and may already have gone another way, so the server
+// records it — but the admin confirms that knowingly first.
 
 interface Partner {
   id: string;
@@ -30,6 +36,7 @@ interface Commission {
   amountMinor: number;
   dueAt: string;
   customerRef: string;
+  customerLabel: string | null;
   payment: { externalPaymentRef: string };
 }
 interface Payout {
@@ -63,6 +70,7 @@ export default function AffiliatePayoutsPage() {
   const [failed, setFailed] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [confirmNoDetails, setConfirmNoDetails] = useState(false);
 
   const load = useCallback(async () => {
     const [p, q] = await Promise.all([fetch('/api/admin/affiliate/payouts'), fetch('/api/admin/affiliate/partners')]);
@@ -103,6 +111,7 @@ export default function AffiliatePayoutsPage() {
   const sum = useMemo(() => (approved ?? []).filter((c) => selected.has(c.id)).reduce((s, c) => s + c.amountMinor, 0), [approved, selected]);
 
   async function save() {
+    setConfirmNoDetails(false);
     setBusy(true);
     try {
       const res = await fetch('/api/admin/affiliate/payouts', {
@@ -175,7 +184,7 @@ export default function AffiliatePayoutsPage() {
                           setSelected(next);
                         }}
                       />
-                      <span className="font-mono">{c.customerRef}</span>
+                      <CustomerName label={c.customerLabel} reference={c.customerRef} />
                       <span className="font-mono text-gray-500">{c.payment.externalPaymentRef}</span>
                       <span>{formatDate(c.dueAt, locale, { timeZone: 'UTC' })}</span>
                       <span className="ml-auto">{money(c.amountMinor)}</span>
@@ -187,7 +196,7 @@ export default function AffiliatePayoutsPage() {
                   <Input type="date" label={L.paidOn} max={today()} value={paidOn} onChange={(e) => setPaidOn(e.target.value)} />
                   <Input label={L.reference} hint={L.referenceHint} value={reference} onChange={(e) => setReference(e.target.value)} />
                 </div>
-                <Button type="button" disabled={busy || selected.size === 0 || !paidOn} onClick={() => void save()} data-testid="affiliate-payout-save">
+                <Button type="button" disabled={busy || selected.size === 0 || !paidOn} onClick={() => (partner?.payoutIban ? void save() : setConfirmNoDetails(true))} data-testid="affiliate-payout-save">
                   {L.save}
                 </Button>
               </>
@@ -195,6 +204,17 @@ export default function AffiliatePayoutsPage() {
           </div>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={confirmNoDetails}
+        title={L.noDetailsTitle}
+        message={L.noDetailsMessage}
+        confirmLabel={L.noDetailsConfirm}
+        cancelLabel={L.noDetailsCancel}
+        loading={busy}
+        onConfirm={() => void save()}
+        onCancel={() => setConfirmNoDetails(false)}
+      />
 
       <Card padding="none">
         <div className="px-4 pt-4">

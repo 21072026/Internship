@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { ONBOARDING_STEPS, loadOnboardingState, pendingOnboardings } from '@/lib/menteeOnboarding';
@@ -19,10 +18,9 @@ const patchSchema = z.object({
 });
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'program.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const menteeId = new URL(request.url).searchParams.get('menteeId');
@@ -36,10 +34,9 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'program.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const parsed = patchSchema.safeParse(await request.json().catch(() => null));

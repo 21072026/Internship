@@ -19,6 +19,9 @@ import { DEFAULT_VERTICAL, verticalHasCapability, type VerticalCapability, type 
  *    matching flow (#938); its layout redirects an anonymous visitor to
  *    `/auth/signin`, so it belongs with the other authenticated areas below,
  *    not here (e2e/robots-sitemap.spec.ts caught it answering 307).
+ *  - `/partner` — the partner-programme page (#3360) exists only where an
+ *    organisation mapped the host and configured a programme; everywhere else
+ *    it is a 404, and a sitemap must not list a 404.
  *  - `/announcements` — same defect, same fix: its layout redirects an
  *    anonymous visitor to `/auth/signin` (available to any signed-in role,
  *    not a public page), and the same e2e spec caught it once `/mentors` no
@@ -47,6 +50,7 @@ export const PUBLIC_ROUTES: readonly {
 }[] = [
   { path: '/', llms: 'The home page: what the product is and who it is for', priority: 1.0, changeFrequency: 'weekly' },
   { path: '/features', llms: 'The full feature catalogue', priority: 0.8, changeFrequency: 'weekly' },
+  { path: '/developers', llms: 'Developers: the public API and webhooks, their contract, error types and deprecation policy', priority: 0.6, changeFrequency: 'weekly' },
   { path: '/for-companies', llms: 'For companies that host interns: what they get and how to ask for a look', priority: 0.8, changeFrequency: 'monthly', needs: 'placements' },
   // The price is one of the two things a stranger searches for by name
   // (#1730), so it sits with /features rather than down among the legal

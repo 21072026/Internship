@@ -21,10 +21,12 @@ import {
 } from '@/lib/supportAttachments';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { SupportTabs } from '@/components/SupportTabs';
+import { RecordChip } from '@/components/affiliate/RecordChip';
+import type { RecordSummary } from '@/lib/affiliateRecordRefRule';
 
 type Status = 'OPEN' | 'IN_PROGRESS' | 'CLOSED';
 
-interface Msg { id: string; body: string; createdAt: string; senderId: string; readAt?: string | null; sender: { fullName: string; role: string }; attachments: SupportAttachmentMeta[] }
+interface Msg { id: string; body: string; createdAt: string; senderId: string; readAt?: string | null; sender: { fullName: string; role: string }; attachments: SupportAttachmentMeta[]; record?: RecordSummary | null }
 interface Ticket {
   id: string;
   status: Status;
@@ -80,7 +82,11 @@ export default function AdminSupportPage() {
       const form = new FormData();
       form.append('ticketId', ticketId);
       form.append('body', body);
-      attachments.forEach(({ file }) => form.append('files', file));
+      // One altText per file, same order — the route pairs them (#3407).
+      attachments.forEach(({ file, alt }) => {
+        form.append('files', file);
+        form.append('altText', alt ?? '');
+      });
       const res = await fetch('/api/admin/support', { method: 'POST', body: form });
       if (res.ok) {
         setReply('');
@@ -257,6 +263,7 @@ export default function AdminSupportPage() {
                             <p className="text-[11px] font-medium opacity-70 mb-0.5">
                               <PersonHoverCard personId={m.senderId} name={m.sender.fullName} role={m.sender.role} />
                             </p>
+                            {m.record && <span className="mb-1 block"><RecordChip record={m.record} /></span>}
                             {m.body}
                             <SupportAttachmentList attachments={m.attachments ?? []} />
                           </div>
@@ -268,6 +275,7 @@ export default function AdminSupportPage() {
                       <PendingAttachmentList
                         attachments={attachments}
                         removeLabel={s.removeAttachment}
+                        onAltChange={(index, alt) => setAttachments((current) => current.map((a, i) => (i === index ? { ...a, alt } : a)))}
                         onRemove={(index) => setAttachments((current) => {
                           const next = [...current];
                           const [removed] = next.splice(index, 1);

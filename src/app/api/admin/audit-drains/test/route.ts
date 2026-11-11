@@ -1,15 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { rateLimit } from '@/lib/rateLimit';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { deliverTestBatch } from '@/lib/auditDrain';
-
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return session && session.user.role === 'ADMIN' ? session : null;
-}
 
 // "Send a test batch" (#2012): two SYNTHETIC rows, signed like a real batch
 // and flagged `X-Audit-Test: 1`, so an integrator proves the receiver and the
@@ -17,8 +11,9 @@ async function requireAdmin() {
 // button, and the outcome neither moves the cursor nor counts towards the
 // pause ceiling (lib/auditDrain.ts deliverTestBatch).
 export async function POST(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const id = new URL(request.url).searchParams.get('id') || '';
   // Keyed by drain id (the sibling webhooks/test does the same): the budget
   // that matters is how often we knock on a third party's URL.

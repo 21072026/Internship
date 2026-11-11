@@ -163,3 +163,39 @@ test('a dismissal survives a fresh browser and closes nobody else’s checklist 
     await cleanupByEmail(otherEmail);
   }
 });
+
+// The launch list counts THIS organisation's companies, mentorships and
+// conversations — an admin of a brand-new tenant used to see those three steps
+// already ticked by other tenants' rows. The default org always holds some
+// in the suite's shared database; the new org holds none.
+test('a new organisation’s launch list is not ticked off by another tenant’s rows', async ({ page }) => {
+  const stamp = Date.now();
+  const org = await prisma.organization.create({ data: { name: `Checklist Scope ${stamp}`, slug: `checklist-scope-${stamp}` } });
+  const email = uniqueEmail('checklist-scope-admin');
+  await seedUser(email, 'CheckPass123', 'ADMIN', 'Checklist Scope Admin', org.id);
+  // Make sure another tenant really does have each of the three.
+  const otherEmail = uniqueEmail('checklist-scope-other');
+  const otherMentor = await seedUser(otherEmail, 'x', 'MENTOR', 'Other Tenant Mentor');
+  const otherMenteeEmail = uniqueEmail('checklist-scope-other-mentee');
+  const otherMentee = await seedUser(otherMenteeEmail, 'x', 'MENTEE', 'Other Tenant Mentee');
+  const otherCompany = await prisma.company.create({ data: { name: `Other Tenant Co ${stamp}`, orgId: otherMentor.orgId } });
+  const otherRelation = await prisma.mentorshipRelation.create({
+    data: { mentorId: otherMentor.id, menteeId: otherMentee.id, orgId: otherMentor.orgId, status: 'ACTIVE' },
+  });
+  await prisma.interactionLog.create({ data: { relationId: otherRelation.id, type: 'Meeting', notes: 'other tenant', date: new Date() } });
+
+  try {
+    await signIn(page, email, 'CheckPass123', '/admin');
+    const steps = (await (await page.request.get('/api/onboarding')).json()).steps as { key: string; done: boolean }[];
+    const done = Object.fromEntries(steps.map((s) => [s.key, s.done]));
+    expect(done.addCompany).toBe(false);
+    expect(done.assignMentorship).toBe(false);
+    expect(done.firstInteraction).toBe(false);
+  } finally {
+    await prisma.interactionLog.deleteMany({ where: { relationId: otherRelation.id } });
+    await prisma.mentorshipRelation.deleteMany({ where: { id: otherRelation.id } });
+    await prisma.company.deleteMany({ where: { id: otherCompany.id } });
+    for (const e of [email, otherEmail, otherMenteeEmail]) await cleanupByEmail(e);
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});

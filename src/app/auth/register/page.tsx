@@ -1,6 +1,8 @@
 import { BrandProvider } from '@/lib/brandClient';
 import { invitationBrand } from '@/lib/invitationBrand';
+import { headers } from 'next/headers';
 import RegisterClient from './RegisterClient';
+import { socialButtonsForHeaders } from '@/lib/socialSignIn';
 
 // The invitation landing wears the inviting organization's brand (#1663): an
 // invitee arrives on the default host with nothing but `?token=`, so the
@@ -11,11 +13,14 @@ import RegisterClient from './RegisterClient';
 export default async function RegisterPage({ searchParams }: { searchParams: Promise<{ token?: string | string[] }> }) {
   const { token } = await searchParams;
   const brand = await invitationBrand(typeof token === 'string' ? token : null);
+  const h = await headers();
+  // Social sign-up (#1962): only the providers the operator configured.
+  const social = socialButtonsForHeaders((n) => h.get(n));
   return brand ? (
     <BrandProvider brand={brand}>
-      <RegisterClient />
+      <RegisterClient social={social} />
     </BrandProvider>
   ) : (
-    <RegisterClient />
+    <RegisterClient social={social} />
   );
 }

@@ -13,6 +13,8 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Badge, RoleBadge } from '@/components/ui/Badge';
 import { Send, Mail, Copy, Check, CheckCircle2, Circle } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { parseGateBody, type GateInfo } from '@/lib/upgradePrompt';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { formatMentorAvailability } from '@/lib/mentorAvailabilityLabel';
 import type { MentorAvailability } from '@/lib/mentorAvailability';
@@ -20,6 +22,7 @@ import { copyToClipboard } from '@/lib/clipboard';
 import { locales } from '@/i18n/config';
 import { useVertical } from '@/lib/verticalClient';
 import { verticalHasCapability } from '@/lib/verticals';
+import { PersonPicker, type PickedPerson } from '@/components/ui/PersonPicker';
 
 const inviteSchema = z.object({
   // Optional since #670: an empty address mints a shareable link instead of
@@ -54,6 +57,8 @@ export default function InvitePage() {
   const locale = useLocale();
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  // The admin-seat quota (#1752) renders the upgrade prompt, not a sentence.
+  const [gate, setGate] = useState<GateInfo | null>(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   // Persistent list from the server (survives refresh), plus any freshly-minted
@@ -111,10 +116,12 @@ export default function InvitePage() {
   const [mentors, setMentors] = useState<
     { id: string; fullName: string; mentorCapacity: number | null; activeMenteeCount: number; availability: MentorAvailability }[]
   >([]);
-  const [mentees, setMentees] = useState<{ id: string; fullName: string }[]>([]);
+  // The mentee to pre-link is searched on the server (#1437); this is the pick.
+  const [pickedMentee, setPickedMentee] = useState<PickedPerson | null>(null);
   const [projects, setProjects] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => {
-    fetch('/api/users?view=mentorAvailability')
+    // Mentors only (#1437) — the mentee side is a server-side search.
+    fetch('/api/users?view=mentorAvailability&roles=ADMIN,MENTOR')
       .then((r) => (r.ok ? r.json() : { users: [] }))
       .then((d) => {
         const users = (d.users ?? []) as {
@@ -136,7 +143,6 @@ export default function InvitePage() {
               availability: u.availability,
             }))
         );
-        setMentees(users.filter((u) => u.role === 'MENTEE').map((u) => ({ id: u.id, fullName: u.fullName })));
       })
       .catch(() => {});
     // Projects are an internship module: a vertical without it (MARKETING) has
@@ -181,6 +187,7 @@ export default function InvitePage() {
   const sendInvite = async (data: InviteData) => {
     setLoading(true);
     setError('');
+    setGate(null);
     setSuccess('');
 
     try {
@@ -209,6 +216,11 @@ export default function InvitePage() {
           setError(t.assignMentor.alreadyAssigned);
           return;
         }
+        const wall = parseGateBody(body);
+        if (wall) {
+          setGate(wall);
+          return;
+        }
         throw new Error(body.error || 'Failed to send invitation');
       }
 
@@ -222,6 +234,7 @@ export default function InvitePage() {
       if (body.invitationId && body.registerUrl) setLinks((p) => ({ ...p, [body.invitationId]: body.registerUrl }));
       await loadInvites();
       reset({ role: 'MENTEE', locale });
+      setPickedMentee(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
     } finally {
@@ -293,6 +306,7 @@ export default function InvitePage() {
               {error}
             </div>
           )}
+          {gate && <UpgradePrompt gate={gate} viewer="admin" className="mb-4" />}
 
           <form onSubmit={onSubmit} className="space-y-4">
             {/* Email-less invitations (#670): leaving this empty produces a link
@@ -349,10 +363,16 @@ export default function InvitePage() {
               />
             )}
             {watchedRole === 'MENTOR' && (
-              <Select
+              <PersonPicker
                 label={t.invite.connectMentee}
-                options={[{ value: '', label: '—' }, ...mentees.map((m) => ({ value: m.id, label: m.fullName }))]}
-                {...register('menteeId')}
+                testId="invite-connect-mentee"
+                roles={['MENTEE']}
+                value={watch('menteeId') ?? ''}
+                selectedName={pickedMentee?.fullName}
+                onChange={(m) => {
+                  setPickedMentee(m);
+                  setValue('menteeId', m?.id ?? '');
+                }}
               />
             )}
             {watchedRole !== 'ADMIN' && hasProjects && (

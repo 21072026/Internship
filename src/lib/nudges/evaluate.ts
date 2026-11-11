@@ -47,6 +47,7 @@ import {
   type Segment,
 } from './rule';
 import { hasRelationConditions, relationMatches, segmentUserWhere, type SegmentRelation } from './segment';
+import { notBenched } from '@/lib/participantState';
 
 /** The mail's opt-out group and the bell's category — a nudge is a reminder about the reader's own work. */
 export const NUDGE_EMAIL_GROUP = 'task_reminders' as const;
@@ -330,7 +331,7 @@ export async function runNudgeSend(job: { ruleId: string; userId: string; dedupe
       return reason ?? 'no_user';
     }
     const user = await prisma.user.findFirst({
-      where: { id: job.userId, orgId, isActive: true },
+      where: { id: job.userId, orgId, isActive: true, ...notBenched() },
       select: { id: true, email: true, fullName: true, role: true, preferredLanguage: true },
     });
     if (!user) return 'no_user';

@@ -1,6 +1,10 @@
 import type { Metadata } from 'next';
 import { pageMetadata } from '@/lib/pageMetadata';
 import { IS_DEMO_MODE, DEMO_ACCOUNTS, DEMO_PASSWORD } from '@/lib/demoMode';
+import { headers } from 'next/headers';
+import { requestHostHeader } from '@/lib/publicHostOrg';
+import { discoverSsoForHost } from '@/lib/ssoDiscovery';
+import { socialButtonsForHeaders } from '@/lib/socialSignIn';
 import { SignInClient } from './SignInClient';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -11,9 +15,19 @@ export async function generateMetadata(): Promise<Metadata> {
 // NEXT_PUBLIC_), so the demo quick-login accounts are resolved here and handed
 // to the client form as a prop. On every non-demo instance the prop is null
 // and the sign-in page renders exactly as before.
-export default function SignInPage() {
+//
+// Per-tenant SSO discovery (#1665): on a tenant's own verified host the page
+// leads with "Continue with <tenant> SSO". On the default host this is null and
+// nothing changes.
+export default async function SignInPage() {
+  const h = await headers();
+  const tenantSso = await discoverSsoForHost(requestHostHeader(h));
+  // Social sign-in (#1962): only the providers the operator configured.
+  const social = socialButtonsForHeaders((n) => h.get(n));
   return (
     <SignInClient
+      tenantSso={tenantSso}
+      social={social}
       demo={
         IS_DEMO_MODE
           ? { accounts: DEMO_ACCOUNTS.map((a) => ({ ...a })), password: DEMO_PASSWORD }

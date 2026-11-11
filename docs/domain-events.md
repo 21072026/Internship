@@ -131,6 +131,44 @@ opens its transaction with `stageTransaction(fn, options)` instead of
 `application.stage_changed` per noted move is raised. A rejected transaction
 raises nothing; a move noted outside the wrapper throws outside production.
 
+**Or emit through the transaction itself** (`emitInTransaction(tx, …)`, `emit.ts`):
+the `DomainEvent` row and its `event.deliver` jobs are written by `tx`, so they
+commit with it or not at all. Use it where the producer already holds the
+transaction and the post-commit note would be one more wrapper — the first user
+is `createUser()` below.
+
+### `user.created`: one writer for User rows
+
+`createUser(db, args, { source, actorId })` (`src/lib/userCreate.ts`) is the only
+`prisma.user.create` in the tree (`npm run check:user-create`, CI). It is a
+writer, not a gate: each caller still does its own world/e-mail check
+(`emailTakenInWorld`, `docs/worlds.md`) before it calls it. It raises
+`user.created` `{ userId, role, source }` — ids and a closed `source` vocabulary
+(`USER_CREATE_SOURCES`), never the address or the name — with `emit()` on the
+global client and `emitInTransaction()` on a transaction client.
+
+### The lifecycle names #1998 asked for, and what shipped
+
+#1998 listed one name per transition. Where a record has a state machine, the
+catalogue publishes **one** `*_changed` / `*_status_changed` event with `from` and
+`to` instead, raised by every writer of that state. An integrator then sees
+every transition, including the ones nobody listed, and a new state is not a
+new event name. The mapping:
+
+| Asked for | Published as |
+|---|---|
+| `offer.sent` / `accepted` / `declined` / `expired` | the same names, plus `offer.withdrawn` (the expiry sweep included) |
+| `requisition.opened` / `closed` | `requisition.status_changed` (`from` null on creation; `to` OPEN, ON_HOLD, FILLED, CANCELLED), next to `requisition.filled` |
+| `interview_request.created` / `accepted` / `declined` | `interview_request.created` / `approved` / `declined`, plus `scheduled` / `cancelled` |
+| `company_interest.created` | `company_interest.changed` (every flag change, its first one included) |
+| `mentorship.completed` / `ended` / `paused` / `rematched` | `mentorship.lifecycle_changed` (`from`/`to` lifecycle states) and `mentorship.transferred` |
+| `mentorship.extended` | `mentorship.extended` (plus `mentorship.ending_soon`) |
+| `meeting.rescheduled` / `cancelled` / `attendance_recorded` | the same names |
+| `weekly_report.submitted`, `document.uploaded`, `goal.completed`, `user.created` | the same names |
+
+No name in that list is reserved-but-unemitted any more: each either ships
+as is or is covered by the event in the right-hand column.
+
 ## Configuration diffs: `src/lib/events/diff.ts` (#1699)
 
 `redactedDiff(before, after, spec)` is the **only** before/after diff in the

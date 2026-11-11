@@ -9,7 +9,9 @@ import { writeOriginVerdict } from '@/lib/writeOrigin';
 import { bodyLimitVerdict } from '@/lib/bodyLimitRule';
 import { LOCALE_HEADER, LOCALE_PATH_HEADER, isPrefixablePath, splitLocalePrefix } from '@/lib/localePath';
 import type { Locale } from '@/i18n/config';
-import { buildCsp } from '@/lib/cspPolicy.cjs';
+import { buildCsp, TEAMS_FRAME_ANCESTORS } from '@/lib/cspPolicy.cjs';
+import { EMBED_MARKER, embedCookieName, injectedCookieHeader, isEmbedSessionEnabled, secureCookies } from '@/lib/embedSession';
+import { readOnlyImpersonationBlocks } from '@/lib/impersonationPolicyRule';
 
 // Methods that mutate state. Unverified users are limited to reads.
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -153,9 +155,55 @@ function reportOnlyPolicy(): { nonce: string; policy: string } | null {
   return { nonce, policy: buildCsp(env, { nonce, dev: process.env.NODE_ENV !== 'production' }) };
 }
 
+/**
+ * The Teams tab's own session cookie (#1954, src/lib/embedSession.ts): handed
+ * to the server as the session cookie, request side only, when the request
+ * carries one and no real session cookie — and the request is marked so the
+ * NextAuth route keeps any refresh in the embed cookie. The marker is never
+ * taken from outside. A no-op while Teams SSO is not configured.
+ */
+function embedSession(req: NextRequest): string | null {
+  return injectedCookieHeader(req.headers.get('cookie'), secureCookies());
+}
+
+/** For getToken(): read the embed cookie when that is the session in play. */
+function tokenCookieName(req: NextRequest): { cookieName?: string } {
+  return embedSession(req) ? { cookieName: embedCookieName(secureCookies()) } : {};
+}
+
+/**
+ * The framing headers of /embed (#1954): next.config.js leaves them off that
+ * path only, and they are set here per request — the Teams hosts while Teams
+ * SSO is configured, `frame-ancestors 'none'` + DENY otherwise. Every other
+ * path keeps next.config.js's 'none' + DENY.
+ */
+function isEmbedPath(pathname: string): boolean {
+  return pathname === '/embed' || pathname.startsWith('/embed/');
+}
+
+function applyEmbedFraming(res: NextResponse): void {
+  const on = isEmbedSessionEnabled();
+  const env = {
+    NEXT_PUBLIC_PLAUSIBLE_DOMAIN: process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN,
+    NEXT_PUBLIC_PLAUSIBLE_HOST: process.env.NEXT_PUBLIC_PLAUSIBLE_HOST,
+    NEXT_PUBLIC_GA4_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID,
+    NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
+    NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+  };
+  res.headers.set('content-security-policy', buildCsp(env, on ? { frameAncestors: TEAMS_FRAME_ANCESTORS } : {}));
+  if (on) res.headers.delete('x-frame-options');
+  else res.headers.set('x-frame-options', 'DENY');
+}
+
 function nextWithRequestId(req: NextRequest, requestId: string, page: PageRouting | null = null): NextResponse {
   const headers = new Headers(req.headers);
   headers.set(REQUEST_ID_HEADER, requestId);
+  headers.delete(EMBED_MARKER);
+  const injected = embedSession(req);
+  if (injected) {
+    headers.set('cookie', injected);
+    headers.set(EMBED_MARKER, '1');
+  }
   // Never trusted from outside: only this function says which language a URL is in.
   headers.delete(LOCALE_HEADER);
   headers.delete(LOCALE_PATH_HEADER);
@@ -182,6 +230,7 @@ function nextWithRequestId(req: NextRequest, requestId: string, page: PageRoutin
     res = NextResponse.next({ request: { headers } });
   }
   if (csp) res.headers.set(REPORT_ONLY_HEADER, csp.policy);
+  if (isEmbedPath(req.nextUrl.pathname)) applyEmbedFraming(res);
   return res;
 }
 
@@ -274,6 +323,22 @@ async function handle(req: NextRequest, requestId: string): Promise<NextResponse
     return res;
   }
 
+  // Read-only impersonation (#1586): ONE central refusal for every write the
+  // impersonating session makes — the policy of the target's organization,
+  // fixed in the JWT when the session started. Before the general allowlist on
+  // purpose: a public form posted from someone else's session is still a write
+  // made as them. Only the ways out pass (impersonationPolicyRule.ts). The
+  // token is decoded for writes only; reads never pay for it.
+  if (WRITE_METHODS.has(req.method) && readOnlyImpersonationBlocks(req.method, pathname)) {
+    const imp = await getToken({ req, secret: process.env.NEXTAUTH_SECRET, ...tokenCookieName(req) });
+    if (imp?.impersonatorId && imp.impersonationReadOnly === true) {
+      return NextResponse.json(
+        { error: 'This is a read-only session as another user — changes are not allowed.', code: 'impersonation_read_only' },
+        { status: 403, headers: { [REQUEST_ID_HEADER]: requestId } }
+      );
+    }
+  }
+
   if (!WRITE_METHODS.has(req.method) || isAllowlisted(pathname)) {
     return nextWithRequestId(req, requestId, page);
   }
@@ -294,7 +359,7 @@ async function handle(req: NextRequest, requestId: string): Promise<NextResponse
     }
   }
 
-  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET, ...tokenCookieName(req) });
 
   // WORLDS (#2590): nothing to add here, and that is deliberate. Which product a
   // session may be used in is decided by the `session` callback in src/lib/auth.ts

@@ -3,6 +3,9 @@ import { authOptions } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { getServerDictionary } from '@/i18n/server';
 import { getSystemMenteeActivity } from '@/lib/activityReport';
+import { programGrantsFor } from '@/lib/authzScope';
+import { programRelationWhere } from '@/lib/programScopeRule';
+import type { Prisma } from '@prisma/client';
 import { tenantWhere } from '@/lib/tenantFilter';
 import { ActivityReportView } from '@/components/ActivityReportView';
 
@@ -17,7 +20,13 @@ export default async function AdminMenteeActivityPage({ searchParams }: { search
   const days = ALLOWED_DAYS.includes(Number(sp.days)) ? Number(sp.days) : 7;
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   // The admin's own tenant only (#2542) — never every org's mentees.
-  const items = await getSystemMenteeActivity(since, await tenantWhere(session));
+  // A PROGRAM_ADMIN reads its own programmes' mentees only (#1577).
+  const grants = await programGrantsFor(session.user);
+  const items = await getSystemMenteeActivity(
+    since,
+    await tenantWhere(session),
+    (grants ? programRelationWhere(grants) : {}) as Prisma.MentorshipRelationWhereInput,
+  );
 
   return (
     <ActivityReportView

@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import type { PrerenderedEmail } from '@/lib/notifications/adapters/types';
 import type { Transporter } from 'nodemailer';
 import type Mail from 'nodemailer/lib/mailer';
 import addressparser from 'nodemailer/lib/addressparser';
@@ -17,9 +18,24 @@ import { notify } from '@/lib/notify';
 import { notificationLink, type NotificationRole } from '@/lib/notificationLink';
 import { capabilitiesMemo, shellCapabilities } from '@/lib/shellCapabilities';
 import { dormantCheckInApplies, interactionReminderApplies } from '@/lib/salesSurface';
-import { markReadUrl } from '@/lib/emailActionToken';
+import { extendRelationUrl, markReadUrl } from '@/lib/emailActionToken';
+import { notBenched } from '@/lib/participantState';
+import { intlLocaleFor } from '@/lib/interviewRequests';
 import { settingByOrg, settingsOrgOfRow } from '@/lib/settingsOrg';
 import { resolveSettingRaw, withSettingsCache } from '@/lib/settingsResolver';
+import {
+  LEGACY_MEETING_LEADS,
+  LEGACY_SERIES_LEADS,
+  MAX_LEAD_MINUTES,
+  dueLead,
+  isDayAheadLead,
+  leadsFor,
+  legacyLeadEnum,
+  lookaheadMinutes,
+  parseLeadList,
+  readRemindedLeads,
+  writeRemindedLeads,
+} from '@/lib/meetingReminderLeads';
 import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { makeConsentRenewToken } from '@/lib/consentRenew';
 import { dueForReminder, makeLeaveToken } from '@/lib/reEngagement';
@@ -28,6 +44,8 @@ import { RETENTION_GRACE_DAYS } from '@/lib/retention';
 // imports nothing of ours, so this stays a leaf dependency and cannot cycle.
 import { pruneInBatches } from '@/lib/retentionPrune';
 import { getMentorMenteeActivity, getSystemMenteeActivity, type MenteeActivity } from '@/lib/activityReport';
+import { programGrantsFor } from '@/lib/authzScope';
+import { programPeopleWhere, programRelationWhere } from '@/lib/programScopeRule';
 import { orgWhere } from '@/lib/tenantFilter';
 import { runUnscoped } from '@/lib/tenantAmbient';
 import { activeAdminsByOrg, tenantAdminIds } from '@/lib/tenantAdmins';
@@ -95,10 +113,12 @@ import { productNameForOrg } from '@/lib/orgBrand';
 import { appOriginForOrg, appOriginsForOrgs } from '@/lib/orgLinkOrigin';
 import { resolvePipelineStages, type ResolvedStage } from '@/lib/pipelineStages';
 import { isStageOverdue } from '@/lib/stageClock';
-import { resolveStageEscalations } from '@/lib/stageSla';
+import { resolveSlaDayRule, resolveStageEscalations } from '@/lib/stageSla';
 import { claimEscalation, escalationRecipients, openBreach, resolveBreaches } from '@/lib/slaBreach';
 import { SLA_LEVEL_MENTOR, daysOverdue, escalationDue, mentorAlreadyTold } from '@/lib/slaLadderRule';
 import { notifyEvent } from '@/lib/notifications/router';
+import { deliverCheckInOnChat } from '@/lib/chat/dormantInChat';
+import { meetingChatCard } from '@/lib/meetingChatCard';
 import { sameTenant } from '@/lib/orgScope';
 import { brandAssetPath } from '@/lib/brandRule';
 import { holdIfRequired } from '@/lib/outboundDrafts';
@@ -1758,7 +1778,7 @@ type InvitationCopy = Dictionary['notifications']['invitationEmail'];
 // sentence with {role} (Turkish does) still renders correctly. An unknown role
 // string (nothing else can reach this today) prints as-is rather than as an
 // empty gap in the sentence.
-function invitationBody(I: InvitationCopy, role: string) {
+export function invitationBody(I: InvitationCopy, role: string) {
   const roleLabel = I.roles[role as keyof typeof I.roles] ?? role;
   const [bodyBefore, bodyAfter = ''] = I.body.split('{role}');
   return { roleLabel, bodyBefore, bodyAfter };
@@ -1798,49 +1818,27 @@ export async function sendInvitationEmail({
   // product under this very address, and accepting here creates the second,
   // independent one. INTERNSHIP (or no org): the origin it always had.
   const registerUrl = `${await appUrlFor(orgId)}/auth/register?token=${token}`;
-  const brand = await emailBrand(orgId);
   const resolved = resolveLocale(locale);
-  // In the inviting tenant's own vocabulary (#2558): a marketing invitation
-  // asks a sales rep to join, not "a mentor". INTERNSHIP's overlay is empty.
-  const I = (await emailDictionary(resolved, orgId)).notifications.invitationEmail;
-  const { roleLabel, bodyBefore, bodyAfter } = invitationBody(I, role);
+  // In the inviting tenant's own vocabulary (#2558) and, when the org wrote
+  // one, its own wording (#3399): the renderer reads emailDictionary() for the
+  // recipient's org and the template editor's row; the token link is drawn
+  // there and cannot be templated away.
+  const { renderNotificationEmail } = await import('@/lib/notifications/emailRender');
+  const mail = await renderNotificationEmail({ eventKey: 'account.invitation', locale: resolved, orgId, params: { role }, actionUrl: registerUrl });
 
   return await sendEmail({
     to,
     // The recipient's tenant: an archived one is not mailed (#1582).
     orgId,
-    fromName: brand.name,
+    fromName: mail.fromName,
     category: 'invitation',
     lane,
     // An essential group, so there is no footer to translate here — but the
     // locale is passed anyway, so this send behaves like every other one if the
     // taxonomy ever moves it.
     locale: resolved,
-    subject: I.subject.replace('{brand}', brand.name),
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, esc(I.heading.replace('{brand}', brand.name)))}
-        <p>${esc(bodyBefore)}<strong>${esc(roleLabel)}</strong>${esc(bodyAfter)}</p>
-        <p>${esc(I.ctaIntro)}</p>
-        <a href="${registerUrl}" style="
-          display: inline-block;
-          background-color: ${brand.accent};
-          color: white;
-          padding: 12px 24px;
-          text-decoration: none;
-          border-radius: 6px;
-          margin: 16px 0;
-        ">
-          ${esc(I.cta)}
-        </a>
-        <p style="color: #6b7280; font-size: 14px;">
-          ${esc(I.expiry)}
-        </p>
-        <p style="color: #6b7280; font-size: 12px;">
-          ${esc(I.copyLink)} ${registerUrl}
-        </p>
-      </div>
-    `,
+    subject: mail.subject,
+    html: mail.html,
   });
 }
 
@@ -1876,47 +1874,32 @@ export async function sendPasswordResetEmail({
   // link into the other product would ask the right person to reset a password
   // on a site where that account does not exist. No org ⇒ the default product.
   const resetUrl = `${await appUrlFor(orgId)}/auth/reset?token=${token}`;
-  const isInitial = purpose === 'SET_INITIAL';
-  const brand = await emailBrand(orgId);
   const resolved = resolveLocale(locale);
-  const P = getDictionary(resolved).notifications.passwordResetEmail;
-  const V = isInitial ? P.setInitial : P.reset;
+  // The org's template applies to a RESET only (#3399); SET_INITIAL keeps its
+  // own copy — it activates an account, which a reset template does not say.
+  const { renderNotificationEmail } = await import('@/lib/notifications/emailRender');
+  const mail = await renderNotificationEmail({
+    eventKey: 'account.passwordReset',
+    locale: resolved,
+    orgId,
+    params: { name: fullName ?? '' },
+    recipientName: fullName,
+    actionUrl: resetUrl,
+    bespokeOnly: purpose === 'SET_INITIAL',
+  });
 
   return await sendEmail({
     to,
     // The recipient's tenant: an archived one is not mailed (#1582).
     orgId,
-    fromName: brand.name,
+    fromName: mail.fromName,
     category: 'password-reset',
     // Queued only on a temporary failure (#2944): a link that has expired is
     // not worth delivering, so the queue lets it go when the token does.
     notAfter: new Date(Date.now() + RESET_TOKEN_TTL_MS[purpose]),
     locale: resolved,
-    subject: V.subject.replace('{brand}', brand.name),
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, esc(V.heading))}
-        ${fullName ? `<p>${esc(P.greeting.replace('{name}', fullName))}</p>` : ''}
-        <p>${esc(V.body.replace('{brand}', brand.name))}</p>
-        <a href="${resetUrl}" style="
-          display: inline-block;
-          background-color: ${brand.accent};
-          color: white;
-          padding: 12px 24px;
-          text-decoration: none;
-          border-radius: 6px;
-          margin: 16px 0;
-        ">
-          ${esc(V.cta)}
-        </a>
-        <p style="color: #6b7280; font-size: 14px;">
-          ${esc(V.expiry)}
-        </p>
-        <p style="color: #6b7280; font-size: 12px;">
-          ${esc(P.copyLink)} ${resetUrl}
-        </p>
-      </div>
-    `,
+    subject: mail.subject,
+    html: mail.html,
   });
 }
 
@@ -2005,42 +1988,27 @@ export async function sendVerificationEmail({
 }) {
   // WORLDS (#2590): same rule as the reset link — the account's own product.
   const verifyUrl = `${await appUrlFor(orgId)}/auth/verify?token=${token}`;
-  const brand = await emailBrand(orgId);
   const resolved = resolveLocale(locale);
-  const V = getDictionary(resolved).notifications.verificationEmail;
+  // The org's own wording when it wrote one (#3399); the link is the renderer's.
+  const { renderNotificationEmail } = await import('@/lib/notifications/emailRender');
+  const mail = await renderNotificationEmail({
+    eventKey: 'account.verification',
+    locale: resolved,
+    orgId,
+    params: { name: fullName ?? '' },
+    recipientName: fullName,
+    actionUrl: verifyUrl,
+  });
 
   await sendEmail({
     to,
     // The recipient's tenant: an archived one is not mailed (#1582).
     orgId,
-    fromName: brand.name,
+    fromName: mail.fromName,
     category: 'verification',
     locale: resolved,
-    subject: V.subject.replace('{brand}', brand.name),
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, esc(V.heading))}
-        ${fullName ? `<p>${esc(V.greeting.replace('{name}', fullName))}</p>` : ''}
-        <p>${esc(V.body)}</p>
-        <a href="${verifyUrl}" style="
-          display: inline-block;
-          background-color: ${brand.accent};
-          color: white;
-          padding: 12px 24px;
-          text-decoration: none;
-          border-radius: 6px;
-          margin: 16px 0;
-        ">
-          ${esc(V.cta)}
-        </a>
-        <p style="color: #6b7280; font-size: 14px;">
-          ${esc(V.expiry)}
-        </p>
-        <p style="color: #6b7280; font-size: 12px;">
-          ${esc(V.copyLink)} ${verifyUrl}
-        </p>
-      </div>
-    `,
+    subject: mail.subject,
+    html: mail.html,
   });
 }
 
@@ -2996,19 +2964,17 @@ function participantClocks(
 // wasn't logged in never learned their request had been decided.
 
 export async function sendMentorshipDecisionEmail({
-  to,
   fullName,
   approved,
   mentorName,
   orgId,
   userId,
 }: {
-  to: string;
   fullName?: string | null;
   approved: boolean;
   mentorName?: string | null;
   orgId?: string | null;
-  userId?: string | null;
+  userId: string;
 }) {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
@@ -3018,20 +2984,22 @@ export async function sendMentorshipDecisionEmail({
     ? `<p>Good news — your mentorship request has been approved${mentorName ? ` and <strong>${esc(mentorName)}</strong> is now your mentor` : ''}. Open your portal to say hi and get started.</p>`
     : `<p>Your mentorship request has been reviewed, but it could not be approved right now. You are welcome to submit a new request later — keeping your profile and CV up to date helps.</p>`;
 
-  await sendEmail({
-    to,
-    userId,
-    category: 'mentorship-decision',
-    fromName: brand.name,
-    subject: approved ? `Your mentorship request was approved` : `Update on your mentorship request`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, heading)}
-        ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
-        ${body}
-        ${ctaBlock(brand, `${base}/portal`, 'Open your portal')}
-      </div>
-    `,
+  await notifyEvent(userId, approved ? 'mentorship_request.approved' : 'mentorship_request.rejected', {}, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    email: {
+      category: 'mentorship-decision',
+      fromName: brand.name,
+      subject: approved ? `Your mentorship request was approved` : `Update on your mentorship request`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, heading)}
+          ${fullName ? `<p>Hi ${esc(fullName)},</p>` : ''}
+          ${body}
+          ${ctaBlock(brand, `${base}/portal`, 'Open your portal')}
+        </div>
+      `,
+    },
   });
 }
 
@@ -3066,18 +3034,16 @@ async function assignedEmailLocale(locale: string | null | undefined, userId: st
 }
 
 export async function sendMenteeAssignedEmail({
-  to,
   mentorName,
   menteeName,
   orgId,
   userId,
   locale,
 }: {
-  to: string;
   mentorName?: string | null;
   menteeName: string;
   orgId?: string | null;
-  userId?: string | null;
+  userId: string;
   locale?: string | null;
 }) {
   const brand = await emailBrand(orgId);
@@ -3088,38 +3054,142 @@ export async function sendMenteeAssignedEmail({
   const M = (await emailDictionary(await assignedEmailLocale(locale, userId), orgId)).notifications.menteeAssignedEmail;
   const parts = assignedEmailParts(M, { self: mentorName, other: menteeName, selfKey: 'mentor', otherKey: 'mentee' });
   const home = notificationLink('MENTOR', 'dashboard', {}, { capabilities: await shellCapabilities(orgId) });
-  await sendEmail({
-    to,
-    userId,
-    category: 'mentee-assigned',
-    fromName: brand.name,
-    subject: parts.subject,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, parts.heading)}
-        ${parts.greeting}
-        ${parts.body}
-        ${ctaBlock(brand, `${base}${home}`, parts.cta)}
-      </div>
-    `,
+  await notifyEvent(userId, 'mentorship_request.menteeAssigned', { menteeName }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    email: {
+      category: 'mentee-assigned',
+      fromName: brand.name,
+      subject: parts.subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, parts.heading)}
+          ${parts.greeting}
+          ${parts.body}
+          ${ctaBlock(brand, `${base}${home}`, parts.cta)}
+        </div>
+      `,
+    },
+  });
+}
+
+// Mentor Offers (#1809): a mentor offered to mentor this mentee, or the one
+// reminder before the offer expires. Sent only to a mentee who opted in
+// (User.openToOffers) — the caller checks that and the opt-out chain; the
+// footer says why the mail came and where to switch it off.
+export async function sendMentorOfferEmail({
+  menteeName,
+  mentorName,
+  message,
+  kind,
+  orgId,
+  userId,
+  locale,
+}: {
+  menteeName: string;
+  mentorName: string;
+  message?: string | null;
+  kind: 'new' | 'reminder';
+  orgId?: string | null;
+  userId: string;
+  locale?: string | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const base = await appUrlForRecipient(orgId, userId);
+  const M = (await emailDictionary(await assignedEmailLocale(locale, userId), orgId)).notifications.mentorOfferEmail;
+  const fill = (t: string) => t.replace('{mentorName}', mentorName).replace('{name}', menteeName);
+  await notifyEvent(userId, 'mentor_offer.new', { mentorName }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    email: {
+      category: 'mentor-offer',
+      fromName: brand.name,
+      subject: fill(kind === 'new' ? M.newSubject : M.reminderSubject),
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, M.heading)}
+          <p>${esc(fill(M.greeting))}</p>
+          <p>${esc(fill(kind === 'new' ? M.newBody : M.reminderBody))}</p>
+          ${kind === 'new' && message ? `<p><strong>${esc(M.messageLabel)}</strong><br>${esc(message).replace(/\n/g, '<br>')}</p>` : ''}
+          ${ctaBlock(brand, `${base}/portal`, M.cta)}
+          <p style="color:#6b7280;font-size:12px">${esc(M.why)}</p>
+        </div>
+      `,
+    },
+  });
+}
+
+// The ONE ending-soon mail per agreed end date (#1786), to each participant of
+// a pairing — sent by src/lib/relationEndingSweep.ts after it claimed the
+// relation's stamp. The mentor's copy carries the signed one-click "extend by
+// the original length" link; the mentee cannot extend, so theirs does not.
+export async function sendRelationEndingEmail({
+  userId,
+  orgId,
+  locale,
+  recipientName,
+  otherName,
+  relationId,
+  endDay,
+  bookPath,
+  extend,
+}: {
+  userId: string;
+  orgId?: string | null;
+  locale?: string | null;
+  recipientName: string;
+  otherName: string;
+  relationId: string;
+  /** The agreed end, YYYY-MM-DD. */
+  endDay: string;
+  /** Where the recipient books the wrap-up meeting. */
+  bookPath: string;
+  /** Mentor only: the original length the link extends by. */
+  extend?: { months: number } | null;
+}) {
+  const brand = await emailBrand(orgId);
+  const base = await appUrlForRecipient(orgId, userId);
+  const lang = await assignedEmailLocale(locale, userId);
+  const M = (await emailDictionary(lang, orgId)).notifications.relationEndingEmail;
+  const date = formatInTimeZone(new Date(`${endDay}T00:00:00Z`), 'UTC', { dateStyle: 'long' }, intlLocaleFor(lang));
+  const fill = (t: string) =>
+    t.replace('{name}', otherName).replace('{recipient}', recipientName).replace('{date}', date).replace('{months}', String(extend?.months ?? ''));
+  await notifyEvent(userId, 'mentorship.ending_soon', { name: otherName, date: endDay, relationId }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    dedupeKey: dedupeKeyFor({ kind: 'relation-ending', relationId, userId, endDay }),
+    email: {
+      category: 'relation-ending',
+      // One per recipient per end date, even if the sweep is retried.
+      fromName: brand.name,
+      subject: fill(M.subject),
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, M.heading)}
+          <p>${esc(fill(M.greeting))}</p>
+          <p>${esc(fill(M.body))}</p>
+          ${ctaBlock(brand, `${base}${bookPath}`, M.bookCta)}
+          ${extend ? `<p>${esc(fill(M.extendHint))}</p>${ctaBlock(brand, extendRelationUrl(relationId, userId, endDay, base), fill(M.extendCta))}` : ''}
+          <p style="color:#6b7280;font-size:12px">${esc(M.why)}</p>
+        </div>
+      `,
+    },
   });
 }
 
 // An admin wiring up a mentorship directly (no prior mentee request, #668) —
 // the mentee never asked, so the request-approval copy would not fit.
 export async function sendMentorAssignedEmail({
-  to,
   menteeName,
   mentorName,
   orgId,
   userId,
   locale,
 }: {
-  to: string;
   menteeName?: string | null;
   mentorName: string;
   orgId?: string | null;
-  userId?: string | null;
+  userId: string;
   locale?: string | null;
 }) {
   const brand = await emailBrand(orgId);
@@ -3132,25 +3202,26 @@ export async function sendMentorAssignedEmail({
   // role-neutral place their contact person can be reached.
   const capabilities = await shellCapabilities(orgId);
   const home = capabilities.includes('mentorship') ? '/portal' : '/messages';
-  await sendEmail({
-    to,
-    userId,
-    category: 'mentor-assigned',
-    fromName: brand.name,
-    subject: parts.subject,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, parts.heading)}
-        ${parts.greeting}
-        ${parts.body}
-        ${ctaBlock(brand, `${base}${home}`, parts.cta)}
-      </div>
-    `,
+  await notifyEvent(userId, 'mentorship_request.mentorAssigned', { mentorName }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    email: {
+      category: 'mentor-assigned',
+      fromName: brand.name,
+      subject: parts.subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, parts.heading)}
+          ${parts.greeting}
+          ${parts.body}
+          ${ctaBlock(brand, `${base}${home}`, parts.cta)}
+        </div>
+      `,
+    },
   });
 }
 
 export async function sendMentorshipRequestEmail({
-  to,
   adminName,
   menteeName,
   targetPosition,
@@ -3158,32 +3229,33 @@ export async function sendMentorshipRequestEmail({
   orgId,
   userId,
 }: {
-  to: string;
   adminName?: string | null;
   menteeName: string;
   targetPosition?: string | null;
   message?: string | null;
   orgId?: string | null;
-  userId?: string | null;
+  userId: string;
 }) {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
-  await sendEmail({
-    to,
-    userId,
-    category: 'mentorship-request',
-    fromName: brand.name,
-    subject: `New mentorship request: ${menteeName}`,
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, 'New mentorship request')}
-        ${adminName ? `<p>Hi ${esc(adminName)},</p>` : ''}
-        <p><strong>${esc(menteeName)}</strong> asked to be matched with a mentor${targetPosition ? ` (target position: ${esc(targetPosition)})` : ''}.</p>
-        ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message)}</blockquote>` : ''}
-        ${ctaBlock(brand, `${base}/admin/mentorship`, 'Review the request')}
-      </div>
-    `,
+  await notifyEvent(userId, 'mentorship_request.new', { from: menteeName }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    email: {
+      category: 'mentorship-request',
+      fromName: brand.name,
+      subject: `New mentorship request: ${menteeName}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, 'New mentorship request')}
+          ${adminName ? `<p>Hi ${esc(adminName)},</p>` : ''}
+          <p><strong>${esc(menteeName)}</strong> asked to be matched with a mentor${targetPosition ? ` (target position: ${esc(targetPosition)})` : ''}.</p>
+          ${message ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444;">${esc(message)}</blockquote>` : ''}
+          ${ctaBlock(brand, `${base}/admin/mentorship`, 'Review the request')}
+        </div>
+      `,
+    },
   });
 }
 
@@ -3197,82 +3269,82 @@ export async function sendMentorshipRequestEmail({
 // by the person it is about.
 
 export async function sendRematchRequestedEmail({
-  to,
   adminName,
   menteeName,
   orgId,
   locale,
   userId,
 }: {
-  to: string;
   adminName?: string | null;
   menteeName: string;
   orgId?: string | null;
   /** The admin's User.preferredLanguage. */
   locale?: string | null;
-  userId?: string | null;
+  userId: string;
 }) {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const resolved = resolveLocale(locale);
   const R = (await emailDictionary(resolved, orgId)).notifications.rematchRequestedEmail;
-  await sendEmail({
-    to,
-    userId,
-    category: 'mentorship-request',
-    locale: resolved,
-    fromName: brand.name,
-    subject: R.subject.replace('{name}', menteeName),
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, esc(R.heading))}
-        ${adminName ? `<p>${esc(R.greeting.replace('{name}', adminName))}</p>` : ''}
-        <p>${esc(R.body.replace('{name}', menteeName))}</p>
-        <p style="color:#6b7280;font-size:14px;">${esc(R.privacy)}</p>
-        ${ctaBlock(brand, `${base}/admin/mentorship`, esc(R.cta))}
-      </div>
-    `,
+  await notifyEvent(userId, 'mentorship_request.rematch', { from: menteeName }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    email: {
+      category: 'mentorship-request',
+      locale: resolved,
+      fromName: brand.name,
+      subject: R.subject.replace('{name}', menteeName),
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, esc(R.heading))}
+          ${adminName ? `<p>${esc(R.greeting.replace('{name}', adminName))}</p>` : ''}
+          <p>${esc(R.body.replace('{name}', menteeName))}</p>
+          <p style="color:#6b7280;font-size:14px;">${esc(R.privacy)}</p>
+          ${ctaBlock(brand, `${base}/admin/mentorship`, esc(R.cta))}
+        </div>
+      `,
+    },
   });
 }
 
 export async function sendRematchMentorNoticeEmail({
-  to,
   mentorName,
   menteeName,
   orgId,
   locale,
   userId,
 }: {
-  to: string;
   mentorName?: string | null;
   menteeName: string;
   orgId?: string | null;
   /** The outgoing mentor's User.preferredLanguage. */
   locale?: string | null;
-  userId?: string | null;
+  userId: string;
 }) {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const resolved = resolveLocale(locale);
   const R = (await emailDictionary(resolved, orgId)).notifications.rematchMentorEmail;
-  await sendEmail({
-    to,
-    userId,
-    category: 'mentorship-decision',
-    locale: resolved,
-    fromName: brand.name,
-    subject: R.subject.replace('{name}', menteeName),
-    html: `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        ${brandHeader(brand, esc(R.heading))}
-        ${mentorName ? `<p>${esc(R.greeting.replace('{name}', mentorName))}</p>` : ''}
-        <p>${esc(R.body.replace('{name}', menteeName))}</p>
-        <p>${esc(R.thanks)}</p>
-        ${ctaBlock(brand, `${base}/mentor`, esc(R.cta))}
-      </div>
-    `,
+  await notifyEvent(userId, 'mentorship_request.rematchMentorNotice', { menteeName }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    email: {
+      category: 'mentorship-decision',
+      locale: resolved,
+      fromName: brand.name,
+      subject: R.subject.replace('{name}', menteeName),
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, esc(R.heading))}
+          ${mentorName ? `<p>${esc(R.greeting.replace('{name}', mentorName))}</p>` : ''}
+          <p>${esc(R.body.replace('{name}', menteeName))}</p>
+          <p>${esc(R.thanks)}</p>
+          ${ctaBlock(brand, `${base}/mentor`, esc(R.cta))}
+        </div>
+      `,
+    },
   });
 }
 
@@ -3448,8 +3520,11 @@ function formatOfferDate(d: Date | null | undefined, locale: Locale): string | n
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(d);
 }
 
-export async function sendOfferSentEmail({
-  to,
+// RENDER, NOT SEND (#1944): the offer mails are handed to the notification
+// router as a PrerenderedEmail (`notifyEvent(…, { email })`), which sends them
+// byte-for-byte once it has said yes — so the offer events gain the ledger, the
+// channel matrix, quiet hours and chat without a word of the mail changing.
+export async function renderOfferSentEmail({
   fullName,
   position,
   companyName,
@@ -3459,7 +3534,6 @@ export async function sendOfferSentEmail({
   orgId,
   userId,
 }: {
-  to: string;
   fullName: string;
   position: string;
   companyName?: string | null;
@@ -3468,7 +3542,7 @@ export async function sendOfferSentEmail({
   locale?: string | null;
   orgId?: string | null;
   userId?: string | null;
-}) {
+}): Promise<PrerenderedEmail> {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
@@ -3476,11 +3550,9 @@ export async function sendOfferSentEmail({
   const M = (await emailDictionary(loc, orgId)).offerEmail;
   const start = formatOfferDate(startDate, loc);
   const expires = formatOfferDate(expiresAt, loc);
-  await sendEmail({
-    to,
-    userId,
+  return {
     category: 'offer',
-    locale,
+    locale: locale ?? null,
     fromName: brand.name,
     subject: M.sent.subject.replace('{position}', position),
     html: `
@@ -3493,12 +3565,12 @@ export async function sendOfferSentEmail({
         ${ctaBlock(brand, `${base}/portal`, M.sent.cta)}
       </div>
     `,
-  });
+  };
 }
 
 // The trial reminder mail (#2415, copy from #2412, story #2392).
 //
-// Lives here rather than in the job for the reason `sendOfferSentEmail` does:
+// Lives here rather than in the job for the reason `renderOfferSentEmail` does:
 // the org brand header, the CTA block, `esc()` and `appUrl()` are this module's,
 // and a second copy of them in src/lib/jobs would drift. The job keeps the
 // DECISION (who, when, which threshold, and both preference gates); this
@@ -3517,7 +3589,6 @@ export async function sendOfferSentEmail({
 // stage-deadline nudge ("this record needs you before a date"), and somebody who
 // muted one meant to mute both. No new category, no new preference key.
 export async function sendTrialReminderEmail({
-  to,
   fullName,
   companyName,
   trialEndsAt,
@@ -3527,7 +3598,6 @@ export async function sendTrialReminderEmail({
   orgId,
   userId,
 }: {
-  to: string;
   fullName: string;
   /** The account the trial belongs to. A proper noun — never translated. */
   companyName: string;
@@ -3537,7 +3607,7 @@ export async function sendTrialReminderEmail({
   link: string;
   locale?: string | null;
   orgId?: string | null;
-  userId?: string | null;
+  userId: string;
 }) {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
@@ -3546,14 +3616,19 @@ export async function sendTrialReminderEmail({
   const M = getDictionary(loc).trials;
   const subject = threshold >= 7 ? M.subject7 : threshold >= 3 ? M.subject3 : M.subject0;
   const endsOn = new Intl.DateTimeFormat(dateLocale(loc), { dateStyle: 'medium', timeZone: 'UTC' }).format(trialEndsAt);
-  await sendEmail({
-    to,
-    userId,
-    category: 'stage-deadline',
-    locale,
-    fromName: brand.name,
-    subject: subject.replace('{company}', companyName),
-    html: `
+  // Through the router (#1711): the copy built here, sent as-is.
+  await notifyEvent(userId, 'trial.endingSoon', { company: companyName, days: String(threshold) }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    // One reminder per (trial end, threshold): a second tick — another replica,
+    // a retried job — is absorbed by the ledger instead of queuing a twin.
+    dedupeKey: `trial:${trialEndsAt.toISOString().slice(0, 10)}:${threshold}`,
+    email: {
+      category: 'stage-deadline',
+      locale,
+      fromName: brand.name,
+      subject: subject.replace('{company}', companyName),
+      html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         ${brandHeader(brand, esc(M.heading))}
         <p>${esc(M.greeting.replace('{name}', fullName))}</p>
@@ -3562,11 +3637,11 @@ export async function sendTrialReminderEmail({
         ${ctaBlock(brand, `${base}${link}`, esc(M.cta))}
       </div>
     `,
+    },
   });
 }
 
-export async function sendOfferDecisionEmail({
-  to,
+export async function renderOfferDecisionEmail({
   fullName,
   menteeName,
   position,
@@ -3575,7 +3650,6 @@ export async function sendOfferDecisionEmail({
   orgId,
   userId,
 }: {
-  to: string;
   fullName: string;
   menteeName: string;
   position: string;
@@ -3583,17 +3657,15 @@ export async function sendOfferDecisionEmail({
   locale?: string | null;
   orgId?: string | null;
   userId?: string | null;
-}) {
+}): Promise<PrerenderedEmail> {
   const brand = await emailBrand(orgId);
   // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
   const base = await appUrlForRecipient(orgId, userId);
   const M = (await emailDictionary(resolveLocale(locale), orgId)).offerEmail;
   const copy = outcome === 'ACCEPTED' ? M.accepted : outcome === 'DECLINED' ? M.declined : M.expired;
-  await sendEmail({
-    to,
-    userId,
+  return {
     category: 'offer',
-    locale,
+    locale: locale ?? null,
     fromName: brand.name,
     subject: copy.subject.replace('{mentee}', menteeName),
     html: `
@@ -3604,7 +3676,7 @@ export async function sendOfferDecisionEmail({
         ${ctaBlock(brand, `${base}/admin/candidates`, M.cta)}
       </div>
     `,
-  });
+  };
 }
 
 // Account role converted by an admin (#1252). Deliberately NOT gated on
@@ -4480,6 +4552,17 @@ export async function checkStageDeadlineReminders() {
   };
   const brandOf = createBrandBook();
   const dictionaryOf = emailDictionaryMemo();
+  // One business-day rule per programme for the tick (#1638).
+  const dayRules = new Map<string, ReturnType<typeof resolveSlaDayRule>>();
+  const dayRuleOf = (rel: { orgId: string | null; cohortId: string | null }) => {
+    const key = `${rel.orgId ?? ''}|${rel.cohortId ?? ''}`;
+    let hit = dayRules.get(key);
+    if (!hit) {
+      hit = resolveSlaDayRule({ orgId: rel.orgId, cohortId: rel.cohortId });
+      dayRules.set(key, hit);
+    }
+    return hit;
+  };
 
   const candidates = await prisma.mentorshipRelation.findMany({
     // Not a paused pair (#1772): its clock is frozen (stageClockPatch), this is the second guard.
@@ -4542,16 +4625,27 @@ export async function checkStageDeadlineReminders() {
             const subject = emailText.subject.replace('{mentee}', rel.mentee.fullName);
             const greeting = emailText.greeting.replace('{mentor}', rel.mentor.fullName);
             const body = emailText.body.replace('{mentee}', `<strong>${rel.mentee.fullName}</strong>`);
-            await brandOf(rel.orgId).then((brand) => sendEmail({
-              category: 'stage-deadline',
-              userId: rel.mentorId,
-              // The record's org — the same one that picks the bell's link above.
-              orgId: rel.orgId,
-              locale: rel.mentor.preferredLanguage,
-              to: rel.mentor.email,
-              subject,
-              html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
-            })).catch((error) => {
+            // Say which day mode produced the date, so a mentor questioning it can see why (#1638).
+            const dayNote = (await dayRuleOf(rel)).mode === 'business' ? `<p style="color:#6b7280;font-size:13px;">${esc(emailText.businessDays)}</p>` : '';
+            // Through the router (#1711), the same event and key as the bell above:
+            // the mail is the copy built here, sent as-is, once per breach rung.
+            await brandOf(rel.orgId).then((brand) => notifyEvent(
+              rel.mentor,
+              'deadline.stagePassed',
+              { menteeName: rel.mentee.fullName, relationId: rel.id },
+              {
+                channels: ['email'],
+                // The record's org — the same one that picks the bell's link above.
+                orgId: rel.orgId,
+                dedupeKey: `sla-breach:${opened.id}:1`,
+                email: {
+                  category: 'stage-deadline',
+                  locale: rel.mentor.preferredLanguage,
+                  subject,
+                  html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>${dayNote}`,
+                },
+              },
+            )).catch((error) => {
               console.error('checkStageDeadlineReminders email failed:', { relationId: rel.id, mentorId: rel.mentorId, error });
             });
           }
@@ -4577,7 +4671,7 @@ export async function checkStageDeadlineReminders() {
     if (!(await claimEscalation(breach.id, breach.level, now))) continue;
     escalated++;
     const days = daysOverdue(dueAt, now);
-    const admins = await escalationRecipients(rel.orgId);
+    const admins = await escalationRecipients(rel.orgId, rel);
     await notifyEvent(
       admins,
       'deadline.slaEscalated',
@@ -4595,15 +4689,23 @@ export async function checkStageDeadlineReminders() {
         .replace('{mentee}', `<strong>${esc(rel.mentee.fullName)}</strong>`)
         .replace('{mentor}', esc(rel.mentor.fullName))
         .replace('{days}', String(days));
-      await brandOf(rel.orgId).then((brand) => sendEmail({
-        category: 'stage-deadline',
-        userId: admin.id,
-        orgId: rel.orgId,
-        locale: admin.preferredLanguage,
-        to: admin.email,
-        subject,
-        html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
-      })).catch((error) => {
+      // Through the router (#1711), the same event and key as the bell above.
+      await brandOf(rel.orgId).then((brand) => notifyEvent(
+        admin,
+        'deadline.slaEscalated',
+        { menteeName: rel.mentee.fullName, mentorName: rel.mentor.fullName, days: String(days), relationId: rel.id, menteeId: rel.menteeId },
+        {
+          channels: ['email'],
+          orgId: rel.orgId,
+          dedupeKey: `sla-breach:${breach.id}:${breach.level + 1}`,
+          email: {
+            category: 'stage-deadline',
+            locale: admin.preferredLanguage,
+            subject,
+            html: `${worldHeading(brand, esc(subject), '')}<p>${greeting}</p><p>${body}</p>`,
+          },
+        },
+      )).catch((error) => {
         console.error('SLA escalation email failed:', { relationId: rel.id, adminId: admin.id, error });
       });
     }
@@ -4737,18 +4839,20 @@ export async function checkNextActionReminders(now = new Date()) {
         const base = await origins.urlFor(owner.orgId);
         const brand = await brandOf(owner.orgId);
         const subject = text.subject.replace('{name}', name);
-        await sendEmail({
-          category: 'stage-deadline',
-          userId: owner.id,
+        // Through the router (#1711): the copy built here, sent as-is.
+        await notifyEvent(owner.id, 'deadline.nextActionDue', { name, relationId: rel.id, menteeId: rel.menteeId }, {
+          channels: ['email'],
           orgId: owner.orgId,
-          locale: owner.preferredLanguage,
-          to: owner.email,
-          subject,
-          html: `${worldHeading(brand, esc(subject), '')}<p>${esc(text.greeting.replace('{owner}', owner.fullName))}</p><p>${esc(text.body.replace('{name}', name))}</p>${noteHtml}${
-            brand.vertical === DEFAULT_VERTICAL
-              ? `<p><a href="${base}${link}">${esc(text.cta)}</a></p>`
-              : ctaBlock(brand, `${base}${link}`, esc(text.cta))
-          }`,
+          email: {
+            category: 'stage-deadline',
+            locale: owner.preferredLanguage,
+            subject,
+            html: `${worldHeading(brand, esc(subject), '')}<p>${esc(text.greeting.replace('{owner}', owner.fullName))}</p><p>${esc(text.body.replace('{name}', name))}</p>${noteHtml}${
+              brand.vertical === DEFAULT_VERTICAL
+                ? `<p><a href="${base}${link}">${esc(text.cta)}</a></p>`
+                : ctaBlock(brand, `${base}${link}`, esc(text.cta))
+            }`,
+          },
         });
       } catch (error) {
         failures += 1;
@@ -4775,7 +4879,7 @@ export async function sendWeeklyReportReminders(now = new Date(), options: { rel
     where: {
       ...(options.relationIds ? { id: { in: options.relationIds } } : {}),
       // Not a paused pair (#1772): reports are still accepted, just never chased during a pause.
-      ...activeRelationWhere(), pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', mentee: { isActive: true },
+      ...activeRelationWhere(), pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', mentee: { isActive: true, ...notBenched() },
       weeklyReports: { none: { weekStart, status: { in: [...SUBMITTED_WEEKLY_REPORT_STATUSES] } } },
     },
     select: {
@@ -4883,8 +4987,9 @@ export async function sendWeeklyReportReminders(now = new Date(), options: { rel
  * morning.
  *
  * No in-app notification: the entire premise is a person who does not sign in.
- * The mail is the only channel that can reach them, and a bell item nobody will
- * ever look at is not a second attempt.
+ * The mail is the channel that can reach them — or chat, where they linked one
+ * (#1946): then the same claimed nudge goes there instead of the mail, never
+ * as well. A bell item nobody will ever look at is not a second attempt.
  */
 // No DORMANT_FIRST_NUDGE_DAYS here: the first nudge's timing is DORMANT_GRACE_DAYS
 // in lib/dormantFirstContact.ts, spent before the flag is even stamped. Two
@@ -4906,7 +5011,8 @@ export async function sendDormantCheckIns(now = new Date()) {
       ...activeRelationWhere(),
       dormantSince: { not: null },
       dormantNudgeCount: { lt: DORMANT_MAX_NUDGES },
-      mentee: { isActive: true },
+      // Not inactive, not on the bench (#1778): nobody on the bench is nudged.
+      mentee: { isActive: true, ...notBenched() },
     },
     select: {
       id: true,
@@ -5022,22 +5128,38 @@ export async function sendDormantCheckIns(now = new Date()) {
     spentByMentee.set(relation.mentee.id, spent + 1);
     lastNudgeByMentee.set(relation.mentee.id, now);
 
+    // "Final" is the person's last nudge, not the relation's.
+    const isFinal = spent + 1 >= DORMANT_MAX_NUDGES;
+    // CHAT IS A CHANNEL, NOT A THIRD NUDGE (#1946): the nudge just claimed is
+    // delivered as a chat card INSTEAD of this mail when the mentee linked a
+    // chat identity; the mail below only goes when the card did not. One
+    // claim, one message, whichever channel — the two-ever cap above is the
+    // one counter for both.
+    if (await deliverCheckInOnChat(relation.mentee.id, isFinal, `dormant:${relation.id}:${count + 1}`)) {
+      sent += 1;
+      continue;
+    }
+
     const locale = isLocale(relation.mentee.preferredLanguage ?? undefined)
       ? (relation.mentee.preferredLanguage as Locale)
       : defaultLocale;
     const copy = (await dictionaryOf(locale, relation.orgId)).dormantCheckIn;
-    // "Final" is the person's last nudge, not the relation's.
-    const isFinal = spent + 1 >= DORMANT_MAX_NUDGES;
     const brand = await emailBrand(relation.orgId);
     const base = await origins.urlFor(relation.mentee.orgId);
-    await sendEmail({
-      to: relation.mentee.email,
-      fromName: brand.name,
-      category: 'dormant-check-in',
-      userId: relation.mentee.id,
-      locale: relation.mentee.preferredLanguage,
-      subject: copy.subject,
-      html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.heading)}<p>${copy.greeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${isFinal ? copy.finalBody : copy.firstBody}</p><p style="color:#666;font-size:13px;">${copy.hint}</p>${ctaBlock(brand, `${base}/portal`, copy.cta)}</div>`,
+    // Through the router (#1711), the copy built here sent as-is. The key is the
+    // chat card's (`dormant:<relation>:<n>`): one claimed nudge, one delivery
+    // per channel, so a rerun of this tick cannot queue the mail twice.
+    await notifyEvent(relation.mentee.id, isFinal ? 'dormant.checkIn.final' : 'dormant.checkIn.first', {}, {
+      channels: ['email'],
+      orgId: relation.mentee.orgId ?? relation.orgId ?? null,
+      dedupeKey: `dormant:${relation.id}:${count + 1}`,
+      email: {
+        category: 'dormant-check-in',
+        locale: relation.mentee.preferredLanguage,
+        fromName: brand.name,
+        subject: copy.subject,
+        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">${brandHeader(brand, copy.heading)}<p>${copy.greeting.replace('{name}', esc(relation.mentee.fullName))}</p><p>${isFinal ? copy.finalBody : copy.firstBody}</p><p style="color:#666;font-size:13px;">${copy.hint}</p>${ctaBlock(brand, `${base}/portal`, copy.cta)}</div>`,
+      },
     })
       .then(() => { sent += 1; })
       .catch((error) => logger.error('Dormant check-in email failed', { relationId: relation.id, error: String(error) }));
@@ -5063,9 +5185,24 @@ export const MEETING_REMINDER_WINDOW_MINUTES = 60;
 // Marking first means a mid-send failure loses a reminder rather than
 // duplicating one — the far less annoying failure mode, and it keeps the in-app
 // notification and the email behind the same single marker.
+//
+// LEAD TIMES (#1636, src/lib/meetingReminderLeads.ts): a meeting may carry its
+// own lead (`reminderLeadMinutes`, 0 = none) and a programme may set a list
+// (`meetingReminderLeadsMinutes`); with neither, the one lead is the hour above
+// and everything below behaves exactly as it always did. Each lead is claimed
+// in `remindedLeads` by one guarded update; the smallest lead also stamps
+// `reminderSentAt`, so a meeting reminded before the deploy is not reminded
+// again.
 export async function sendMeetingReminders() {
+  return withSettingsCache(sendMeetingRemindersInner);
+}
+
+async function sendMeetingRemindersInner() {
   const now = new Date();
-  const horizon = new Date(now.getTime() + MEETING_REMINDER_WINDOW_MINUTES * 60 * 1000);
+  // The furthest any lead can reach; each meeting is then judged on its own leads.
+  const horizon = new Date(now.getTime() + lookaheadMinutes([MAX_LEAD_MINUTES]) * 60 * 1000);
+  const leadsSettingOf = (orgId: string | null, programId: string | null) =>
+    settingsOrgOfRow(orgId).then((org) => resolveSettingRaw('meetingReminderLeadsMinutes', { orgId: org, programId }));
   const participantSelect = {
     id: true,
     email: true,
@@ -5091,8 +5228,11 @@ export async function sendMeetingReminders() {
     // so they never match the scheduledAt window either.
     where: {
       scheduledAt: { gt: now, lte: horizon },
-      reminderSentAt: null,
       seriesId: null,
+      // A meeting that asked for no reminder is never loaded. Spelled with an
+      // explicit NULL branch: `NOT (col = 0)` is NULL — false — for a NULL row in
+      // SQL, so `NOT: { reminderLeadMinutes: 0 }` would drop every default meeting.
+      OR: [{ reminderLeadMinutes: null }, { reminderLeadMinutes: { gt: 0 } }],
       relationId: { not: null },
       // A cancelled meeting (#1980) is not reminded about. Moving one clears
       // `reminderSentAt`, so the new time gets its own reminder from here.
@@ -5130,10 +5270,26 @@ export async function sendMeetingReminders() {
   for (const m of meetings) {
     // Guaranteed by the query above; the guard is what tells TypeScript so.
     if (!m.relation) continue;
+    const leads = leadsFor({
+      override: m.reminderLeadMinutes,
+      configured: parseLeadList(await leadsSettingOf(m.relation.orgId, m.relation.cohortId)),
+      legacy: LEGACY_MEETING_LEADS,
+    });
+    if (leads.length === 0) continue;
+    const smallest = Math.min(...leads);
+    const sentLeads = readRemindedLeads(m.remindedLeads);
+    // A pre-#1636 claim covers the one lead that existed then.
+    if (m.reminderSentAt) sentLeads.add(smallest);
+    const minutesAway = (m.scheduledAt!.getTime() - now.getTime()) / 60000;
+    const lead = dueLead(minutesAway, leads, sentLeads);
+    if (lead === null) continue;
     // Claim it first — see the idempotency note above.
     const claim = await prisma.meeting.updateMany({
-      where: { id: m.id, reminderSentAt: null },
-      data: { reminderSentAt: new Date() },
+      where: { id: m.id, remindedLeads: m.remindedLeads, ...(lead === smallest ? { reminderSentAt: null } : {}) },
+      data: {
+        remindedLeads: writeRemindedLeads(new Set([...sentLeads, lead])),
+        ...(lead === smallest ? { reminderSentAt: new Date() } : {}),
+      },
     });
     if (claim.count === 0) continue;
     reminded++;
@@ -5147,22 +5303,29 @@ export async function sendMeetingReminders() {
     );
 
     for (const user of participants) {
-      const link = user.id === m.relation.mentorId ? '/mentor/meetings' : '/portal/calendar';
       // LOCALE (#1720): the recipient is a signed-up participant, so the
       // language is their own stored preference — for the mail below and for
       // the date it is about. Resolved up here because the in-app notification
       // carries the same pre-rendered string and is addressed to the same
       // person.
+      // The mail's button target (the bell's link is the router's own).
+      const link = user.id === m.relation.mentorId ? '/mentor/meetings' : '/portal/calendar';
       const uLocale = resolveLocale(user.preferredLanguage);
       // Per participant: the two sides of a relation can sit in different zones,
       // and each must read the time on their own clock (#1030).
       const when = formatInTimeZone(m.scheduledAt!, user.timezone, undefined, dateLocale(uLocale));
-      // In-app: unconditional (notify() never throws).
-      await notify(
+      // The bell, push and chat (#1942) through the router — never a chat
+      // call from here. `reminderSentAt` (claimed above) is the single-shot
+      // guard for every channel together; the dedupe key holds the same line
+      // inside the router should one participant be reached twice.
+      await notifyEvent(
         user.id,
         'meeting_reminder.startingSoon',
         { title: m.title, minutes, when },
-        link
+        {
+          dedupeKey: `meeting-reminder:${m.id}:${user.id}:${m.scheduledAt!.toISOString()}`,
+          chatCard: meetingChatCard(m, 'reminder'),
+        }
       );
       notified++;
 
@@ -5182,7 +5345,7 @@ export async function sendMeetingReminders() {
           orgId: user.orgId,
           // On the queue (#2951): one reminder per participant per start time,
           // however often the tick runs, and none once the meeting has begun.
-          dedupeKey: dedupeKeyFor({ kind: 'meeting-reminder', meetingId: m.id, userId: user.id, at: m.scheduledAt! }),
+          dedupeKey: dedupeKeyFor({ kind: 'meeting-reminder', meetingId: m.id, userId: user.id, at: m.scheduledAt!, lead }),
           notAfter: m.scheduledAt!,
           locale: uLocale,
           subject: R.subject.replace('{title}', m.title),
@@ -5233,6 +5396,7 @@ export async function sendMeetingReminders() {
           // …and whose product this is: the organizer's world, as for the invite.
           orgId: m.relation.orgId ?? m.relation.mentor?.orgId ?? null,
           meetingId: m.id,
+          lead,
         });
         emailed++;
       } catch (e) {
@@ -5258,6 +5422,7 @@ async function sendMeetingGuestReminderEmail({
   locale,
   orgId,
   meetingId,
+  lead,
 }: {
   to: string;
   name?: string | null;
@@ -5272,6 +5437,8 @@ async function sendMeetingGuestReminderEmail({
   orgId?: string | null;
   /** The meeting, for the queued mail's natural key (#2951). */
   meetingId?: string;
+  /** The lead this reminder is for (#1636); part of its dedupe key. */
+  lead?: number;
 }) {
   const zone = resolveTimeZone(organizerTimeZone);
   const resolved = resolveLocale(locale);
@@ -5288,7 +5455,7 @@ async function sendMeetingGuestReminderEmail({
     // declines, which is the only "opt out" that address can express.
     category: 'meeting-guest-reminder',
     // On the queue (#2951): once per guest per start time, never after it.
-    ...(meetingId ? { dedupeKey: dedupeKeyFor({ kind: 'guest-reminder', meetingId, guest: to, at: scheduledAt }) } : {}),
+    ...(meetingId ? { dedupeKey: dedupeKeyFor({ kind: 'guest-reminder', meetingId, guest: to, at: scheduledAt, lead }) } : {}),
     notAfter: scheduledAt,
     locale: resolved,
     subject: R.subject.replace('{title}', title),
@@ -5329,14 +5496,17 @@ function upcomingSeriesOccurrences(series: SeriesRule, from: Date, withinMinutes
   return ruleOccurrences(series, from, horizon).filter((when) => when > from);
 }
 
-function leadFor(minutesAway: number): 'DAY_BEFORE' | 'HOUR_BEFORE' | null {
-  if (minutesAway <= 60) return 'HOUR_BEFORE';
-  if (minutesAway >= 23 * 60) return 'DAY_BEFORE';
-  return null;
+// Which lead is due is src/lib/meetingReminderLeads.ts (#1636): with nothing
+// configured the leads are [1440, 60] and the windows are exactly the old
+// DAY_BEFORE (from 23h on) and HOUR_BEFORE (≤ 60 min).
+export async function sendProjectMeetingSeriesReminders() {
+  return withSettingsCache(sendProjectMeetingSeriesRemindersInner);
 }
 
-export async function sendProjectMeetingSeriesReminders() {
+async function sendProjectMeetingSeriesRemindersInner() {
   const now = new Date();
+  const leadsSettingOf = (orgId: string | null, programId: string | null) =>
+    settingsOrgOfRow(orgId).then((org) => resolveSettingRaw('meetingReminderLeadsMinutes', { orgId: org, programId }));
   const seriesList = await prisma.meetingSeries.findMany({
     // A project's recurring call, and a standing 1:1 on a live relation (#2013).
     where: {
@@ -5354,6 +5524,7 @@ export async function sendProjectMeetingSeriesReminders() {
       relation: {
         select: {
           orgId: true,
+          cohortId: true,
           mentorId: true,
           menteeId: true,
           mentor: { select: { fullName: true } },
@@ -5376,8 +5547,27 @@ export async function sendProjectMeetingSeriesReminders() {
     const oneToOne = !series.projectId ? series.relation : null;
     if (!series.projectId && !oneToOne) continue;
 
-    const occurrences = upcomingSeriesOccurrences(series, now, SERIES_LOOKAHEAD_MINUTES);
+    // The series' lead times (#1636): its programme's (a 1:1's cohort), else its org's.
+    const leads = leadsFor({
+      configured: parseLeadList(
+        await leadsSettingOf(series.project?.orgId ?? oneToOne?.orgId ?? null, oneToOne?.cohortId ?? null),
+      ),
+      legacy: LEGACY_SERIES_LEADS,
+    });
+    if (leads.length === 0) continue;
+    const occurrences = upcomingSeriesOccurrences(series, now, Math.max(SERIES_LOOKAHEAD_MINUTES, lookaheadMinutes(leads)));
     if (occurrences.length === 0) continue;
+    // What was already sent per occurrence — rows from before #1636 carry only the enum.
+    const sentRows = await prisma.meetingSeriesReminder.findMany({
+      where: { seriesId: series.id, occurrenceAt: { in: occurrences } },
+      select: { occurrenceAt: true, lead: true, leadMinutes: true },
+    });
+    const sentFor = (when: Date) =>
+      new Set(
+        sentRows
+          .filter((r) => r.occurrenceAt.getTime() === when.getTime())
+          .map((r) => r.leadMinutes ?? (r.lead === 'DAY_BEFORE' ? 1440 : 60)),
+      );
 
     // The whole team, not just the ProjectMember rows: a mentee attached to the
     // project the legacy way (MentorshipRelation.projectId) is expected at the
@@ -5410,12 +5600,16 @@ export async function sendProjectMeetingSeriesReminders() {
     await origins.prefetch(recipients.map((r) => r.orgId));
 
     for (const when of occurrences) {
-      const lead = leadFor((when.getTime() - now.getTime()) / 60000);
-      if (!lead) continue;
+      const lead = dueLead((when.getTime() - now.getTime()) / 60000, leads, sentFor(when));
+      if (lead === null) continue;
+      const soon = !isDayAheadLead(lead);
+      // The pre-#1636 key for 1440/60, so the queue dedupes across the deploy.
+      const leadKey = legacyLeadEnum(lead) ?? `L${lead}`;
 
-      // Claim first — see the idempotency note above.
+      // Claim first — see the idempotency note above. Both unique keys guard it:
+      // (…, leadMinutes) and, for 1440/60, the old (…, lead) a pre-deploy row holds.
       try {
-        await prisma.meetingSeriesReminder.create({ data: { seriesId: series.id, occurrenceAt: when, lead } });
+        await prisma.meetingSeriesReminder.create({ data: { seriesId: series.id, occurrenceAt: when, lead: legacyLeadEnum(lead), leadMinutes: lead } });
       } catch (e) {
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') continue;
         throw e;
@@ -5436,7 +5630,7 @@ export async function sendProjectMeetingSeriesReminders() {
         const whenLocal = formatInTimeZone(when, user.timezone, undefined, dateLocale(uLocale));
         await notify(
           user.id,
-          lead === 'HOUR_BEFORE' ? 'meeting_reminder.seriesSoon' : 'meeting_reminder.seriesTomorrow',
+          soon ? 'meeting_reminder.seriesSoon' : 'meeting_reminder.seriesTomorrow',
           { title: series.title, project: projectName, when: whenLocal },
           link
         );
@@ -5463,11 +5657,11 @@ export async function sendProjectMeetingSeriesReminders() {
             orgId: user.orgId,
             // On the queue (#2951): one per member per occurrence and lead
             // time, and none once the occurrence has started.
-            dedupeKey: dedupeKeyFor({ kind: 'series-reminder', seriesId: series.id, userId: user.id, at: when, lead }),
+            dedupeKey: dedupeKeyFor({ kind: 'series-reminder', seriesId: series.id, userId: user.id, at: when, lead: leadKey }),
             notAfter: when,
             locale: uLocale,
             subject:
-              lead === 'HOUR_BEFORE'
+              soon
                 ? S.subjectSoon.replace('{title}', series.title)
                 : S.subjectTomorrow.replace('{title}', series.title).replace('{project}', projectName),
             html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -5506,7 +5700,7 @@ export async function sendWeeklyMentorDigests() {
   const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   const mentors = await prisma.user.findMany({
-    where: { role: 'MENTOR', isActive: true },
+    where: { role: 'MENTOR', isActive: true, ...notBenched() },
     select: {
       id: true,
       orgId: true,
@@ -5579,24 +5773,25 @@ export async function sendWeeklyMentorDigests() {
     try {
       const base = await origins.urlFor(m.orgId);
       const brand = await brandOf(m.orgId);
-      await sendEmail({
-        category: 'mentor-digest',
-        userId: m.id,
-        orgId: m.orgId,
+      await notifyEvent(m.id, 'digest.mentorWeekly', {}, {
+        channels: ['email'],
+        orgId: m.orgId ?? null,
         dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'mentor-weekly', userId: m.id, day: utcDayKey(new Date()) }),
-        to: m.email,
-        locale: mLocale,
-        subject: D.subject,
-        html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          ${worldHeading(brand, esc(D.heading), `<h2 style="color:#2563eb;">${esc(D.heading)}</h2>`)}
-          <p>${esc(D.greeting.replace('{name}', m.fullName))}</p>
-          <ul>
-            ${countLine(D.stale, stale)}
-            ${countLine(D.upcoming, upcoming)}
-            ${countLine(D.newApplications, newApplications)}
-          </ul>
-          <a href="${base}/mentor" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(D.cta)}</a>
-        </div>`,
+        email: {
+          category: 'mentor-digest',
+          locale: mLocale,
+          subject: D.subject,
+          html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            ${worldHeading(brand, esc(D.heading), `<h2 style="color:#2563eb;">${esc(D.heading)}</h2>`)}
+            <p>${esc(D.greeting.replace('{name}', m.fullName))}</p>
+            <ul>
+              ${countLine(D.stale, stale)}
+              ${countLine(D.upcoming, upcoming)}
+              ${countLine(D.newApplications, newApplications)}
+            </ul>
+            <a href="${base}/mentor" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(D.cta)}</a>
+          </div>`,
+        },
       });
       sent++;
     } catch (e) {
@@ -5750,20 +5945,21 @@ async function sendOverdueTodoMail(
   const block = await overdueTodoBlock(reach, locale, u.id, undefined, false);
   if (!block) return false;
   const A = (await emailDictionary(locale, u.orgId)).notifications.activityDigestEmail;
-  await sendEmail({
-    category: 'activity-digest',
-    userId: u.id,
-    orgId: u.orgId,
+  await notifyEvent(u.id, 'digest.overdueTodos', {}, {
+    channels: ['email'],
+    orgId: u.orgId ?? null,
     dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'activity-todo', userId: u.id, day: utcDayKey(new Date()) }),
-    to: u.email,
-    locale: u.preferredLanguage,
-    subject: A.todoSubject,
-    html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
-      ${worldHeading(brand, esc(A.todoSubject), `<h2 style="color:#2563eb;">${esc(A.todoSubject)}</h2>`)}
-      <p>${esc(A.todoGreeting.replace('{name}', u.fullName))}</p>
-      ${block}
-      <p style="margin-top:16px;"><a href="${base}/todos" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.todoCta)}</a></p>
-    </div>`,
+    email: {
+      category: 'activity-digest',
+      locale: u.preferredLanguage,
+      subject: A.todoSubject,
+      html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+        ${worldHeading(brand, esc(A.todoSubject), `<h2 style="color:#2563eb;">${esc(A.todoSubject)}</h2>`)}
+        <p>${esc(A.todoGreeting.replace('{name}', u.fullName))}</p>
+        ${block}
+        <p style="margin-top:16px;"><a href="${base}/todos" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.todoCta)}</a></p>
+      </div>`,
+    },
   });
   return true;
 }
@@ -5779,7 +5975,7 @@ export async function sendDailyActivityDigests() {
   let skipped = 0;
 
   const mentors = await prisma.user.findMany({
-    where: { role: 'MENTOR', isActive: true },
+    where: { role: 'MENTOR', isActive: true, ...notBenched() },
     // #1720: `preferredLanguage` was missing here too — every recipient of this
     // digest is a registered user, so their own preference is the whole answer.
     select: { id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true },
@@ -5826,22 +6022,23 @@ export async function sendDailyActivityDigests() {
     try {
       const base = await origins.urlFor(m.orgId);
       const brand = await brandOf(m.orgId);
-      await sendEmail({
-        category: 'activity-digest',
-        userId: m.id,
-        orgId: m.orgId,
+      await notifyEvent(m.id, 'digest.activity', {}, {
+        channels: ['email'],
+        orgId: m.orgId ?? null,
         dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'activity-mentor', userId: m.id, day: utcDayKey(new Date()) }),
-        to: m.email,
-        locale: mLocale,
-        subject: A.subject,
-        html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
-          ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
-          <p>${esc(A.greetingMentor.replace('{name}', m.fullName))}</p>
-          ${activityDigestTable(items, mLocale, A)}
-          ${overdue}
-          <p style="margin-top:16px;"><a href="${base}/mentor/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
-          <p style="color:#9ca3af;font-size:12px;">${esc(A.trackingNote)}</p>
-        </div>`,
+        email: {
+          category: 'activity-digest',
+          locale: mLocale,
+          subject: A.subject,
+          html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+            ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
+            <p>${esc(A.greetingMentor.replace('{name}', m.fullName))}</p>
+            ${activityDigestTable(items, mLocale, A)}
+            ${overdue}
+            <p style="margin-top:16px;"><a href="${base}/mentor/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
+            <p style="color:#9ca3af;font-size:12px;">${esc(A.trackingNote)}</p>
+          </div>`,
+        },
       });
       sent++;
     } catch (e) {
@@ -5854,9 +6051,10 @@ export async function sendDailyActivityDigests() {
   // tenant, i.e. one product's mentee names in the other product's inbox. A
   // NULL-org admin is the default org's (orgWhere), the rule tenantWhere()
   // applies on every screen.
+  // PROGRAM_ADMINs included: each one's table is narrowed below (#1577).
   const adminsByOrg = await activeAdminsByOrg({
     id: true, orgId: true, email: true, fullName: true, emailNotifications: true, notificationPrefs: true, preferredLanguage: true,
-  });
+  }, { includeProgramAdmins: true });
   const admins = [...adminsByOrg.values()].flat();
   await origins.prefetch(admins.map((a) => a.orgId));
   for (const [orgId, orgAdmins] of adminsByOrg) {
@@ -5872,8 +6070,11 @@ export async function sendDailyActivityDigests() {
           skipped++;
           continue;
         }
+        // A PROGRAM_ADMIN's to-dos: the people of its programmes only (#3485).
+        const todoGrants = await programGrantsFor({ id: a.id, role: 'ADMIN', orgId });
+        const todoPeople = (todoGrants ? { AND: [orgFilter, programPeopleWhere(todoGrants)] } : orgFilter) as Prisma.UserWhereInput;
         try {
-          if (await sendOverdueTodoMail(a, { assignee: { is: orgFilter } }, await origins.urlFor(a.orgId), brand)) sent++;
+          if (await sendOverdueTodoMail(a, { assignee: { is: todoPeople } }, await origins.urlFor(a.orgId), brand)) sent++;
         } catch (e) {
           console.error('Overdue to-do mail failed:', e);
         }
@@ -5888,27 +6089,34 @@ export async function sendDailyActivityDigests() {
         skipped++;
         continue;
       }
+      // A PROGRAM_ADMIN's table holds its own programmes' mentees only (#1577).
+      const grants = await programGrantsFor({ id: a.id, role: 'ADMIN', orgId });
+      const items = grants ? await getSystemMenteeActivity(since, orgFilter, programRelationWhere(grants) as Prisma.MentorshipRelationWhereInput) : adminItems;
+      if (items.length === 0) continue;
       const aLocale = resolveLocale(a.preferredLanguage);
       const A = (await dictionaryOf(aLocale, a.orgId)).notifications.activityDigestEmail;
-      // Their own organisation's to-dos, by the same org rule as the table.
-      const overdue = await overdueTodoBlock({ assignee: { is: orgFilter } }, aLocale, a.id, A);
+      // Their own organisation's to-dos, by the same org rule as the table —
+      // a PROGRAM_ADMIN's narrowed to its programmes' people (#3485).
+      const todoPeople = (grants ? { AND: [orgFilter, programPeopleWhere(grants)] } : orgFilter) as Prisma.UserWhereInput;
+      const overdue = await overdueTodoBlock({ assignee: { is: todoPeople } }, aLocale, a.id, A);
       try {
         const base = await origins.urlFor(a.orgId);
-        await sendEmail({
-          category: 'activity-digest',
-          userId: a.id,
-          orgId: a.orgId,
+        await notifyEvent(a.id, 'digest.activity', {}, {
+          channels: ['email'],
+          orgId: a.orgId ?? null,
           dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'activity-admin', userId: a.id, day: utcDayKey(new Date()) }),
-          to: a.email,
-          locale: aLocale,
-          subject: A.subjectAll,
-          html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
-            ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
-            <p>${esc(A.greetingAdmin.replace('{name}', a.fullName))}</p>
-            ${activityDigestTable(adminItems, aLocale, A)}
-            ${overdue}
-            <p style="margin-top:16px;"><a href="${base}/admin/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
-          </div>`,
+          email: {
+            category: 'activity-digest',
+            locale: aLocale,
+            subject: A.subjectAll,
+            html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+              ${worldHeading(brand, esc(A.heading), `<h2 style="color:#2563eb;">${esc(A.heading)}</h2>`)}
+              <p>${esc(A.greetingAdmin.replace('{name}', a.fullName))}</p>
+              ${activityDigestTable(items, aLocale, A)}
+              ${overdue}
+              <p style="margin-top:16px;"><a href="${base}/admin/mentee-activity" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.cta)}</a></p>
+            </div>`,
+          },
         });
         sent++;
       } catch (e) {
@@ -6043,8 +6251,10 @@ export async function checkRetentionReminders() {
  * date that was set months ago: someone can withdraw in between, and the whole
  * promise of the one-click link is that withdrawing actually stops the mail.
  */
-export async function checkReEngagementReminders() {
-  const people = await dueForReminder();
+export async function checkReEngagementReminders(opts: { userIds?: readonly string[] } = {}) {
+  // `userIds`: "Re-invite the bench" (#1778) — the same message, the same
+  // consent check and the same stamp, for the given people only.
+  const people = await dueForReminder(new Date(), opts);
 
   // WORLDS (#2590): the one-click "leave the pool" link opens the product the
   // PERSON's account lives in. `dueForReminder()` selects no organization, so it
@@ -6458,13 +6668,15 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
             try {
               const brand = await emailBrand(recipient.orgId);
               const base = await origins.urlFor(recipient.orgId);
-              await sendEmail({
-                category: 'document-reminder',
-                userId: recipient.id,
-                locale: recipient.preferredLanguage,
-                to: recipient.email,
-                fromName: brand.name,
+              // Through the router (#1711), the same event as the bell above; the
+              // weekly claim row already made this send once per week.
+              const mail = {
+                channels: ['email'] as const,
                 orgId: recipient.orgId,
+                email: {
+                category: 'document-reminder',
+                locale: recipient.preferredLanguage,
+                fromName: brand.name,
                 subject: t.reminderSubject.replace('{requirement}', label),
                 html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
                   ${brandHeader(brand, t.reminderHeading)}
@@ -6472,7 +6684,10 @@ export async function sendWeeklyMissingDocumentReminders(now = new Date()) {
                   <p>${esc(t.reminderBody.replace('{requirement}', label).replace('{mentee}', mentee.fullName))}</p>
                   ${ctaBlock(brand, `${base}${link}`, t.reminderCta)}
                 </div>`,
-              });
+                },
+              };
+              if (isMentee) await notifyEvent(recipient.id, 'missing_document.self', { requirement: label }, mail);
+              else await notifyEvent(recipient.id, 'missing_document.mentor', { mentee: mentee.fullName, requirement: label, relationId: recipient.relationId ?? undefined }, mail);
               emailed++;
             } catch (error) {
               console.error('Missing document reminder email failed:', { menteeId: mentee.id, recipientId: recipient.id, requirementId: requirement.id, error });

@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { requireCapability } from '@/lib/capabilityGate';
 import { acceptanceReport, AgreementWriteError, AGREEMENT_LOCALES, listAgreementVersions, publishAgreementVersion } from '@/lib/mentoringAgreement';
+import { requirePermission } from '@/lib/authz';
 
 // The mentoring agreement's admin surface (#1790), for the caller's own org.
 //   GET   — every version (a fresh org gets the starter template as v1) and,
@@ -23,15 +22,11 @@ const publishSchema = z
   })
   .strict();
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return session;
-}
 
-export async function GET() {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const refusal = await requireCapability(session.user.orgId, 'mentorship');
   if (refusal) return refusal;
   return withTenantScope(session, async () => {
@@ -45,8 +40,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const refusal = await requireCapability(session.user.orgId, 'mentorship');
   if (refusal) return refusal;
   const parsed = publishSchema.safeParse(await request.json().catch(() => null));
@@ -67,20 +63,20 @@ export async function POST(request: Request) {
   });
 }
 
-async function immutable() {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+async function immutable(request: Request) {
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
   return NextResponse.json({ error: 'A published agreement version is never edited. Save a new version.', code: 'immutable' }, { status: 405 });
 }
 
-export async function PATCH() {
-  return immutable();
+export async function PATCH(request: Request) {
+  return immutable(request);
 }
 
-export async function PUT() {
-  return immutable();
+export async function PUT(request: Request) {
+  return immutable(request);
 }
 
-export async function DELETE() {
-  return immutable();
+export async function DELETE(request: Request) {
+  return immutable(request);
 }

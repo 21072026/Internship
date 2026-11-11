@@ -101,6 +101,8 @@ export default function AdminNewslettersPage() {
   // The picked hero image. Deliberately the File and nothing else — see the
   // chip in the markup below for why no object URL is minted from it.
   const [image, setImage] = useState<{ file: File } | null>(null);
+  // The hero image's description (#3388); empty = decorative.
+  const [imageAlt, setImageAlt] = useState('');
   const [scheduleAt, setScheduleAt] = useState('');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
@@ -218,7 +220,10 @@ export default function AdminNewslettersPage() {
       form.set('action', action);
       if (templateKey) form.set('templateKey', templateKey);
       if (action === 'schedule') form.set('scheduledAt', new Date(scheduleAt).toISOString());
-      if (image) form.set('image', image.file);
+      if (image) {
+        form.set('image', image.file);
+        form.set('imageAlt', imageAlt);
+      }
 
       const res = await fetch('/api/admin/newsletters', { method: 'POST', body: form });
       const data = await res.json().catch(() => ({}));
@@ -600,9 +605,21 @@ export default function AdminNewslettersPage() {
                   <span className="text-xs text-gray-400">{Math.round(image.file.size / 1024)} KB</span>
                 </span>
                 <Button type="button" variant="secondary" onClick={() => fileRef.current?.click()}>{n.imageReplace}</Button>
-                <Button type="button" variant="ghost" onClick={() => { setImage(null); if (fileRef.current) fileRef.current.value = ''; }}>
+                <Button type="button" variant="ghost" onClick={() => { setImage(null); setImageAlt(''); if (fileRef.current) fileRef.current.value = ''; }}>
                   {n.imageRemove}
                 </Button>
+                <label className="block w-full text-xs text-gray-600 dark:text-gray-300">
+                  {t.imageViewer.altLabel}
+                  <input
+                    type="text"
+                    value={imageAlt}
+                    maxLength={TEXT_LIMITS.imageAltText}
+                    onChange={(e) => setImageAlt(e.target.value)}
+                    data-testid="newsletter-image-alt"
+                    className="mt-0.5 block w-full rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                  />
+                  <span className="mt-0.5 block text-[11px] text-gray-500 dark:text-gray-400">{t.imageViewer.altHint}</span>
+                </label>
               </div>
             ) : (
               <Button type="button" variant="secondary" onClick={() => fileRef.current?.click()}>

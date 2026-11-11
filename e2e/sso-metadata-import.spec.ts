@@ -238,7 +238,7 @@ test('test connection reports each step, mints no session, and is admin-only', {
   expect((await page.request.post(`/api/admin/organizations/${foreign.id}/sso/test`)).status()).toBe(403);
   const mentee = await apiAs(playwright, await seedAccount('meta-mentee', 'MENTEE'));
   try {
-    expect((await mentee.post(url)).status()).toBe(401);
+    expect((await mentee.post(url)).status()).toBe(403);
   } finally {
     await mentee.dispose();
   }

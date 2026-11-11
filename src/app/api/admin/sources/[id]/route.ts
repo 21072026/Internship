@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { requirePermission } from '@/lib/authz';
 
 // DELETE — remove a source (admin). Mentees keep their record; their sourceId is
 // cleared via the optional relation so no mentee is orphaned.
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('user.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
   const { id } = await params;
   // Same tenant only (#2570): another tenant's source answers exactly like one

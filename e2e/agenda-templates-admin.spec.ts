@@ -136,9 +136,9 @@ test('the library is admin-only', async ({ page }) => {
   await seedUser(mentorEmail, password, 'MENTOR', 'Not An Admin');
   try {
     await signInAndSettle(page, mentorEmail, password, '/mentor');
-    expect((await page.request.get('/api/admin/agenda-templates')).status()).toBe(401);
-    expect((await page.request.post('/api/admin/agenda-templates', { data: { translations: { en: 'x' }, items: [{ translations: { en: 'y' } }] } })).status()).toBe(401);
-    expect((await page.request.delete('/api/admin/agenda-templates', { data: { id: 'nope' } })).status()).toBe(401);
+    expect((await page.request.get('/api/admin/agenda-templates')).status()).toBe(403);
+    expect((await page.request.post('/api/admin/agenda-templates', { data: { translations: { en: 'x' }, items: [{ translations: { en: 'y' } }] } })).status()).toBe(403);
+    expect((await page.request.delete('/api/admin/agenda-templates', { data: { id: 'nope' } })).status()).toBe(403);
   } finally {
     await cleanupByEmail(mentorEmail);
   }

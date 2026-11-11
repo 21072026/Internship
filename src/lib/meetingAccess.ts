@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma';
+import { isParticipant } from '@/lib/relationParticipants';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { meetingOrgSource, type MeetingParents } from '@/lib/meetingTenantRule';
 
@@ -64,7 +65,7 @@ export async function loadAccessibleMeeting(
       title: true,
       meetLink: true,
       createdById: true,
-      relation: { select: { mentorId: true, menteeId: true, orgId: true } },
+      relation: { select: { id: true, mentorId: true, menteeId: true, orgId: true } },
       projectId: true,
       project: { select: { orgId: true } },
       conversationId: true,
@@ -88,7 +89,8 @@ export async function loadAccessibleMeeting(
   };
 
   if (isCreator || isAdmin) return found;
-  if (meeting.relation && (meeting.relation.mentorId === user.id || meeting.relation.menteeId === user.id)) {
+  // The pair, or a seat beyond it — a group's meeting is every member's (#1804).
+  if (meeting.relation && (await isParticipant(meeting.relation, user.id))) {
     return found;
   }
   if (meeting.projectId) {

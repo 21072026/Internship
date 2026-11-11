@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -15,6 +13,7 @@ import {
   normalizeOptions,
 } from '@/lib/orgAttributesRule';
 import { attributeReferences, deleteOrgAttribute, listOrgAttributes } from '@/lib/orgAttributes';
+import { requirePermission } from '@/lib/authz';
 
 // The org's segmentation attributes (#1920): define, label in EN/TR/DE, set a
 // SELECT's options, reorder, mark segmentable, and see how many people carry a
@@ -48,11 +47,6 @@ const updateSchema = z.object({
 const reorderSchema = z.object({ order: z.array(z.string().min(1)).min(1).max(MAX_ATTRIBUTES_PER_ORG) });
 const deleteSchema = z.object({ id: z.string().min(1), confirm: z.boolean().optional() });
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return session;
-}
 
 function labelColumns(input: z.infer<typeof labels>) {
   return { labelEn: input.en?.trim() ?? '', labelTr: input.tr?.trim() ?? '', labelDe: input.de?.trim() ?? '' };
@@ -61,9 +55,10 @@ function labelColumns(input: z.infer<typeof labels>) {
 const hasLabel = (l: { labelEn: string; labelTr: string; labelDe: string }) => !!(l.labelEn || l.labelTr || l.labelDe);
 
 // GET — the org's attributes in display order, with value counts.
-export async function GET() {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const orgId = await settingsOrgOf(session);
   return withTenantScope(session, async () => NextResponse.json({ attributes: await listOrgAttributes(orgId) }));
 }
@@ -72,8 +67,9 @@ export async function GET() {
 // typed or derived from the first label, and is fixed once created (it is what
 // saved views, subscriptions and import files name).
 export async function POST(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   const orgId = await settingsOrgOf(session);
@@ -113,8 +109,9 @@ export async function POST(request: Request) {
 // `order: [ids]`, reorder the whole list. Type and key are fixed: changing
 // either would silently reinterpret every value already stored.
 export async function PATCH(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const body = await request.json().catch(() => null);
   const orgId = await settingsOrgOf(session);
   return withTenantScope(session, async () => {
@@ -155,8 +152,9 @@ export async function PATCH(request: Request) {
 
 // DELETE — remove an attribute and its values. Referenced → 409 first.
 export async function DELETE(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const parsed = deleteSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   const orgId = await settingsOrgOf(session);

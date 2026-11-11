@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { requirePermission } from '@/lib/authz';
 import {
   MATCH_REASON_NOTE_MAX,
   isMatchDismissReason,
@@ -36,10 +36,10 @@ const schema = z.object({
 //     rank means "we did not suggest this person", and the per-rank report
 //     counts only rows that have a rank.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   // Authorization at the route, never by hiding the control.
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('program.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const parsed = schema.safeParse(await request.json().catch(() => null));
@@ -55,11 +55,16 @@ export async function POST(request: Request) {
 
     // The batch anchors the write: it names the mentee, the rule set and
     // whether AI ranked it. No batch, nothing to attach an outcome to.
+    // The caller's tenant only (#3588): another org's batch reads as missing,
+    // and the mentor named must be one of this org's people.
+    const tenant = await tenantWhere(session);
     const batch = await prisma.matchFeedback.findMany({
-      where: { batchId },
+      where: withinTenant({ batchId }, tenant),
       select: { mentorId: true, menteeId: true, aiUsed: true, ruleSetVersion: true, rank: true },
     });
     if (batch.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const mentor = await prisma.user.findFirst({ where: withinTenant({ id: mentorId }, tenant), select: { id: true } });
+    if (!mentor) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const shown = batch.find((r) => r.mentorId === mentorId) ?? null;
     // Dismissing something that was never shown is not a decision about a

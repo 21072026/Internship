@@ -1,19 +1,21 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { TEXT_LIMITS } from '@/lib/textLimits';
+import { supportAltText } from '@/lib/supportMessageRequest';
+import { requirePermission } from '@/lib/authz';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { sendSupportPush } from '@/lib/messagePush';
 import { supportPushRecipients } from '@/lib/supportPushRule';
 import { notificationLink } from '@/lib/notificationLink';
 import { tenantWhere } from '@/lib/tenantFilter';
+import { describeRecords } from '@/lib/affiliateRecordRef';
 import {
   SUPPORT_ATTACHMENT_MAX_COUNT,
   validateSupportFile,
 } from '@/lib/supportAttachments';
 
-const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
+const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true, altText: true } as const;
 
 // Admin side of the support channel (#594): the queue at /admin/support.
 // Admins see every ticket OF THEIR OWN TENANT, reply into the thread, move
@@ -35,16 +37,11 @@ const updateSchema = z.object({
   assignToMe: z.boolean().optional(),
 });
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return session;
-}
-
 // GET — the full queue, optionally filtered: ?status=OPEN|IN_PROGRESS|CLOSED.
 export async function GET(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('support.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const statusParam = new URL(request.url).searchParams.get('status');
   const status = ['OPEN', 'IN_PROGRESS', 'CLOSED'].includes(statusParam ?? '')
@@ -68,7 +65,7 @@ export async function GET(request: Request) {
         orderBy: { createdAt: 'asc' },
         take: 100,
         select: {
-          id: true, body: true, createdAt: true, senderId: true, readAt: true,
+          id: true, body: true, createdAt: true, senderId: true, readAt: true, recordRef: true,
           sender: { select: { fullName: true, role: true } },
           attachments: { select: ATTACHMENT_SELECT },
         },
@@ -76,24 +73,39 @@ export async function GET(request: Request) {
     },
   });
 
-  return NextResponse.json({ tickets, me: session.user.id });
+  // A partner's question names the affiliate row it is about (#3353): described
+  // inside the admin's own org only.
+  const records = session.user.orgId
+    ? await describeRecords(session.user.orgId, tickets.flatMap((t) => t.messages.map((m) => m.recordRef)))
+    : new Map();
+  return NextResponse.json({
+    tickets: tickets.map((t) => ({
+      ...t,
+      messages: t.messages.map(({ recordRef, ...m }) => ({ ...m, record: (recordRef && records.get(recordRef)) || null })),
+    })),
+    me: session.user.id,
+  });
 }
 
 // POST — reply into a ticket. Replying moves an OPEN ticket to IN_PROGRESS,
 // takes assignment if the ticket has none, marks the requester's messages
 // read, and notifies the requester.
 export async function POST(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('support.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   let payload: unknown;
   let files: File[] = [];
+  // One `altText` per `files` entry, same order (#3407).
+  let altTexts: string[] = [];
 
   if (request.headers.get('content-type')?.includes('multipart/form-data')) {
     const form = await request.formData().catch(() => null);
     if (!form) return NextResponse.json({ error: 'Invalid multipart request' }, { status: 400 });
     payload = { ticketId: form.get('ticketId'), body: form.get('body') ?? '' };
     files = form.getAll('files').filter((value): value is File => typeof value !== 'string');
+    altTexts = form.getAll('altText').map((value) => (typeof value === 'string' ? value : ''));
   } else {
     payload = await request.json().catch(() => null);
   }
@@ -129,12 +141,18 @@ export async function POST(request: Request) {
     }
   }
 
+  const alts = files.map((file, i) => supportAltText(file, altTexts[i]));
+  if (alts.some((a) => a !== null && a.length > TEXT_LIMITS.imageAltText)) {
+    return NextResponse.json({ error: 'Image description too long' }, { status: 400 });
+  }
+
   const attachments = await Promise.all(
-    files.map(async (file) => ({
+    files.map(async (file, i) => ({
       filename: file.name,
       contentType: file.type,
       size: file.size,
       data: Buffer.from(await file.arrayBuffer()),
+      altText: alts[i],
     })),
   );
 
@@ -182,8 +200,9 @@ export async function POST(request: Request) {
 
 // PUT — status transitions and assignment.
 export async function PUT(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('support.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const parsed = updateSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success || (!parsed.data.status && !parsed.data.assignToMe)) {

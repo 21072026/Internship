@@ -46,7 +46,23 @@ export async function GET(request: Request) {
   // sending side (POST /api/admin/announcements); this is the reading side of the
   // same wall, and the middleware scopes nothing while MT_ENFORCE_ISOLATION is
   // off. A no-op for a single-tenant deployment.
-  const where = withinTenant({ createdAt: { gte: me.createdAt } }, await tenantWhere(session));
+  // Targeting (#1721): only SENT broadcasts, and a targeted one only for the
+  // people it was delivered to — the bell rows it wrote are that list, so the
+  // feed reads them rather than re-evaluating criteria that may have changed
+  // since. An untargeted one (every row before #1721) stays everyone's.
+  const mine = await prisma.notification.findMany({
+    where: { userId: session.user.id, announcementId: { not: null } },
+    select: { announcementId: true },
+  });
+  const deliveredToMe = mine.map((n) => n.announcementId).filter((v): v is string => !!v);
+  const where = withinTenant(
+    {
+      createdAt: { gte: me.createdAt },
+      status: 'SENT' as const,
+      OR: [{ targeted: false }, { id: { in: deliveredToMe } }],
+    },
+    await tenantWhere(session),
+  );
 
   const [total, announcements] = await Promise.all([
     prisma.announcement.count({ where }),
@@ -63,7 +79,7 @@ export async function GET(request: Request) {
         translations: true,
         link: true,
         createdAt: true,
-        image: { select: { id: true } },
+        image: { select: { id: true, altText: true } },
       },
     }),
   ]);
@@ -80,6 +96,7 @@ export async function GET(request: Request) {
       // message as if it had been meant for them.
       languageFallback: isAnnouncementFallback({ translations }, me.preferredLanguage),
       imageUrl: image ? announcementImageUrl(a.id) : null,
+      imageAlt: image?.altText ?? null,
     })),
     total,
     page,

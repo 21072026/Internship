@@ -66,6 +66,27 @@ export function candidatesSheet(candidates: CandidateRow[], stageLabel: StageLab
   };
 }
 
+// ── Skills gap (#1823) ───────────────────────────────────────────────────────
+
+interface SkillsGapRow {
+  label: string;
+  demandOpenings: number;
+  demandRequisitions: number;
+  holders: number;
+  gap: number;
+  avgLevel: number | null;
+  confirmed: number;
+}
+
+/** Every skill row of the skills-gap report, headers in the caller's locale. */
+export function skillsGapSheet(rows: SkillsGapRow[], g: Record<'sheetName' | 'colSkill' | 'colSeats' | 'colPositions' | 'colPeople' | 'colGap' | 'colAvgLevel' | 'colConfirmed', string>): Sheet {
+  return {
+    name: g.sheetName.slice(0, 31),
+    columns: [g.colSkill, g.colSeats, g.colPositions, g.colPeople, g.colGap, g.colAvgLevel, g.colConfirmed],
+    rows: rows.map((r) => [r.label, r.demandOpenings, r.demandRequisitions, r.holders, r.gap, r.avgLevel ?? '', r.confirmed]),
+  };
+}
+
 // ── Analytics ────────────────────────────────────────────────────────────────
 
 interface FunnelKpi {

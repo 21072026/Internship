@@ -14,6 +14,7 @@ import { formatDate } from '@/lib/relativeTime';
 import { DECLINE_REASON_CODES } from '@/lib/offers';
 import { hasStructuredCompensation, type CompensationFields } from '@/lib/compensation';
 import { CompensationSummary } from '@/components/CompensationSummary';
+import { OfferLetterView } from '@/components/OfferLetterView';
 
 interface Offer extends Partial<CompensationFields> {
   id: string;
@@ -22,6 +23,8 @@ interface Offer extends Partial<CompensationFields> {
   startDate: string | null;
   expiresAt: string | null;
   compensationNote?: string | null;
+  // The frozen offer letter (#1857) — present on the candidate's own offer.
+  letterSnapshot?: string | null;
   declineReasonCode: string | null;
   company: { id: string; name: string } | null;
 }
@@ -44,6 +47,7 @@ export function OfferCard() {
   const [declineReason, setDeclineReason] = useState('');
   const [declineNote, setDeclineNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [letterOpen, setLetterOpen] = useState(false);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/offers');
@@ -101,6 +105,9 @@ export function OfferCard() {
             </p>
             <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mt-3">{t.portal.offer.whatsNext}</p>
             <p className="text-sm text-gray-500">{accepted ? t.portal.offer.whatsNextAccepted : t.portal.offer.whatsNextDeclined}</p>
+            <a href={`/api/offers/${offer.id}/letter`} className="mt-3 inline-block text-sm text-blue-600 hover:underline" data-testid="offer-letter-download">
+              {t.offers.letter.download}
+            </a>
           </div>
         </div>
       </Card>
@@ -169,6 +176,24 @@ export function OfferCard() {
         )}
       </div>
 
+      {/* The offer letter (#1857): what accepting agrees to, frozen at send. */}
+      <div className="mt-4 rounded-lg border border-gray-100 dark:border-gray-700 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <button type="button" className="text-sm font-medium text-blue-600 hover:underline" onClick={() => setLetterOpen((v) => !v)} aria-expanded={letterOpen} data-testid="offer-letter-toggle">
+            {letterOpen ? t.offers.letter.hide : t.offers.letter.read}
+          </button>
+          <a href={`/api/offers/${offer.id}/letter`} className="text-sm text-blue-600 hover:underline" data-testid="offer-letter-download">
+            {t.offers.letter.download}
+          </a>
+        </div>
+        {letterOpen && offer.letterSnapshot && (
+          <div className="mt-3 max-h-96 overflow-y-auto">
+            <OfferLetterView markdown={offer.letterSnapshot} testId="offer-letter-text" />
+          </div>
+        )}
+        <p className="mt-2 text-xs text-gray-500" data-testid="offer-letter-record-notice">{t.offers.letter.recordNotice}</p>
+      </div>
+
       {!declining ? (
         <div className="mt-5 flex flex-col sm:flex-row gap-2">
           <Button size="lg" className="flex-1" data-testid="offer-accept-button" onClick={() => setConfirmAccept(true)}>
@@ -219,7 +244,7 @@ export function OfferCard() {
       <ConfirmDialog
         open={confirmAccept}
         title={t.portal.offer.confirmAcceptTitle}
-        message={t.portal.offer.confirmAcceptBody.replace('{position}', offer.position).replace('{company}', companySuffix)}
+        message={`${t.portal.offer.confirmAcceptBody.replace('{position}', offer.position).replace('{company}', companySuffix)} ${t.offers.letter.agree} ${t.offers.letter.recordNotice}`}
         confirmLabel={t.portal.offer.confirmAcceptCta}
         cancelLabel={t.portal.offer.cancel}
         loading={busy}

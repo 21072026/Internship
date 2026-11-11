@@ -15,6 +15,8 @@ import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { isValidTimeZone, offsetAt } from '@/lib/timezone';
 import { MATCH_DIMENSIONS, type MatchDimension } from './types';
 import { asStringList, lowercaseOnly, normalizeTerm, termMap, tokens } from './normalize';
+import { skillOverlap, type SkillEdgeRow } from '@/lib/skillTaxonomyRule';
+import { semanticAffinity } from './semantic';
 
 /** What every person on either side of a match may carry. All optional. */
 export interface MatchPerson {
@@ -29,6 +31,32 @@ export interface MatchPerson {
   interests?: string | null;
   targetPosition?: string | null;
   managerId?: string | null;
+  /**
+   * Canonical skill ids (`UserSkill`, #1815). Read by the `skills` dimension
+   * only when the caller also passes `ctx.skillGraph` (#1787) — then the
+   * comparison is the taxonomy's adjacency-weighted `skillOverlap()` (#1821)
+   * instead of the free-text one.
+   */
+  skillIds?: readonly string[];
+  /**
+   * The person's cached profile themes (`ProfileDigest.themes`, #2038), read
+   * by the `semanticAffinity` dimension. Absent = no digest yet: the rule is
+   * not applicable and adds the same 0 to everybody.
+   */
+  themes?: readonly string[];
+  /**
+   * Answers to the org's MATCHABLE admin-defined questions (#1803), field key
+   * → value, loaded in bulk by ./customAnswers.ts. Read only by the
+   * `customField:<key>` family.
+   */
+  customAnswers?: Readonly<Record<string, unknown>>;
+  /**
+   * The person's org attributes (#3424), attribute key → stored value, loaded
+   * in bulk by ./attributeValues.ts — directory data (site, level, business
+   * unit) the IdP or the roster feed writes. Read only by the
+   * `attribute:<key>` family.
+   */
+  attributes?: Readonly<Record<string, string>>;
 }
 
 export interface MatchMentee extends MatchPerson {
@@ -59,6 +87,13 @@ export interface DimensionResult {
 export interface ScoreContext {
   /** The instant zone offsets are read at. Fixed by the caller for determinism. */
   now: Date;
+  /**
+   * The org's skill graph, loaded by the caller (#1787). Present = score the
+   * `skills` dimension on canonical ids with adjacency, the same rule the
+   * requisition alerts use (#1821); absent = the free-text comparison, so a
+   * dry run or a preview without the graph scores exactly as before.
+   */
+  skillGraph?: { edges: readonly SkillEdgeRow[]; label?: (skillId: string) => string };
 }
 
 export type DimensionConfig = Record<string, unknown>;
@@ -94,13 +129,29 @@ export const DIMENSIONS: Readonly<Record<MatchDimension, DimensionFn>> = {
   // config.mode: 'normalized' (default — aliases, accents, punctuation) or
   // 'lowercase' (the pre-#1781 comparison, used by DEFAULT_RULE_SET).
   // config.minShared: how many shared skills count as a match (default 1).
-  skills: (mentee, mentor, config) =>
-    overlap(
+  // With ctx.skillGraph and a mentee who has canonical skills, the overlap is
+  // `skillOverlap()` over ids: an exact skill counts 1, a neighbour its edge
+  // weight, and the ratio is over the mentee's skills — `mode` is ignored, ids
+  // need no folding. The detail names the neighbour and what it stands in for.
+  skills: (mentee, mentor, config, ctx) => {
+    const ids = [...new Set(mentee.skillIds ?? [])];
+    if (ctx.skillGraph && ids.length > 0) {
+      const label = ctx.skillGraph.label ?? ((id: string) => id);
+      const o = skillOverlap(ids, mentor.skillIds ?? [], ctx.skillGraph.edges);
+      const hits = o.direct.length + o.adjacent.length;
+      return {
+        matched: hits >= Math.max(1, num(config.minShared, 1)),
+        ratio: clamp01(o.score / ids.length),
+        detail: [...o.direct.map(label), ...o.adjacent.map((a) => `${label(a.skillId)} ≈ ${label(a.via)}`)],
+      };
+    }
+    return overlap(
       asStringList(mentee.skills),
       asStringList(mentor.skills),
       config.mode === 'lowercase' ? lowercaseOnly : normalizeTerm,
       num(config.minShared, 1)
-    ),
+    );
+  },
 
   // The request's preferred languages win over the profile's spoken ones.
   language: (mentee, mentor) => {
@@ -152,6 +203,19 @@ export const DIMENSIONS: Readonly<Record<MatchDimension, DimensionFn>> = {
     return { matched: availability.status === 'available', ratio, detail: availability.status === 'available' ? detail : [...detail, availability.status] };
   },
 
+  // Soft only (#2038): the cached themes of both profiles, compared without a
+  // provider call (src/lib/matching/semantic.ts). The detail names what they
+  // share, and what met halfway ("platform engineering ≈ platform team").
+  semanticAffinity: (mentee, mentor) => {
+    if (!mentee.themes?.length || !mentor.themes?.length) return notApplicable('no profile digest');
+    const a = semanticAffinity(mentee.themes, mentor.themes);
+    return {
+      matched: a.score > 0,
+      ratio: a.score,
+      detail: [...a.sharedThemes, ...a.relatedThemes.map((r) => `${r.theme} ≈ ${r.via}`)],
+    };
+  },
+
   // Meant as HARD_EXCLUDE: matched means "one manages the other".
   managerExclusion: (mentee, mentor) => {
     const hit = (mentee.managerId != null && mentee.managerId === mentor.id) || (mentor.managerId != null && mentor.managerId === mentee.id);
@@ -165,6 +229,84 @@ export const DIMENSIONS: Readonly<Record<MatchDimension, DimensionFn>> = {
   },
 };
 
+/** The prefix of the admin-defined family: `customField:<fieldKey>` (#1803). */
+export const CUSTOM_FIELD_PREFIX = 'customField:';
+const CUSTOM_KEY_RE = /^customField:[a-z][a-z0-9_]{0,79}$/;
+
+/** Is `key` a well-formed `customField:<fieldKey>` dimension? */
+export function isCustomFieldDimension(key: string): boolean {
+  return CUSTOM_KEY_RE.test(key);
+}
+
+/**
+ * One admin-defined question compared between the two people who both
+ * answered it. The answer's own shape picks the comparison — the write side
+ * (validateResponse) guarantees a key's answers share one type:
+ *   · a string or a boolean (SELECT, BOOLEAN) — exact match;
+ *   · a list (MULTI_SELECT) — shared options over the MENTEE's list;
+ *   · a number (NUMBER, SCALE) — closeness: matched within config.tolerance
+ *     (default 0), ratio falling linearly to 0 at tolerance + 1 apart.
+ * Either side unanswered = not applicable, the same 0 for every mentor.
+ */
+export function customFieldDimension(fieldKey: string, mentee: MatchMentee, mentor: MatchMentor, config: DimensionConfig): DimensionResult {
+  const a = mentee.customAnswers?.[fieldKey];
+  const b = mentor.customAnswers?.[fieldKey];
+  const empty = (v: unknown) => v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0);
+  if (empty(a) || empty(b)) return notApplicable('not answered');
+  if (typeof a === 'number' && typeof b === 'number') {
+    const diff = Math.abs(a - b);
+    const tolerance = Math.max(0, num(config.tolerance, 0));
+    return { matched: diff <= tolerance, ratio: clamp01(1 - diff / (tolerance + 1)), detail: [`${a} / ${b}`] };
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    const want = (Array.isArray(a) ? a : [a]).map(String);
+    const have = new Set((Array.isArray(b) ? b : [b]).map(String));
+    const shared = want.filter((v) => have.has(v));
+    return { matched: shared.length > 0, ratio: clamp01(shared.length / want.length), detail: shared };
+  }
+  const same = String(a) === String(b);
+  return { matched: same, ratio: same ? 1 : 0, detail: same ? [String(a)] : [] };
+}
+
+/** The prefix of the org-attribute family: `attribute:<attributeKey>` (#3424). */
+export const ATTRIBUTE_PREFIX = 'attribute:';
+const ATTRIBUTE_KEY_RE = /^attribute:[a-z][a-z0-9_]{0,63}$/;
+
+/** Is `key` a well-formed `attribute:<attributeKey>` dimension? */
+export function isAttributeDimension(key: string): boolean {
+  return ATTRIBUTE_KEY_RE.test(key);
+}
+
+/** How an attribute rule compares the two values (`config.attributeMode`). */
+export const ATTRIBUTE_MODES = ['same', 'different', 'gte_mentor'] as const;
+export type AttributeMode = (typeof ATTRIBUTE_MODES)[number];
+
+/**
+ * One org attribute compared between mentee and mentor (#3424):
+ *   · same        — "prefer the same site": equal values match;
+ *   · different   — "a mentor from another business unit": unequal values match;
+ *   · gte_mentor  — "mentor level ≥ mentee level", NUMBER attributes: a value
+ *                   that is not a number on either side is not applicable.
+ * A value missing on either side — or an attribute deleted since the rule was
+ * written, whose values went with it — is not applicable: the same 0 for every
+ * mentor, never a penalty and never an error.
+ */
+export function attributeDimension(attributeKey: string, mentee: MatchMentee, mentor: MatchMentor, config: DimensionConfig): DimensionResult {
+  const a = mentee.attributes?.[attributeKey]?.trim();
+  const b = mentor.attributes?.[attributeKey]?.trim();
+  if (!a || !b) return notApplicable('no value');
+  const mode = (ATTRIBUTE_MODES as readonly string[]).includes(String(config.attributeMode)) ? (config.attributeMode as AttributeMode) : 'same';
+  if (mode === 'gte_mentor') {
+    const [x, y] = [Number(a), Number(b)];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return notApplicable('not a number');
+    const hit = y >= x;
+    return { matched: hit, ratio: hit ? 1 : 0, detail: [`${a} / ${b}`] };
+  }
+  const same = a.toLowerCase() === b.toLowerCase();
+  const hit = mode === 'same' ? same : !same;
+  return { matched: hit, ratio: hit ? 1 : 0, detail: hit ? (same ? [a] : [`${a} / ${b}`]) : [] };
+}
+
 export function isKnownDimension(key: string): key is MatchDimension {
   return (MATCH_DIMENSIONS as readonly string[]).includes(key);
 }
@@ -177,6 +319,8 @@ export function evaluateDimension(
   config: DimensionConfig,
   ctx: ScoreContext
 ): DimensionResult {
+  if (isCustomFieldDimension(key)) return customFieldDimension(key.slice(CUSTOM_FIELD_PREFIX.length), mentee, mentor, config);
+  if (isAttributeDimension(key)) return attributeDimension(key.slice(ATTRIBUTE_PREFIX.length), mentee, mentor, config);
   if (!isKnownDimension(key)) return { matched: false, ratio: 0, detail: ['unknown dimension'] };
   return DIMENSIONS[key](mentee, mentor, config, ctx);
 }

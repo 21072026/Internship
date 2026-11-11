@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
@@ -11,6 +10,7 @@ import { shellCapabilities } from '@/lib/shellCapabilities';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { isDealValueEnabled, valueByMonth, type ValueJourney } from '@/lib/dealValue';
+import { funnelStartedAt, OUR_HIRE_WHERE, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
 
 // GET /api/admin/analytics/deal-value — the ESTIMATED value of won deals,
 // month by month (#2422, story #2393): per month, what was newly won, what was
@@ -30,10 +30,9 @@ import { isDealValueEnabled, valueByMonth, type ValueJourney } from '@/lib/dealV
 
 export async function GET(request: Request) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requirePermission('analytics.read', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     try {
       return await withTenantScope(session, async () => {
@@ -58,7 +57,10 @@ export async function GET(request: Request) {
         // was valued over every org's won relations.
         const tenant = await tenantWhere(session);
         const relations = await prisma.mentorshipRelation.findMany({
-          where: withinTenant({ startDate: { lte: windowEnd } }, tenant),
+          // The one placement rule (#3472): a "won" record is a PLACEMENT relation
+          // whose win is ours. A sales book never sets either column, so its
+          // numbers are unchanged; the rule is here so no reader counts its own way.
+          where: withinTenant({ startDate: { lte: windowEnd }, ...PLACEMENT_RELATION_WHERE, ...OUR_HIRE_WHERE }, tenant),
           select: {
             id: true,
             previousRelationId: true,
@@ -66,6 +68,7 @@ export async function GET(request: Request) {
             lifecycleState: true,
             pipelineStatus: true,
             startDate: true,
+            funnelEnteredAt: true,
             value: { select: { valueMinor: true, currency: true } },
             // ALL of them, not just the window's: the first move's `fromStatus`
             // is where the record started, and a record that moved only after
@@ -86,7 +89,7 @@ export async function GET(request: Request) {
           id: r.id,
           previousRelationId: r.previousRelationId,
           startStatus: r.statusChanges[0]?.fromStatus ?? r.pipelineStatus,
-          startedAt: r.startDate.getTime(),
+          startedAt: funnelStartedAt(r).getTime(),
           changes: r.statusChanges.map((c) => ({ toStatus: c.toStatus, at: c.createdAt.getTime() })),
           valueMinor: r.value?.valueMinor ?? null,
           currency: r.value?.currency ?? null,

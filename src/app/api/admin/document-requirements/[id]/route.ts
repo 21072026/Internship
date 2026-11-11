@@ -1,13 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { reviewChainSchema, storedReviewerRoles } from '@/lib/documentReview';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { mayManageOrgRequirements } from '@/lib/documentRequirementAccess';
+import { requirePermission } from '@/lib/authz';
 
 // Deliberately not wrapped in withTenantScope (a super admin edits any
 // tenant's requirements; see src/lib/documentRequirementAccess.ts). The gate
@@ -29,8 +28,9 @@ const patchSchema = z.object({
 }).strict();
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authz = await requirePermission('content.write', { request });
+  if ('error' in authz) return authz.error;
+  const { session } = authz;
   const { id } = await params;
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
@@ -59,8 +59,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authz = await requirePermission('content.write', { request });
+  if ('error' in authz) return authz.error;
+  const { session } = authz;
   const { id } = await params;
   const orgId = new URL(request.url).searchParams.get('orgId');
   if (!orgId) return NextResponse.json({ error: 'orgId is required' }, { status: 400 });

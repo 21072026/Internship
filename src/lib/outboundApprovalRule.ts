@@ -127,6 +127,7 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   'sso-certificate': { exempt: true, why: `${ESSENTIAL} — the IdP certificate-expiry warning, addressed to the org's admins and support address` },
   // ── triggered by the person themselves ────────────────────────────────────
   'mentor-application-received': { exempt: true, why: 'the acknowledgement of the person\'s own application' },
+  'affiliate-application-received': { exempt: true, why: 'the acknowledgement of the person\'s own partner application (#3361)' },
   // #3132: the answer to the person's own bug report, sent only when an admin
   // chooses to AND the person allowed contact. Held like `message` (a human's
   // words to a lead are still the product writing to a lead).
@@ -142,6 +143,7 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   'retention-reminder': { exempt: false, trigger: 'other', why: 'a cron-driven data-protection re-consent ask, not triggered by the person' },
   // ── held: automated mail about the funnel ─────────────────────────────────
   'stage-deadline': { exempt: false, trigger: 'deadline', why: 'trial and stage deadline reminders' },
+  'affiliate-window-ending': { exempt: false, trigger: 'deadline', why: 'a partner told that a customer\'s commission window ends soon (#3556)' },
   'interaction-reminder': { exempt: false, trigger: 'deadline', why: 'an automated nudge' },
   'weekly-report': { exempt: false, trigger: 'deadline', why: 'an automated nudge' },
   'document-reminder': { exempt: false, trigger: 'deadline', why: 'an automated nudge' },
@@ -180,7 +182,10 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   'mentor-assigned': { exempt: false, trigger: 'pipeline', why: 'an owner-assigned notice' },
   'mentee-assigned': { exempt: false, trigger: 'pipeline', why: 'an owner-assigned notice' },
   'mentor-application': { exempt: false, trigger: 'pipeline', why: 'an application decision' },
+  'affiliate-application-decision': { exempt: false, trigger: 'pipeline', why: 'the answer to a declined partner application (#3362)' },
+  'mentor-offer': { exempt: false, trigger: 'pipeline', why: 'a mentor offering mentorship (#1809), sent only to an opted-in mentee' },
   'goals-evaluation': { exempt: false, trigger: 'pipeline', why: 'an automated evaluation notice' },
+  'relation-ending': { exempt: false, trigger: 'pipeline', why: 'the one ending-soon nudge per agreed end date (#1786)' },
   // Inbound requests are addressed to staff in practice (and staff is never
   // held); listed so a copy that does reach a lead waits like everything else.
   'public-contact': { exempt: false, trigger: 'request', why: 'a profile enquiry forwarded by mail' },

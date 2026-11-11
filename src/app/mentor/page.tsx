@@ -22,6 +22,7 @@ import { interactionTypeStyle } from '@/lib/interactionTypes';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { getMentorImpact } from '@/lib/mentorImpact';
 import { DocumentReviewQueue } from '@/components/DocumentReviewQueue';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
 
 async function getMentorData(mentorId: string) {
   const relations = await prisma.mentorshipRelation.findMany({
@@ -207,6 +208,8 @@ export default async function MentorDashboard() {
                       <p className="text-xs text-gray-500">{rel.mentee.university}</p>
                     </div>
                     <StatusBadge status={rel.status} />
+                  {/* Paused / ended early / re-matched … (#1774); live pairs say Active already. */}
+                  <RelationLifecycleBadge relation={rel} hideLive />
                   </div>
                   {rel.company && (
                     <p className="text-xs text-blue-600 mb-2">📍 {rel.company.name}</p>

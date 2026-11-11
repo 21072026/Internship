@@ -18,7 +18,8 @@ test('sending an announcement persists it and shows up in the history list', asy
     await page.fill('textarea', uniqueText);
 
     const postDone = page.waitForResponse(
-      (r) => r.url().includes('/api/admin/announcements') && r.request().method() === 'POST'
+      // The exact path: the audience estimate (#1721) also POSTs, to /api/admin/announcements/estimate.
+      (r) => new URL(r.url()).pathname === '/api/admin/announcements' && r.request().method() === 'POST'
     );
     await page.getByRole('button', { name: /^Broadcast$/i }).click();
     await postDone;

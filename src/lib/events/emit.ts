@@ -20,6 +20,7 @@ import { logger } from '@/lib/logger';
 import { currentOrgId } from '@/lib/orgContext';
 import { ambientRequestId } from '@/lib/requestId';
 import { enqueue } from '@/lib/jobs/queue';
+import { prismaQueueStore } from '@/lib/jobs/queueStore';
 import type { DomainEventName, EventPayload } from './catalog';
 import { createEmitter, deliverEvent, type DeliveryOutcome, type EmitContext, type NewDomainEvent } from './emitCore';
 import { subscriberRegistry } from './subscribers';
@@ -60,6 +61,34 @@ function getEmitter() {
  */
 export function emit<N extends DomainEventName>(name: N, payload: EventPayload<N>, ctx?: EmitContext): Promise<string | null> {
   return getEmitter()(name, payload as Record<string, unknown>, ctx);
+}
+
+/**
+ * `emit()` inside a caller's interactive transaction (#1998): the `DomainEvent`
+ * row and its `event.deliver` jobs are written THROUGH `tx`, so a rollback —
+ * a refused write later in the unit, an import's dry run — takes the event
+ * with it, and the worker sees it only once the transaction commits. The
+ * transactional half of the outbox (#1680) for producers that already run in
+ * a transaction; everything else still calls `emit()`.
+ */
+export function emitInTransaction<N extends DomainEventName>(
+  tx: Prisma.TransactionClient,
+  name: N,
+  payload: EventPayload<N>,
+  ctx?: EmitContext,
+): Promise<string | null> {
+  registerAllSubscribers();
+  const inTx = createEmitter({
+    registry: subscriberRegistry,
+    insertEvent: (row) => tx.domainEvent.create({ data: { ...row, payload: row.payload as Prisma.InputJsonValue }, select: { id: true } }),
+    enqueueDelivery: ({ eventId, subscriber, orgId, idempotencyKey }) =>
+      enqueue('event.deliver', { eventId, subscriber }, { orgId, idempotencyKey, trigger: 'event', store: prismaQueueStore(tx) }),
+    ambientOrgId: currentOrgId,
+    ambientCorrelationId: ambientRequestId,
+    production: process.env.NODE_ENV === 'production',
+    logger,
+  });
+  return inTx(name, payload as Record<string, unknown>, ctx);
 }
 
 /** The `event.deliver` job body (registered in src/jobs/index.ts). */

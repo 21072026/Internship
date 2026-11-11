@@ -62,6 +62,12 @@ export function ImpersonationBanner() {
         <UserCog className="h-4 w-4 shrink-0" />
         <span className="flex-1 min-w-0">
           {t.impersonation.viewingAs.replace('{name}', session?.user?.name ?? '')}
+          {/* The target org's read_only policy (#1586): says why a save fails. */}
+          {session?.user?.impersonationReadOnly && (
+            <span data-testid="impersonation-read-only" className="ml-2 rounded bg-purple-200 px-1.5 py-0.5 text-xs font-semibold dark:bg-purple-800">
+              {t.impersonation.readOnly}
+            </span>
+          )}
         </span>
         {error && <span className="text-red-700 dark:text-red-300">{error}</span>}
         <button onClick={stop} disabled={busy} className="font-semibold underline hover:no-underline disabled:opacity-50">

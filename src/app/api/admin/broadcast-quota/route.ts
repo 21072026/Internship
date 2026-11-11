@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { broadcastQuotaStatus } from '@/lib/broadcastQuota';
@@ -13,9 +12,10 @@ import { broadcastQuotaStatus } from '@/lib/broadcastQuota';
  * being refused. `limit: null` (and therefore `used: null`) means the band is
  * unlimited, which is what today's grandfathered single-tenant install returns.
  */
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('mail.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return withTenantScope(session, async () =>
     NextResponse.json(await broadcastQuotaStatus(resolveOrgId(session))),

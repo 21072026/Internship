@@ -1,9 +1,10 @@
+// i18n-scopes: no-dictionary — `key` indexes t.nav in the component; these names are not namespaces (#3599).
 import {
   Scale,
   BookOpenCheck,
   Activity, AlarmClock, BarChart3, BookOpen, Braces, BriefcaseBusiness, Building2, CalendarClock, CalendarDays,
   CalendarRange, ClipboardCheck, ClipboardList, Columns3, FileSignature, FileText, FolderGit2,
-  FolderKanban, GitMerge, GraduationCap, Inbox, Layers, LayoutDashboard, LifeBuoy, ListChecks, Lock,
+  FolderKanban, GitMerge, GraduationCap, HeartHandshake, Inbox, Layers, LayoutDashboard, LifeBuoy, ListChecks, Lock,
   BellRing, Handshake, HeartPulse, Mail, MailCheck, MailOpen, Megaphone, MessageSquare, MessageSquareQuote, MessageSquareText, Network, Quote, Radio,
   ScrollText, Settings, ShieldCheck, Smile, Tag as TagIcon, User, UserCheck, UserCog, UserPlus, Users, Video,
   Webhook,
@@ -23,6 +24,7 @@ import {
   ServerCog,
   Presentation,
 } from 'lucide-react';
+import type { Permission } from '@/lib/authzRule';
 import type { VerticalCapability } from '@/lib/verticals';
 
 /**
@@ -72,6 +74,13 @@ export interface NavLink {
    * `superAdminOnly`: the page and its API apply the rule themselves.
    */
   operatorOnly?: boolean;
+  /**
+   * The permission the destination's page needs (#1579), for the few admin
+   * pages a narrower tier cannot open (an OBSERVER holds reads only). An
+   * untagged link needs a read every tier holds. Presentation only — the
+   * page's API answers 403 itself, and that is the control.
+   */
+  permission?: Permission;
 }
 
 /** Who is looking — the facts the audience tags above are judged against. */
@@ -79,12 +88,18 @@ export interface NavAudience {
   superAdmin?: boolean;
   /** A super admin or the default organization's ADMIN (see `operatorOnly`). */
   operator?: boolean;
+  /**
+   * The permissions the viewer's admin tier holds (#1579) — TIER_PERMISSIONS of
+   * their tier, computed by the caller; undefined = not judged by permission.
+   */
+  permissions?: ReadonlySet<Permission>;
 }
 
 /** Does the audience pass this link's `superAdminOnly` / `operatorOnly` tag? */
 export function navAudienceAllows(l: NavLink, opts: NavAudience = {}): boolean {
   if (l.superAdminOnly && opts.superAdmin !== true) return false;
   if (l.operatorOnly && opts.superAdmin !== true && opts.operator !== true) return false;
+  if (l.permission && opts.permissions && !opts.permissions.has(l.permission)) return false;
   return true;
 }
 
@@ -93,7 +108,7 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/board', icon: Columns3, key: 'board' },
   // Stage automation rules (#1703/#1704): what runs when a relation enters or
   // leaves a stage. Every vertical with a pipeline has it.
-  { href: '/admin/automations', icon: Zap, key: 'automations', capability: 'pipeline' },
+  { href: '/admin/automations', icon: Zap, key: 'automations', capability: 'pipeline', permission: 'org.settings.write' },
   { href: '/admin/companies', icon: Building2, key: 'companies' },
   // The partner programme (docs/affiliate-module.md), marketing CRM only.
   { href: '/admin/affiliates', icon: Wallet, key: 'affiliates', capability: 'affiliate' },
@@ -101,6 +116,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/hiring', icon: Inbox, key: 'hiring', capability: 'placements' },
   { href: '/admin/requisitions', icon: BriefcaseBusiness, key: 'requisitions' , capability: 'placements' },
   { href: '/admin/offers', icon: Handshake, key: 'offers' , capability: 'placements' },
+  // The placement ledger (#1765): one row per hire, its attribution and invoice state.
+  { href: '/admin/placements', icon: Receipt, key: 'placements', capability: 'placements' },
   { href: '/admin/interview-requests', icon: CalendarDays, key: 'interviewRequests' , capability: 'placements' },
   { href: '/interviews', icon: ClipboardCheck, key: 'interviewPanels' , capability: 'placements' },
   { href: '/admin/candidates', icon: Users, key: 'candidates' },
@@ -158,7 +175,7 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/newsletters', icon: MailOpen, key: 'newsletters', capability: 'mentorship' },
   // Admin-authored nudges (#1686): reminders to mentors and mentees, so `mentorship`.
   // Stage-change rules are the automations screen (#1704), not this one.
-  { href: '/admin/nudges', icon: BellRing, key: 'nudges', capability: 'mentorship' },
+  { href: '/admin/nudges', icon: BellRing, key: 'nudges', capability: 'mentorship', permission: 'org.settings.write' },
   { href: '/admin/testimonials', icon: Quote, key: 'testimonials', capability: 'mentorship' },
   // Survey results (#1910). Untagged: a survey's audience may be companies, and
   // the engine (#1879) is not a mentorship module.
@@ -205,6 +222,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
   // Re-engaging dormant applicants/mentees is the internship funnel's tail.
   { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement', capability: 'mentorship' },
+  // Admin-defined registration / onboarding / profile questions (#1802).
+  { href: '/admin/forms', icon: ClipboardList, key: 'forms', capability: 'mentorship' },
   // The mentoring agreement both sides accept at kickoff (#1790).
   { href: '/admin/agreements', icon: FileSignature, key: 'agreements', capability: 'mentorship' },
   { href: '/admin/contributor-terms', icon: FileSignature, key: 'contributorTerms', capability: 'projects' },
@@ -225,6 +244,7 @@ export const MENTOR_NAV_LINKS: NavLink[] = [
   { href: '/mentor/board', icon: Columns3, key: 'board' },
   { href: '/mentor/mentees', icon: Users, key: 'myMentees' },
   { href: '/mentor/applications', icon: Inbox, key: 'applications' },
+  { href: '/mentor/offers', icon: HeartHandshake, key: 'mentorOffers' },
   { href: '/mentor/invite', icon: UserPlus, key: 'inviteMentee' },
   { href: '/mentor/profile', icon: User, key: 'myProfile' },
   { href: '/mentor/projects', icon: FolderGit2, key: 'projects', capability: 'projects' },
@@ -296,6 +316,8 @@ export const AFFILIATE_NAV_LINKS: NavLink[] = [
   { href: '/affiliate/commissions', icon: Receipt, key: 'affiliateCommissions', capability: 'affiliate' },
   { href: '/affiliate/payouts', icon: Wallet, key: 'affiliatePayouts', capability: 'affiliate' },
   { href: '/affiliate/payout-details', icon: Lock, key: 'affiliatePayoutDetails', capability: 'affiliate' },
+  // Questions about a row (#3353) go to the ordinary support channel, kept inside the portal.
+  { href: '/affiliate/support', icon: LifeBuoy, key: 'affiliateSupport', capability: 'affiliate' },
   { href: '/affiliate/contract', icon: FileSignature, key: 'affiliateContract', capability: 'affiliate' },
 ];
 

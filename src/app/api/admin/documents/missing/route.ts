@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { bulkMissingRequirements } from '@/lib/documentRequirements';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { getServerDictionary } from '@/i18n/server';
 import { mayManageOrgRequirements } from '@/lib/documentRequirementAccess';
+import { requirePermission } from '@/lib/authz';
 
 // Deliberately not wrapped in withTenantScope: the org is an explicit
 // parameter a super admin may point at any tenant, and bulkMissingRequirements
@@ -17,8 +16,9 @@ import { mayManageOrgRequirements } from '@/lib/documentRequirementAccess';
 const roleSchema = z.enum(['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE']);
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const query = new URL(request.url).searchParams;
   const orgId = query.get('orgId');
   if (!orgId) return NextResponse.json({ error: 'orgId is required' }, { status: 400 });

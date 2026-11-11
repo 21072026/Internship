@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { resolveOrgId } from '@/lib/orgScope';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
@@ -8,6 +6,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { logActivity } from '@/lib/activity';
 import { sendSecurityNotice } from '@/lib/securityNotices';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
+import { requirePermission } from '@/lib/authz';
 
 // POST — an admin forces a user out of the product, everywhere, right now.
 //
@@ -28,10 +27,9 @@ import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 // ADMIN only, scoped to the caller's tenant, never a peer admin, never from an
 // impersonation session, and audited under the caller's own id.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('user.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   // Not from an impersonation session (#1039). An admin wearing someone else's
   // identity must not be able to reach a security control that is logged as a

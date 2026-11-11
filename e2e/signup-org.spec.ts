@@ -58,6 +58,10 @@ test('signup creates org + unverified ADMIN + consent + subscription; verify adm
   expect(users).toHaveLength(1);
   const admin = users[0];
   expect(admin.email).toBe(email);
+  // The one account writer raised its event inside the signup transaction (#1998).
+  const created = await prisma.domainEvent.findMany({ where: { name: 'user.created', subjectId: admin.id } });
+  expect(created.map((e) => e.payload)).toEqual([{ userId: admin.id, role: 'ADMIN', source: 'signup' }]);
+  expect(created[0].orgId).toBe(org.id);
   expect(admin.role).toBe('ADMIN');
   expect(admin.isActive).toBe(false);
   expect(admin.emailVerified).toBe(false);
@@ -131,7 +135,12 @@ test('a failure inside the transaction leaves no organization, user, consent or 
   const email = uniqueEmail('selfserve-rollback');
   emails.push(email);
   const name = `Rollback Org ${Date.now()}`;
-  const [orgs, subs, consents] = await Promise.all([prisma.organization.count(), prisma.subscription.count(), prisma.userConsent.count()]);
+  const [orgs, subs, consents, created] = await Promise.all([
+    prisma.organization.count(),
+    prisma.subscription.count(),
+    prisma.userConsent.count(),
+    prisma.domainEvent.count({ where: { name: 'user.created' } }),
+  ]);
 
   const res = await signup(request, body(email, name), { 'x-e2e-fail-signup': '1' });
   expect(res.status()).toBe(500);
@@ -141,6 +150,9 @@ test('a failure inside the transaction leaves no organization, user, consent or 
   expect(await prisma.userConsent.count()).toBe(consents);
   expect(await prisma.user.count({ where: { email } })).toBe(0);
   expect(await prisma.organization.count({ where: { name } })).toBe(0);
+  // …and no ghost event: user.created was written through the same
+  // transaction (emitInTransaction), so the rollback took it too (#1998).
+  expect(await prisma.domainEvent.count({ where: { name: 'user.created' } })).toBe(created);
 });
 
 test('a MARKETING host refuses a self-serve signup before any write', { tag: '@smoke' }, async ({ request }) => {

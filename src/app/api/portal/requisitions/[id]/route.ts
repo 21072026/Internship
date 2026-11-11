@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -12,16 +11,16 @@ import { parseScreeningQuestions } from '@/lib/screeningQuestions';
 // rule as the list; anything not visible — a draft, a full role, another org's
 // — is a 404, never a 403 that would confirm it exists.
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'MENTEE' && session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requireRoleOrPermission(['MENTEE'], 'company.read', { request: _request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
   const orgId = resolveOrgId(session);
   const { id } = await params;
   if (!orgId) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return withTenantScope(session, async () => {
-    const job = await prisma.requisition.findFirst({ where: { AND: [{ id }, visibleJobsWhere(orgId)] }, select: { ...PORTAL_JOB_SELECT, company: { select: { id: true, name: true, logoUrl: true, description: true } } } });
+    const job = await prisma.requisition.findFirst({ where: { AND: [{ id }, visibleJobsWhere(orgId)] }, select: { ...PORTAL_JOB_SELECT, company: { select: { id: true, name: true, logoUrl: true, description: true, slug: true, isPublicProfile: true } } } });
     if (!job) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     // The apply form (#1832): the role's screening questions, and whether this mentee already applied.
     const [extra, mine] = await Promise.all([

@@ -11,9 +11,10 @@
 // Scheduled as the queued job `relationHealth.sweep` (src/lib/jobs/schedules.ts,
 // handler in src/jobs/platform.ts, #1677); sweepRelationHealth() is the body.
 
+import { adminTierFor } from '@/lib/authzRule';
+import { adminReceives } from '@/lib/programScopeRule';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/logger';
 import { settingsOrgOfRow } from '@/lib/settingsOrg';
 import { orgWhere } from '@/lib/tenantFilter';
 import { assessRelations, HEALTH_RELATION_SELECT, reminderDaysReader, type HealthRelationRow } from '@/lib/relationHealthLive';
@@ -22,7 +23,8 @@ import type { HealthReason } from '@/lib/relationHealth';
 import { SNAPSHOT_RETENTION_DAYS, shouldAlert, utcDay } from '@/lib/relationHealthTrend';
 import { emailDictionary } from '@/i18n/emailDictionary';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
-import { emailBrand, sendEmail } from '@/services/emailService';
+import { emailBrand } from '@/services/emailService';
+import { notifyEvent } from '@/lib/notifications/router';
 
 const DAY = 24 * 60 * 60 * 1000;
 const BATCH = 500;
@@ -31,6 +33,9 @@ const BATCH = 500;
 export interface Crossing {
   orgId: string;
   relationOrgId: string | null;
+  /** What a PROGRAM_ADMIN's grant is matched against (#3485). */
+  cohortId: string | null;
+  companyId: string | null;
   menteeId: string;
   menteeName: string;
   mentorName: string;
@@ -116,6 +121,8 @@ export async function sweepRelationHealth(opts: { now?: Date; orgIds?: string[] 
         crossings.push({
           orgId: await settingsOrgOfRow(r.orgId),
           relationOrgId: r.orgId,
+          cohortId: r.cohortId,
+          companyId: r.companyId,
           menteeId: r.mentee.id,
           menteeName: r.mentee.fullName,
           mentorName: r.mentor.fullName,
@@ -134,19 +141,26 @@ export async function sweepRelationHealth(opts: { now?: Date; orgIds?: string[] 
   });
   result.pruned = pruned.count;
   result.crossings = crossings.length;
-  result.mailed = await mailCrossingDigests(crossings);
+  result.mailed = await mailCrossingDigests(crossings, today);
   return result;
 }
 
 /** One digest per admin of each org that has crossings tonight, in the admin's language. */
-async function mailCrossingDigests(crossings: Crossing[]): Promise<number> {
+async function mailCrossingDigests(crossings: Crossing[], today: Date): Promise<number> {
   if (crossings.length === 0) return 0;
   const byOrg = new Map<string, Crossing[]>();
   for (const c of crossings) byOrg.set(c.orgId, [...(byOrg.get(c.orgId) ?? []), c]);
 
   const admins = await prisma.user.findMany({
     where: { role: 'ADMIN', isActive: true },
-    select: { id: true, orgId: true, email: true, fullName: true, preferredLanguage: true },
+    select: { id: true, orgId: true, email: true, fullName: true, preferredLanguage: true, adminLevel: true },
+  });
+  // A PROGRAM_ADMIN reads only the relations its grants cover, so its digest
+  // lists only those (#3485, programScopeRule.ts adminReceives). One query for
+  // every PROGRAM_ADMIN's grants.
+  const grants = await prisma.adminScopeGrant.findMany({
+    where: { userId: { in: admins.filter((a) => a.adminLevel === 'PROGRAM_ADMIN').map((a) => a.id) } },
+    select: { userId: true, orgId: true, cohortId: true, companyId: true },
   });
   const labels = new Map<string, Promise<(key: string) => string>>();
   const labelFor = (orgId: string | null, locale: Locale) => {
@@ -158,8 +172,10 @@ async function mailCrossingDigests(crossings: Crossing[]): Promise<number> {
   let mailed = 0;
   for (const admin of admins) {
     const org = await settingsOrgOfRow(admin.orgId);
-    const list = byOrg.get(org);
-    if (!list) continue;
+    const own = grants.filter((g) => g.userId === admin.id && g.orgId === org);
+    const tier = adminTierFor('ADMIN', admin.adminLevel);
+    const list = (byOrg.get(org) ?? []).filter((c) => adminReceives(tier, own, { cohortId: c.cohortId, companyId: c.companyId }));
+    if (list.length === 0) continue;
     const locale: Locale = isLocale(admin.preferredLanguage ?? undefined) ? (admin.preferredLanguage as Locale) : defaultLocale;
     const t = await emailDictionary(locale, org);
     const H = t.relationHealth;
@@ -181,21 +197,25 @@ async function mailCrossingDigests(crossings: Crossing[]): Promise<number> {
       );
     }
     const subject = H.subject.replace('{n}', String(list.length)).replace('{product}', brand.name);
-    await sendEmail({
-      category: 'program-health',
-      userId: admin.id,
+    // Through the router (#1711): opt-outs and the delivery ledger are its; the
+    // digest is the copy built above, sent as-is — once per admin per night.
+    await notifyEvent(admin.id, 'relation_health.digest', { count: list.length }, {
+      channels: ['email'],
       orgId: admin.orgId,
-      locale,
-      to: admin.email,
-      subject,
-      html: `<div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto;">
+      dedupeKey: `relation-health:${today.toISOString().slice(0, 10)}`,
+      email: {
+        subject,
+        category: 'program-health',
+        locale,
+        html: `<div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto;">
           <h2 style="color:${esc(brand.accent)};">${esc(H.heading)}</h2>
           <p>${esc(H.greeting.replace('{name}', admin.fullName))}</p>
           <p>${esc(H.intro)}</p>
           <ul style="padding-left:18px;">${items.join('')}</ul>
           <p style="font-size:12px;color:#6b7280;">${esc(H.footer)}</p>
         </div>`,
-    }).catch((error) => logger.error('Relation health digest failed', { userId: admin.id, error: String(error) }));
+      },
+    });
     mailed++;
   }
   return mailed;

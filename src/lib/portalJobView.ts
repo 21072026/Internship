@@ -10,7 +10,7 @@ export type PortalJob = {
   requiredSkills: unknown;
   openings: number;
   filled: number;
-  company: { id: string; name: string; logoUrl: string | null; description?: string | null };
+  company: { id: string; name: string; logoUrl: string | null; description?: string | null; slug?: string | null; isPublicProfile?: boolean };
 };
 
 /** A requisition's requiredSkills JSON as the list of strings it should be. */

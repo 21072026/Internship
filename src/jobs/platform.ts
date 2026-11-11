@@ -21,6 +21,7 @@ import type { ScopedPayload } from '@/lib/jobs/types';
 import { dispatchDueNewsletters, queueScheduledNewsletter } from '@/lib/newsletterDispatch';
 import { runUsageRollup } from '@/lib/jobs/usageRollup';
 import { runTrialReminders } from '@/lib/jobs/trialReminders';
+import { runAffiliateWindowNotices } from '@/lib/jobs/affiliateWindowNotices';
 import { runReportSubscriptions } from '@/lib/jobs/reportSubscriptions';
 import { sweepRelationHealth } from '@/lib/jobs/relationHealthSweep';
 import { dispatchDueSurveyCampaigns } from '@/lib/surveyCampaigns';
@@ -48,6 +49,8 @@ export function registerPlatformJobs(): void {
   }, SWEEP_OPTS);
   registerJob('usage.rollup', async () => counters(await runUsageRollup()), SWEEP_OPTS);
   registerJob('trial.reminders', async (p) => counters(await runTrialReminders({ ...scope(p), now: atOf(p) })), SWEEP_OPTS);
+  // Claim-before-send per customer (#3556): a rerun finds nothing left to claim.
+  registerJob('affiliate.windowNotices', async (p) => counters(await runAffiliateWindowNotices({ ...scope(p), now: atOf(p) })), SWEEP_OPTS);
   registerJob('reports.subscriptions', async (p) => counters(await runReportSubscriptions({ ...scope(p), now: atOf(p) })), SWEEP_OPTS);
   registerJob('relationHealth.sweep', async (p) => counters(await sweepRelationHealth({ ...scope(p), now: atOf(p) })), SWEEP_OPTS);
   registerJob('surveys.campaigns', async (p) => {

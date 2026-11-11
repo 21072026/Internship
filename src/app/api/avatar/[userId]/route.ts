@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -52,8 +53,12 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { userId } = await params;
-  if (userId !== session.user.id && session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Someone else's avatar is an admin's write — the permission layer's answer (#1571).
+  if (userId !== session.user.id) {
+    const actor = await actorFromSession(session);
+    if (!actor || !(await can(actor, 'user.write', undefined, session))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
   }
 
   return await withTenantScope(session, async () => {

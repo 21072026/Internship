@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useLocale, useT } from '@/i18n/client';
 import { fillTemplate } from '@/components/ui/fillTemplate';
-import { planDisplayName, upgradeOffer, type GateInfo } from '@/lib/upgradePrompt';
+import { planDisplayName, upgradeOffer, type GateInfo, type GateMetric } from '@/lib/upgradePrompt';
 import type { PlanAudience } from '@/lib/plans';
 
 // The one door on every plan wall (#1745): a 403 `plan_limit_reached` or
@@ -24,6 +24,14 @@ import type { PlanAudience } from '@/lib/plans';
 //   company — an employer account: pointed at the pricing page.
 // NEVER rendered for a mentee (FREE CORE): the mentee-facing gate answers a
 // capacity message instead (POST /api/apply → `program_full`).
+// One sentence per thing a cap counts; every other line of the prompt is shared.
+const LIMIT_BODY: Record<GateMetric, (u: ReturnType<typeof useT>['upgrade']) => string> = {
+  ACTIVE_PAIRS: (u) => u.limitBody,
+  ADMIN_SEATS: (u) => u.limitBodySeats,
+  COMPANIES: (u) => u.limitBodyCompanies,
+  PROGRAMS: (u) => u.limitBodyPrograms,
+};
+
 export function UpgradePrompt({
   gate,
   viewer,
@@ -50,7 +58,7 @@ export function UpgradePrompt({
       ? offer
         ? fillTemplate(u.featureBody, { feature: featureName, plan: offer.planName })
         : u.featureNoPlan
-      : fillTemplate(u.limitBody, {
+      : fillTemplate(LIMIT_BODY[gate.metric](u), {
           usage: String(gate.usage ?? '?'),
           limit: String(gate.limit ?? '?'),
           plan: planDisplayName(gate.plan) ?? '?',
@@ -89,7 +97,7 @@ export function UpgradePrompt({
           <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">{title}</p>
           <p className="text-sm text-gray-600 dark:text-gray-300" data-testid="upgrade-prompt-body">{body}</p>
           {price && <p className="text-sm font-medium text-gray-900 dark:text-gray-100" data-testid="upgrade-prompt-price">{price}</p>}
-          {gate.code === 'plan_limit_reached' && <p className="text-xs text-gray-500 dark:text-gray-400">{u.reassurance}</p>}
+          {gate.code === 'plan_limit_reached' && gate.metric === 'ACTIVE_PAIRS' && <p className="text-xs text-gray-500 dark:text-gray-400">{u.reassurance}</p>}
           {viewer === 'staff' && <p className="text-xs text-gray-500 dark:text-gray-400">{u.askAdmin}</p>}
           {viewer === 'company' && <p className="text-xs text-gray-500 dark:text-gray-400">{u.contactSales}</p>}
           <div className="flex flex-wrap items-center gap-3 pt-1">

@@ -169,14 +169,17 @@ jobs:
         id: check
         env:
           R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          # Its OWN read-only token, never R2_ACCESS_KEY_ID: backup-offsite-setup.yml
+          # writes that one to the server as the backup's write credential, so a
+          # read-only key stored there would break the next backup.
+          AWS_ACCESS_KEY_ID: ${{ secrets.OFFSITE_CHECK_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.OFFSITE_CHECK_SECRET_ACCESS_KEY }}
           RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
           BUCKET: ${{ vars.OFFSITE_BUCKET || 'internship-crm-backups' }}
         run: |
           set -o pipefail
           if [ -z "$R2_ACCOUNT_ID" ] || [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$RESTIC_PASSWORD" ]; then
-            msg="⚠️ off-site check not configured: set the R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and RESTIC_PASSWORD repository secrets (docs/disaster-recovery.md § Off-site copy)."
+            msg="⚠️ off-site check not configured: set the R2_ACCOUNT_ID, OFFSITE_CHECK_ACCESS_KEY_ID, OFFSITE_CHECK_SECRET_ACCESS_KEY and RESTIC_PASSWORD repository secrets (docs/disaster-recovery.md § Off-site copy)."
             echo "::notice::$msg"; echo "$msg" >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi

@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { raiseRequisitionStatus } from '@/lib/requisitionEvents';
 import { closedAtForStatus } from '@/lib/requisitions';
 
 // An accepted offer fills its requisition (#1411, spec #1854).
@@ -100,6 +101,7 @@ export async function applyAcceptedOffer(
       where: { id: requisitionId },
       data: { status: 'FILLED', closedAt: closedAtForStatus('FILLED', after.closedAt) },
     });
+    await raiseRequisitionStatus(tx, { requisitionId, orgId: offer.orgId, from: after.status, to: 'FILLED' });
   }
   return { outcome: 'counted', requisitionId, filled: after.filled, openings: after.openings, nowFilled };
 }

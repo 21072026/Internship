@@ -156,3 +156,15 @@ test('every resource family answers a delta fetch and validates its filters', as
   const company = (await (await request.get(`/api/v1/companies/${tenants.orgA.company.id}`, { headers: a.headers })).json()).data;
   expect(company.openRequisitionCount).toBe(1);
 });
+
+test('a candidate is found by exact e-mail, in the key\'s organisation only, and the address is never returned', async ({ request }) => {
+  // The lookup a connector's search step makes before it creates (#2004).
+  const { orgA, orgB } = tenants;
+  const key = await mintKey(orgA.org.id, 'candidates:read');
+  const own = await listIds(request, `/api/v1/candidates?email=${encodeURIComponent(orgA.mentee.email.toUpperCase())}`, key);
+  expect(own.ids).toEqual([orgA.mentee.id]);
+  expect(own.text).not.toContain(orgA.mentee.email);
+  // Another organisation's address finds nothing; an unknown one finds nothing.
+  expect((await listIds(request, `/api/v1/candidates?email=${encodeURIComponent(orgB.mentee.email)}`, key)).ids).toEqual([]);
+  expect((await listIds(request, '/api/v1/candidates?email=nobody%40example.test', key)).ids).toEqual([]);
+});

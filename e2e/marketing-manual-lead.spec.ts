@@ -192,7 +192,10 @@ test('INTERNSHIP never sees the form and the route refuses it; MENTEE and COMPAN
     // The MARKETING-org logins below only work on the marketing host (#2590);
     // the INTERNSHIP admin above stayed on the default one.
     await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
-    await signInAsFreshUser(page, menteeEmail, PW, '/portal');
+    // A MARKETING lead has no mentee portal (#2351): /portal bounces it to
+    // /account. Waiting on '/portal' only passed when the URL was caught
+    // mid-bounce, which is why this read green locally and red on e2e-full.
+    await signInAsFreshUser(page, menteeEmail, PW, '/account');
     expect((await page.request.post('/api/admin/marketing-accounts', { data: body })).status()).toBe(403);
 
     await signInAsFreshUser(page, companyEmail, PW, '/company');

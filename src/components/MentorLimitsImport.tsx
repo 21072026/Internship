@@ -78,11 +78,13 @@ export function MentorLimitsImport({ onApplied }: { onApplied: () => void }) {
         <CardDescription>{L.hint}</CardDescription>
       </CardHeader>
       <div className="space-y-3">
+        {/* w-full: a native file input is ~300px wide by default and spilled
+            the card at phone width (the mobile layout audit, 360px). */}
         <input
           type="file"
           accept=".csv,text/csv,text/plain"
           onChange={(e) => pickFile(e.target.files?.[0])}
-          className="block text-sm text-gray-700 dark:text-gray-200"
+          className="block w-full max-w-full text-sm text-gray-700 dark:text-gray-200"
           aria-label={L.file}
           data-testid="mentor-limits-import-file"
         />

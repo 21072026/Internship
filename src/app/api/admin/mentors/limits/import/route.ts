@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -11,6 +9,7 @@ import { logger } from '@/lib/logger';
 import { requireCapability } from '@/lib/capabilityGate';
 import { MENTOR_LIMITS_IMPORT_MAX_CHARS, MENTOR_LIMITS_IMPORT_MAX_ROWS } from '@/lib/mentorLimitsImport';
 import { MentorLimitsImportError, runMentorLimitsImport } from '@/lib/mentorLimitsImportStore';
+import { requirePermission } from '@/lib/authz';
 
 // POST /api/admin/mentors/limits/import — per-mentor load limits by CSV (#1808).
 // Columns: email + any of mentorCapacity, selfMatchLimit, acceptingMentees
@@ -37,9 +36,9 @@ export async function POST(request: Request) {
 }
 
 async function handlePost(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('user.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const limited = enforceRateLimit(request, 'mentor-limits-import', { ...RATE_LIMIT, subject: session.user.id });
   if (limited) return limited;
   const declared = Number(request.headers.get('content-length'));

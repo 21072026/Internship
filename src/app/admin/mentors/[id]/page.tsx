@@ -10,6 +10,7 @@ import { useStageLabel } from '@/lib/pipelineStagesClient';
 import { RoleConvertButton } from '@/components/RoleConvertButton';
 import { UserQuickActions } from '@/components/UserQuickActions';
 import { useT } from '@/i18n/client';
+import { FormAnswersPanel } from '@/components/forms/FormAnswersPanel';
 
 interface MentorRelation {
   id: string;
@@ -135,6 +136,10 @@ export default function AdminMentorDetailPage() {
             </div>
           )}
         </Card>
+      </div>
+      {/* Answers to the org's own questions (#1803); nothing when none is asked. */}
+      <div className="mt-6">
+        <FormAnswersPanel userId={id} />
       </div>
     </div>
   );

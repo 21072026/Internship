@@ -29,12 +29,23 @@ import { formatMinorPrice } from '@/lib/money';
 import { marketingPriceListForHost } from '@/lib/marketingPriceList';
 import { priceListFromSeatMinor } from '@/lib/marketingPriceListRule';
 import { I18nScope } from '@/i18n/scope';
+import { tenantWelcomeFor } from '@/lib/tenantWelcome';
+import { TenantWelcomePage } from '@/components/landing/TenantWelcomePage';
 
 async function HomePage() {
   // Only decode a session when one could exist — this is the most-hit page in
   // the app and the overwhelming majority of its visitors are signed out (#1197).
   const session = (await hasSessionCookie()) ? await getServerSession(authOptions) : null;
   if (session) redirect(roleHome(session.user.role));
+
+  // A tenant's own, verified domain with a welcome written (#1664) greets its
+  // people in their words instead of selling them our product. Our own hosts
+  // never ask the database (src/lib/tenantWelcome.ts).
+  const welcome = await tenantWelcomeFor(requestHostHeader(await headers()));
+  if (welcome) {
+    const { t: wt } = await getServerDictionary();
+    return <TenantWelcomePage welcome={welcome} copy={wt.tenantWelcome} />;
+  }
 
   const { t, locale, product } = await getServerDictionary();
   const L = t.landing;

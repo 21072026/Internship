@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -54,7 +53,9 @@ const categorySchema = z
   .max(40)
   .regex(/^[A-Z0-9_]+$/, 'uppercase key');
 
-const createSchema = z
+// The object before its cross-field refine: zod 4 keeps refinements on the
+// object itself, so the PATCH shape is derived from this, not from createSchema.
+const costShape = z
   .object({
     cohortId: z.string().min(1).max(60).nullable().optional(),
     category: categorySchema,
@@ -65,25 +66,22 @@ const createSchema = z
     periodEnd: dateSchema,
     note: z.string().trim().max(2000).nullable().optional(),
   })
-  .strict()
+  .strict();
+
+const createSchema = costShape
   .refine((value) => toUtcDate(value.periodStart) <= toUtcDate(value.periodEnd), {
     message: 'periodStart must not be after periodEnd',
     path: ['periodEnd'],
   });
 
-const patchSchema = createSchema.innerType().partial().extend({ id: z.string().min(1).max(60) }).strict();
+const patchSchema = costShape.partial().extend({ id: z.string().min(1).max(60) }).strict();
 
 const deleteSchema = z.object({ id: z.string().min(1).max(60) }).strict();
 
-async function adminSession() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return session;
-}
-
 export async function GET(request: Request) {
-  const session = await adminSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'No organization' }, { status: 400 });
@@ -110,8 +108,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await adminSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'No organization' }, { status: 400 });
@@ -161,8 +160,9 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
-  const session = await adminSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'No organization' }, { status: 400 });
@@ -220,8 +220,9 @@ export async function PATCH(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const session = await adminSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'No organization' }, { status: 400 });

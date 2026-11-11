@@ -53,7 +53,7 @@ test('a mentor connects their calendar, a meeting is mirrored, and disconnecting
       { maxRedirects: 0 }
     );
     expect(tampered.headers()['location']).toContain('google=failed');
-    expect(await prisma.googleCalendarConnection.count({ where: { userId: mentor.id } })).toBe(0);
+    expect(await prisma.calendarConnection.count({ where: { userId: mentor.id } })).toBe(0);
 
     // The real callback stores the connection.
     const ok = await page.request.get(
@@ -62,9 +62,9 @@ test('a mentor connects their calendar, a meeting is mirrored, and disconnecting
     );
     expect(ok.headers()['location']).toContain('google=connected');
 
-    const conn = await prisma.googleCalendarConnection.findUnique({ where: { userId: mentor.id } });
+    const conn = await prisma.calendarConnection.findUnique({ where: { userId_provider: { userId: mentor.id, provider: 'GOOGLE' } } });
     expect(conn).toBeTruthy();
-    expect(conn!.googleEmail).toBe('connected.person@gmail.example');
+    expect(conn!.accountEmail).toBe('connected.person@gmail.example');
     // The tokens are sealed at rest: the plaintext Google handed us must not be
     // findable in the row.
     expect(conn!.accessTokenEnc).not.toContain('mock-access-1');
@@ -85,7 +85,7 @@ test('a mentor connects their calendar, a meeting is mirrored, and disconnecting
     expect(created.ok()).toBeTruthy();
 
     await expect
-      .poll(async () => prisma.googleCalendarEventLink.count({ where: { connectionId: conn!.id } }), { timeout: 15_000 })
+      .poll(async () => prisma.calendarEventLink.count({ where: { connectionId: conn!.id } }), { timeout: 15_000 })
       .toBe(1);
 
     const mockState = await (await request.get(`${MOCK}/__state`)).json();
@@ -100,7 +100,7 @@ test('a mentor connects their calendar, a meeting is mirrored, and disconnecting
     const eventsNamed = async (summary: string): Promise<MockEvent[]> =>
       ((await (await request.get(`${MOCK}/__state`)).json()).events as MockEvent[]).filter((e) => e.summary === summary);
     const meeting = await prisma.meeting.findFirstOrThrow({ where: { relationId: relation.id, title: 'GCal Sync Meeting' } });
-    const link = await prisma.googleCalendarEventLink.findFirstOrThrow({ where: { meetingId: meeting.id } });
+    const link = await prisma.calendarEventLink.findFirstOrThrow({ where: { meetingId: meeting.id } });
 
     // Rescheduling PATCHes the event it already made — the same Google id, one
     // event, the new time — instead of creating a second one.
@@ -111,7 +111,7 @@ test('a mentor connects their calendar, a meeting is mirrored, and disconnecting
     await expect
       .poll(async () => (await eventsNamed('GCal Sync Meeting')).map((e) => e.start?.dateTime), { timeout: 15_000 })
       .toEqual([movedTo.toISOString()]);
-    expect((await eventsNamed('GCal Sync Meeting'))[0].id).toBe(link.googleEventId);
+    expect((await eventsNamed('GCal Sync Meeting'))[0].id).toBe(link.externalEventId);
 
     // Accepting a meeting request mirrors the meeting too — it used to be the
     // one scheduling path that never reached a calendar.
@@ -132,12 +132,12 @@ test('a mentor connects their calendar, a meeting is mirrored, and disconnecting
     const deleted = await page.request.delete(`/api/meetings/${meeting.id}`);
     expect(deleted.ok()).toBeTruthy();
     expect(await eventsNamed('GCal Sync Meeting')).toHaveLength(0);
-    expect(await prisma.googleCalendarEventLink.count({ where: { googleEventId: link.googleEventId } })).toBe(0);
+    expect(await prisma.calendarEventLink.count({ where: { externalEventId: link.externalEventId } })).toBe(0);
 
     // Disconnecting revokes at Google and forgets the tokens here.
     const removed = await page.request.delete('/api/integrations/google/connection');
     expect(removed.ok()).toBeTruthy();
-    expect(await prisma.googleCalendarConnection.count({ where: { userId: mentor.id } })).toBe(0);
+    expect(await prisma.calendarConnection.count({ where: { userId: mentor.id } })).toBe(0);
 
     const afterRevoke = await (await request.get(`${MOCK}/__state`)).json();
     expect((afterRevoke.revoked as string[]).length).toBeGreaterThan(0);
@@ -173,7 +173,7 @@ test('a mentee who never connected is unaffected', async ({ page }) => {
     expect(created.ok()).toBeTruthy();
     const meeting = await prisma.meeting.findFirst({ where: { relationId: relation.id } });
     expect(meeting).toBeTruthy();
-    expect(await prisma.googleCalendarEventLink.count({ where: { meetingId: meeting!.id } })).toBe(0);
+    expect(await prisma.calendarEventLink.count({ where: { meetingId: meeting!.id } })).toBe(0);
   } finally {
     await prisma.mentorshipRelation.delete({ where: { id: relation.id } }).catch(() => {});
     await cleanupByEmail(menteeEmail);

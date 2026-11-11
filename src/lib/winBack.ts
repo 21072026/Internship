@@ -1,7 +1,8 @@
 import { prisma } from '@/lib/prisma';
 import { inTransaction, type Db } from '@/lib/dbHandle';
 import { findActiveMentorship, AlreadyMentoredError } from '@/lib/activeMentorship';
-import { ENDED_CHURNED } from '@/lib/relationLifecycle';
+import { ENDED_CHURNED, effectiveLifecycleState } from '@/lib/relationLifecycle';
+import { raiseLifecycleChanged } from '@/lib/lifecycleEvents';
 import { stageTrialWindow } from '@/lib/trialWindow';
 import { stageDeadlineUpdate } from '@/lib/stageSla';
 import type { WinBackStage } from '@/lib/winBackRule';
@@ -42,6 +43,8 @@ export async function winBack(input: {
   /** The new journey's trial window; omitted = the stage's own default. */
   trialWindow?: { trialStartedAt?: Date | null; trialEndsAt?: Date | null };
   db?: Db;
+  /** Who won it back; omitted = the system (an ingested event). */
+  actorId?: string | null;
 }): Promise<{ newRelationId: string }> {
   const now = input.at ?? new Date();
   const done = await inTransaction(input.db ?? prisma, async (tx) => {
@@ -55,7 +58,7 @@ export async function winBack(input: {
     await tx.$queryRaw`SELECT id FROM \`MentorshipRelation\` WHERE id = ${input.relationId} FOR UPDATE`;
     const old = await tx.mentorshipRelation.findUniqueOrThrow({
       where: { id: input.relationId },
-      select: { id: true, orgId: true, mentorId: true, menteeId: true, companyId: true, status: true, pipelineStatus: true },
+      select: { id: true, orgId: true, mentorId: true, menteeId: true, companyId: true, status: true, lifecycleState: true, pipelineStatus: true },
     });
     // Every refusal is decided BEFORE the first write and answered, not thrown
     // from inside the unit: joined to a caller's transaction (the batch dry
@@ -97,11 +100,22 @@ export async function winBack(input: {
       },
       select: { id: true },
     });
-    return { newRelationId: created.id };
+    return {
+      newRelationId: created.id,
+      // Only a close made HERE is a lifecycle move; a predecessor that was
+      // already closed (`expect.closed`) moved earlier.
+      ended: input.expect.closed ? null : { relationId: old.id, orgId: old.orgId, from: effectiveLifecycleState(old) },
+    };
   });
   if ('refused' in done) {
     if (done.refused === 'mentored') throw new AlreadyMentoredError(done.menteeId, done.otherId);
     throw new WinBackConflictError();
+  }
+  // After the commit, and only when this unit OWNED its transaction (#1998):
+  // joined to a caller's, the caller decides whether anything commits — and
+  // the only joined caller today is the ingest dry run, which never does.
+  if (done.ended && (input.db ?? prisma) === prisma) {
+    await raiseLifecycleChanged({ ...done.ended, to: ENDED_CHURNED, reasonCode: null, actorId: input.actorId ?? null });
   }
   return { newRelationId: done.newRelationId };
 }

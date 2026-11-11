@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { MAX_EDGES_PER_SKILL, setEdges } from '@/lib/skillCuration';
+import { requirePermission } from '@/lib/authz';
 
 // Replace a skill's neighbours (#1817): what adjacency-aware matching counts
 // as "close enough", with a weight 0..1 each.
@@ -23,10 +22,9 @@ const bodySchema = z.object({
 });
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // The skill vocabulary feeds mentor and requisition matching — an internship module.
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;

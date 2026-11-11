@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { isSuperAdmin } from '@/lib/superAdmin';
 import { MAX_VIEW_NAME, SAVED_VIEW_VISIBILITIES, sanitizeViewFilters, toSavedViewDto as toDto } from '@/lib/savedViews';
+import { requirePermission } from '@/lib/authz';
 
 // One saved view (#1900). Only its author changes or deletes it — whether it is
 // PRIVATE or shared with the org — or a super admin. Checked here, in the
@@ -30,9 +29,9 @@ async function loadOwned(id: string, session: Parameters<typeof tenantWhere>[0] 
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input', issues: parsed.error.issues }, { status: 400 });
   const { id } = await params;
@@ -59,9 +58,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('content.write', { request: _request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { id } = await params;
   return withTenantScope(session, async () => {
     const owned = await loadOwned(id, session);

@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
 import { sendMeetingInviteEmail } from '@/services/emailService';
 import { emit } from '@/lib/events/emit';
-import { notifyIfAllowed } from '@/lib/notify';
+import { notifyEvent } from '@/lib/notifications/router';
+import { meetingChatCard } from '@/lib/meetingChatCard';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import type { Prisma } from '@prisma/client';
@@ -14,10 +14,12 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { formatInTimeZone, isValidTimeZone, parseUserDateTime } from '@/lib/timezone';
 import { resolveMeetingLink } from '@/lib/meetingContext';
 import { meetingLinkRefusal } from '@/lib/meetingRoom';
+import { adoptProviderEvent } from '@/lib/conferenceGeneration';
 import { recordPairActivity } from '@/lib/metering';
 import { pushMeetingInBackground } from '@/lib/googleCalendarSync';
 import { guestsField, inviteGuests, normalizeGuests } from '@/lib/meetingGuests';
 import { durationMinutesField, meetingEnd } from '@/lib/meetingDuration';
+import { reminderLeadField } from '@/lib/meetingReminderLeadField';
 import { bookWithoutConflict, conflictBody, recordForcedBooking } from '@/lib/busyWindows';
 import { findPolicyViolation, policyBody, policyExempt, recordPolicyOverride } from '@/lib/bookingPolicy';
 import type { PolicyViolation } from '@/lib/bookingPolicyRule';
@@ -36,6 +38,9 @@ const schema = z.object({
   // How long it runs (#1984). Omitted → the one default, stored as null so the
   // row keeps following the default if it ever changes.
   durationMinutes: durationMinutesField,
+  // Reminder lead (#1636): null = the programme default, 0 = no reminder,
+  // N = one reminder N minutes ahead (src/lib/meetingReminderLeads.ts).
+  reminderLeadMinutes: reminderLeadField,
   // Outsiders with no account here (#1446). Each gets its own RSVP token and
   // the same emailed yes/no buttons; see src/lib/meetingGuests.ts for why the
   // whole batch is attached to ONE of the created rows.
@@ -45,16 +50,14 @@ const schema = z.object({
   force: z.boolean().optional(),
 });
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
   // Every role's scope is spelled out (#913) — an unlisted role (COMPANY,
   // SOURCE) is rejected, never silently given everything (the #831
-  // allowlist-by-omission lesson).
+  // allowlist-by-omission lesson). An admin is judged by the permission layer (#1571).
+  const gate = await requireRoleOrPermission(['MENTOR', 'MENTEE'], 'program.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
   const role = session.user.role;
-  if (role !== 'ADMIN' && role !== 'MENTOR' && role !== 'MENTEE') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
   return await withTenantScope(session, async () => {
     // `relationId: { not: null }` keeps this endpoint's shape after #1051 made
     // the column nullable: every consumer (MeetingsManager, MeetingSchedulerPanel)
@@ -66,7 +69,7 @@ export async function GET() {
     // scopes nothing with MT_ENFORCE_ISOLATION off (#2542 follow-up). Every
     // role's relation filter is narrowed to the caller's tenant.
     const relationWhere: Prisma.MentorshipRelationWhereInput = withinTenant<Prisma.MentorshipRelationWhereInput>(
-      role === 'ADMIN' ? {} : role === 'MENTOR' ? { mentorId: session.user.id } : { menteeId: session.user.id },
+      admin ? {} : role === 'MENTOR' ? { mentorId: session.user.id } : { menteeId: session.user.id },
       await tenantWhere(session),
     );
     const where: Prisma.MeetingWhereInput = { relationId: { not: null }, relation: { is: relationWhere } };
@@ -106,7 +109,7 @@ export async function GET() {
         // their mentor, they are a third party's PII, and this same payload is
         // rendered on /portal. So the list is included only for the roles that
         // can actually invite.
-        ...(role === 'ADMIN' || role === 'MENTOR'
+        ...(admin || role === 'MENTOR'
           ? {
               guests: {
                 select: { id: true, email: true, name: true, rsvp: true },
@@ -124,10 +127,9 @@ export async function GET() {
 // POST — schedule a meeting for one or many mentees (bulk). Each gets its own
 // Meeting row + RSVP token, and an emailed invite with the Meet link.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'relation.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
 
   // Unlimited until #1446. Scheduling always mailed people, but only people the
   // caller was already connected to; it can now mail addresses the caller typed,
@@ -167,7 +169,7 @@ export async function POST(request: Request) {
     // OF THEIR TENANT, a mentor on their own. A foreign id is dropped exactly
     // like a missing one (#2542 follow-up).
     const where = withinTenant(
-      session.user.role === 'ADMIN'
+      admin
         ? { id: { in: relationIds } }
         : { id: { in: relationIds }, mentorId: session.user.id },
       await tenantWhere(session),
@@ -189,6 +191,8 @@ export async function POST(request: Request) {
       inviteeCount: relations.length,
       orgId: session.user.orgId,
       organizerId: session.user.id,
+      // A Meet room on the organiser's own calendar under GENERATE_PROVIDER (#2009).
+      conference: when ? { title, start: when, end: meetingEnd(when, { durationMinutes }), timeZone: organizerZone } : null,
     });
     if (!resolved.ok) return meetingLinkRefusal(resolved);
     const link = resolved.link;
@@ -228,6 +232,7 @@ export async function POST(request: Request) {
         title,
         scheduledAt: when,
         durationMinutes: durationMinutes ?? null,
+        reminderLeadMinutes: parsed.data.reminderLeadMinutes ?? null,
         timeZone: organizerZone,
         meetLink: link,
         rsvpToken,
@@ -267,6 +272,9 @@ export async function POST(request: Request) {
         meeting = await prisma.meeting.create({ data });
       }
       guestHostMeetingId ??= meeting.id;
+      // A generated Meet room already IS an event on the organiser's calendar:
+      // adopt it as this row's mirror before the push, or the push makes a second.
+      await adoptProviderEvent([meeting.id], resolved.conference);
       // Mirror into the calendars of whoever connected their own Google account
       // (#709). A no-op unless the operator enabled the integration and the
       // person opted in; unconnected users keep the e-mail + .ics path exactly
@@ -312,13 +320,15 @@ export async function POST(request: Request) {
       // echo when an admin schedules a meeting on their own relation.
       if (rel.mentee.id !== session.user.id && !notifiedMentees.has(rel.mentee.id)) {
         notifiedMentees.add(rel.mentee.id);
-        await notifyIfAllowed(
-          rel.mentee.id,
-          'meetingReminders',
-          when ? 'meeting.scheduled' : 'meeting.scheduledNoTime',
-          when ? { title, when: formatInTimeZone(when, rel.mentee.timezone) } : { title },
-          '/portal'
-        );
+        // Through the router (#1942): the bell, and a chat card with the join
+        // button for a mentee who linked chat. The mail went out above.
+        const chatCard = meetingChatCard(meeting, 'invite');
+        const dedupeKey = `meeting-invite:${meeting.id}`;
+        if (when) {
+          await notifyEvent(rel.mentee.id, 'meeting.scheduled', { title, when: formatInTimeZone(when, rel.mentee.timezone) }, { dedupeKey, chatCard });
+        } else {
+          await notifyEvent(rel.mentee.id, 'meeting.scheduledNoTime', { title }, { dedupeKey, chatCard });
+        }
       }
       created++;
     }

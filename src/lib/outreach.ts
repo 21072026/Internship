@@ -28,7 +28,7 @@ export function outreachActorWhere(actor: { role: string; userId: string; orgId:
   }
 }
 
-export type OutreachPrecondition = 'not_shortlisted' | 'no_consent';
+export type OutreachPrecondition = 'not_shortlisted' | 'no_consent' | 'not_in_pool';
 
 /**
  * The two facts a company must meet before it may ask, both read from the
@@ -53,4 +53,26 @@ export async function outreachPreconditions(
   if (!application && !interest) return { ok: false, code: 'not_shortlisted' };
   if (!(await hasConsent(menteeId, 'TALENT_POOL_VISIBILITY'))) return { ok: false, code: 'no_consent' };
   return { ok: true, applicationId: application?.id ?? null };
+}
+
+/**
+ * The talent-pool door (#1394): instead of a shortlist, the candidate must be
+ * in the pool THIS company may search — `poolWhere` is talentPoolVisibleWhere()
+ * (src/lib/talentPool.ts), the same rule the search reads, so it carries the
+ * public-profile opt-in, the active TALENT_POOL_VISIBILITY consent and the
+ * early-access window. A candidate of another org, outside the pool or with
+ * the consent withdrawn answers `not_in_pool` — the route's 404, so a company
+ * learns nothing about a person the search would not have shown it.
+ */
+export async function talentPoolIntroPreconditions(
+  orgId: string,
+  menteeId: string,
+  poolWhere: Prisma.UserWhereInput,
+): Promise<{ ok: true; applicationId: null } | { ok: false; code: OutreachPrecondition }> {
+  const inPool = await prisma.user.findFirst({ where: { AND: [poolWhere, { id: menteeId, orgId }] }, select: { id: true } });
+  if (!inPool) return { ok: false, code: 'not_in_pool' };
+  // Re-read on its own as well: the consent is the legal basis, and this check
+  // must not depend on the pool rule keeping it in its WHERE.
+  if (!(await hasConsent(menteeId, 'TALENT_POOL_VISIBILITY'))) return { ok: false, code: 'not_in_pool' };
+  return { ok: true, applicationId: null };
 }

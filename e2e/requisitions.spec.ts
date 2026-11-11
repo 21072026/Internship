@@ -51,6 +51,7 @@ test.describe.serial('Story #806 requisitions', () => {
   });
 
   test.afterAll(async () => {
+    await prisma.domainEvent.deleteMany({ where: { orgId: { in: [orgA?.id, orgB?.id].filter(Boolean) } } }).catch(() => {});
     await prisma.requisition.deleteMany({ where: { orgId: { in: [orgA?.id, orgB?.id].filter(Boolean) } } }).catch(() => {});
     await prisma.user.deleteMany({ where: { email: { in: Object.values(emails) } } }).catch(() => {});
     await prisma.company.deleteMany({ where: { id: { in: [companyA?.id, companyAOther?.id, companyB?.id].filter(Boolean) } } }).catch(() => {});
@@ -109,6 +110,14 @@ test.describe.serial('Story #806 requisitions', () => {
     expect(cancelledItem.closedAt).toBeTruthy(); expect(cancelledItem.openings).toBe(3); expect(cancelledItem.filled).toBe(2);
     const reopened = await page.request.patch(`/api/requisitions/${item.id}`, { data: { status: 'ON_HOLD' } });
     expect((await reopened.json()).requisition.closedAt).toBeNull();
+    // Every status write is on the bus (#1998): the create, each change; the
+    // refused openings edit above raised nothing.
+    const events = await prisma.domainEvent.findMany({ where: { name: 'requisition.status_changed', subjectId: item.id }, orderBy: { createdAt: 'asc' } });
+    expect(events.map((e) => e.payload)).toEqual([
+      { requisitionId: item.id, from: null, to: 'OPEN' },
+      { requisitionId: item.id, from: 'OPEN', to: 'CANCELLED' },
+      { requisitionId: item.id, from: 'CANCELLED', to: 'ON_HOLD' },
+    ]);
   });
 
   test('concurrent count PATCH allows one winner and preserves the invariant', async ({ page }) => {

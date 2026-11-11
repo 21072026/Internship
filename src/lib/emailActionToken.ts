@@ -39,7 +39,12 @@ export type EmailAction =
   // React to one specific message. Bound to the message id rather than "the
   // newest in the thread" so a reply arriving between send and click cannot
   // redirect the reaction onto the wrong message.
-  | { kind: 'react'; messageId: string; userId: string; emojiIndex: number };
+  | { kind: 'react'; messageId: string; userId: string; emojiIndex: number }
+  // Extend a pairing by its original length (#1786), minted only for the
+  // relation's mentor. Bound to the end date the mail announced (`fromDay`,
+  // YYYYMMDD): once that date has moved — by this link or anyone else — the
+  // link is spent, so a forwarded or replayed mail cannot extend it again.
+  | { kind: 'extend'; relationId: string; userId: string; fromDay: string };
 
 // `~` separates the fields and `.` separates payload from signature (as in
 // replyToken). `~` specifically because the token is a URL *path* segment:
@@ -55,6 +60,7 @@ function sign(payload: string): string {
 
 function serialize(action: EmailAction, day: number): string {
   const stamp = day.toString(36);
+  if (action.kind === 'extend') return ['x', action.relationId, action.userId, action.fromDay, stamp].join(SEP);
   return action.kind === 'read'
     ? ['k', action.relationId, action.userId, stamp].join(SEP)
     : ['r', action.messageId, action.userId, String(action.emojiIndex), stamp].join(SEP);
@@ -98,6 +104,12 @@ export function verifyEmailActionToken(token: string): EmailAction | 'expired' |
     if (!relationId || !userId) return null;
     if (expired(stamp)) return 'expired';
     return { kind: 'read', relationId, userId };
+  }
+  if (parts[0] === 'x' && parts.length === 5) {
+    const [, relationId, userId, fromDay, stamp] = parts;
+    if (!relationId || !userId || !/^\d{8}$/.test(fromDay)) return null;
+    if (expired(stamp)) return 'expired';
+    return { kind: 'extend', relationId, userId, fromDay };
   }
   if (parts[0] === 'r' && parts.length === 5) {
     const [, messageId, userId, rawIndex, stamp] = parts;
@@ -150,4 +162,9 @@ export function reactionLinksHtml(messageId: string, userId: string, origin?: st
     return `<a href="${url}" style="text-decoration:none;font-size:20px;padding:4px 6px;" title="${emoji}">${emoji}</a>`;
   }).join('');
   return `<div style="margin:8px 0;">${links}</div>`;
+}
+
+/** "Extend by the original length" link for the ending-soon mail (#1786). */
+export function extendRelationUrl(relationId: string, userId: string, endDay: string, origin?: string | null): string {
+  return emailActionUrl({ kind: 'extend', relationId, userId, fromDay: endDay.replace(/-/g, '') }, origin);
 }

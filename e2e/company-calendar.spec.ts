@@ -110,7 +110,7 @@ test.describe.serial('COMPANY calendar scoping (#2005)', () => {
     await login(page, emails.companyNull);
     expect(await titlesFor(page)).toEqual([]);
     await login(page, emails.source);
-    expect((await page.request.get('/api/calendar-events')).status()).toBe(401);
+    expect((await page.request.get('/api/calendar-events')).status()).toBe(403);
   });
 
   test('/company/calendar mounts the calendar on the company shell', async ({ page }) => {

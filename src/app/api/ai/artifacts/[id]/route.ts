@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
 import { ARTIFACT_VISIBILITIES, canReadArtifact, toArtifactDto } from '@/lib/ai/artifacts';
 
@@ -17,12 +19,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const { id } = await params;
   return withTenantScope(session, async () => {
     const a = await prisma.aiArtifact.findUnique({ where: { id } });
-    if (!a) return notFound();
+    // Another org's artefact is missing for everyone (#3588) — before the
+    // 403/404 split below, whose admin branch would otherwise confirm the id.
+    if (!a || !(await inCallerTenant(a.orgId, session.user.orgId))) return notFound();
     const viewer = { id: session.user.id, role: session.user.role, orgId: session.user.orgId ?? null };
     if (!(await canReadArtifact(viewer, a))) {
       // Saying "forbidden" only to someone already related to the subject: a
       // stranger cannot use the status code to learn that an id exists.
-      const related = session.user.role === 'ADMIN' || (a.subjectUserId && (await prisma.mentorshipRelation.findFirst({ where: { mentorId: session.user.id, menteeId: a.subjectUserId }, select: { id: true } })));
+      // "Admin" is the permission layer's answer (#1571).
+      const actor = await actorFromSession(session);
+      const isAdmin = !!actor && (await can(actor, 'user.read', undefined, session));
+      const related = isAdmin || (a.subjectUserId && (await prisma.mentorshipRelation.findFirst({ where: { mentorId: session.user.id, menteeId: a.subjectUserId }, select: { id: true } })));
       return related ? NextResponse.json({ error: 'Forbidden' }, { status: 403 }) : notFound();
     }
     return NextResponse.json({ artifact: toArtifactDto(a, session.user.id) });

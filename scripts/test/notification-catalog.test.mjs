@@ -28,6 +28,7 @@ import {
   NOTIFICATION_EVENT_KEYS,
   NOTIFICATION_CHANNELS,
   LINK_ID_KEYS,
+  audienceAllows,
   eventDef,
   isNotificationEventKey,
   validateEventPayload,
@@ -47,9 +48,9 @@ const CATEGORIES = new Set([
 const EMAIL_GROUPS = new Set([
   'account_security', 'direct_messages', 'mentorship_lifecycle', 'pipeline_updates',
   'meeting_invites', 'meeting_reminders', 'task_reminders', 'digests', 'reports_analytics',
-  'opportunities', 'inbound_requests', 'newsletter', 'announcements',
+  'opportunities', 'inbound_requests', 'newsletter', 'surveys', 'announcements',
 ]);
-const LINK_KINDS = new Set(['relation', 'thread', 'mentee', 'support', 'project', 'dashboard']);
+const LINK_KINDS = new Set(['relation', 'thread', 'mentee', 'support', 'project', 'dashboard', 'requisition']);
 
 const placeholders = (template) =>
   [...new Set([...template.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))].sort();
@@ -132,6 +133,17 @@ test('every entry declares values from the real vocabularies', () => {
   }
 });
 
+test('digests, reports, newsletter issues and batched volume never push (#1715)', () => {
+  for (const entry of NOTIFICATION_EVENTS) {
+    if (!entry.defaultChannels.includes('push')) continue;
+    assert.ok(
+      !['digests', 'reports_analytics', 'newsletter'].includes(entry.emailGroup),
+      `${entry.key}: a ${entry.emailGroup} event must not push`
+    );
+    assert.equal(entry.delivery, 'immediate', `${entry.key}: a batched event must not push`);
+  }
+});
+
 test('an entry that ships e-mail is never in a newsletter-only group', () => {
   // The newsletter has its own send path, its own audience and its own archive
   // (#1469). An event routed into that group would inherit an opt-out reserved
@@ -203,6 +215,7 @@ test('a security or account event is mandatory on every channel', () => {
     'security.twoFactorReset',
     'role_changed.toMentor',
     'role_changed.toMentee',
+    'admin_tier.changed',
     'retention.confirm',
   ];
   for (const key of mustBeEssential) {
@@ -214,4 +227,49 @@ test('a security or account event is mandatory on every channel', () => {
       `${key} must sit in the essential account_security group so no switch can silence it`
     );
   }
+});
+
+// ── Who may receive a hiring event (#1944) ──────────────────────────────────
+const KNOWN_ROLES = new Set(['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE', 'AFFILIATE']);
+const HIRING_PREFIXES = ['offer_', 'interview_request.', 'interview_panel.', 'interview.panelComplete', 'job_application.'];
+const isHiring = (key) => HIRING_PREFIXES.some((p) => key.startsWith(p));
+
+test('every hiring event declares its audience, from real roles', () => {
+  const hiring = NOTIFICATION_EVENTS.filter((e) => isHiring(e.key));
+  assert.ok(hiring.length >= 15, `expected the hiring events, found ${hiring.length}`);
+  for (const e of hiring) {
+    assert.ok(Array.isArray(e.audience) && e.audience.length > 0, `${e.key}: a hiring event must declare its audience`);
+  }
+  for (const e of NOTIFICATION_EVENTS) {
+    for (const role of e.audience ?? []) assert.ok(KNOWN_ROLES.has(role), `${e.key}: unknown audience role "${role}"`);
+  }
+});
+
+test('a mentee never receives an internal hiring card (#1944)', () => {
+  // The decision, the approval queue, the company's side and the mentor's
+  // heads-up: none of these is the candidate's to read.
+  const internal = NOTIFICATION_EVENTS.filter(
+    (e) =>
+      e.key === 'interview_request.received' ||
+      e.key === 'interview_request.declined' ||
+      e.key === 'interview.panelComplete' ||
+      e.key.startsWith('interview_panel.outcome.') ||
+      e.key.startsWith('job_application.') ||
+      /^offer_(accepted|declined|expired)\.(admin|company)$/.test(e.key) ||
+      e.key === 'offer_sent.mentor'
+  );
+  assert.ok(internal.length >= 14, `expected the internal hiring events, found ${internal.length}`);
+  for (const e of internal) {
+    assert.ok(!e.audience.includes('MENTEE'), `${e.key} must never reach a MENTEE`);
+    assert.equal(audienceAllows(e, 'MENTEE'), false, `${e.key}: audienceAllows lets a MENTEE through`);
+  }
+  // The candidate's own events stay theirs.
+  assert.equal(audienceAllows(eventDef('offer_sent.new'), 'MENTEE'), true);
+  assert.equal(audienceAllows(eventDef('offer_sent.new'), 'COMPANY'), false);
+});
+
+test('an event without an audience is unrestricted', () => {
+  assert.equal(audienceAllows({}, 'MENTEE'), true);
+  assert.equal(audienceAllows({ audience: ['ADMIN'] }, 'ADMIN'), true);
+  assert.equal(audienceAllows({ audience: ['ADMIN'] }, 'COMPANY'), false);
 });

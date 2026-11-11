@@ -53,7 +53,7 @@ test('bug report integrations: admin mail, public-safe GitHub issue, reporter no
       .toBeGreaterThanOrEqual(2);
 
     // 2. The reporter cannot reach the GitHub route; an anonymous caller neither.
-    expect((await userPage.request.get(`/api/admin/support/reports/${silentId}/github`)).status()).toBe(401);
+    expect((await userPage.request.get(`/api/admin/support/reports/${silentId}/github`)).status()).toBe(403);
     expect((await request.post(`/api/admin/support/reports/${silentId}/github`, { data: { title: 'x', body: 'y' } })).status()).toBe(401);
 
     // 3. The admin previews the draft: technical facts only.

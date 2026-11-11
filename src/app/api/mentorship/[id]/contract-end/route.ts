@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { actorFromSession, can } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -34,6 +35,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Admin reach from the permission rule, not the role string (#1571).
+    const actor = await actorFromSession(session);
+    const isAdmin = !!actor && (await can(actor, 'relation.write', undefined, session));
 
     const denied = await requireCapability(session.user.orgId ?? null, 'pipeline');
     if (denied) return denied;
@@ -44,7 +48,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         select: { id: true, status: true, mentorId: true, pipelineStatus: true, contractEndsAt: true },
       });
       if (!relation) return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
-      if (session.user.role !== 'ADMIN' && relation.mentorId !== session.user.id) {
+      if (!isAdmin && relation.mentorId !== session.user.id) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 

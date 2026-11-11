@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { programPeopleWhere } from '@/lib/programScopeRule';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -8,6 +8,7 @@ import { accountState } from '@/lib/accountState';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import type { Prisma } from '@prisma/client';
 import { isTagMode, parseTagIds } from '@/lib/tags';
+import { pickerLimit, pickerRoles } from '@/lib/userPickerQuery';
 
 // Field sets, narrowest first (#855). The admin list used to return every
 // column — email, phone, university, department, birth year — for every user in
@@ -38,6 +39,8 @@ const SELECTS = {
     // secret: the admin directory offers "reset two-factor" only to the rows
     // where there is something to reset, so support does not press it blind.
     twoFactorEnabled: true,
+    // On the bench (#1778): the directory badges it and offers "return".
+    participantState: true,
   },
   // Admin mentor pickers (#942): a name plus what's needed to derive
   // availability. `activeMenteeCount` and `availability` are computed below,
@@ -108,11 +111,11 @@ function withAccountState<T extends object>(users: T[]) {
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // A list (#1577): a PROGRAM_ADMIN with grants passes and reads only the
+    // people its grants reach (programPeopleWhere, applied to every view below).
+    const gate = await requireRoleOrPermission(['MENTOR'], 'user.read', { request, listing: true });
+    if ('error' in gate) return gate.error;
+    const { session, grants } = gate;
 
     // Tenant (#2542). `User` is in TENANT_MODELS, so with MT_ENFORCE_ISOLATION
     // on the middleware scopes these reads too — but the flag is off in every
@@ -158,6 +161,11 @@ export async function GET(request: Request) {
       if (role) filters.role = role;
       if (status === 'active') filters.isActive = true;
       if (status === 'archived') filters.isActive = false;
+      // The bench (#1778) — active accounts parked for this term.
+      if (status === 'benched') {
+        filters.isActive = true;
+        filters.participantState = 'BENCHED';
+      }
       if (search) {
         filters.OR = [{ fullName: { contains: search } }, { email: { contains: search } }];
       }
@@ -184,16 +192,36 @@ export async function GET(request: Request) {
       // The request's filters, narrowed to the caller's tenant as a conjunct —
       // an `AND`, so the search's `OR` and the tag filter's `AND` above can
       // neither widen nor replace it.
-      const where = withinTenant(filters, tenant);
+      const programScope: Prisma.UserWhereInput[] = grants ? [programPeopleWhere(grants) as Prisma.UserWhereInput] : [];
+      const where = withinTenant<Prisma.UserWhereInput>({ AND: [filters, ...programScope] }, tenant);
 
       // Mentor picker with capacity/availability (#942): same `where` filters
       // as everything else here, but the response needs two computed fields no
       // Prisma `select` can produce — activeMenteeCount and the availability
       // derived from it. One groupBy covers every returned mentor's ACTIVE
       // count instead of a query per mentor. Full list, like `picker`/
-      // `directory` — a picker dropdown has no use for pagination.
+      // `directory`, unless the caller asks for a bounded page (#1437).
+      //
+      // Only the picker roles (src/lib/userPickerQuery.ts): a COMPANY or SOURCE
+      // account is never a mentor or a mentee, and shipping their names to be
+      // discarded in the browser was most of a 228 KB response. `roles` narrows
+      // further (the mentor pickers ask for ADMIN,MENTOR — a handful of rows);
+      // `limit` turns the call into one searchable page with its `total`, which
+      // is how the mentee picker reaches a thousand people without downloading
+      // them.
       if (view === 'mentorAvailability') {
-        const users = await prisma.user.findMany({ where, select: SELECTS.mentorAvailability, orderBy: { fullName: 'asc' } });
+        const roles = pickerRoles(searchParams.get('roles'), roleParam);
+        const limit = pickerLimit(searchParams.get('limit'));
+        const pickerWhere = withinTenant<Prisma.UserWhereInput>({ ...filters, role: { in: roles } }, tenant);
+        const [users, total] = await Promise.all([
+          prisma.user.findMany({
+            where: pickerWhere,
+            select: SELECTS.mentorAvailability,
+            orderBy: { fullName: 'asc' },
+            ...(limit ? { take: limit } : {}),
+          }),
+          limit ? prisma.user.count({ where: pickerWhere }) : Promise.resolve(null),
+        ]);
         const counts = users.length
           ? await prisma.mentorshipRelation.groupBy({
               by: ['mentorId'],
@@ -215,6 +243,7 @@ export async function GET(request: Request) {
               }),
             };
           }),
+          ...(total === null ? {} : { total, limit }),
         });
       }
 
@@ -233,7 +262,7 @@ export async function GET(request: Request) {
       const [total, archivedCount, users] = await Promise.all([
         prisma.user.count({ where }),
         // For the "Archived (N)" tab: same role/search filter, opposite status.
-        prisma.user.count({ where: withinTenant({ ...filters, isActive: false }, tenant) }),
+        prisma.user.count({ where: withinTenant<Prisma.UserWhereInput>({ AND: [{ ...filters, isActive: false }, ...programScope] }, tenant) }),
         prisma.user.findMany({
           where,
           select,

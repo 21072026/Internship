@@ -26,3 +26,28 @@ test('a kind change stamps or clears funnelEnteredAt, a no-op leaves it', () => 
   assert.equal(funnelEnteredAtForKindChange('PLACEMENT', 'COACHING', now), null);
   assert.equal(funnelEnteredAtForKindChange('PLACEMENT', 'PLACEMENT', now), undefined);
 });
+
+// #1505: time to hire is measured from the moment the relation ENTERED the
+// funnel. A coaching pair that turned into a job search months later must not
+// carry the coaching months into the number; a row with no stamp (before #1503)
+// reads exactly as it did, from its startDate.
+test('a journey starts at funnel entry, and a row without one at its startDate', async () => {
+  const { register } = await import('node:module');
+  register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
+  const { funnelStartedAt } = await import('../../src/lib/placement.ts');
+  const { timeToHire } = await import('../../src/lib/funnelKpi.ts');
+
+  const start = new Date('2026-01-01T00:00:00Z');
+  const entered = new Date('2026-05-01T00:00:00Z');
+  const hiredAt = new Date('2026-06-01T00:00:00Z').getTime();
+  assert.equal(funnelStartedAt({ startDate: start, funnelEnteredAt: entered }), entered);
+  assert.equal(funnelStartedAt({ startDate: start, funnelEnteredAt: null }), start);
+  assert.equal(funnelStartedAt({ startDate: start }), start);
+
+  const order = ['APPLICATION_100', 'HIRED_660'];
+  const journey = (r) => ({ startStatus: 'APPLICATION_100', startedAt: funnelStartedAt(r).getTime(), changes: [{ toStatus: 'HIRED_660', at: hiredAt }] });
+  // Entered in May, hired in June: 31 days, not the 151 since the pairing.
+  assert.equal(timeToHire(order, [journey({ startDate: start, funnelEnteredAt: entered })]).medianDays, 31);
+  // No stamp: unchanged, from the pairing.
+  assert.equal(timeToHire(order, [journey({ startDate: start, funnelEnteredAt: null })]).medianDays, 151);
+});

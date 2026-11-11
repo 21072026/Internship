@@ -87,6 +87,17 @@ test('mentee sees their issued certificate, downloads it and gets a LinkedIn add
     });
     expect(gen.status()).toBe(201);
     const docId = (await gen.json()).document.id as string;
+    // The mentee is told it is ready (#1410), once, linked to the card.
+    await expect
+      .poll(() => prisma.notification.count({ where: { userId: mentee.id, type: 'certificate.issued' } }))
+      .toBe(1);
+    expect((await prisma.notification.findFirstOrThrow({ where: { userId: mentee.id, type: 'certificate.issued' } })).link).toBe('/portal/journey');
+    // A reference letter has no portal card, so it notifies nobody.
+    const letter = await mentorPage.request.post(`/api/mentorship/${relation.id}/certificate`, {
+      data: { variant: 'REFERENCE_LETTER', locale: 'en', body: 'A reference.' },
+    });
+    expect(letter.status()).toBe(201);
+    expect(await prisma.notification.count({ where: { userId: mentee.id, type: 'certificate.issued' } })).toBe(1);
     const doc = await prisma.document.findUniqueOrThrow({ where: { id: docId }, select: { createdAt: true } });
 
     await gotoSettled(menteePage, '/portal/journey');

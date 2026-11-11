@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requirePermission } from '@/lib/authz';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { enforceRateLimit } from '@/lib/rateLimit';
@@ -19,9 +18,9 @@ import { TRANSLATION_PURPOSES, type LocaleMap } from '@/lib/machineTranslation';
 const schema = z.object({ purpose: z.enum(TRANSLATION_PURPOSES), brief: z.string().trim().min(3).max(2000) }).strict();
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const limited = enforceRateLimit(request, 'ai:content_draft', { ...AI_RATE_LIMITS.content_draft, subject: session.user.id });
   if (limited) return limited;
   const parsed = schema.safeParse(await request.json().catch(() => null));

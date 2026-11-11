@@ -1,0 +1,118 @@
+# The placement ledger (#1765)
+
+A `Placement` is the billable fact behind a hire: which company, which role, on
+what date, credited to which mentor and which source, and whether it has been
+invoiced. `StatusChange` is a log and stays one; the ledger is the record.
+
+## How a row is stamped
+
+- Every stage write path already ends in `emitStageChange()`, which emits
+  `pipeline.stage_change`. The **`placement` subscriber**
+  (`src/lib/events/subscribers/placement.ts`) runs on the job worker and calls
+  `syncPlacementForRelation()` (`src/lib/placementLedger.ts`) — the only code
+  that creates, reverses or reinstates a row.
+- It **reconciles**: it reads the relation's *current* stage and asks the pure
+  `reconcilePlacement()` (`src/lib/placementRule.ts`) what the ledger should
+  say. A redelivered, duplicated or out-of-order event converges on the same
+  row; `Placement.relationId` is unique, so a concurrent double-create is one row.
+- The hire stages are the org's own `outcomeStageKeys().finished` (#1882) — never
+  a hardcoded `HIRED_660`, because tenants define their own stages (#747).
+- Skipped: a vertical without the `placements` capability (a sale is not a hire),
+  a `COACHING` relation (#1503), a relation with no org.
+- It **observes only**: no stage move, no relation status change, no notification.
+
+## What a row carries
+
+company (the relation's, else the accepted offer's), `offerId` + `requisitionId`
+(the newest ACCEPTED offer), `creditedMentorId` (the relation's mentor), `sourceId`
+(the mentee's), `attribution` (the relation's `employmentAttribution`, NULL read as
+`THROUGH_US`). The attribution columns are plain ids, not FKs: the record outlives
+what they point at.
+
+`THROUGH_US` starts `INVOICEABLE`; `SELF_FOUND` / `ALREADY_EMPLOYED` start
+`NOT_INVOICEABLE` with `feeModel: NONE` — the row exists because honest reporting
+needs it.
+
+## Reversal
+
+Leaving the hire stage sets `reversedAt`; a return clears it. **A placement is
+never deleted.** Reversed rows are hidden from the ledger by default and ignored
+by the ROI report and the `placement-outcomes` report.
+
+## Invoice states
+
+`NOT_INVOICEABLE → (none)`, `INVOICEABLE → INVOICED | WAIVED`,
+`INVOICED → INVOICEABLE`, `WAIVED → INVOICEABLE` (`canChangeInvoiceState()`).
+`INVOICED` needs an invoice reference and a live (not reversed) hire.
+`PATCH /api/admin/placements/[id]` is `org.settings.write` (ORG_ADMIN), writes with
+a guarded `updateMany` (409 `state_conflict` on a race) and an `AuditLog`
+`PLACEMENT_INVOICE_STATE` row with `orgId`.
+
+## Not in scope
+
+No public per-hire fee page: placement/brokerage rules in DE and TR need a legal
+check first. No usage counter yet.
+
+## What a placement NUMBER counts (#1504)
+
+Every analytics reader that counts placements reads one rule, `src/lib/placement.ts`:
+`countsAsPlacement()` in memory, `PLACEMENT_RELATION_WHERE` + `OUR_HIRE_WHERE` in SQL, on top of
+the tenant's own finished stages (`outcomeStageKeys()`).
+
+- **COACHING relations leave both sides of a placement rate and the funnel** — their stage means
+  nothing to a hiring funnel. A mentor's *workload* still counts every pairing.
+- **A hire is ours when it came `THROUGH_US` or says nothing** (NULL, every row from before #1503).
+  `SELF_FOUND` / `ALREADY_EMPLOYED` stay in the denominator as placement relations, but are not
+  placements; in a cohort row they are neither hired nor in progress.
+- With every relation `PLACEMENT` and no attribution stated, every number is exactly what it was —
+  `e2e/placement-counts.spec.ts` pins that.
+
+Readers on the rule: the admin analytics screen (`adminAnalyticsData.ts`: funnel, total,
+conversion, mentor workload), programme/cohort comparison (`analyticsReports.ts`), benchmark,
+source conversion (both `/api/admin/analytics/sources` and `/api/admin/sources`) and the mentor's
+own analytics.
+
+The remaining hire counters read the same rule since #3472: the forecast (learns from and
+projects PLACEMENT relations whose hire is ours), the deal-value book (a no-op for a sales book,
+which sets neither column), the ROI report (stage-trail hires on our placements only; a ledgered
+hire stamped SELF_FOUND / ALREADY_EMPLOYED is not counted), mentor impact (`mentored`/`active` are
+workload and count every pairing; internship and outcome count the funnel, the outcome only our
+hires) and a SOURCE's referral outcomes (a coaching pair or a hire that is not ours is no
+placement). The two pure rules stay dependency-free: their loaders pass the flags
+(`inFunnel`/`ourHire`, `countsAsHire`), and an absent flag reads as before.
+
+**Durations start at funnel entry (#1505).** A journey's start is `funnelStartedAt()`
+(`src/lib/placement.ts`): `funnelEnteredAt ?? startDate`. The pairing and the funnel entry are
+not the same event: a coaching pair that turned into a job search months later used to carry
+the coaching months into its time to hire. Every journey builder (the funnel route, the forecast,
+deal value) and the mentor's average days to hired read it; a row without a stamp (before #1503,
+and every PLACEMENT pair since, which stamps it to the start) measures from `startDate` as before.
+A SOURCE's time to placement is unchanged: it measures from the referral, a different question.
+
+**The kind and the attribution in the UI (#1507).** A COACHING relation shows a "Coaching"
+badge and no stage control: not on `/admin/candidates/[id]`, not on `/mentor/mentees/[id]`, and
+the mentee's portal shows no journey strip. The admin's candidate page offers one way into the
+funnel ("move into the placement funnel", `PUT /api/mentorship/[id] { kind: 'PLACEMENT' }`); the
+server refuses it from anyone else (`kind_admin_only`). A move into one of the tenant's hire
+stages (`outcomeStageKeysFrom().finished`, never in MARKETING, never for a coaching pair) first
+asks whose outcome it is — `EmploymentAttributionDialog`, the same shape as the drop-off reason
+dialog — and the answer rides the same stage write (`stageMoveData` + `recordStageMove`), so
+the stage gate (#1589) still decides and its dialog (#1590) still shows. The server flag
+`EMPLOYMENT_ATTRIBUTION_REQUIRED` stays off: the boards, bulk moves and API clients do not send
+it yet.
+
+**A promotion to MENTOR asks about the person's own open relations (#1506).** Both promotion
+paths — the mentor application approval (`PATCH /api/mentor-applications/[id]`, `action:
+'approve'`) and the admin's role convert (`PATCH /api/users/[id] { role: 'MENTOR' }`) — refuse
+an account that is still the mentee of an open (`status: ACTIVE`) relation with `400
+promotion_choice_required` and the relations (`openRelations`: id, mentor name, stage, kind;
+no contact data). The admin's `promotionChoice` (`src/lib/promotionRelationsRule.ts`, no
+default) is applied in the promotion's own transaction (`src/lib/promotionRelations.ts`):
+`COACHING` reclassifies the relations (out of the funnel, history kept), `END` closes them
+through the lifecycle write (`ENDED_EARLY`, `changed_goals`, a `RelationLifecycleEvent`, the
+mentor notified) and `KEEP` changes nothing. Nothing is deleted, nothing reopens, so the
+one-active-mentor rule (#419) is untouched. An account without open relations promotes
+exactly as before. The application approval also stamps `sessionsValidFrom` now, like the role
+convert always did: the promoted account's MENTEE token stops working and the next sign-in
+carries MENTOR. Neither path revokes remembered devices — their refresh reads the user fresh
+and mints the new role (`src/lib/trustedDevice.ts`).

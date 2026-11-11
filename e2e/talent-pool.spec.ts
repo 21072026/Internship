@@ -25,6 +25,10 @@ test('talent-pool is gated by the entitlement and only surfaces public-profile m
   await prisma.user.update({ where: { id: privateMentee.id }, data: { publicProfile: false, university: 'MIT', skills: ['React'] } });
   await prisma.user.update({ where: { id: noConsentMentee.id }, data: { publicProfile: true, university: 'MIT', skills: ['React'] } });
   await prisma.userConsent.create({ data: { userId: publicMentee.id, type: 'TALENT_POOL_VISIBILITY', grantedAt: new Date() } });
+  // One tenant for everyone (#1394): the pool is scoped to the caller's org.
+  const org = await prisma.organization.create({ data: { name: `Talent Org ${Date.now()}`, slug: `tp-org-${Date.now()}` } });
+  await prisma.company.update({ where: { id: company.id }, data: { orgId: org.id } });
+  await prisma.user.updateMany({ where: { email: { in: [companyEmail, publicEmail, privateEmail, noConsentEmail] } }, data: { orgId: org.id } });
 
   try {
     await page.goto('/auth/signin');
@@ -64,5 +68,6 @@ test('talent-pool is gated by the entitlement and only surfaces public-profile m
     await cleanupByEmail(privateEmail);
     await cleanupByEmail(noConsentEmail);
     await prisma.company.delete({ where: { id: company.id } }).catch(() => {});
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
   }
 });

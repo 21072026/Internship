@@ -40,6 +40,8 @@ test('win-back opens a new journey and closes the lost one as churned', async ({
 
     const old = await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: lost.id } });
     expect(old).toMatchObject({ status: 'COMPLETED', lifecycleState: 'ENDED_CHURNED', pipelineStatus: 'DEAL_LOST' });
+    const ended = await prisma.domainEvent.findMany({ where: { name: 'mentorship.lifecycle_changed', subjectId: lost.id } });
+    expect(ended.map((e) => e.payload)).toEqual([{ relationId: lost.id, from: 'ACTIVE', to: 'ENDED_CHURNED', reasonCode: null }]);
     const fresh = await prisma.mentorshipRelation.findFirstOrThrow({ where: { previousRelationId: lost.id } });
     expect(fresh).toMatchObject({ status: 'ACTIVE', pipelineStatus: 'DEAL_WON', mentorId: rep.id, menteeId: lead.id, companyId: company.id });
 

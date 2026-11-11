@@ -24,11 +24,10 @@
 
 import type { EvaluationType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/logger';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { shellCapabilities } from '@/lib/shellCapabilities';
-import { notifyIfAllowed } from '@/lib/notify';
+import { notifyEvent } from '@/lib/notifications/router';
 import { notificationLink } from '@/lib/notificationLink';
 import { settingsOrgOfRow } from '@/lib/settingsOrg';
 import {
@@ -41,7 +40,7 @@ import {
 } from '@/lib/evaluationDueRule';
 import { emailDictionary } from '@/i18n/emailDictionary';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
-import { emailBrand, sendEmail } from '@/services/emailService';
+import { emailBrand } from '@/services/emailService';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -163,8 +162,15 @@ async function remindMentor(
   n: number,
 ) {
   const link = notificationLink('MENTOR', 'relation', { relationId: rel.id }, { capabilities: await shellCapabilities(rel.orgId) });
-  await notifyIfAllowed(rel.mentorId, 'goalsEvaluations', type === 'FINAL' ? 'evaluation.dueFinal' : 'evaluation.dueInterim', { menteeName: rel.mentee.fullName }, link);
-  if (!rel.mentor.isActive) return;
+  const eventKey = type === 'FINAL' ? 'evaluation.dueFinal' : 'evaluation.dueInterim';
+  // One router call for the bell and the mail (#1711): the category switch, the
+  // e-mail group, the channel matrix and quiet hours are decided once there, and
+  // each reminder (`n`, claimed above) is one ledger row per channel.
+  const dedupeKey = `evaluation-due:${rel.id}:${type}:${n}`;
+  if (!rel.mentor.isActive) {
+    await notifyEvent(rel.mentorId, eventKey, { menteeName: rel.mentee.fullName, relationId: rel.id }, { channels: ['inApp'], dedupeKey });
+    return;
+  }
   const locale: Locale = isLocale(rel.mentor.preferredLanguage ?? undefined) ? (rel.mentor.preferredLanguage as Locale) : defaultLocale;
   const org = await settingsOrgOfRow(rel.orgId);
   const t = (await emailDictionary(locale, org)).evaluationDue;
@@ -172,19 +178,17 @@ async function remindMentor(
   const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const subject = (type === 'FINAL' ? t.subjectFinal : t.subjectInterim).replace('{mentee}', rel.mentee.fullName);
   const body = (type === 'FINAL' ? t.bodyFinal : t.bodyInterim).replace('{mentor}', rel.mentor.fullName).replace('{mentee}', rel.mentee.fullName);
-  await sendEmail({
-    category: 'goals-evaluation',
-    userId: rel.mentorId,
-    orgId: rel.orgId,
-    locale,
-    to: rel.mentor.email,
-    subject,
-    html: `<div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
+  const html = `<div style="font-family: Arial, sans-serif; max-width: 560px; margin: 0 auto;">
         ${body.split('\n').map((line) => `<p>${esc(line)}</p>`).join('')}
         <p><a href="${esc(`${brand.appUrl}${link}`)}" style="display:inline-block;padding:10px 18px;border-radius:8px;background:${esc(brand.accent)};color:#fff;text-decoration:none;">${esc(t.cta)}</a></p>
         ${n >= EVALUATION_MAX_REMINDERS ? `<p style="font-size:12px;color:#6b7280;">${esc(t.lastReminder)}</p>` : ''}
-      </div>`,
-  }).catch((error) => logger.error('Evaluation reminder failed', { relationId: rel.id, error: String(error) }));
+      </div>`;
+  await notifyEvent(rel.mentorId, eventKey, { menteeName: rel.mentee.fullName, relationId: rel.id }, {
+    channels: ['inApp', 'email'],
+    orgId: rel.orgId,
+    dedupeKey,
+    email: { subject, html, category: 'goals-evaluation', locale },
+  });
 }
 
 /**

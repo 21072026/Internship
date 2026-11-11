@@ -160,6 +160,32 @@ test('offer create and draft edit validate requisitions and allow an optional cl
   }
 });
 
+// WCAG 3.3.7 Redundant Entry (#2864): picking a requisition first carries its
+// title into the empty Position field, and never overwrites one already typed.
+test('the offer wizard takes the position from the chosen requisition', async ({ page }) => {
+  const s = await seedScenario('reqprefill');
+  try {
+    const req = await prisma.requisition.create({ data: { orgId: s.org.id, companyId: s.company.id, title: 'Prefill Backend Requisition', status: 'OPEN', openings: 1, requiredSkills: [] } });
+    await signInAndSettle(page, s.adminEmail, s.pw, '/admin');
+    await page.goto(`/admin/candidates/${s.mentee.id}`);
+    await page.getByTestId('offer-create-button').click();
+    const modal = page.getByTestId('offer-wizard-modal');
+    const position = modal.getByLabel('Position');
+    await expect(position).toHaveValue('');
+    const select = modal.getByTestId('offer-requisition-select');
+    await expect(select.locator('option')).toHaveText(['No requisition', req.title]);
+    await select.selectOption(req.id);
+    await expect(position).toHaveValue(req.title);
+
+    await position.fill('Typed by hand');
+    await select.selectOption('');
+    await select.selectOption(req.id);
+    await expect(position).toHaveValue('Typed by hand');
+  } finally {
+    await s.cleanup();
+  }
+});
+
 test('mentee declines an offer with a reason and sees a persistent declined state', async ({ page }) => {
   const s = await seedScenario('decl');
   try {

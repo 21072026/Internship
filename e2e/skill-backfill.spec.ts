@@ -91,9 +91,9 @@ test('apply maps what resolves (Turkish letters included), queues the rest, and 
 test('the queue is ADMIN-only', async ({ playwright, baseURL }) => {
   const mentorCtx = await playwright.request.newContext({ baseURL });
   expect((await signInViaApi(mentorCtx, mentorEmail, PASSWORD)).ok).toBe(true);
-  expect((await mentorCtx.get('/api/admin/skills/unmapped')).status()).toBe(401);
+  expect((await mentorCtx.get('/api/admin/skills/unmapped')).status()).toBe(403);
   const term = await prisma.unmappedSkillTerm.findFirstOrThrow({ where: { orgId } });
-  expect((await mentorCtx.post(`/api/admin/skills/unmapped/${term.id}`, { data: { action: 'discard' } })).status()).toBe(401);
+  expect((await mentorCtx.post(`/api/admin/skills/unmapped/${term.id}`, { data: { action: 'discard' } })).status()).toBe(403);
   await mentorCtx.dispose();
 });
 

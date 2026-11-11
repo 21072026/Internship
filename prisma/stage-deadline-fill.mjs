@@ -18,13 +18,23 @@ const BATCH = 500;
  *
  * @param {any} db        a PrismaClient (or the app's extended client)
  * @param {string} orgId
- * @param {{ apply?: boolean, now?: Date }} [options]  apply=false is a dry run
+ * @param {{ apply?: boolean, now?: Date, dayRuleFor?: (cohortId: string | null) => Promise<any> }} [options]
+ *        apply=false is a dry run; dayRuleFor resolves the business-day rule of
+ *        a relation's programme (#1638) — omitted, every deadline is calendar days
  * @returns {Promise<{ total: number, pastDue: number, fromStartDate: number, perStage: Map<string, { set: number, pastDue: number }> }>}
  */
 export async function fillOrgStageDeadlines(db, orgId, options = {}) {
   const apply = options.apply === true;
   const now = options.now ?? new Date();
   const result = { total: 0, pastDue: 0, fromStartDate: 0, perStage: new Map() };
+  // One rule per programme, resolved once (#1638).
+  const rules = new Map();
+  const ruleFor = async (cohortId) => {
+    if (!options.dayRuleFor) return null;
+    const key = cohortId ?? '';
+    if (!rules.has(key)) rules.set(key, await options.dayRuleFor(cohortId ?? null));
+    return rules.get(key);
+  };
 
   const rows = await db.stageSla.findMany({
     where: { orgId, days: { not: null } },
@@ -68,7 +78,7 @@ export async function fillOrgStageDeadlines(db, orgId, options = {}) {
     cursor = relations[relations.length - 1].id;
 
     for (const relation of relations) {
-      const plan = planStageDeadline(relation, rows, now);
+      const plan = planStageDeadline(relation, rows, now, await ruleFor(relation.cohortId));
       if (!plan) continue;
       if (apply) {
         const written = await db.mentorshipRelation.updateMany({

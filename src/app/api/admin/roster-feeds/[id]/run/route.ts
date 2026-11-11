@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
@@ -14,16 +13,12 @@ import { runResponse } from '@/lib/rosterFeedAdmin';
 // than running it twice. On the demo's write blocklist with the rest of
 // /api/admin/roster-feeds: it fetches with a stored credential.
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return session && session.user.role === 'ADMIN' ? session : null;
-}
-
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function POST(request: Request, { params }: Ctx) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { id } = await params;
   const body = (await request.json().catch(() => ({}))) as { dryRun?: unknown };
   const dryRun = body?.dryRun === true;

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -61,7 +62,13 @@ export async function GET(request: Request) {
   if (!rel || !(await inCallerTenant(rel.orgId, resolveOrgId(session)))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
-  const allowed = session.user.role === 'ADMIN' || rel.mentorId === session.user.id || rel.menteeId === session.user.id;
+  // "Admin" is the permission layer's answer (#1571): reading the pair's record
+  // is program.read; the canDelete/canEdit flags below mirror the write routes,
+  // which ask relation.write.
+  const actor = await actorFromSession(session);
+  const adminReads = !!actor && (await can(actor, 'program.read', undefined, session));
+  const adminWrites = adminReads && !!actor && (await can(actor, 'relation.write', undefined, session));
+  const allowed = adminReads || rel.mentorId === session.user.id || rel.menteeId === session.user.id;
   if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const evaluations = await prisma.evaluation.findMany({ where: { relationId }, orderBy: { createdAt: 'desc' } });
@@ -76,7 +83,7 @@ export async function GET(request: Request) {
   // and with whether the viewer may remove or correct it (author or admin) so
   // the panel only offers a button where the route would actually allow it —
   // PATCH re-checks the 7-day window itself (#1893).
-  const mine = (e: { authorId: string }) => e.authorId === session.user.id || session.user.role === 'ADMIN';
+  const mine = (e: { authorId: string }) => e.authorId === session.user.id || adminWrites;
   return NextResponse.json({
     evaluations: evaluations.map((e) => ({
       ...e,
@@ -121,8 +128,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
   const isParticipant = rel.mentorId === session.user.id || rel.menteeId === session.user.id;
-  if (session.user.role !== 'ADMIN' && !isParticipant) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  if (!isParticipant) {
+    // A non-participant writes only as an admin — the permission layer's answer (#1571).
+    const actor = await actorFromSession(session);
+    if (!actor || !(await can(actor, 'relation.write', undefined, session))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
   }
 
   // Which side is being scored decides the rubric: the mentee writing means the

@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { createUser } from '@/lib/userCreate';
 import crypto from 'crypto';
 import { z } from 'zod';
+import { relationScheduleFields, scheduleCreateData } from '@/lib/relationSchedule';
+import { relationScheduleDefaults } from '@/lib/relationScheduleDefaults';
+import { isBenched, MENTOR_BENCHED_ERROR } from '@/lib/participantState';
 import { createPasswordResetToken } from '@/lib/passwordReset';
 import { sendPasswordResetEmail } from '@/services/emailService';
 import { slugify } from '@/lib/transliterate';
@@ -40,21 +43,25 @@ const schema = z.object({
   sourceId: z.string().optional().nullable(),
   // Set on resubmit after the duplicate warning (#841): "yes, create anyway".
   confirmDuplicate: z.boolean().optional(),
+  // The agreed duration and rhythm (#1784), all optional.
+  ...relationScheduleFields,
 });
 
 // A mentor (or admin) creates a mentee and assigns it to themselves in one step.
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requireRoleOrPermission(['MENTOR'], 'relation.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     return await withTenantScope(session, async () => {
       const parsed = schema.safeParse(await request.json());
       if (!parsed.success) {
         return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
       }
       const { fullName, email, ...rest } = parsed.data;
+      // A benched mentor (#1778) takes no new mentee — not even one they add themselves.
+      const self = await prisma.user.findUnique({ where: { id: session.user.id }, select: { participantState: true } });
+      if (isBenched(self)) return NextResponse.json(MENTOR_BENCHED_ERROR, { status: 409 });
 
       // A real email means the mentee can be invited to set a password and log in.
       // No email → a deterministic placeholder for a tracking-only mentee (no login).
@@ -120,7 +127,8 @@ export async function POST(request: Request) {
         );
       }
       if (referredById) {
-        const referrer = await prisma.user.findUnique({ where: { id: referredById }, select: { role: true } });
+        // The caller's tenant only (#3588), like the source below.
+        const referrer = await prisma.user.findFirst({ where: withinTenant({ id: referredById }, await tenantWhere(session)), select: { role: true } });
         if (!referrer || !['ADMIN', 'MENTOR', 'MENTEE'].includes(referrer.role)) {
           return NextResponse.json({ error: 'Invalid source user' }, { status: 400 });
         }
@@ -141,6 +149,12 @@ export async function POST(request: Request) {
       // A tenant whose first stage is TRIAL_ACTIVE gets the trial window with
       // the create (#2551); for every other start stage this is `{}`, no query.
       const trialWindow = await stageTrialWindow({ orgId, toStage: pipelineStatus, enteredAt: new Date() });
+      // The agreed duration and rhythm (#1784): the mentor's choice, else the org's defaults.
+      const schedule = scheduleCreateData(
+        { expectedEndDate: parsed.data.expectedEndDate, durationMonths: parsed.data.durationMonths, expectedMeetingIntervalWeeks: parsed.data.expectedMeetingIntervalWeeks },
+        new Date(),
+        await relationScheduleDefaults(orgId),
+      );
 
       // Account + mentorship in ONE transaction: a failure between the two used
       // to leave a mentee account with no relation, invisible to the mentor who
@@ -152,7 +166,7 @@ export async function POST(request: Request) {
       let mentee;
       try {
         mentee = await prisma.$transaction(async (tx) => {
-          const created = await tx.user.create({
+          const created = await createUser(tx, {
             data: {
               email: finalEmail,
               password: NO_LOGIN_PASSWORD,
@@ -169,7 +183,7 @@ export async function POST(request: Request) {
               referredById,
               sourceId,
             },
-          });
+          }, { source: 'mentor', actorId: session.user.id });
           const active = await findActiveMentorship(tx, created.id);
           if (active) throw new AlreadyMentoredError(created.id, active.id);
           await tx.mentorshipRelation.create({
@@ -179,6 +193,7 @@ export async function POST(request: Request) {
               orgId,
               pipelineStatus,
               ...trialWindow,
+              ...schedule,
               // A mentor's own mentee is a placement relation from day one (#1503).
               funnelEnteredAt: new Date(),
             },

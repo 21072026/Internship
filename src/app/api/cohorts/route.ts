@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { z } from 'zod';
@@ -8,11 +7,14 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveOrgId } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
+import { enforceQuota } from '@/lib/quota';
+import { quotaError } from '@/lib/quotaRule';
 
 // GET — all cohorts with intern counts + per-stage distribution (admin).
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('program.read', { request: request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   // Programme cohorts are the internship product (`/admin/cohorts` is tagged
   // `mentorship` in navLinks.ts); a hidden link is not a gate, this is.
@@ -47,8 +49,9 @@ const schema = z.object({ name: z.string().min(1).max(120), term: z.string().max
 
 // POST — create a cohort (admin).
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('program.write', { request: request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const gated = await requireCapability(resolveOrgId(session), 'mentorship');
   if (gated) return gated;
   return await withTenantScope(session, async () => {
@@ -58,6 +61,10 @@ export async function POST(request: Request) {
   // a NULL row is the DEFAULT org's — so a cohort created by any other tenant
   // used to land in the internship org's list.
   const orgId = resolveOrgId(session) ?? (await defaultOrgId());
+  // The plan's programme band (#1752): refuses the next cohort, never an
+  // existing one. Fails open for the default org.
+  const programs = await enforceQuota(orgId, 'PROGRAMS');
+  if (!programs.allowed) return NextResponse.json(quotaError(programs), { status: 403 });
   // Trim so a whitespace-only term is stored as null (shows as "—") rather than
   // a blank string. Term is free-text (e.g. "Fall 2026"), so no format check.
   const cohort = await prisma.cohort.create({ data: { orgId, name: parsed.data.name.trim(), term: parsed.data.term?.trim() || null } });

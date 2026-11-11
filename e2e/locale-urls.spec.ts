@@ -73,12 +73,12 @@ test('each language URL is canonical to itself and names its siblings', async ({
 
 test('the language switcher moves to the same page in the other language', async ({ page }) => {
   await page.goto('/tr/features');
-  await page.getByTestId('public-header').getByRole('button', { name: 'de', exact: true }).first().click();
+  await page.getByTestId('public-header').getByRole('button', { name: 'de Deutsch', exact: true }).first().click();
   await expect(page).toHaveURL(/\/de\/features$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(FEATURES_TITLE.de);
 
   // English is unprefixed.
-  await page.getByTestId('public-header').getByRole('button', { name: 'en', exact: true }).first().click();
+  await page.getByTestId('public-header').getByRole('button', { name: 'en English', exact: true }).first().click();
   await expect(page).toHaveURL(/\/features$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(FEATURES_TITLE.en);
 });

@@ -100,6 +100,12 @@ export interface JobPayloadMap {
   /// `ApiExport` row's file. The row carries everything else (org, key,
   /// resource), so a payload can never widen what the request was granted.
   'api.export': { exportId: string };
+  /// Re-evaluate every affiliate partner after a commission-plan change (#3170,
+  /// `src/lib/affiliatePlanResync.ts`). Enqueued with the org's `orgId`, keyed
+  /// on the org and the plan version; the state it reports and resumes from is
+  /// `AffiliateProgramSettings.planResync`. `actorId` is the admin who saved
+  /// the plan (the writer's audit rows name them).
+  'affiliate.planResync': { planVersion: number; actorId: string };
   /// The Klaviyo pull connector's tick (src/lib/klaviyoSync.ts): every enabled
   /// connection whose turn it is. Each connection takes its own lease.
   'klaviyo.sync': Record<string, never>;
@@ -116,6 +122,9 @@ export interface JobPayloadMap {
   'reminders.stageDeadline': Record<string, never>;
   'reminders.retentionReconsent': Record<string, never>;
   'matching.needMatchAlerts': Record<string, never>;
+  'mentorOffers.sweep': Record<string, never>;
+  'requests.expirySweep': Record<string, never>;
+  'reminders.relationEnding': Record<string, never>;
   'meetings.reminders': Record<string, never>;
   'meetings.seriesReminders': Record<string, never>;
   'meetings.autoLog': Record<string, never>;
@@ -128,12 +137,17 @@ export interface JobPayloadMap {
   'email.healthCheck': Record<string, never>;
   'outbound.expireDrafts': Record<string, never>;
   'auth.trustedDevicePurge': Record<string, never>;
+  /// One health sample for the public /status page (#1604, src/lib/statusSample.ts).
+  'status.sample': Record<string, never>;
   'ai.artifactRetention': Record<string, never>;
   'newsletter.dispatch': Record<string, never>;
   'newsletter.queue': Record<string, never>;
   'retention.prune': Record<string, never>;
   'usage.rollup': Record<string, never>;
   'trial.reminders': ScopedPayload;
+  /// A partner's customers whose commission window ends soon (#3556,
+  /// src/lib/jobs/affiliateWindowNotices.ts). `orgIds` narrows, `at` pins the clock.
+  'affiliate.windowNotices': ScopedPayload;
   'relationHealth.sweep': ScopedPayload;
   'surveys.campaigns': ScopedPayload & { batch?: number };
   'evaluations.reminders': ScopedPayload;
@@ -148,6 +162,9 @@ export interface JobPayloadMap {
   /// The nightly nudge scan (#1684, src/lib/nudges/evaluate.ts): every enabled
   /// condition-scan NudgeRule of every org.
   'nudge.evaluate': Record<string, never>;
+  /// The nightly profile-digest refresh (#2038, src/lib/profileDigest.ts): a
+  /// bounded scan of consenting people, a model call only where the text changed.
+  'profileDigest.refresh': Record<string, never>;
   /// One nudge to one person (#1684). Keyed `nudge:<ruleId>:<userId>:<dedupeKey>`;
   /// the NudgeSend row (unique on the same triple) is claimed before the send.
   'nudge.send': { ruleId: string; userId: string; dedupeKey: string; eventId: string | null };
@@ -155,6 +172,43 @@ export interface JobPayloadMap {
   /// The `AutomationRun` row holds the rule, the relation and the org; the
   /// payload is only its id, keyed `automation:<runId>`.
   'automation.run': { runId: string };
+  /// One event mail the notification router owes one person (#1710, sender
+  /// #1719). Enqueued by the router's e-mail channel (src/lib/notifications/
+  /// router.ts, keyed `notify:<dedupeKey>`); rendered by renderNotificationEmail()
+  /// — the same renderer the template editor's preview uses — and handed to
+  /// sendEmail(). The job's own `orgId` is the recipient's org.
+  /// One SCHEDULED announcement whose time has come (#1721). Enqueued by
+  /// POST /api/admin/announcements with runAt = scheduledAt, keyed
+  /// `announcement:<id>`; dispatchScheduledAnnouncement() claims the row
+  /// SCHEDULED → SENDING, so a rerun or a prior cancel sends nothing.
+  'announcement.send': { announcementId: string };
+  'notification.email': {
+    eventKey: string;
+    userId: string;
+    locale: string;
+    params: Record<string, unknown>;
+    link: string | null;
+    emailGroup: string;
+    delivery: 'immediate' | 'batched';
+    /** A pre-rendered mail (#1711), sealed (src/lib/notifications/sealedEmail.ts). */
+    sealedEmail?: string;
+  };
+  /// A delivery held to the end of the recipient's quiet hours or an org
+  /// blackout day (#1714); the consumer is runDeferredDelivery() in the router.
+  'notification.deferred': {
+    deliveryId: string;
+    channel: string;
+    eventKey: string;
+    userId: string;
+    orgId: string | null;
+    locale: string;
+    params: Record<string, unknown>;
+    link: string;
+    dedupeKey: string;
+    sealedEmail?: string;
+    /** The chat card (#1942), carried so a held reminder keeps its join button. */
+    card?: { subjectKey: string; actionUrl: string | null; supersede: boolean } | null;
+  };
 }
 
 /// The narrowing a manual run may carry. Absent fields mean "every tenant, now".
@@ -174,6 +228,7 @@ export const JOB_NAMES: readonly JobName[] = [
   'roster.sweep',
   'email.send',
   'api.export',
+  'affiliate.planResync',
   'api.import.candidates',
   'sso.certificateExpiry',
   'klaviyo.sync',
@@ -183,6 +238,9 @@ export const JOB_NAMES: readonly JobName[] = [
   'reminders.stageDeadline',
   'reminders.retentionReconsent',
   'matching.needMatchAlerts',
+  'mentorOffers.sweep',
+  'requests.expirySweep',
+  'reminders.relationEnding',
   'meetings.reminders',
   'meetings.seriesReminders',
   'meetings.autoLog',
@@ -195,12 +253,14 @@ export const JOB_NAMES: readonly JobName[] = [
   'email.healthCheck',
   'outbound.expireDrafts',
   'auth.trustedDevicePurge',
+  'status.sample',
   'ai.artifactRetention',
   'newsletter.dispatch',
   'newsletter.queue',
   'retention.prune',
   'usage.rollup',
   'trial.reminders',
+  'affiliate.windowNotices',
   'relationHealth.sweep',
   'surveys.campaigns',
   'evaluations.reminders',
@@ -209,7 +269,10 @@ export const JOB_NAMES: readonly JobName[] = [
   'automation.run',
   'webhook.deliver',
   'nudge.evaluate',
+  'profileDigest.refresh',
   'nudge.send',
+  'notification.email',
+  'notification.deferred',
 ] as const;
 
 export function isJobName(value: unknown): value is JobName {

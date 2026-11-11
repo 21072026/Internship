@@ -4,9 +4,11 @@
 // import the .ts rule; scripts/test/stage-sla-rule.test.mjs runs one corpus
 // through both copies. Change both in one commit.
 //
-// No imports: the backfill, the unit test and nothing else read it.
+// One import: prisma/business-days.mjs (#1638), itself pure. The backfill, the
+// admin SLA save and the unit test read this file.
 
-const DAY = 24 * 60 * 60 * 1000;
+import { slaDeadline } from './business-days.mjs';
+
 
 export const SLA_PRECEDENCE = ['mentorCohort', 'mentor', 'cohort', 'org'];
 
@@ -83,12 +85,15 @@ export function stageEntry(relation) {
  *
  * The deadline counts from the day the relation ENTERED the stage, not from
  * now: a candidate parked for ninety days must read overdue, not compliant.
- * `pastDue` is what the caller turns into the anti-storm stamps.
+ * `pastDue` is what the caller turns into the anti-storm stamps. `dayRule` is
+ * optional (see prisma/business-days.mjs).
  */
-export function planStageDeadline(relation, rows, now) {
+export function planStageDeadline(relation, rows, now, dayRule) {
   const sla = resolveSlaDays(rows, { cohortId: relation.cohortId, mentorId: relation.mentorId }).get(relation.pipelineStatus);
   if (!sla) return null;
   const entry = stageEntry(relation);
-  const stageDeadline = new Date(entry.at + sla.days * DAY);
+  // `dayRule` (#1638): the scope's business-day rule; absent or `calendar` is
+  // `entry + days × 24h`, exactly what this did before.
+  const stageDeadline = slaDeadline(entry.at, sla.days, dayRule);
   return { stageDeadline, pastDue: stageDeadline.getTime() <= now.getTime(), source: sla.source, enteredFrom: entry.from };
 }

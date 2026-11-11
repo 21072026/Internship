@@ -6,10 +6,11 @@
 // Who may confirm is the route's question (`/api/mentorship/[id]/skills/…`),
 // answered from the relation — never from a body field.
 
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { skillLabel } from '@/lib/skillTaxonomyRule';
 import { resolveMany } from '@/lib/skillsResolve';
-import { confirmLevelPlan, skillProgression } from '@/lib/skillLevelRule';
+import { confirmLevelPlan, mergedLevel, skillProgression } from '@/lib/skillLevelRule';
 
 export interface SkillLevelView {
   skillId: string;
@@ -134,4 +135,66 @@ export async function skillProgressOf(userId: string, locale: string): Promise<S
     out.push({ skillId: r.skillId, label: skillLabel(r.skill, locale), ...p, verified: r.verifiedAt !== null });
   }
   return out.sort((a, b) => b.now - b.start - (a.now - a.start) || a.label.localeCompare(b.label, locale));
+}
+
+// ─── Folding two rows into one (#1822) ───────────────────────────────────────
+
+/** The columns a fold reads from both rows. */
+export const USER_SKILL_FOLD_SELECT = {
+  id: true,
+  userId: true,
+  skillId: true,
+  level: true,
+  levelSource: true,
+  verifiedById: true,
+  verifiedAt: true,
+} as const;
+
+type FoldRow = { id: string; level: number | null; levelSource: string | null; verifiedById: string | null; verifiedAt: Date | null };
+
+/**
+ * Two `UserSkill` rows that are about to become one — the curator merged the
+ * loser's skill into the target's, or an admin merged the loser's account into
+ * the target's. The target row survives: the loser's level history moves onto
+ * it, and its proficiency becomes whichever `mergedLevel()` says wins (a
+ * confirmed level beats a self-rating, a rating beats none). The caller deletes
+ * the loser row afterwards, inside the same transaction. The ONE fold both
+ * merges use, so a rating is lost by neither.
+ */
+export async function foldUserSkillRow(tx: Prisma.TransactionClient, target: FoldRow, loser: FoldRow): Promise<void> {
+  await tx.userSkillLevelChange.updateMany({ where: { userSkillId: loser.id }, data: { userSkillId: target.id } });
+  const winner = mergedLevel(target, loser);
+  if (winner) await tx.userSkill.update({ where: { id: target.id }, data: winner });
+}
+
+/**
+ * Move every canonical skill row of `fromUserId` onto `toUserId` (an account
+ * merge). A skill only the loser holds is re-pointed as is; a skill both hold
+ * is folded with `foldUserSkillRow` and the loser's row removed. Returns the
+ * counts for the merge report.
+ */
+export async function moveUserSkills(
+  tx: Prisma.TransactionClient,
+  fromUserId: string,
+  toUserId: string,
+): Promise<{ moved: number; folded: number }> {
+  const [losers, targets] = await Promise.all([
+    tx.userSkill.findMany({ where: { userId: fromUserId }, select: USER_SKILL_FOLD_SELECT }),
+    tx.userSkill.findMany({ where: { userId: toUserId }, select: USER_SKILL_FOLD_SELECT }),
+  ]);
+  const targetOf = new Map(targets.map((r) => [r.skillId, r]));
+  let moved = 0;
+  let folded = 0;
+  for (const loser of losers) {
+    const target = targetOf.get(loser.skillId);
+    if (!target) {
+      await tx.userSkill.update({ where: { id: loser.id }, data: { userId: toUserId } });
+      moved++;
+      continue;
+    }
+    await foldUserSkillRow(tx, target, loser);
+    await tx.userSkill.delete({ where: { id: loser.id } });
+    folded++;
+  }
+  return { moved, folded };
 }

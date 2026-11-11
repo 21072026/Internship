@@ -286,9 +286,9 @@ function Vocabulary() {
                 return (
                   <tr key={row.id} data-testid={`skill-row-${row.key}`} className="border-b border-gray-100 dark:border-gray-800/60 last:border-0 align-top">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900 dark:text-gray-100">{row.labelEn}</div>
+                      <div lang="en" className="font-medium text-gray-900 dark:text-gray-100">{row.labelEn}</div>
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {row.labelTr} · {row.labelDe}
+                        <span lang="tr">{row.labelTr}</span> · <span lang="de">{row.labelDe}</span>
                         {row.category ? ` · ${row.category}` : ''}
                       </div>
                       {merged ? (
@@ -307,6 +307,7 @@ function Vocabulary() {
                             <label key={field} className="text-xs text-gray-600 dark:text-gray-300">
                               {m[field]}
                               <input
+                                lang={field === 'labelEn' ? 'en' : field === 'labelTr' ? 'tr' : 'de'}
                                 value={draft[field]}
                                 onChange={(e) => setDraft({ ...draft, [field]: e.target.value })}
                                 data-testid={`skill-edit-${field}`}

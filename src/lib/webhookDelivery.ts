@@ -13,6 +13,7 @@
 // (the hook's / the event's), never the ambient tenant.
 
 import type { Prisma } from '@prisma/client';
+import { tenantAdminRows } from '@/lib/tenantAdmins';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { enqueue } from '@/lib/jobs/queue';
@@ -21,6 +22,8 @@ import { validateEventPayload } from '@/lib/events/catalog';
 import type { DeliveredEvent } from '@/lib/events/subscribers';
 import { SsrfBlockedError, SsrfUnresolvedError } from '@/lib/ssrfGuard';
 import { deliverToWebhook, liveSubscriptionsWhere, type WebhookEvent } from '@/lib/webhooks';
+import { companyReceiverCheck } from '@/lib/companyWebhookScope';
+import { sourceReceiverCheck } from '@/lib/sourceWebhookScope';
 import {
   runDeliveryAttempt,
   webhookJobKey,
@@ -51,6 +54,17 @@ async function enqueueDelivery(eventId: string, webhookId: string, orgId: string
 }
 
 /**
+ * Both owner checks of one event (#2006), each memoised: a hook with neither
+ * `companyId` nor `sourceId` passes untouched; an owned hook receives the
+ * event only when its owner's check says so.
+ */
+function ownerReceiverCheck(event: { name: string; orgId: string | null; payload: Record<string, unknown> }) {
+  const company = companyReceiverCheck(event);
+  const source = sourceReceiverCheck(event);
+  return async (hook: { companyId: string | null; sourceId: string | null }) => (await company(hook)) && (await source(hook));
+}
+
+/**
  * The webhook subscriber's body: one delivery job per live subscription of the
  * event's tenant that wants it. Never `Promise.all` across subscriptions — each
  * receiver is its own job, so the slowest one delays nobody else.
@@ -58,11 +72,15 @@ async function enqueueDelivery(eventId: string, webhookId: string, orgId: string
 export async function fanOutWebhookEvent(event: DeliveredEvent): Promise<number> {
   const hooks = await prisma.webhook.findMany({
     where: liveSubscriptionsWhere(event.orgId),
-    select: { id: true, events: true },
+    select: { id: true, events: true, companyId: true, sourceId: true },
   });
+  // A company's own hook only gets its own company's hiring events, a
+  // source's own hook only its own candidates' events (#2006).
+  const mayReceive = ownerReceiverCheck(event);
   let queued = 0;
   for (const h of hooks) {
     if (!subscribesTo(h.events, event.name)) continue;
+    if (!(await mayReceive(h))) continue;
     await enqueueDelivery(event.id, h.id, event.orgId);
     queued += 1;
   }
@@ -128,10 +146,8 @@ const deps: DeliveryDeps = {
       detail: reason,
     });
     if (!hook.orgId) return;
-    const admins = await prisma.user.findMany({
-      where: { orgId: hook.orgId, role: 'ADMIN', isActive: true },
-      select: { id: true, email: true, fullName: true, preferredLanguage: true },
-    });
+    // An org-level notice: no PROGRAM_ADMIN (#3485).
+    const admins = await tenantAdminRows(hook.orgId, null, { id: true, email: true, fullName: true, preferredLanguage: true });
     const { sendWebhookDisabledEmail } = await import('@/services/emailService');
     for (const a of admins) {
       try {
@@ -166,7 +182,7 @@ export function runWebhookDelivery(
 export type ReplayResult = { ok: true; queued: number } | { ok: false; reason: 'not_found' | 'disabled' | 'event_gone' };
 
 async function replayableHook(webhookId: string, orgId: string | null) {
-  const hook = await prisma.webhook.findFirst({ where: { id: webhookId, orgId }, select: { id: true, orgId: true, events: true } });
+  const hook = await prisma.webhook.findFirst({ where: { id: webhookId, orgId }, select: { id: true, orgId: true, events: true, companyId: true, sourceId: true } });
   if (!hook) return null;
   return hook;
 }
@@ -194,12 +210,21 @@ export async function replayRecentEvents(webhookId: string, orgId: string | null
   if (!(await isLive(webhookId, orgId))) return { ok: false, reason: 'disabled' };
   const names = Array.isArray(hook.events) ? (hook.events as unknown[]).filter((e): e is string => typeof e === 'string') : [];
   if (names.length === 0) return { ok: true, queued: 0 };
-  const events = await prisma.domainEvent.findMany({
+  // An owned (company or source) hook replays only what fan-out would have
+  // sent it (#2006): filtered BEFORE the `count`, so "the last N" means its last N.
+  const owned = Boolean(hook.companyId || hook.sourceId);
+  const candidates = await prisma.domainEvent.findMany({
     where: { orgId, name: { in: names } },
     orderBy: { createdAt: 'desc' },
-    take: count,
-    select: { id: true },
+    take: owned ? count * 10 : count,
+    select: { id: true, name: true, orgId: true, payload: true },
   });
+  const events: { id: string }[] = [];
+  for (const e of candidates) {
+    if (events.length >= count) break;
+    if (owned && !(await ownerReceiverCheck({ ...e, payload: e.payload as Record<string, unknown> })(hook))) continue;
+    events.push(e);
+  }
   const stamp = Date.now();
   // Oldest first, so the receiver sees them in the order they happened.
   for (const e of events.reverse()) await enqueueDelivery(e.id, webhookId, orgId, `n:${stamp}`);

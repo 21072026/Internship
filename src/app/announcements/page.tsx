@@ -18,6 +18,8 @@ interface AnnouncementItem {
   languageFallback?: boolean;
   link: string | null;
   imageUrl: string | null;
+  /** The author's description (#3388); null = decorative. */
+  imageAlt?: string | null;
   createdAt: string;
 }
 
@@ -87,14 +89,14 @@ export default function AnnouncementsPage() {
                 {a.imageUrl && (
                   <button
                     type="button"
-                    onClick={() => lightbox.open([{ src: a.imageUrl! }])}
-                    aria-label={t.imageViewer.viewImage}
+                    onClick={() => lightbox.open([{ src: a.imageUrl!, alt: a.imageAlt ?? undefined }])}
+                    aria-label={a.imageAlt ? t.imageViewer.view.replace('{name}', a.imageAlt) : t.imageViewer.viewImage}
                     className="mt-2 block rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={a.imageUrl}
-                      alt=""
+                      alt={a.imageAlt ?? ''}
                       data-testid="announcement-image"
                       className="max-h-96 w-auto max-w-full rounded-lg border border-gray-200 dark:border-gray-700 object-contain"
                     />

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
@@ -10,16 +9,12 @@ import { feedWriteData, loadPublicFeed, prepareFeedWrite } from '@/lib/rosterFee
 // One roster feed (#1964). Another org's id answers 404 on every verb — the
 // same answer as an id that does not exist, so the route confirms nothing.
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return session && session.user.role === 'ADMIN' ? session : null;
-}
-
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(_request: Request, { params }: Ctx) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.read', { request: _request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { id } = await params;
   return withTenantScope(session, async () => {
     const feed = await loadPublicFeed(id, await settingsOrgOf(session));
@@ -29,8 +24,9 @@ export async function GET(_request: Request, { params }: Ctx) {
 }
 
 export async function PATCH(request: Request, { params }: Ctx) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { id } = await params;
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
@@ -68,8 +64,9 @@ export async function PATCH(request: Request, { params }: Ctx) {
 }
 
 export async function DELETE(request: Request, { params }: Ctx) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { id } = await params;
   return withTenantScope(session, async () => {
     const orgId = await settingsOrgOf(session);

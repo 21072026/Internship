@@ -35,6 +35,7 @@ const REASON_VARIANT: Record<AttentionReason, 'warning' | 'danger' | 'info' | 'p
   cancellation_pending: 'danger',
   // Amber: still a conversation to have, with a date on it (#2843).
   decision_window_closing: 'warning',
+  behind_cadence: 'info',
 };
 
 // Ranked "needs attention" widget on the mentor dashboard (EPIC: mentor
@@ -79,6 +80,7 @@ export function MentorAttentionQueue({
     free_quota_exceeded: labels.freeQuotaExceeded,
     cancellation_pending: labels.cancellationPending,
     decision_window_closing: labels.decisionWindowClosing,
+    behind_cadence: labels.behindCadence,
   };
 
   return (
@@ -111,7 +113,9 @@ export function MentorAttentionQueue({
                     ? reasonLabel[r].replace('{date}', formatDate(item.contractEndsAt, locale, { timeZone: 'UTC' }))
                     : r === 'decision_window_closing' && item.decisionWindowEndsAt
                       ? reasonLabel[r].replace('{date}', formatDate(item.decisionWindowEndsAt, locale, { timeZone: 'UTC' }))
-                      : reasonLabel[r]}
+                      : r === 'behind_cadence' && item.cadence
+                        ? reasonLabel[r].replace('{d}', String(item.cadence.daysSince)).replace('{n}', String(item.cadence.intervalDays))
+                        : reasonLabel[r]}
                 </Badge>
               ))}
             </div>

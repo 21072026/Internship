@@ -19,8 +19,26 @@ import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { interactionInTenant, meetingInTenant } from '@/lib/analyticsScope';
 import { mentorWorkload as mentorWorkloadRows } from '@/lib/analyticsReports';
+import { relationProgramWhere, type ProgramFilter } from '@/lib/programFilterRule';
+import { programPeopleWhere, programRelationWhere, type GrantLike } from '@/lib/programScopeRule';
+import type { Prisma } from '@prisma/client';
+import { countsAsPlacement, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
 
-export async function loadAdminAnalytics(session: Session, params: { from: string | null; to: string | null }, locale: Locale) {
+export async function loadAdminAnalytics(
+  session: Session,
+  params: {
+    from: string | null;
+    to: string | null;
+    program?: ProgramFilter;
+    /**
+     * A PROGRAM_ADMIN's grants (#1577): every number below is computed over
+     * the relations — and the people — they cover, on top of the programme
+     * filter. Absent for every other reader, whose numbers do not change.
+     */
+    scope?: readonly GrantLike[];
+  },
+  locale: Locale,
+) {
   const now = new Date();
   // Range: default from = start of the month 5 months ago; to = now. If the
   // client sends bad/inverted dates we fall back to the default rather than 500.
@@ -53,16 +71,43 @@ export async function loadAdminAnalytics(session: Session, params: { from: strin
   // meetings carry no `orgId`; they belong to their relation's (or project's)
   // tenant — src/lib/analyticsScope.ts.
   const tenant = await tenantWhere(session);
-  const interactionWhere = { date: inRange, ...interactionInTenant(tenant) };
-  const meetingWhere = { scheduledAt: inRange, ...meetingInTenant(tenant) };
+  // The programme filter (#1652). With none ('all') every `where` below is
+  // byte-for-byte what it was, so the unfiltered screen is unchanged. With one,
+  // relations narrow by `cohortId`, interactions and meetings follow their
+  // relation — a PROJECT meeting belongs to no programme, so it drops out of a
+  // filtered view rather than being guessed into one. The signup funnel is
+  // about accounts, not relations, and stays tenant-wide.
+  const program = params.program ?? { kind: 'all' as const };
+  // A PROGRAM_ADMIN's grants narrow like a filter that is always on (#1577):
+  // relations AND the grants, interactions/meetings through them, projects and
+  // mentors only with a relation inside them, signups only the people they
+  // reach, the programme list only the granted cohorts.
+  const scope = params.scope ?? null;
+  const relWhere: Prisma.MentorshipRelationWhereInput = scope
+    ? { AND: [relationProgramWhere(program), programRelationWhere(scope) as Prisma.MentorshipRelationWhereInput] }
+    : relationProgramWhere(program);
+  const filtered = program.kind !== 'all' || scope !== null;
+  const relationInScope = { relation: { is: { ...tenant, ...relWhere } } };
+  const interactionWhere = { date: inRange, ...(filtered ? relationInScope : interactionInTenant(tenant)) };
+  const meetingWhere = { scheduledAt: inRange, ...(filtered ? relationInScope : meetingInTenant(tenant)) };
 
   const [byStage, interactions, meetings, rsvpGroups, projectRows, relDates, interactionDates] = await Promise.all([
-    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: withinTenant({}, tenant), _count: { _all: true } }),
+    // The funnel is the PLACEMENT funnel (#1504): a COACHING relation's stage
+    // means nothing here. Grouped by attribution too, so the hire count below
+    // can leave out the hires that are not ours without a second query.
+    prisma.mentorshipRelation.groupBy({
+      by: ['pipelineStatus', 'employmentAttribution'],
+      where: withinTenant({ ...relWhere, ...PLACEMENT_RELATION_WHERE }, tenant),
+      _count: { _all: true },
+    }),
     prisma.interactionLog.count({ where: interactionWhere }),
     prisma.meeting.count({ where: meetingWhere }),
     prisma.meeting.groupBy({ by: ['rsvp'], where: meetingWhere, _count: { _all: true } }),
-    prisma.project.findMany({ where: withinTenant({}, tenant), select: { name: true, _count: { select: { relations: true } } } }),
-    prisma.mentorshipRelation.findMany({ where: withinTenant({ startDate: inRange }, tenant), select: { startDate: true } }),
+    prisma.project.findMany({
+      where: withinTenant({}, tenant),
+      select: { name: true, _count: { select: { relations: filtered ? { where: relWhere } : true } } },
+    }),
+    prisma.mentorshipRelation.findMany({ where: withinTenant({ startDate: inRange, ...relWhere }, tenant), select: { startDate: true } }),
     prisma.interactionLog.findMany({ where: interactionWhere, select: { date: true } }),
   ]);
 
@@ -74,7 +119,8 @@ export async function loadAdminAnalytics(session: Session, params: { from: strin
     [7, 30].map(async (days) => {
       const since = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
       const createdIn = { createdAt: { gte: since } };
-      const inTenant = <W extends object>(w: W) => withinTenant(w, tenant);
+      const people = scope ? [programPeopleWhere(scope) as Prisma.UserWhereInput] : [];
+      const inTenant = (w: Prisma.UserWhereInput) => withinTenant<Prisma.UserWhereInput>(people.length ? { AND: [w, ...people] } : w, tenant);
       const [registered, verified, active] = await Promise.all([
         prisma.user.count({ where: inTenant(createdIn) }),
         prisma.user.count({ where: inTenant({ ...createdIn, emailVerified: true }) }),
@@ -100,10 +146,12 @@ export async function loadAdminAnalytics(session: Session, params: { from: strin
 
   const projectWorkload = projectRows
     .map((p) => ({ name: p.name, interns: p._count.relations }))
+    .filter((p) => !filtered || p.interns > 0)
     .sort((a, b) => b.interns - a.interns)
     .slice(0, 10);
 
-  const funnel = Object.fromEntries(byStage.map((s) => [s.pipelineStatus, s._count._all]));
+  const funnel: Record<string, number> = {};
+  for (const s of byStage) funnel[s.pipelineStatus] = (funnel[s.pipelineStatus] ?? 0) + s._count._all;
 
   // What "hired" means here is the TENANT's own finished stage set (#1882) —
   // this route used to compare against the literals `HIRED_660`/`EMPLOYED_700`,
@@ -124,7 +172,19 @@ export async function loadAdminAnalytics(session: Session, params: { from: strin
     shellCapabilities(orgId),
   ]);
   // Shared with the report registry and the scheduled subscriptions (#1905).
-  const mentorWorkload = await mentorWorkloadRows({ stageOrgId: orgId, tenant, locale }, outcome);
+  const mentorWorkload = (
+    await mentorWorkloadRows({ stageOrgId: orgId, tenant, locale, ...(filtered ? { relation: relWhere } : {}) }, outcome)
+  ).filter((m) => !filtered || m.active > 0);
+  // The selector's options: the tenant's programmes, for every reader of this
+  // screen — /api/cohorts needs `program.read`, which an analytics reader may
+  // not hold. Names only; nothing else about a programme leaks through here.
+  const programs = capabilities.includes('mentorship')
+    ? await prisma.cohort.findMany({
+        where: withinTenant(scope ? { id: { in: scope.flatMap((g) => (g.cohortId ? [g.cohortId] : [])) } } : {}, tenant),
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, name: true, term: true },
+      })
+    : [];
 
   const rsvp = Object.fromEntries(rsvpGroups.map((g) => [g.rsvp, g._count._all]));
   // Acceptance rate is over those who actually responded (accepted + declined).
@@ -134,7 +194,12 @@ export async function loadAdminAnalytics(session: Session, params: { from: strin
   const rsvpAcceptanceRate = rsvpResponded ? Math.round(((rsvp.ACCEPTED || 0) / rsvpResponded) * 100) : null;
 
   const totalRelations = byStage.reduce((n, s) => n + s._count._all, 0);
-  const hiredCount = outcome.finished.reduce((n, key) => n + (funnel[key] || 0), 0);
+  // Ours only (#1504): a SELF_FOUND / ALREADY_EMPLOYED hire is an honest
+  // outcome, not a placement. With no attribution stated anywhere this is
+  // exactly the old sum.
+  const hiredCount = byStage
+    .filter((s) => countsAsPlacement({ pipelineStatus: s.pipelineStatus, employmentAttribution: s.employmentAttribution }, outcome.finished))
+    .reduce((n, s) => n + s._count._all, 0);
   const conversionToHired = totalRelations ? Math.round((hiredCount / totalRelations) * 100) : 0;
 
   return {
@@ -157,6 +222,9 @@ export async function loadAdminAnalytics(session: Session, params: { from: strin
     // Which modules the cards above are about (#2423) — see the comment where
     // it is resolved. A consumer that finds the field missing shows everything.
     capabilities,
+    programs,
+    // The filter these numbers were computed under, echoed for the screen.
+    program: program.kind === 'program' ? program.id : program.kind,
   };
 }
 

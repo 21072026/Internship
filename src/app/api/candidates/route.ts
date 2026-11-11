@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -8,14 +7,17 @@ import { isTagMode, parseTagIds } from '@/lib/tags';
 import { markOrphanApplicants, orphanApplicantWhere } from '@/lib/orphanApplicant';
 import { skillTermsWhere } from '@/lib/skillFilter';
 import { resolveOrgId } from '@/lib/orgScope';
+import { programMenteeWhere, programRelationWhere } from '@/lib/programScopeRule';
+import { candidateSort, isUnassignedFilter, unassignedMenteeWhere } from '@/lib/unassignedCandidates';
 
 export async function GET(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // A list (#1577): a PROGRAM_ADMIN with grants passes and gets them back —
+    // its rows are narrowed to the candidates of its granted cohorts/companies
+    // below. Every other tier gets `grants` undefined and reads its whole org.
+    const gate = await requirePermission('user.read', { request, listing: true });
+    if ('error' in gate) return gate.error;
+    const { session, grants } = gate;
 
     return await withTenantScope(session, async () => {
     const { searchParams } = new URL(request.url);
@@ -78,7 +80,10 @@ export async function GET(request: Request) {
       relSome.mentorId = session.user.id;
       relSome.status = 'ACTIVE';
     }
-    if (pipelineStatus) relSome.pipelineStatus = pipelineStatus;
+    // `unassigned` (#1440) is not a stage: it is "no ACTIVE relation", a
+    // conjunct of its own below (src/lib/unassignedCandidates.ts).
+    const unassignedOnly = isUnassignedFilter(pipelineStatus);
+    if (pipelineStatus && !unassignedOnly) relSome.pipelineStatus = pipelineStatus;
     if (company) relSome.company = { name: company };
     if (project) relSome.project = { name: { contains: project } };
     if (cohortId) relSome.cohortId = cohortId;
@@ -133,7 +138,8 @@ export async function GET(request: Request) {
       // Tag chips on the row, so a filtered list shows WHY each person matched.
       tags: { select: { tag: { select: { id: true, name: true, color: true } } } },
       menteeRelations: {
-        where: { status: 'ACTIVE' as const },
+        // A PROGRAM_ADMIN sees the candidate's relations inside its grants only (#1577).
+        where: grants ? { status: 'ACTIVE' as const, ...programRelationWhere(grants) } : { status: 'ACTIVE' as const },
         include: {
           mentor: { select: { id: true, fullName: true } },
           company: { select: { id: true, name: true } },
@@ -155,7 +161,15 @@ export async function GET(request: Request) {
     // this is the admin's whole candidate book (src/lib/tenantFilter.ts).
     const tenant = await tenantWhere(session);
     const skillWhere = skillList.length ? await skillTermsWhere(resolveOrgId(session), skillList) : null;
-    const base = orphanOnly ? { AND: [where, orphanApplicantWhere()] } : where;
+    const programScope = grants ? [programMenteeWhere(grants)] : [];
+    const base = {
+      AND: [
+        where,
+        ...(orphanOnly ? [orphanApplicantWhere()] : []),
+        ...(unassignedOnly ? [unassignedMenteeWhere()] : []),
+        ...programScope,
+      ],
+    };
     const query = withinTenant(skillWhere ? { AND: [base, skillWhere] } : base, tenant);
 
     // One branch: every filter, the skill terms included, is SQL (#1820), so the
@@ -164,7 +178,9 @@ export async function GET(request: Request) {
     const raw = await prisma.user.findMany({
       where: query,
       select,
-      orderBy: { createdAt: 'desc' },
+      // Newest first, except the unassigned queue, which reads longest-waiting
+      // first (#1440); `?sort=oldest|newest` overrides either.
+      orderBy: { createdAt: candidateSort(searchParams.get('sort'), pipelineStatus) === 'oldest' ? 'asc' : 'desc' },
       ...(all ? {} : { skip: (page - 1) * pageSize, take: pageSize }),
     });
     const candidates = raw.map(normalize);

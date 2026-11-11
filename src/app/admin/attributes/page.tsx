@@ -139,6 +139,7 @@ export default function AdminAttributesPage() {
         <Input
           key={l}
           label={L.labelIn.replace('{lang}', l.toUpperCase())}
+          lang={l}
           value={value[l] ?? ''}
           maxLength={MAX_LABEL_LENGTH}
           onChange={(e) => onChange({ ...value, [l]: e.target.value })}

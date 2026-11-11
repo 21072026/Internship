@@ -39,6 +39,7 @@ test.afterAll(async () => {
   if (seeded) {
     await prisma.setting.deleteMany({ where: { orgId: seeded.org.id } });
     await prisma.notification.deleteMany({ where: { user: { email: { in: seeded.emails } } } });
+    await prisma.mentorshipRelation.updateMany({ where: { id: seeded.relationId }, data: { cohortId: null } });
     await prisma.cohort.deleteMany({ where: { id: { in: [cohortId, otherCohortId].filter(Boolean) } } });
     await cleanupCustomPipelineOrg(seeded.org.id, seeded.emails);
   }
@@ -148,4 +149,40 @@ test('the settings card saves a row, refuses a half-filled one, and resets', asy
   await expect(card.getByTestId('terminology-message')).toHaveText('Saved.');
   expect((await (await admin.get('/api/admin/terminology')).json()).terminology).toEqual({});
   await expect(card.getByTestId('terminology-en-mentor-manyCap')).toHaveValue('');
+});
+
+
+// #3400: a programme's own vocabulary reaches that programme's pages and the
+// people whose active mentorship is in it; the org's other pages keep the org's.
+test('a programme vocabulary reaches its admin pages and its own pairs', async ({ browser }) => {
+  expect((await admin.put('/api/admin/terminology', { data: { terminology: { en: { mentor: COACH } } } })).status()).toBe(200);
+  expect((await admin.put('/api/admin/terminology', { data: { terminology: { en: { mentor: GUIDE } }, programId: cohortId } })).status()).toBe(200);
+  // The seeded pair joins the programme.
+  await prisma.mentorshipRelation.update({ where: { id: seeded.relationId }, data: { cohortId } });
+  const baseURL = test.info().project.use.baseURL!;
+
+  // The admin, on the programme's own page: the programme's word.
+  const adminCtx = await browser.newContext();
+  await adminCtx.addCookies([{ name: 'locale', value: 'en', url: baseURL }]);
+  const adminPage = await adminCtx.newPage();
+  await signInAsFreshUser(adminPage, seeded.adminEmail, PW, '/admin');
+  await gotoSettled(adminPage, `/admin/programs/${cohortId}/journey`);
+  await expect(adminPage.locator('[data-testid="journey-audience"] option[value="MENTOR"]')).toHaveText('The guide');
+  // …and the org's word everywhere else.
+  await expect(adminPage.locator('a[href="/admin/mentors"]').first()).toContainText('Coaches');
+  // Another org's programme id is not honoured: the page keeps the org's word.
+  await gotoSettled(adminPage, `/admin/programs/${otherCohortId}/journey`);
+  await expect(adminPage.locator('[data-testid="journey-audience"] option[value="MENTOR"]')).not.toHaveText('The guide');
+  await adminCtx.close();
+
+  // The mentee of a pair in the programme reads the programme's word.
+  const mentee = await prisma.user.findFirstOrThrow({ where: { orgId: seeded.org.id, role: 'MENTEE' }, select: { id: true, email: true } });
+  await prisma.notification.create({ data: { userId: mentee.id, type: 'mentorship_request.rematchGeneric', params: {} } });
+  const menteeCtx = await browser.newContext();
+  await menteeCtx.addCookies([{ name: 'locale', value: 'en', url: baseURL }]);
+  const menteePage = await menteeCtx.newPage();
+  await signInAsFreshUser(menteePage, mentee.email, PW, '/portal');
+  await gotoSettled(menteePage, '/notifications');
+  await expect(menteePage.getByText('asked to be matched with a different guide').first()).toBeVisible();
+  await menteeCtx.close();
 });

@@ -1,19 +1,17 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { removeAlias } from '@/lib/skillCuration';
+import { requirePermission } from '@/lib/authz';
 
 // Remove one spelling from a skill (#1817). The people already linked keep
 // their rows; the spelling simply stops resolving.
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string; aliasId: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // The skill vocabulary feeds mentor and requisition matching — an internship module.
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;

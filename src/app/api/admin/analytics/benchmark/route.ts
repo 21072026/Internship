@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { entitled } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -14,6 +13,7 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { worldOfOrg } from '@/lib/userWorld';
 import { benchmarkOrgKey, orgInWorldWhere } from '@/lib/analyticsScope';
 import { benchmarkFigures, MIN_OTHER_PROGRAMS, MIN_RELATIONS, type BenchmarkAgg } from '@/lib/benchmarkPool';
+import { isOurHire, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
 
 // The anonymity floors (MIN_RELATIONS, MIN_OTHER_PROGRAMS) and the arithmetic
 // live in src/lib/benchmarkPool.ts, pure and unit-tested.
@@ -37,11 +37,10 @@ import { benchmarkFigures, MIN_OTHER_PROGRAMS, MIN_RELATIONS, type BenchmarkAgg 
 // So the stage sets are resolved per orgId, from ONE batched `findMany` over the
 // orgs the groupBy actually returned (never one query per row, and never once
 // for the viewer's own org applied to everybody).
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // The CALLER's tier, org passed explicitly (this runs before the scope binds).
   if (!(await entitled(await settingsOrgOf(session), 'ADVANCED_ANALYTICS'))) {
     return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: 'ADVANCED_ANALYTICS' }, { status: 403 });
@@ -72,9 +71,11 @@ export async function GET() {
     const fallbackOrgId = await defaultOrgId();
     const myOrgId = resolveOrgId(session) ?? fallbackOrgId;
     const world = await worldOfOrg(myOrgId);
+    // Placement relations only, and by attribution (#1504): a COACHING pair is
+    // in neither side of the rate, and a hire that is not ours is no placement.
     const grouped = await prisma.mentorshipRelation.groupBy({
-      by: ['orgId', 'pipelineStatus'],
-      where: orgInWorldWhere(world),
+      by: ['orgId', 'pipelineStatus', 'employmentAttribution'],
+      where: { AND: [orgInWorldWhere(world), PLACEMENT_RELATION_WHERE] },
       _count: { _all: true },
     });
 
@@ -143,7 +144,7 @@ export async function GET() {
       // org's stage set — the one it is the backfill's row of.
       const outcome = outcomeFor(key);
       a.total += n;
-      if (outcome.finished.includes(g.pipelineStatus)) a.hired += n;
+      if (outcome.finished.includes(g.pipelineStatus) && isOurHire(g.employmentAttribution)) a.hired += n;
       if (outcome.offPath.includes(g.pipelineStatus)) a.dropped += n;
       byOrg.set(key, a);
     }

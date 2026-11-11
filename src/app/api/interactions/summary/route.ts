@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { getThreadIfAllowed } from '@/lib/messaging';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -25,11 +24,9 @@ const schema = z.object({
 // month's visit opens on it instead of an empty card. Same gate as POST: the
 // mentor of the pair or an admin of its org; anything else reads as missing.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'program.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const relationId = new URL(request.url).searchParams.get('relationId') ?? '';
   if (!relationId) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   return await withTenantScope(session, async () => {
@@ -64,11 +61,9 @@ function isOperatorUse(user: { id: string; role: string }, mentorId: string): bo
   return user.role === 'ADMIN' && user.id !== mentorId;
 }
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'relation.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const userLimited = enforceRateLimit(request, 'ai:interaction_summary', {
     ...AI_RATE_LIMITS.interaction_summary,

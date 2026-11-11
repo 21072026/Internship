@@ -1,18 +1,16 @@
 import { NextResponse } from 'next/server';
 import { scanMessageForSafeguarding } from '@/lib/safeguardingScan';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
-import { sendEmail } from '@/services/emailService';
+import { notifyEvent } from '@/lib/notifications/router';
 import { notify } from '@/lib/notify';
 import { replyAddress } from '@/lib/replyToken';
 import { conversationForRelation } from '@/lib/conversations';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { requireCapability } from '@/lib/capabilityGate';
-import { emailAllowed, notificationCategoryAllowed } from '@/lib/notificationPrefs';
-import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
+import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { normalizeEmailVariants, canonicalEmail, resolveEmail } from '@/lib/localizedEmail';
 
@@ -33,10 +31,9 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 // POST — a mentor (or admin) emails one or more of their mentees. Each send is
 // logged as an InteractionLog(Email) on the relation.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'mail.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
   // Mailing mentees about their mentorship is a mentorship-module write: a
   // vertical without the module (MARKETING) has no relations of this kind to
   // write to, and the composer is not in its nav either.
@@ -66,7 +63,7 @@ export async function POST(request: Request) {
     // mail another tenant's mentees by id (#2542 follow-up). A foreign id is
     // silently dropped, exactly like an id that does not exist.
     const where = withinTenant(
-      session.user.role === 'ADMIN'
+      admin
         ? { id: { in: relationIds } }
         : { id: { in: relationIds }, mentorId: session.user.id },
       await tenantWhere(session),
@@ -105,36 +102,29 @@ export async function POST(request: Request) {
         .split('\n')
         .map((l) => `<p>${l || '&nbsp;'}</p>`)
         .join('')}</div>`;
-      if (emailAllowed(rel.mentee, 'messages') && emailGroupAllowedForCategory(rel.mentee, 'mentor-direct')) {
-        try {
-          // Reply-To routes mentee replies back into this thread (inbound email).
-          // The recipient is baked into the token so a reply still threads when
-          // the mentee answers from a different address than their profile one.
-          // Absent when no inbound domain is configured (#2217).
-          const replyTo = replyAddress(rel.id, rel.mentee.id);
-          //
-          // `locale` is the mentee's own language because the body already is:
-          // resolveEmail() above picked the mentee's translation of the message,
-          // so the unsubscribe footer matches the language of the mail it sits
-          // under. `userId` is the MENTEE's id, never session.user.id — the
-          // mentor is the author here, the mentee is the recipient whose
-          // preferences and unsubscribe token this mail must carry.
-          await sendEmail({
-            to: rel.mentee.email,
-            subject: personalSubject,
-            html,
-            ...(replyTo ? { replyTo } : {}),
-            category: 'mentor-direct',
-            userId: rel.mentee.id,
-            locale: rel.mentee.preferredLanguage,
-            // The relation's org: outside the default world sendEmail names the
-            // sender after it, so a marketing lead never hears "from Internship CRM".
-            orgId: rel.orgId,
-          });
-        } catch (e) {
-          console.error('Mentor email failed for', rel.mentee.email, e);
-        }
-      }
+      // Reply-To routes mentee replies back into this thread (inbound email).
+      // The recipient is baked into the token so a reply still threads when
+      // the mentee answers from a different address than their profile one.
+      // Absent when no inbound domain is configured (#2217).
+      const replyTo = replyAddress(rel.id, rel.mentee.id);
+      // Through the router (#1711): the 'messages' switch and the mentor-direct
+      // e-mail group are its decision now, recorded per delivery; the mail is
+      // the mentee's own translation built above, sent as-is. The recipient is
+      // the MENTEE, never session.user.id — the mentor is the author, the mentee
+      // is the one whose preferences and unsubscribe token the mail carries.
+      // `locale` is the mentee's because the body already is; the relation's org
+      // names the sender outside the default world.
+      await notifyEvent(rel.mentee.id, 'mentor.directEmail', { from: session.user.name ?? '', relationId: rel.id }, {
+        channels: ['email'],
+        orgId: rel.orgId,
+        email: {
+          subject: personalSubject,
+          html,
+          category: 'mentor-direct',
+          locale: rel.mentee.preferredLanguage,
+          ...(replyTo ? { replyTo } : {}),
+        },
+      });
       await prisma.interactionLog.create({
         data: { relationId: rel.id, date: new Date(), type: 'Email', notes: `${personalSubject} — ${personalBody}` },
       });

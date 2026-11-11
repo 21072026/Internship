@@ -3,22 +3,14 @@ import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { actorFromSession, can } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { orgScoped, resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
-import { z } from 'zod';
 import { createInteraction } from '@/lib/interactionWrite';
-import { TEXT_LIMITS } from '@/lib/textLimits';
-import { INTERACTION_TYPES } from '@/lib/interactionTypes';
+import { createInteractionSchema } from '@/lib/interactionSchema';
 
-const createInteractionSchema = z.object({
-  relationId: z.string().min(1),
-  date: z.string().min(1),
-  subject: z.string().max(TEXT_LIMITS.interactionSubject).optional(),
-  notes: z.string().min(1, 'Notes are required').max(TEXT_LIMITS.interactionNotes),
-  type: z.enum(INTERACTION_TYPES),
-});
 
 export async function GET(request: Request) {
   try {
@@ -87,6 +79,9 @@ export async function POST(request: Request) {
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // Admin reach from the permission rule, not the role string (#1571).
+    const actor = await actorFromSession(session);
+    const isAdmin = !!actor && (await can(actor, 'relation.write', undefined, session));
 
     return await withTenantScope(session, async () => {
     const body = await request.json();
@@ -111,7 +106,7 @@ export async function POST(request: Request) {
     }
 
     const isAuthorized =
-      session.user.role === 'ADMIN' || relation.mentorId === session.user.id;
+      isAdmin || relation.mentorId === session.user.id;
 
     if (!isAuthorized) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

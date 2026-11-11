@@ -88,6 +88,8 @@ interface Seeded {
     outreach: string;
     matchReason: string;
     placementNote: string;
+    matchProposalNote: string;
+    matchDecisionNote: string;
     agendaItem: string;
     ownTemplate: string;
   };
@@ -160,6 +162,8 @@ async function seedPaperTrail(prefix: string): Promise<Seeded> {
     outreach: `we saw your profile, call 0170 ${tag}`,
     matchReason: `mentee asked for a woman mentor ${tag}`,
     placementNote: `salary agreed at 3k ${tag}`,
+    matchProposalNote: `keep away from her ex-manager ${tag}`,
+    matchDecisionNote: `she asked for someone outside her old team ${tag}`,
     agendaItem: `talk about her debts ${tag}`,
     ownTemplate: `Hi, it's me from Kadikoy ${tag}`,
   };
@@ -405,6 +409,18 @@ async function seedPaperTrail(prefix: string): Promise<Seeded> {
   await prisma.placement.create({
     data: { orgId: org.id, relationId: relation.id, menteeId: mentee.id, placedAt: new Date(), note: pii.placementNote },
   });
+  // The matching round's proposal and the recorded decision (#1793).
+  await prisma.matchRound.create({
+    data: {
+      orgId: org.id,
+      name: `round ${tag}`,
+      createdById: mentor.id,
+      proposals: { create: [{ orgId: org.id, menteeId: mentee.id, mentorId: mentor.id, note: pii.matchProposalNote }] },
+    },
+  });
+  await prisma.matchDecision.create({
+    data: { orgId: org.id, menteeId: mentee.id, mentorId: mentor.id, source: 'ADMIN_DIRECT', decidedById: mentor.id, note: pii.matchDecisionNote },
+  });
   await prisma.sessionAgenda.create({
     data: { relationId: relation.id, items: { create: [{ text: pii.agendaItem }] } },
   });
@@ -460,6 +476,8 @@ async function cleanup(s: Seeded) {
   await prisma.survey.deleteMany({ where: { id: s.surveyId } });
   await prisma.application.deleteMany({ where: { companyId: s.companyId } });
   await prisma.placement.deleteMany({ where: { relation: { mentorId: s.mentorId } } });
+  await prisma.matchRound.deleteMany({ where: { proposals: { some: { mentorId: s.mentorId } } } });
+  await prisma.matchDecision.deleteMany({ where: { mentorId: s.mentorId } });
   await prisma.companyInterest.deleteMany({ where: { companyId: s.companyId } });
   await prisma.requisition.deleteMany({ where: { companyId: s.companyId } });
   await prisma.offer.deleteMany({ where: { relation: { mentorId: s.mentorId } } });
@@ -532,6 +550,8 @@ async function expectNoFreeTextLeft(s: Seeded) {
   expect(await prisma.candidateOutreach.count({ where: { firstMessage: { contains: p.outreach } } })).toBe(0);
   expect(await prisma.matchFeedback.count({ where: { reasonNote: { contains: p.matchReason } } })).toBe(0);
   expect(await prisma.placement.count({ where: { note: { contains: p.placementNote } } })).toBe(0);
+  expect(await prisma.matchProposal.count({ where: { note: { contains: p.matchProposalNote } } })).toBe(0);
+  expect(await prisma.matchDecision.count({ where: { note: { contains: p.matchDecisionNote } } })).toBe(0);
   expect(await prisma.sessionAgendaItem.count({ where: { text: { contains: p.agendaItem } } })).toBe(0);
   expect(await prisma.messageTemplate.count({ where: { title: { contains: p.ownTemplate } } })).toBe(0);
   expect(await prisma.signInDevice.count({ where: { userAgent: { contains: s.tag } } })).toBe(0);

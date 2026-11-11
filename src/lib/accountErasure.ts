@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
 import { disconnect as disconnectGoogleCalendar } from '@/lib/googleCalendarClient';
+import { disconnectMicrosoft as disconnectMicrosoftCalendar } from '@/lib/microsoftCalendarClient';
 import { runUnscoped } from '@/lib/tenantAmbient';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { OPEN_TEXT_TASKS } from '@/lib/ai/artifacts';
@@ -237,6 +238,8 @@ async function mentorApplicationOps(userId: string): Promise<Prisma.PrismaPromis
         referenceName: null,
         referenceContact: null,
         referenceOutcome: null,
+        // Answers to the org's own questions, staged until an account exists (#1803).
+        formAnswers: Prisma.DbNull,
       },
     }),
   ];
@@ -511,7 +514,11 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     prisma.messageTemplate.deleteMany({ where: { ownerId: userId } }),
     // The mentee's own words in their self-serve mentorship request, and the
     // reason they gave when asking for a different mentor (#2098).
-    prisma.mentorshipRequest.updateMany({ where: { menteeId: userId }, data: { message: null, rematchNote: null } }),
+    // `cancelReason` (#1775) is what an admin wrote ABOUT this person's request — scrubbed with the rest.
+    prisma.mentorshipRequest.updateMany({ where: { menteeId: userId }, data: { message: null, rematchNote: null, cancelReason: null } }),
+    // A mentor's own words in a Mentor Offer (#1809), written to a mentee: about
+    // the mentee when the mentee is erased, the mentor's text when the mentor is.
+    prisma.mentorOffer.updateMany({ where: { OR: [{ mentorId: userId }, { menteeId: userId }] }, data: { message: null } }),
     // Their own bell. A hard delete cascades it; anonymise used to keep every
     // rendered sentence ("Ayşe sent you a message", with the link) under a row
     // that claimed to be anonymous. Theirs alone, so deleted (#2106).
@@ -536,6 +543,9 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     // mentor's private note is — body and every kept revision.
     prisma.sessionNote.updateMany({ where: asSubject, data: { body: '' } }),
     prisma.sessionNoteRevision.updateMany({ where: { note: asSubject }, data: { body: '' } }),
+    // A thank-you (#1868) is prose about its recipient written by its sender:
+    // the words go either way, the dated row stays.
+    prisma.kudo.updateMany({ where: { OR: [{ senderId: userId }, { recipientId: userId }] }, data: { reason: '' } }),
     prisma.personalNote.updateMany({
       where: { OR: [{ meeting: asSubject }, { meeting: directMeeting }] },
       data: { body: '' },
@@ -561,9 +571,16 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
       data: { title: '', cancelReason: null },
     }),
     prisma.goal.updateMany({ where: asSubject, data: { description: null, successCriteria: null } }),
-    prisma.offer.updateMany({ where: asSubject, data: { compensationNote: null, declineNote: null } }),
+    // The frozen letter names them and states their pay; the click-to-accept
+    // record is their IP and browser (#1857).
+    prisma.offer.updateMany({
+      where: asSubject,
+      data: { compensationNote: null, declineNote: null, letterSnapshot: null, acceptedIp: null, acceptedUserAgent: null },
+    }),
     prisma.statusChange.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.relationLifecycleEvent.updateMany({ where: asSubject, data: { reasonNote: null } }),
+    // The pair's agreed next steps (#1795): prose about the pairing whose subject they are.
+    prisma.mentorshipRelation.updateMany({ where: { menteeId: userId }, data: { closurePlan: null } }),
     prisma.companyInterest.updateMany({ where: { menteeId: userId }, data: { note: null } }),
     // The fit sentence (#2042) is prose about the candidate; the score, the
     // breakdown and the rule-set version stay — they are the explainability record.
@@ -594,6 +611,12 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     prisma.candidateOutreach.updateMany({ where: { menteeId: userId }, data: { firstMessage: null } }),
     prisma.matchFeedback.updateMany({ where: { menteeId: userId }, data: { reasonNote: null } }),
     prisma.placement.updateMany({ where: { menteeId: userId }, data: { note: null } }),
+    //   - the matching round's proposal note and the recorded match decision's
+    //     "why this mentor" (#1793): prose about a pairing, so it goes when
+    //     either side of the pair is erased; the proposal and decision rows,
+    //     their state and scores stay.
+    prisma.matchProposal.updateMany({ where: { OR: [{ menteeId: userId }, { mentorId: userId }] }, data: { note: null } }),
+    prisma.matchDecision.updateMany({ where: { OR: [{ menteeId: userId }, { mentorId: userId }] }, data: { note: null } }),
     //   - the session agenda of their relation (required column → emptied).
     prisma.sessionAgendaItem.updateMany({ where: { agenda: asSubject }, data: { text: '' } }),
   ];
@@ -657,10 +680,13 @@ export async function hardDeleteUser(userId: string): Promise<void> {
   // support ticket failed with an opaque FK error.
   await prisma.supportTicket.updateMany({ where: { assignedAdminId: userId }, data: { assignedAdminId: null } });
   await prisma.mentorshipRequest.updateMany({ where: { decidedById: userId }, data: { decidedById: null } });
+  await prisma.mentorshipRequest.updateMany({ where: { cancelledById: userId }, data: { cancelledById: null } });
   await prisma.project.updateMany({ where: { ownerUserId: userId }, data: { ownerUserId: null } });
   // Revoked at Google first (#2098): the cascade would drop our copy of the
   // token but leave the grant live on the person's Google account.
   await disconnectGoogleCalendar(userId);
+  // And a Microsoft 365 connection (#1991): its tokens forgotten here too.
+  await disconnectMicrosoftCalendar(userId);
   await prisma.user.delete({ where: { id: userId } });
 }
 
@@ -682,6 +708,13 @@ export async function anonymizeUser(userId: string): Promise<void> {
     // delete cascades them; anonymise keeps the user row, so they went nowhere
     // until the housekeeping purge (#2098).
     prisma.signInDevice.deleteMany({ where: { userId } }),
+    // Who they are in a chat workspace (#1937): a chat member id and display
+    // name. A hard delete cascades them; anonymise keeps the user row, and a
+    // linked identity would keep delivering to a person who is gone.
+    prisma.chatIdentity.deleteMany({ where: { userId } }),
+    // Social sign-in identities (#1962): a provider subject and an address. An
+    // anonymised account must not be reachable through Google any more either.
+    prisma.userIdentity.deleteMany({ where: { userId } }),
     // The remember-me rows carry the same two columns. They are revoked below
     // (outside this transaction, through the one revoker), not deleted: a
     // revoked row is what turns a replayed cookie into a refusal.
@@ -700,6 +733,9 @@ export async function anonymizeUser(userId: string): Promise<void> {
     // The canonical twin of `skills`/`skillLevels` below (#1818/#1822): the
     // rows carry the levels, and their history goes with them by cascade.
     prisma.userSkill.deleteMany({ where: { userId } }),
+    // Their profile digest (#2038): a summary written about them, from their
+    // own words. A hard delete cascades it.
+    prisma.profileDigest.deleteMany({ where: { userId } }),
     // Every free-text surface outside the User row — see scrubFreeTextOps. This
     // is the half that used to be missing: the row claimed to be anonymous
     // while the person's messages, their support thread and the notes written
@@ -746,6 +782,8 @@ export async function anonymizeUser(userId: string): Promise<void> {
         // they said …"). The re-engagement promise is void once the account is
         // erased, so the note goes with it.
         reEngageNote: null,
+        // The admin's bench reason (#1778) is prose about them.
+        benchedReason: null,
         skills: [],
         skillLevels: {},
         publicProfile: false,
@@ -767,4 +805,6 @@ export async function anonymizeUser(userId: string): Promise<void> {
   // cascaded it — an erased account kept OAuth tokens to the person's own
   // Google calendar. Revoked at Google, then forgotten here.
   await disconnectGoogleCalendar(userId);
+  // And a Microsoft 365 connection (#1991): its tokens forgotten here too.
+  await disconnectMicrosoftCalendar(userId);
 }

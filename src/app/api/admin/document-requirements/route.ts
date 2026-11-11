@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getServerSession, type Session } from 'next-auth';
+import { type Session } from 'next-auth';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { reviewChainSchema, storedReviewerRoles } from '@/lib/documentReview';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { mayManageOrgRequirements } from '@/lib/documentRequirementAccess';
+import { requirePermission } from '@/lib/authz';
 
 // Deliberately not wrapped in withTenantScope: the org is an explicit
 // parameter a super admin may point at any tenant. The authorisation is
@@ -32,11 +32,6 @@ const bodySchema = z.object({
   ...reviewChainSchema,
 }).strict();
 
-async function adminSession() {
-  const session = await getServerSession(authOptions);
-  return session?.user.role === 'ADMIN' ? session : null;
-}
-
 async function validOrgStage(session: Session, route: string, orgId: string, stage?: string | null) {
   // Refused before the lookup, with the same answer as a missing org, so it
   // cannot confirm that a foreign org id exists.
@@ -51,8 +46,9 @@ async function validOrgStage(session: Session, route: string, orgId: string, sta
 }
 
 export async function GET(request: Request) {
-  const session = await adminSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authz = await requirePermission('content.read', { request });
+  if ('error' in authz) return authz.error;
+  const { session } = authz;
   const orgId = new URL(request.url).searchParams.get('orgId');
   if (!orgId) return NextResponse.json({ error: 'orgId is required' }, { status: 400 });
   const gate = await validOrgStage(session, 'GET /api/admin/document-requirements', orgId);
@@ -65,8 +61,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await adminSession();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authz = await requirePermission('content.write', { request });
+  if ('error' in authz) return authz.error;
+  const { session } = authz;
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   const gate = await validOrgStage(session, 'POST /api/admin/document-requirements', parsed.data.orgId, parsed.data.appliesToStage);

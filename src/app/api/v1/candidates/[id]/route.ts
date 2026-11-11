@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { withApiKey } from '@/lib/apiKey';
+import { sourceOnly, withApiKey } from '@/lib/apiKey';
 import { apiNotFound, apiOk } from '@/lib/api/v1';
 import { apiWrite, writeOk } from '@/lib/api/v1Write';
 import { candidateSelect, serializeCandidate } from '@/lib/api/v1Resources';
@@ -11,10 +11,10 @@ import { planFieldUpdates } from '@/lib/externalSyncPolicy';
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return withApiKey(request, 'candidates:read', async (key) => {
-    const row = await prisma.user.findFirst({ where: { id, role: 'MENTEE', orgId: key.orgId }, select: candidateSelect });
+    const row = await prisma.user.findFirst({ where: { id, role: 'MENTEE', orgId: key.orgId, ...sourceOnly(key) }, select: candidateSelect });
     if (!row) return apiNotFound();
     return apiOk(serializeCandidate(row));
-  });
+  }, { sourceScoped: true });
 }
 
 // PATCH /api/v1/candidates/{id} (#1996) — the profile fields the read endpoint

@@ -55,3 +55,44 @@ white-label value with zero storage risk; brand-new tenant-defined keys come in
 Slice C. The MySQL `ENUM → VARCHAR` change preserves existing values (the enum is
 stored as its label string), so Slice C's migration is data-safe, but it is
 sequenced last and verified on preview before prod.
+
+## Stage entry gates (#1589)
+
+A tenant can state, per stage, what must hold before a relation moves
+**forward** into it — four columns on `PipelineStage`, all off by default:
+
+| Column | Refuses the move unless |
+|---|---|
+| `gateCapability` | the mover holds this `Permission` (`src/lib/authzRule.ts`) on the relation — e.g. `pipeline.transition`, which no MENTOR holds. An unknown name refuses every forward move (fail-closed). |
+| `gateDocuments` | the mentee has no unmet **mandatory** document requirement that applies at the target stage (`missingRequirementsAtStage()`). |
+| `gateEvaluation` | a submitted `Evaluation` exists for the relation. |
+| `gateOffer` | an `Offer` in `SENT` or `ACCEPTED` exists for the relation. |
+
+`canTransition()` (`src/lib/stageGate.ts`; the pure half is
+`src/lib/stageGateRule.ts`) is asked **before anything is written** by
+`PUT /api/mentorship/[id]` (board, candidate page), the bulk advance (per row —
+blocked rows come back in `blocked[]`, the rest move) and
+`PATCH /api/v1/relationships/[id]/stage` (an API key's `relationships:write`
+scope stands in for the capability). A refusal is
+`409 { error: 'stage_gate_blocked', gate: { code, stage, missing? } }`.
+
+Never gated: an org on the built-in stages (no rows), a stage with no gate, a
+backwards or same-stage move, a move into an off-path stage, and a `COACHING`
+relation. `replaceStages()` carries a stage's gates over by key when the caller
+does not send them, so an editor that does not know about gates never wipes
+them.
+
+**Editing the gates (#1590).** The stage editor shows an "Entry conditions"
+row under every on-path stage and saves it through the same atomic `PUT`. Gates
+are **not** a paid feature: on the FREE plan the PUT accepts a body that changes
+nothing but gates (`onlyGatesChanged()` in `src/lib/stageGateRule.ts`) and
+answers `403 plan_required` to any change of key, label, order, colour, phase or
+flags. The editor offers `pipeline.transition` (admins with pipeline rights) as
+the capability; any other Permission already on a row is kept and shown by name.
+
+**The refusal.** Every UI that moves a stage reads a `409 stage_gate_blocked`
+through `stageGateFrom()` and opens `StageGateDialog`
+(`src/components/StageGateDialog.tsx`): the stage's label, the reason in the
+viewer's language, the missing documents by name, and a link to the documents
+section (`#documents` on the candidate page and on the mentor's relation page).
+The board puts the card back.

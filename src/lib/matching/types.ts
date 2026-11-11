@@ -29,9 +29,18 @@ export const MATCH_DIMENSIONS = [
   'capacityHeadroom',
   'managerExclusion',
   'previousPairing',
+  // Cached profile themes compared deterministically (#2038). Soft only.
+  'semanticAffinity',
 ] as const;
 
 export type MatchDimension = (typeof MATCH_DIMENSIONS)[number];
+
+/**
+ * Dimensions that may only ever be WEIGHTED (#2038): they can add to a score,
+ * never block a pair. The write schema refuses a hard kind for them, and the
+ * scorer reads a hard kind found on one anyway (an older row) as weighted.
+ */
+export const SOFT_ONLY_DIMENSIONS: readonly string[] = ['semanticAffinity'];
 
 /** One evaluated rule: what it is, whether it held, and what it contributed. */
 export interface MatchBreakdownEntry {

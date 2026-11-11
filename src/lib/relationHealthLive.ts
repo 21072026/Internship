@@ -13,7 +13,7 @@ import { prisma } from '@/lib/prisma';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { findDormantFirstContacts } from '@/lib/dormantFirstContact';
 import { getLastContacts } from '@/lib/lastContact';
-import { menteesWithOpenTodo } from '@/lib/openWork';
+import { relationsWithOpenWork } from '@/lib/openWork';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 import { scoreRelation, type HealthAssessment } from '@/lib/relationHealth';
 
@@ -26,11 +26,12 @@ export const HEALTH_RELATION_SELECT = {
   startDate: true,
   stageDeadline: true,
   cohortId: true,
+  // Who may hear about it: a PROGRAM_ADMIN's grant can name a company (#3485).
+  companyId: true,
   mentor: { select: { id: true, fullName: true, isActive: true } },
   mentee: { select: { id: true, fullName: true } },
   questions: { where: { answer: null }, select: { id: true } },
   meetingRequests: { where: { status: 'PENDING' as const }, select: { id: true } },
-  goals: { where: { status: 'OPEN' as const }, select: { id: true } },
   weeklyReports: { where: { status: { in: [...SUBMITTED_WEEKLY_REPORT_STATUSES] } }, select: { weekStart: true } },
 } satisfies Prisma.MentorshipRelationSelect;
 
@@ -69,7 +70,7 @@ export async function assessRelations(
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
   const [openWork, dormant, lastContacts, lastMoves] = await Promise.all([
-    menteesWithOpenTodo(rows.map((r) => r.mentee.id)),
+    relationsWithOpenWork(rows.map((r) => ({ id: r.id, menteeId: r.mentee.id }))),
     findDormantFirstContacts(rows.map((r) => ({ id: r.id, orgId: r.orgId, menteeId: r.mentee.id, pipelineStatus: r.pipelineStatus, stageDeadline: r.stageDeadline }))),
     getLastContacts(rows.map((r) => ({ id: r.id, menteeId: r.mentee.id }))),
     prisma.statusChange.groupBy({ by: ['relationId'], where: { relationId: { in: ids } }, _max: { createdAt: true } }),
@@ -90,7 +91,7 @@ export async function assessRelations(
       stageDeadline: r.stageDeadline,
       unansweredQuestions: r.questions.length,
       pendingMeetingRequests: r.meetingRequests.length,
-      hasOpenWork: r.goals.length > 0 || openWork.has(r.mentee.id),
+      hasOpenWork: openWork.has(r.id),
       weeklyReports:
         r.pipelineStatus === 'INTERNSHIP_IN_PROGRESS_450'
           ? { submittedWeekStarts: r.weeklyReports.map((w) => w.weekStart.getTime()) }

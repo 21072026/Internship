@@ -49,6 +49,8 @@ test.describe('relationship-health snapshots', () => {
   });
 
   test('one snapshot per day, one alert per crossing, and a readable trend', async ({ page }) => {
+    // The mail waits for the job worker's tick (#1711), up to a minute on a busy queue.
+    test.slow();
     await signInAndSettle(page, admin, PW, '/admin');
     const today = new Date();
     const midnight = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
@@ -68,8 +70,10 @@ test.describe('relationship-health snapshots', () => {
     expect(snap?.band).toBe('AT_RISK');
     expect(snap?.reasons).toEqual(expect.arrayContaining(['inactive', 'overdue', 'no_open_goal']));
     expect(snap?.alertedAt).not.toBeNull();
+    // The digest leaves through the router's e-mail job (#1711), drained by
+    // the worker every few seconds — polled, not read at once.
+    await expect.poll(async () => (await digests()).length, { timeout: 60_000 }).toBe(1);
     const mails = await digests();
-    expect(mails).toHaveLength(1);
     expect(mails[0].subject).toMatch(/^1 relationship\(s\) need attention — /);
 
     // A second run the same day: still one row, no second mail.

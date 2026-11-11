@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireOrg, resolveOrgId } from '@/lib/orgScope';
@@ -41,8 +42,12 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    if (evaluation.authorId !== session.user.id && session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (evaluation.authorId !== session.user.id) {
+      // Someone else's record is an admin's write — the permission layer's answer (#1571).
+      const actor = await actorFromSession(session);
+      if (!actor || !(await can(actor, 'relation.write', undefined, session))) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     await prisma.evaluation.delete({ where: { id } });
@@ -122,8 +127,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    if (evaluation.authorId !== session.user.id && session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    if (evaluation.authorId !== session.user.id) {
+      // Someone else's record is an admin's write — the permission layer's answer (#1571).
+      const actor = await actorFromSession(session);
+      if (!actor || !(await can(actor, 'relation.write', undefined, session))) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     // An interview scorecard is not correctable through here. Its own route

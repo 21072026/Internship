@@ -46,7 +46,6 @@ export type BulkInviteReason =
   | 'duplicate_in_paste'
   | 'already_user'
   | 'already_invited'
-  | 'seat_limit'
   | 'too_many_rows'
   | 'send_failed';
 
@@ -97,8 +96,6 @@ export interface BulkInviteContext {
   existingUserEmails: ReadonlySet<string>;
   /** Lowercased addresses with an unused, unexpired invitation. */
   pendingInviteEmails: ReadonlySet<string>;
-  /** Seats left under the tenant's plan; null = unlimited. */
-  seatsAvailable: number | null;
 }
 
 // Same shape the CSV importer accepts — deliberately liberal, the mail
@@ -192,7 +189,6 @@ export function validateBulkInvite(
   ctx: BulkInviteContext,
 ): BulkInviteReportRow[] {
   const seen = new Set<string>();
-  let invitable = 0;
   const report: BulkInviteReportRow[] = [];
 
   for (const raw of parsed.rows) {
@@ -240,11 +236,8 @@ export function validateBulkInvite(
       push('skip', 'already_invited');
       continue;
     }
-    if (ctx.seatsAvailable != null && invitable >= ctx.seatsAvailable) {
-      push('skip', 'seat_limit');
-      continue;
-    }
-    invitable++;
+    // No seat check (#1752): a bulk invitation is MENTOR/MENTEE only, and those
+    // are the free core — never counted against a plan, never refused for one.
     push('invite');
   }
 

@@ -9,6 +9,7 @@ import { logActivity } from '@/lib/activity';
 import { notify } from '@/lib/notify';
 import { findOrCreateDirectConversation } from '@/lib/conversations';
 import { outreachActorWhere } from '@/lib/outreach';
+import { actorFromSession, can } from '@/lib/authz';
 import { canRevoke, decisionTarget } from '@/lib/outreachRule';
 
 // PATCH /api/company/outreach/[id] (#1840) — the gate and the candidate's control.
@@ -38,7 +39,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
   const { action } = parsed.data;
   const role = session.user.role;
-  const allowed = action === 'revoke' ? role === 'MENTEE' : role === 'MENTOR' || role === 'ADMIN';
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'company.write', undefined, session));
+  const allowed = action === 'revoke' ? role === 'MENTEE' : role === 'MENTOR' || isAdmin;
   if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const scope = outreachActorWhere({ role, userId: session.user.id, orgId, companyId: session.user.companyId });
   if (!scope) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -70,6 +73,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       }
       await notify(row.requestedById, 'outreach.revokedCompany', { name: row.mentee.fullName }, '/company');
       await logActivity({ action: 'outreach.revoked', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'candidate_outreach', targetId: row.id, orgId });
+      await prisma.auditLog.create({ data: { actorId: session.user.id, action: 'OUTREACH_REVOKED', targetId: row.id, orgId } });
       return NextResponse.json({ request: { id: row.id, status: 'REVOKED' } });
     }
 
@@ -84,6 +88,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (target === 'DECLINED') {
       await notify(row.requestedById, 'outreach.declinedCompany', { name: row.mentee.fullName }, '/company');
       await logActivity({ action: 'outreach.declined', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'candidate_outreach', targetId: row.id, orgId });
+      await prisma.auditLog.create({ data: { actorId: session.user.id, action: 'OUTREACH_DECLINED', targetId: row.id, orgId } });
       return NextResponse.json({ request: { id: row.id, status: target } });
     }
 
@@ -108,6 +113,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     await notify(row.menteeId, 'outreach.approvedCandidate', { company: row.company.name }, `/messages/c/${conversation.id}`);
     await notify(row.requestedById, 'outreach.approvedCompany', { name: row.mentee.fullName }, `/messages/c/${conversation.id}`);
     await logActivity({ action: 'outreach.approved', actorId: session.user.id, actorEmail: session.user.email ?? null, targetType: 'candidate_outreach', targetId: row.id, orgId });
+    await prisma.auditLog.create({ data: { actorId: session.user.id, action: 'OUTREACH_APPROVED', targetId: row.id, orgId } });
     return NextResponse.json({ request: { id: row.id, status: target, conversationId: conversation.id } });
   });
 }

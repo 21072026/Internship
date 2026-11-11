@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -8,16 +7,12 @@ import { settingsOrgOf } from '@/lib/settingsOrg';
 // Dismiss the console banner for a failed or stopped run (#1967). The run
 // itself is unchanged; only `acknowledgedAt` is stamped.
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return session && session.user.role === 'ADMIN' ? session : null;
-}
-
 type Ctx = { params: Promise<{ id: string; runId: string }> };
 
 export async function POST(_request: Request, { params }: Ctx) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request: _request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { id, runId } = await params;
   return withTenantScope(session, async () => {
     const orgId = await settingsOrgOf(session);

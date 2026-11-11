@@ -224,3 +224,6 @@ playwright.repro.config.ts
 # Generated on install/dev/build by scripts/i18n-scopes.mjs (#3217): never committed,
 # so parallel PRs cannot conflict on it or go stale against main.
 /src/i18n/scopes.generated.ts
+
+# Translator hand-off files from `npm run i18n:export` (#2082, docs/i18n.md).
+/i18n/exports/

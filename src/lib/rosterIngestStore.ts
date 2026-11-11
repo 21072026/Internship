@@ -53,6 +53,7 @@ import { revokeTrustedDevicesForUsers } from './trustedDevice';
 import { rosterActor, type DeprovisionSettings } from './rosterDeprovisionRule';
 import type { RosterDeprovisionPort } from './rosterIngest';
 import { alertRosterRun } from './rosterAlert';
+import { createUser } from '@/lib/userCreate';
 
 type TxClient = Prisma.TransactionClient;
 
@@ -187,7 +188,7 @@ function prismaRowWriter(feed: RosterFeedConfig, tx: TxClient): RosterRowWriter 
         throw new Error('an account with this e-mail address already exists');
       }
       const password = await bcrypt.hash(randomBytes(18).toString('hex'), 10);
-      const created = await tx.user.create({
+      const created = await createUser(tx, {
         data: {
           email,
           fullName: changes.fullName || email.split('@')[0],
@@ -202,7 +203,7 @@ function prismaRowWriter(feed: RosterFeedConfig, tx: TxClient): RosterRowWriter 
           department: changes.department ?? null,
         },
         select: { id: true },
-      });
+      }, { source: 'roster' });
       return created.id;
     },
     async update(row) {

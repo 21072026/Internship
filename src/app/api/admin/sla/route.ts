@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere } from '@/lib/tenantFilter';
 import { breachOwners, listOpenBreaches } from '@/lib/slaQueue';
@@ -11,10 +10,9 @@ import { breachOwners, listOpenBreaches } from '@/lib/slaQueue';
 // SLAs are deliberately not behind `premiumAnalytics` (see
 // api/admin/stage-sla/route.ts).
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const sp = new URL(request.url).searchParams;
   const level = Number(sp.get('level'));
   const ack = sp.get('acknowledged');

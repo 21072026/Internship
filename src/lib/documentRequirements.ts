@@ -148,6 +148,36 @@ export async function missingRequirementsForUser(userId: string, locale: Locale)
   return applicable.filter((requirement) => !completedIds.has(requirement.id));
 }
 
+/**
+ * The mandatory requirements a mentee would still owe once in `stage` — the
+ * ones with no stage or exactly that stage — that no document of theirs
+ * satisfies. The documents half of the stage entry gate (#1589): unlike
+ * missingRequirementsForUser(), which reads the stages the person is in now,
+ * this asks about the stage they are about to enter.
+ */
+export async function missingRequirementsAtStage(userId: string, stage: string, locale: Locale): Promise<MissingRequirement[]> {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { orgId: true, role: true } });
+  if (!user?.orgId) return [];
+  const requirements = await prisma.documentRequirement.findMany({
+    where: {
+      orgId: user.orgId,
+      active: true,
+      mandatory: true,
+      OR: [{ appliesToRole: null }, { appliesToRole: user.role }],
+    },
+    select: requirementSelect,
+    orderBy: [{ order: 'asc' }, { key: 'asc' }],
+  });
+  const applicable = requirements.filter((requirement) => applies(requirement, user.role, new Set([stage])));
+  if (applicable.length === 0) return [];
+  const documents = await prisma.document.findMany({
+    where: { ownerId: userId, isTemplate: false, requirementId: { in: applicable.map((requirement) => requirement.id) } },
+    select: satisfactionSelect,
+  });
+  const completedIds = satisfiedIds(applicable, documents, new Date());
+  return applicable.filter((requirement) => !completedIds.has(requirement.id)).map((requirement) => localized(requirement, locale));
+}
+
 export interface BulkMissingRow {
   user: { id: string; fullName: string; email: string; role: Role };
   stages: string[];

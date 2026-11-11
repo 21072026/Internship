@@ -1,6 +1,8 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { notifyEvent } from '@/lib/notifications/router';
+import { notifyEvent, runDeferredDelivery, type DeferredDelivery } from '@/lib/notifications/router';
+import { runNotificationEmail } from '@/lib/notifications/emailJob';
+import type { JobRecord } from '@/lib/jobs/queue';
 
 /**
  * The notification router, end to end against a real database (#1710).
@@ -46,8 +48,8 @@ async function ledgerFor(userId: string) {
  */
 async function mailJobsFor(userId: string) {
   const jobs = await prisma.job.findMany({
-    where: { name: 'notification.email' },
-    select: { id: true, payload: true, idempotencyKey: true },
+    where: { name: { in: ['notification.email', 'notification.deferred'] } },
+    select: { id: true, name: true, payload: true, idempotencyKey: true, runAt: true },
   });
   return jobs.filter((j) => (j.payload as { userId?: string } | null)?.userId === userId);
 }
@@ -213,6 +215,102 @@ test.describe('notification router', () => {
     }
   });
 
+  // A quiet window around "now", in UTC, so the test does not depend on the clock.
+  function quietAroundNow() {
+    const hhmm = (d: Date) => d.toISOString().slice(11, 16);
+    const now = Date.now();
+    return { start: hhmm(new Date(now - 60 * 60 * 1000)), end: hhmm(new Date(now + 60 * 60 * 1000)), tz: 'UTC' };
+  }
+
+  test('the channel matrix is enforced by the router: e-mail off, push on for one category (#1714)', async () => {
+    const email = uniqueEmail('notify-matrix');
+    const user = await seedUser(email, PW, 'MENTOR', 'Notify Matrix');
+    try {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { notificationPrefs: { channels: { deadlines: { email: false, push: true } } } },
+      });
+      await notifyEvent(user.id, 'deadline.stagePassed', { menteeName: 'Aylin', relationId: 'rel-1' });
+      const ledger = await ledgerFor(user.id);
+      expect(ledger.find((r) => r.channel === 'email')).toMatchObject({ status: 'SKIPPED', skipReason: 'channel_off' });
+      expect(ledger.find((r) => r.channel === 'inApp')).toMatchObject({ status: 'SENT' });
+      // Push was added by the person's choice; no device here, so it is recorded as such.
+      expect(ledger.find((r) => r.channel === 'push')).toMatchObject({ status: 'SKIPPED', skipReason: 'no_device' });
+      expect((await mailJobsFor(user.id)).filter((j) => j.name === 'notification.email')).toHaveLength(0);
+    } finally {
+      await cleanup(email);
+    }
+  });
+
+  test('quiet hours hold the e-mail to the window end exactly once; the bell goes now (#1714)', async () => {
+    const email = uniqueEmail('notify-quiet');
+    const user = await seedUser(email, PW, 'MENTOR', 'Notify Quiet');
+    try {
+      const quiet = quietAroundNow();
+      await prisma.user.update({ where: { id: user.id }, data: { notificationPrefs: { quietHours: quiet } } });
+      const opts = { dedupeKey: 'quiet-1' };
+      const r = await notifyEvent(user.id, 'deadline.stagePassed', { menteeName: 'Aylin', relationId: 'rel-1' }, opts);
+      expect(r).toMatchObject({ sent: 1, queued: 1 });
+      // A replay of the same event holds nothing twice.
+      await notifyEvent(user.id, 'deadline.stagePassed', { menteeName: 'Aylin', relationId: 'rel-1' }, opts);
+
+      const jobs = await mailJobsFor(user.id);
+      expect(jobs.map((j) => j.name)).toEqual(['notification.deferred']);
+      const runAt = jobs[0].runAt;
+      expect(runAt.toISOString().slice(11, 16)).toBe(quiet.end);
+      expect(runAt.getTime()).toBeGreaterThan(Date.now());
+      expect((await ledgerFor(user.id)).find((r) => r.channel === 'email')).toMatchObject({ status: 'QUEUED' });
+
+      // When the window opens the held delivery goes through the e-mail adapter.
+      await prisma.user.update({ where: { id: user.id }, data: { notificationPrefs: {} } });
+      expect(await runDeferredDelivery(jobs[0].payload as unknown as DeferredDelivery)).toBe('queued');
+      expect((await mailJobsFor(user.id)).map((j) => j.name).sort()).toEqual(['notification.deferred', 'notification.email']);
+    } finally {
+      await cleanup(email);
+    }
+  });
+
+  test('a held delivery re-reads the preferences: switched off overnight, it is skipped (#1714)', async () => {
+    const email = uniqueEmail('notify-quiet-off');
+    const user = await seedUser(email, PW, 'MENTOR', 'Notify Quiet Off');
+    try {
+      await prisma.user.update({ where: { id: user.id }, data: { notificationPrefs: { quietHours: quietAroundNow() } } });
+      await notifyEvent(user.id, 'deadline.stagePassed', { menteeName: 'Aylin', relationId: 'rel-1' });
+      const [held] = await mailJobsFor(user.id);
+      await prisma.user.update({ where: { id: user.id }, data: { notificationPrefs: { channels: { deadlines: { email: false } } } } });
+      expect(await runDeferredDelivery(held.payload as unknown as DeferredDelivery)).toBe('skipped');
+      expect((await ledgerFor(user.id)).find((r) => r.channel === 'email')).toMatchObject({ status: 'SKIPPED', skipReason: 'channel_off' });
+      // A rerun of the same job finds the row settled and does nothing.
+      expect(await runDeferredDelivery(held.payload as unknown as DeferredDelivery)).toBe('gone');
+    } finally {
+      await cleanup(email);
+    }
+  });
+
+  test('account_security ignores the matrix and the quiet hours (#1714)', async () => {
+    const email = uniqueEmail('notify-quiet-essential');
+    const user = await seedUser(email, PW, 'MENTEE', 'Notify Quiet Essential');
+    try {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          notificationPrefs: {
+            quietHours: quietAroundNow(),
+            channels: Object.fromEntries(
+              ['messages', 'announcements', 'mentorship', 'stageUpdates'].map((c) => [c, { inApp: false, email: false }]),
+            ),
+          },
+        },
+      });
+      const result = await notifyEvent(user.id, 'impersonation.accessed', {});
+      expect(result).toMatchObject({ sent: 1, queued: 1, skipped: 0, failed: 0 });
+      const jobs = await mailJobsFor(user.id);
+      expect(jobs.map((j) => j.name)).toEqual(['notification.email']);
+    } finally {
+      await cleanup(email);
+    }
+  });
+
   test('a recipient with no address gets the in-app row and no mail, and nothing throws', async () => {
     // The contract every existing call site depends on: notify() has always
     // swallowed its own failures so a notification cannot break the action that
@@ -231,6 +329,81 @@ test.describe('notification router', () => {
       });
     } finally {
       await prisma.notificationDelivery.deleteMany({ where: { userId: orphanId } });
+    }
+  });
+
+  test('a pre-rendered mail leaves byte-for-byte through the router, sealed in the queue, once (#1711)', async () => {
+    const email = uniqueEmail('notify-prerendered');
+    const user = await seedUser(email, PW, 'MENTOR', 'Notify Prerendered');
+    try {
+      const subject = `Evaluation due: Aylin ${user.id}`;
+      const html = '<div><p>Exactly the site\'s own markup.</p></div>';
+      const r = await notifyEvent(user.id, 'evaluation.dueInterim', { menteeName: 'Aylin', relationId: 'rel-1' }, {
+        channels: ['email'],
+        dedupeKey: `prerendered-${user.id}`,
+        email: { subject, html, category: 'goals-evaluation', locale: 'en' },
+      });
+      expect(r).toMatchObject({ queued: 1 });
+      const [job] = (await mailJobsFor(user.id)) as unknown as (JobRecord & { payload: Record<string, unknown> })[];
+      // The queue row holds the mail sealed, never in the clear.
+      expect(typeof job.payload.sealedEmail).toBe('string');
+      expect(JSON.stringify(job.payload)).not.toContain(subject);
+      const full = (await prisma.job.findUniqueOrThrow({ where: { id: job.id } })) as unknown as JobRecord;
+      const payload = full.payload as Parameters<typeof runNotificationEmail>[0];
+      expect(await runNotificationEmail(payload, full)).toMatch(/^(sent|skipped_by_send)$/);
+      const log = await prisma.emailLog.findFirstOrThrow({ where: { to: email }, orderBy: { createdAt: 'desc' } });
+      // The site's own subject and category — not the catalogue template's.
+      expect(log).toMatchObject({ subject, category: 'goals-evaluation' });
+      expect(await runNotificationEmail(payload, full)).toBe('claimed_elsewhere');
+      expect(await prisma.emailLog.count({ where: { to: email } })).toBe(1);
+    } finally {
+      await prisma.emailLog.deleteMany({ where: { to: email } });
+      await cleanup(email);
+    }
+  });
+
+  test('a new-message push goes through the router: one ledger row per message, the thread link, muted is SKIPPED (#1715)', async () => {
+    const email = uniqueEmail('notify-msg-push');
+    const user = await seedUser(email, PW, 'MENTEE', 'Notify Msg Push');
+    try {
+      const opts = { channels: ['push'] as const, preview: 'see you at 3', dedupeKey: `message:m-${user.id}` };
+      const r = await notifyEvent(user.id, 'message.new', { from: 'Aylin', conversationId: 'conv_1' }, opts);
+      expect(r).toMatchObject({ skipped: 1 });
+      // A retried POST of the same message never buzzes twice.
+      expect(await notifyEvent(user.id, 'message.new', { from: 'Aylin', conversationId: 'conv_1' }, opts)).toMatchObject({ deduped: 1 });
+      const ledger = await ledgerFor(user.id);
+      expect(ledger).toHaveLength(1);
+      expect(ledger[0]).toMatchObject({ channel: 'push', eventKey: 'message.new', status: 'SKIPPED', skipReason: 'no_device' });
+      // The push channel writes no bell row: the message route writes its own.
+      expect(await prisma.notification.count({ where: { userId: user.id } })).toBe(0);
+
+      // The Messages switch silences the push with a recorded reason.
+      await prisma.notificationDelivery.deleteMany({ where: { userId: user.id } });
+      await prisma.user.update({ where: { id: user.id }, data: { notificationPrefs: { messages: false } } });
+      await notifyEvent(user.id, 'message.newByEmail', { relationId: 'rel_1' }, { ...opts, dedupeKey: `message:e-${user.id}` });
+      expect((await ledgerFor(user.id))[0]).toMatchObject({ channel: 'push', status: 'SKIPPED', skipReason: 'category_off' });
+    } finally {
+      await cleanup(email);
+    }
+  });
+
+  test('a non-message event produces a push delivery record: no device is SKIPPED, a muted category is SKIPPED (#1715)', async () => {
+    const email = uniqueEmail('notify-push');
+    const user = await seedUser(email, PW, 'MENTEE', 'Notify Push');
+    try {
+      // offer_sent.new lists push; the person has no browser subscription and no app install.
+      const r = await notifyEvent(user.id, 'offer_sent.new', { position: 'Analyst' }, { channels: ['inApp', 'push'] });
+      expect(r).toMatchObject({ sent: 1, skipped: 1 });
+      const ledger = await ledgerFor(user.id);
+      expect(ledger.find((row) => row.channel === 'push')).toMatchObject({ status: 'SKIPPED', skipReason: 'no_device', eventKey: 'offer_sent.new' });
+
+      // The /account category switch silences push like the bell, with a recorded reason.
+      await prisma.notificationDelivery.deleteMany({ where: { userId: user.id } });
+      await prisma.user.update({ where: { id: user.id }, data: { notificationPrefs: { stageUpdates: false } } });
+      await notifyEvent(user.id, 'offer_sent.new', { position: 'Analyst' }, { channels: ['push'] });
+      expect((await ledgerFor(user.id)).find((row) => row.channel === 'push')).toMatchObject({ status: 'SKIPPED', skipReason: 'category_off' });
+    } finally {
+      await cleanup(email);
     }
   });
 });

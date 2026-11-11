@@ -1,19 +1,27 @@
 import { NextResponse } from 'next/server';
+import { requireCompanySeat } from '@/lib/companySeatGate';
 import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import type { Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { COMPANY_NOT_VERIFIED, publishRefused } from '@/lib/companyVerification';
+import { raiseRequisitionStatus } from '@/lib/requisitionEvents';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { closedAtForStatus, normalizeSkills, protectedFields, requisitionPatchSchema } from '@/lib/requisitions';
 import { syncRequisitionSkills } from '@/lib/skillsResolve';
+import { requireRoleOrPermission, type Permission } from '@/lib/authz';
 
 type Context = { params: Promise<{ id: string }> };
 
-function scopeFor(session: Session | null) {
-  if (!session) return { error: NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 }) };
-  if (session.user.role !== 'ADMIN' && session.user.role !== 'COMPANY') return { error: NextResponse.json({ error: 'Forbidden', code: 'forbidden' }, { status: 403 }) };
+async function scopeFor(
+  request: Request,
+  permission: Permission,
+): Promise<{ error: NextResponse } | { session: Session; orgId: string }> {
+  const gate = await requireRoleOrPermission(['COMPANY'], permission, { request });
+  if ('error' in gate) return gate;
+  const { session } = gate;
   const orgId = resolveOrgId(session);
   if (!orgId) return { error: NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 }) };
   if (session.user.role === 'COMPANY' && !session.user.companyId) return { error: NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 }) };
@@ -22,7 +30,7 @@ function scopeFor(session: Session | null) {
 
 export async function GET(_request: Request, { params }: Context) {
   const { id } = await params;
-  const scope = scopeFor(await getServerSession(authOptions));
+  const scope = await scopeFor(_request, 'company.read');
   if ('error' in scope) return scope.error;
   return withTenantScope(scope.session, async () => {
     const requisition = await prisma.requisition.findFirst({
@@ -41,8 +49,11 @@ export async function PATCH(request: Request, { params }: Context) {
   // reason as POST /api/requisitions: one answer per module, not one per role.
   const capGate = await requireCapability(session.user.orgId, 'placements');
   if (capGate) return capGate;
-  const scope = scopeFor(session);
+  const scope = await scopeFor(request, 'company.write');
   if ('error' in scope) return scope.error;
+  // Seats (#1870): an INTERVIEWER seat writes no requisition.
+  const seatGate = await requireCompanySeat(scope.session, 'requisition.write');
+  if (seatGate) return seatGate;
   return withTenantScope(scope.session, async () => {
     const body: unknown = await request.json().catch(() => null);
     const protectedList = protectedFields(body);
@@ -63,6 +74,14 @@ export async function PATCH(request: Request, { params }: Context) {
         where: { id, orgId: scope.orgId, ...(scope.session.user.role === 'COMPANY' ? { companyId: scope.session.user.companyId! } : {}) },
       });
       if (!current) return NextResponse.json({ error: 'Requisition not found', code: 'not_found' }, { status: 404 });
+      // Publishing is what an unverified employer may not do (#1865); every
+      // other edit of a draft stays open to it.
+      if (parsed.data.status === 'OPEN') {
+        const company = await tx.company.findUnique({ where: { id: current.companyId }, select: { verificationStatus: true } });
+        if (publishRefused({ companyStatus: company?.verificationStatus, nextRequisitionStatus: 'OPEN' })) {
+          return NextResponse.json({ error: 'The company is not verified yet', code: COMPANY_NOT_VERIFIED }, { status: 403 });
+        }
+      }
       const openings = parsed.data.openings ?? current.openings;
       const filled = parsed.data.filled ?? current.filled;
       if (filled > openings) return NextResponse.json({ error: 'Filled cannot exceed openings', code: 'filled_exceeds_openings' }, { status: 409 });
@@ -89,6 +108,7 @@ export async function PATCH(request: Request, { params }: Context) {
       if (changed.count !== 1) return NextResponse.json({ error: 'Requisition changed concurrently; reload and try again', code: 'concurrent_update' }, { status: 409 });
       const requisition = await tx.requisition.findUnique({ where: { id: current.id }, include: { company: { select: { id: true, name: true } }, owner: { select: { id: true, fullName: true } } } });
       if (skills) mirror = { id: current.id, skills };
+      await raiseRequisitionStatus(tx, { requisitionId: current.id, orgId: scope.orgId, from: current.status, to: status }, scope.session.user.id);
       return NextResponse.json({ requisition });
     });
     const synced = mirror as { id: string; skills: string[] } | null;

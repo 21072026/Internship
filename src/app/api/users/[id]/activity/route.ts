@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -15,7 +16,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
 
     let allowed = session.user.id === id;
-    if (!allowed && session.user.role === 'ADMIN') {
+    // "Any admin" is the permission layer's answer (#1571).
+    const actor = allowed ? null : await actorFromSession(session);
+    if (!allowed && actor && (await can(actor, 'activity.read', undefined, session))) {
       // "Any admin" means any admin of THIS tenant (#2542): another tenant's
       // account is a 404, the same answer as an id that does not exist.
       const inTenant = await prisma.user.findFirst({ where: withinTenant({ id }, await tenantWhere(session)), select: { id: true } });

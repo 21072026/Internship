@@ -35,10 +35,16 @@ setQueueLogger(logger);
 type PrismaJob = Awaited<ReturnType<typeof prisma.job.findFirstOrThrow>>;
 const toRecord = (row: PrismaJob): JobRecord => row as JobRecord;
 
-export function prismaQueueStore(): QueueStore {
+/**
+ * `db` is the root client, or a caller's interactive transaction (#1998): a
+ * job enqueued through a transaction becomes visible to the worker only when
+ * that transaction commits, and disappears with it on a rollback. Only the
+ * enqueue side (insert + key lookup) honours it; claiming always uses the root.
+ */
+export function prismaQueueStore(db: Pick<typeof prisma, 'job'> = prisma): QueueStore {
   return {
     insertJob: async (data) => {
-      const row = await prisma.job.create({
+      const row = await db.job.create({
         data: {
           name: data.name,
           // `payload` is a MySQL JSON column; Prisma types it as InputJsonValue
@@ -57,7 +63,7 @@ export function prismaQueueStore(): QueueStore {
     },
 
     findJobByIdempotencyKey: async (key) => {
-      const row = await prisma.job.findUnique({ where: { idempotencyKey: key } });
+      const row = await db.job.findUnique({ where: { idempotencyKey: key } });
       return row ? toRecord(row) : null;
     },
 

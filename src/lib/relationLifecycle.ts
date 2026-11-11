@@ -298,6 +298,14 @@ export const LIFECYCLE_END_REASON_CODES = [
 ] as const;
 export type LifecycleEndReasonCode = (typeof LIFECYCLE_END_REASON_CODES)[number];
 
+/**
+ * An extension of the agreed end date (#1786): recorded as a lifecycle event
+ * whose `toState` equals its `fromState` — the pairing does not change state,
+ * but the audit trail says when, by whom and (optionally) why it was extended.
+ * Written only by src/lib/relationExtend.ts. Not an end reason.
+ */
+export const EXTENDED_REASON_CODE = 'extended';
+
 /** The reasons that mean the pairing ran its course. */
 export const COMPLETION_REASON_CODES: readonly LifecycleEndReasonCode[] = ['finished', 'programme_ended'];
 

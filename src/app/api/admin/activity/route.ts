@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -16,10 +15,9 @@ const LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR'] as const;
 // a system entry, or one the deploy backfill has not reached — is the default
 // org's (src/lib/tenantFilter.ts), never another tenant's.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('activity.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const sp = new URL(request.url).searchParams;
   const level = sp.get('level');

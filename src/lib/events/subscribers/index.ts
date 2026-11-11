@@ -6,6 +6,7 @@ import { webhookSubscriber } from './webhook';
 import { configAuditSubscriber } from './configAudit';
 import { automationSubscriber } from './automation';
 import { nudgeSubscriber } from './nudge';
+import { placementSubscriber } from './placement';
 
 let registered = false;
 
@@ -16,4 +17,5 @@ export function registerAllSubscribers(): void {
   registerSubscriber(configAuditSubscriber);
   registerSubscriber(automationSubscriber);
   registerSubscriber(nudgeSubscriber);
+  registerSubscriber(placementSubscriber);
 }

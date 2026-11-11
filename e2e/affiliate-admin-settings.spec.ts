@@ -49,6 +49,18 @@ async function as(playwright: RequestFactory, baseURL: string | undefined, email
   return ctx;
 }
 
+/** Waits for the queued re-evaluation of plan version `v` to finish; its final state. */
+async function resyncOf(ctx: APIRequestContext, v: number) {
+  let state: { v: number; status: string } | null = null;
+  await expect
+    .poll(async () => {
+      state = (await (await ctx.get('/api/admin/affiliate/settings', { headers: host })).json()).planResync;
+      return state && state.v === v ? state.status : null;
+    }, { timeout: 60_000, intervals: [500, 1_000, 2_000] })
+    .toMatch(/^(DONE|INCOMPLETE)$/);
+  return state;
+}
+
 test.beforeAll(async () => {
   const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
   orgId = (await prisma.organization.create({ data: { name: `Acme Sales ${stamp}`, slug: `aff-admin-${stamp}`, vertical: 'MARKETING' } })).id;
@@ -98,7 +110,7 @@ test('read for every admin tier, write for the organisation admin only', { tag: 
   expect((await rep.get('/api/admin/affiliate/settings', { headers: host })).status()).toBe(403);
   // A PROGRAM_ADMIN's reach is its cohort/company grants; affiliate data is neither (docs).
   const prog = await as(playwright, baseURL, emails[3]);
-  for (const path of ['settings', 'partners', 'payments', 'commissions', 'payouts']) {
+  for (const path of ['overview', 'settings', 'partners', 'payments', 'commissions', 'payouts']) {
     expect((await prog.get(`/api/admin/affiliate/${path}`, { headers: host })).status(), path).toBe(403);
   }
 });
@@ -114,13 +126,16 @@ test('a plan is validated, versioned only on a real change, and re-evaluates par
 
   const first = await put(PLAN);
   expect(first.status()).toBe(200);
-  expect(await first.json()).toMatchObject({ changed: true, planVersion: 1, partnersResynced: 1 });
+  expect(await first.json()).toMatchObject({ changed: true, planVersion: 1, resync: { v: 1 } });
+  // The partners are re-evaluated by a queued job (#3170); the settings report it.
+  expect(await resyncOf(owner, 1)).toMatchObject({ status: 'DONE', total: 1, done: 1, failed: 0 });
   expect(await (await put(PLAN)).json()).toMatchObject({ changed: false, planVersion: 1 });
 
   // A payment under v1, then a richer v2: the existing commission is frozen (drift), never changed.
   await recordAffiliatePayment({ orgId, partnerId, customerExternalRef: 'c-1', amountMinor: 800, currency: 'EUR', receivedAt: new Date('2026-03-01T10:00:00Z'), externalPaymentRef: 'inv-1', source: 'MANUAL' });
   const second = await put({ ...PLAN, tiers: [{ upToMinor: 1_000, commissionMinor: 450 }] });
-  expect(await second.json()).toMatchObject({ changed: true, planVersion: 2, partnersResynced: 1, drift: 1 });
+  expect(await second.json()).toMatchObject({ changed: true, planVersion: 2 });
+  expect(await resyncOf(owner, 2)).toMatchObject({ status: 'DONE', done: 1, drift: 1 });
   const commission = await prisma.affiliateCommission.findFirstOrThrow({ where: { orgId } });
   expect([commission.amountMinor, commission.planVersion]).toEqual([300, 1]);
   expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.plan.update' } })).toBe(2);
@@ -134,6 +149,46 @@ test('the contract is published through the API', { tag: '@smoke' }, async ({ pl
   expect(await (await put({ de: 'Synthetische Bedingungen', en: 'Synthetic terms' })).json()).toEqual({ changed: false, version: 1 });
   const s = await (await owner.get('/api/admin/affiliate/settings', { headers: host })).json();
   expect(s).toMatchObject({ contractVersion: 1, contract: { en: 'Synthetic terms', de: 'Synthetische Bedingungen' } });
+});
+
+test('the public page content is validated, stored and audited (#3359)', async ({ playwright, baseURL }) => {
+  const owner = await as(playwright, baseURL, emails[0]);
+  const observer = await as(playwright, baseURL, emails[1]);
+  const put = (ctx: APIRequestContext, data: unknown) => ctx.put('/api/admin/affiliate/settings/landing', { headers: host, data });
+
+  expect((await put(observer, { landing: {} })).status()).toBe(403);
+  expect((await put(owner, {})).status()).toBe(400);
+  const bad = await put(owner, { landing: { copy: { fr: {} }, phone: 'call me', productSignupUrl: 'http://app.example/' } });
+  expect(bad.status()).toBe(400);
+  expect((await bad.json()).issues.map((i: { field: string }) => i.field).sort()).toEqual(['copy.fr', 'phone', 'productSignupUrl']);
+
+  const landing = {
+    copy: {
+      de: { heroTitle: 'Partner werden', steps: [{ title: 'Registrieren', text: 'In Sekunden.' }], bullets: ['Jederzeit kündbar'] },
+      en: { heroTitle: 'Become a partner' },
+    },
+    phone: '+49 30 1234567',
+    email: 'partners@acme.example',
+    productSignupUrl: 'https://app.acme.example/register',
+  };
+  const saved = await put(owner, { landing });
+  expect(saved.status()).toBe(200);
+  expect((await saved.json()).changed).toBe(true);
+  // The same content in another key order is not a change.
+  expect((await (await put(owner, { landing: { productSignupUrl: landing.productSignupUrl, email: landing.email, phone: landing.phone, copy: { en: landing.copy.en, de: landing.copy.de } } })).json()).changed).toBe(false);
+  const s = await (await observer.get('/api/admin/affiliate/settings', { headers: host })).json();
+  expect(s.landing).toMatchObject({ copy: { de: { heroTitle: 'Partner werden' } }, phone: '+49 30 1234567', email: 'partners@acme.example' });
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.landing.update' } })).toBe(1);
+
+  // The figure cards (#3364): satisfaction has no live source, a typed card needs a figure.
+  const badStats = await put(owner, { landing: { ...landing, stats: { satisfaction: { mode: 'live' }, customers: { mode: 'manual', value: '' } } } });
+  expect(badStats.status()).toBe(400);
+  expect((await badStats.json()).issues.map((i: { field: string }) => i.field).sort()).toEqual(['stats.customers.value', 'stats.satisfaction.mode']);
+  const withStats = await put(owner, { landing: { ...landing, stats: { activePartners: { mode: 'live' }, satisfaction: { mode: 'manual', value: '96 %' } } } });
+  expect((await withStats.json()).changed).toBe(true);
+  const s2 = await (await observer.get('/api/admin/affiliate/settings', { headers: host })).json();
+  expect(s2.landing.stats).toEqual({ activePartners: { mode: 'live', value: null }, satisfaction: { mode: 'manual', value: '96 %' } });
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.landing.update' } })).toBe(2);
 });
 
 test('partners: create, codes unique, state changes under the lock, IBAN reveal audited', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
@@ -294,6 +349,35 @@ test('payouts: all or nothing under the lock, only APPROVED rows of that partner
   expect(partners.find((p: { id: string }) => p.id === partnerId).totals.PAID).toBe(body.amountMinor);
 });
 
+
+// #3351: a partner without payout details can still be paid — the transfer
+// happens outside the CRM — but the screen makes the admin confirm it first.
+test('a payout to a partner without payout details is confirmed first', async ({ playwright, baseURL, page }) => {
+  const owner = await as(playwright, baseURL, emails[0]);
+  const bare = await prisma.affiliatePartner.create({ data: { orgId, code: 'noiban-1', displayName: 'No Details Partner' } });
+  await recordAffiliatePayment({ orgId, partnerId: bare.id, customerExternalRef: 'c-noiban', amountMinor: 800, currency: 'EUR', receivedAt: new Date('2026-03-12T00:00:00Z'), externalPaymentRef: 'inv-noiban', source: 'MANUAL' });
+  const commission = await prisma.affiliateCommission.findFirstOrThrow({ where: { orgId, partnerId: bare.id } });
+  await owner.post('/api/admin/affiliate/commissions/transition', { headers: host, data: { ids: [commission.id], transition: 'APPROVE' } });
+
+  await page.context().setExtraHTTPHeaders(host);
+  await signInAndSettle(page, emails[0], PW, '/admin');
+  await gotoSettled(page, '/admin/affiliates/payouts');
+  await page.getByTestId('affiliate-payout-partner').selectOption(bare.id);
+  await expect(page.getByTestId('affiliate-payout-sum')).toBeVisible();
+
+  // Cancel: nothing is written.
+  await page.getByTestId('affiliate-payout-save').click();
+  const dialog = page.getByTestId('confirm-dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  expect((await prisma.affiliateCommission.findUniqueOrThrow({ where: { id: commission.id } })).status).toBe('APPROVED');
+
+  // Confirm: the payout is recorded as usual.
+  await page.getByTestId('affiliate-payout-save').click();
+  await dialog.getByRole('button', { name: 'Record anyway' }).click();
+  await expect.poll(async () => (await prisma.affiliateCommission.findUniqueOrThrow({ where: { id: commission.id } })).status).toBe('PAID');
+});
 
 // #3176: the refusal clears as the address is fixed, so the example link comes back
 // before the next save. A screen nicety, not a boundary: no @smoke tag.

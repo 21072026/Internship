@@ -5,6 +5,7 @@ import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { UpcomingMeetingBanner } from '@/components/UpcomingMeetingBanner';
 import { UpcomingMeetings } from '@/components/UpcomingMeetings';
 import { MentorshipRequestPanel } from '@/components/MentorshipRequestPanel';
+import { MentorOffersPortalPanel } from '@/components/MentorOffersPortalPanel';
 import { OfferCard } from '@/components/OfferCard';
 import { JourneyTracker } from '@/components/JourneyTracker';
 import { AnnouncementsCard } from '@/components/AnnouncementsCard';
@@ -17,6 +18,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { User, Building2, ExternalLink, MessageCircle, FolderKanban, ArrowRight, Route } from 'lucide-react';
 import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
+import { cadenceLabel } from '@/lib/relationSchedule';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { loadMenteeProjects } from '@/lib/menteeProjects';
 import { missingRequirementsForUser } from '@/lib/documentRequirements';
@@ -32,6 +34,7 @@ import { ProfileProgressMeter } from '@/components/ProfileProgressMeter';
 import { AgreementCard } from '@/components/AgreementCard';
 import { agreementBlockFor } from '@/lib/mentoringAgreement';
 import { shellCapabilities } from '@/lib/shellCapabilities';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
 
 // #916: the dashboard is a SUMMARY. The heavier panels live on sub-routes so
 // deep links and the back button work and the phone page stays short:
@@ -60,6 +63,7 @@ async function getMenteeData(menteeId: string, locale: Locale) {
         startDate: true,
         completedAt: true,
         pipelineStatus: true,
+        kind: true,
         // The stage clock (#1724): the org's per-stage deadline when one is
         // configured, plus the newest recorded move so the shared helper can
         // date the current stage. One extra row per relation, not the trail.
@@ -68,6 +72,14 @@ async function getMenteeData(menteeId: string, locale: Locale) {
         // restart the mentee's own "days in this stage".
         statusChanges: { where: REAL_STAGE_MOVE, orderBy: { createdAt: 'desc' }, take: 1, select: { createdAt: true } },
         mentor: { select: { id: true, fullName: true, publicProfile: true } },
+        // What the pair agreed to (#1784), read-only for the mentee.
+        expectedEndDate: true,
+        expectedMeetingIntervalWeeks: true,
+        // The pair's agreed next steps (#1795), on the archived record.
+        closurePlan: true,
+        // Where it stands (#1774): paused, completed or ended — and why.
+        lifecycleState: true,
+        endReasonCode: true,
       },
     }),
     // Has the mentee ever decided on company visibility (#527)? A row means
@@ -168,6 +180,8 @@ export default async function PortalDashboard({
           to preselect the requested mentor (#1773). */}
       {(!relation || isArchived) ? (
         <Suspense fallback={null}>
+          {/* Mentor Offers (#1809): the opt-in and any open offers. */}
+          <MentorOffersPortalPanel />
           <MentorshipRequestPanel />
         </Suspense>
       ) : requestedMentorId ? (
@@ -189,7 +203,8 @@ export default async function PortalDashboard({
 
       {/* Journey / pipeline stage — the "where am I" strip stays on the summary
           (#692); the full mentorship detail lives on /portal/journey. */}
-      {relation && (
+      {/* A coaching pair is outside the hiring funnel (#1507): no stage strip. */}
+      {relation && relation.kind !== 'COACHING' && (
         <div className="mb-6">
           <JourneyTracker
             status={relation.pipelineStatus}
@@ -231,6 +246,8 @@ export default async function PortalDashboard({
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <StatusBadge status={relation.status} />
+                  {/* Paused / ended early / re-matched … (#1774); live pairs say Active already. */}
+                  <RelationLifecycleBadge relation={relation} hideLive />
               {/* "Completed" is the moment it ended, so it reads as a distance;
                   "Since" is the mentorship's start date and stays a date. */}
               <span className="text-xs text-gray-400">
@@ -243,7 +260,25 @@ export default async function PortalDashboard({
                 )}
               </span>
             </div>
+            {!isArchived && (relation.expectedEndDate || relation.expectedMeetingIntervalWeeks) && (
+              <p className="text-sm text-gray-600 dark:text-gray-300" data-testid="portal-relation-schedule">
+                {[
+                  relation.expectedEndDate
+                    ? t.relationSchedule.endsOn.replace('{date}', formatDate(relation.expectedEndDate, locale, { timeZone: 'UTC' }))
+                    : null,
+                  relation.expectedMeetingIntervalWeeks
+                    ? t.relationSchedule.meets.replace('{rhythm}', cadenceLabel(t.relationSchedule, relation.expectedMeetingIntervalWeeks).toLowerCase())
+                    : null,
+                ].filter(Boolean).join(' · ')}
+              </p>
+            )}
             {isArchived && <ArchivedNotice title={t.portal.archived.title} hint={t.portal.archived.hint} />}
+            {isArchived && relation.closurePlan && (
+              <div className="rounded-xl border border-gray-200 p-4 dark:border-gray-700" data-testid="closure-plan">
+                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">{t.closure.archivedPlan}</p>
+                <p className="mt-1 whitespace-pre-wrap text-sm text-gray-800 dark:text-gray-200">{relation.closurePlan}</p>
+              </div>
+            )}
             <div className="p-4 bg-blue-50 rounded-xl">
               <p className="text-xs font-medium text-blue-700 uppercase tracking-wide mb-2">
                 {t.portal.yourMentor}

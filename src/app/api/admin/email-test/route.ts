@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requirePermission } from '@/lib/authz';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import {
   brandHeader,
   emailBrand,
@@ -23,11 +22,9 @@ const esc = (s: string) =>
 
 // GET — SMTP connectivity + the addresses the app sends from, so an admin can
 // confirm configuration at a glance before sending a probe.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requirePermission('mail.read', { request });
+  if ('error' in gate) return gate.error;
   const [smtp, bulkSmtp] = await Promise.all([verifySmtpConnection(), verifyBulkSmtpConnection()]);
   return NextResponse.json({
     smtp,
@@ -47,10 +44,9 @@ export async function GET() {
 // emails back an SPF/DKIM/SpamAssassin report) or a mail-tester.com address to
 // diagnose the 550-5.7.26 "sender unauthenticated" (SPF/DKIM) rejections.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('mail.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'A valid recipient email is required' }, { status: 400 });

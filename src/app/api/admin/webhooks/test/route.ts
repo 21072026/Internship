@@ -1,22 +1,17 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { rateLimit } from '@/lib/rateLimit';
 import { deliverToWebhook } from '@/lib/webhooks';
 import { resolveOrgId } from '@/lib/orgScope';
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return session && session.user.role === 'ADMIN' ? session : null;
-}
-
 // Send a signed `ping` to one webhook and report the receiver's answer.
 // It goes through the normal delivery path, so an integrator can prove their
 // signature verification works before their first real event arrives.
 export async function POST(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const id = new URL(request.url).searchParams.get('id') || '';
   // Keyed by hook id, not by client IP: the receiver is a third party and every
   // admin shares one production host, so the budget that matters is "how often

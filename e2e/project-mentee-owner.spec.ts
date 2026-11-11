@@ -144,14 +144,15 @@ test('a mentee owner manages their project; a plain member and other roles do no
     const del = await page.request.delete(`/api/project-tasks/${foreignTask.id}`);
     expect(del.status()).toBe(200);
 
-    // Join requests are how a mentee owner grows the team; adding directly is
-    // refused on purpose (no relation check, and it notifies the target).
+    // Join requests still grow the team; a direct add reaches only the owner's
+    // own mentorship circle (#2272) — this member shares no mentor with them,
+    // so re-seating them answers like a missing person.
     expect((await page.request.get(`/api/projects/${project.id}/join-requests`)).status()).toBe(200);
     const directAdd = await page.request.post(`/api/projects/${project.id}/members`, {
       data: { userId: member.id, role: 'MENTEE' },
     });
-    expect(directAdd.status()).toBe(403);
-    expect((await directAdd.json()).code).toBe('mentee_owner_invite');
+    expect(directAdd.status()).toBe(404);
+    expect((await directAdd.json()).code).toBe('not_addable');
 
     // A plain mentee member gets neither the roster nor someone else's to-do.
     const memberCtx = await page.context().browser()!.newContext();

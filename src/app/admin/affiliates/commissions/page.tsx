@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +14,7 @@ import { formatMinorAmount } from '@/lib/money';
 import { formatDate } from '@/lib/relativeTime';
 import { interpolate } from '@/lib/notificationText';
 import { AffiliateTabs } from '../AffiliateTabs';
+import { CustomerName } from '@/components/affiliate/CustomerName';
 
 // Commissions (docs/affiliate-module.md, #3116): by status, oldest due first;
 // approve / reject / back to pending in bulk; and the drift list — frozen rows
@@ -32,6 +34,7 @@ interface Row {
   planVersion: number;
   partner: { code: string; displayName: string };
   customerRef: string;
+  customerLabel: string | null;
   payment: { amountMinor: number; externalPaymentRef: string };
 }
 interface Data {
@@ -51,12 +54,22 @@ interface Drift {
   expected: { kind: 'TIER' | 'PERCENT'; amountMinor: number } | null;
 }
 
+// `?status=` opens a filter directly (the overview's shortcuts, #3173).
 export default function AffiliateCommissionsPage() {
+  return (
+    <Suspense fallback={<SkeletonRows rows={5} />}>
+      <AffiliateCommissions />
+    </Suspense>
+  );
+}
+
+function AffiliateCommissions() {
   const t = useT();
   const L = t.affiliateCommissions;
   const locale = useLocale();
   const toast = useToast();
-  const [status, setStatus] = useState<Status>('PENDING');
+  const asked = useSearchParams().get('status');
+  const [status, setStatus] = useState<Status>(() => STATUSES.find((s) => s === asked) ?? 'PENDING');
   const [page, setPage] = useState(1);
   const [data, setData] = useState<Data | null>(null);
   const [drift, setDrift] = useState<Drift[] | null>(null);
@@ -209,7 +222,7 @@ export default function AffiliateCommissionsPage() {
                     )}
                     <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.dueAt, locale, { timeZone: 'UTC' })}</td>
                     <td className="px-4 py-2">{r.partner.displayName}</td>
-                    <td className="px-4 py-2 font-mono">{r.customerRef}</td>
+                    <td className="px-4 py-2"><CustomerName label={r.customerLabel} reference={r.customerRef} /></td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">{money(r.payment.amountMinor)}</td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">
                       {money(r.amountMinor)} <Badge>{L[`kind${r.kind}`]}</Badge>

@@ -139,6 +139,14 @@ export const AI_TASKS = {
   // in, 4-7 ordered prompts out — a DRAFT until a seat adds it. Participant
   // and free; the mentee's log consent, because the log is what it reads.
   agenda_personalize: { label: 'Personalised session agenda', audience: 'participant', consent: 'AI_INTERACTION_SUMMARY', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 700 },
+  // A person's profile in themes for the semantic match rule (#2038): their
+  // own free text (bio, interests, target position, skills, goal titles) in,
+  // a short paragraph and ≤ 12 English theme tokens out, cached on
+  // ProfileDigest so a matching query never calls a provider. Operator: it
+  // serves the org's matching, not the person's own screen — but it is their
+  // personal text, so the CV-processing consent gates it (profile_enrich's
+  // precedent). No name, e-mail or id is sent.
+  profile_digest: { label: 'Profile themes for matching', audience: 'operator', consent: 'AI_CV_PARSING', tier: 'fast', maxInputChars: DEFAULT_MAX_INPUT_CHARS, maxOutputTokens: 500 },
 } as const satisfies Record<string, AiTaskSpec>;
 
 export type AiTaskId = keyof typeof AI_TASKS;

@@ -36,8 +36,12 @@ import { appOriginForOrg } from '@/lib/orgLinkOrigin';
 export const INVITATION_TTL_DAYS = 7;
 
 export interface CreateInvitationInput {
-  /** Who is inviting — becomes `invitedById` (and the invitee's `referredById`). */
-  actor: { id: string; email?: string | null };
+  /**
+   * Who is inviting — becomes `invitedById` (and the invitee's `referredById`).
+   * `id: null` only for an employer that signed itself up (#1865): nobody
+   * invited it, and a stand-in person would be a lie in the referral record.
+   */
+  actor: { id: string | null; email?: string | null };
   /** The inviter's tenant, from resolveOrgId(session). */
   orgId: string | null;
   /** null mints an email-less shareable link (#670); nothing is sent. */
@@ -71,6 +75,8 @@ export interface CreateInvitationInput {
    * Meaningless for any other role and simply carried through as null.
    */
   companyId?: string | null;
+  /** The seat a COMPANY teammate invitation carries (#1870); null = the company's first login (OWNER). */
+  companySeatRole?: string | null;
   /** The affiliate partner an invited AFFILIATE account is linked to (#3117). */
   partnerId?: string | null;
   /** Passed through to the activity log for IP/UA attribution. */
@@ -167,6 +173,7 @@ export async function persistInvitation(
       menteeId: input.menteeId ?? null,
       projectId: input.projectId ?? null,
       companyId: input.companyId ?? null,
+      companySeatRole: input.companySeatRole ?? null,
       partnerId: input.partnerId ?? null,
     },
     select: { id: true, locale: true },

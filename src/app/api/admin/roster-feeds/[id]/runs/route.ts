@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -11,16 +10,12 @@ import { RUN_SUMMARY_SELECT } from '@/lib/rosterFeedAdmin';
 
 const PAGE_SIZE = 20;
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return session && session.user.role === 'ADMIN' ? session : null;
-}
-
 type Ctx = { params: Promise<{ id: string }> };
 
 export async function GET(request: Request, { params }: Ctx) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { id } = await params;
   const page = Math.max(1, Math.floor(Number(new URL(request.url).searchParams.get('page')) || 1));
   return withTenantScope(session, async () => {

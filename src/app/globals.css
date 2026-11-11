@@ -845,3 +845,25 @@ textarea:focus-visible {
 html[data-embedded-app] [data-app-chrome] {
   display: none !important;
 }
+
+/*
+ * The partner page theme's entrance effect (#3535, src/components/partnerTheme/Reveal.tsx).
+ * Only an element the script has armed is ever hidden, and only while the
+ * visitor has NOT asked for reduced motion — the blanket rule above would make
+ * the transition instant, but an instant pop-in is still motion this page does
+ * not need, so under `reduce` nothing is hidden at all.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .pt-reveal[data-armed] {
+    transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+  }
+  .pt-reveal[data-armed]:not([data-shown]) {
+    opacity: 0;
+  }
+  .pt-reveal[data-armed][data-anim='rise']:not([data-shown]) {
+    transform: translateY(1.5rem);
+  }
+  .pt-reveal[data-armed][data-anim='zoom']:not([data-shown]) {
+    transform: scale(0.95);
+  }
+}

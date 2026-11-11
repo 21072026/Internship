@@ -6,10 +6,12 @@ import { markThreadRead } from '@/lib/threadRead';
 import { conversationForRelation } from '@/lib/conversations';
 import { verifyEmailActionToken, EMAIL_REACTION_EMOJIS } from '@/lib/emailActionToken';
 import { logger } from '@/lib/logger';
+import { extendRelation } from '@/lib/relationExtend';
 import { withRequestScope } from '@/lib/requestContext';
 
 // One-click actions from a notification email (#1204): "mark as read" and the
-// five emoji reactions. No session — the signed token is the credential, the
+// five emoji reactions — and, since #1786, extending a pairing from its
+// ending-soon mail. No session — the signed token is the credential, the
 // same trust model as the Reply-To tokens and the RSVP links.
 //
 // POST, not GET, deliberately: mail clients and corporate link scanners
@@ -55,6 +57,19 @@ async function handlePost(request: Request) {
   });
   if (!user || !user.isActive) {
     return NextResponse.json({ error: 'This account is no longer active.' }, { status: 403 });
+  }
+
+  if (action.kind === 'extend') {
+    // Extend by the original length (#1786). Authorization is read from the
+    // relation, not trusted from the token: only its CURRENT mentor may, so a
+    // link outlives neither a mentor transfer nor the end date it announced.
+    const rel = await prisma.mentorshipRelation.findUnique({ where: { id: action.relationId }, select: { mentorId: true } });
+    if (!rel) return NextResponse.json({ error: 'Pairing not found.' }, { status: 404 });
+    if (rel.mentorId !== user.id) return NextResponse.json({ error: 'Not your pairing.' }, { status: 403 });
+    const fromDay = `${action.fromDay.slice(0, 4)}-${action.fromDay.slice(4, 6)}-${action.fromDay.slice(6, 8)}`;
+    const result = await extendRelation({ relationId: action.relationId, actorId: user.id, expectFromDay: fromDay });
+    if (!result.ok) return NextResponse.json({ error: result.code, code: result.code }, { status: result.status });
+    return NextResponse.json({ ok: true, kind: 'extend', expectedEndDate: result.expectedEndDate });
   }
 
   if (action.kind === 'read') {

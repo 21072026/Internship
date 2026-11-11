@@ -152,6 +152,8 @@ instead of shipping a second one.
 notifications) → switch on → a real stage move → the worker runs the rule → the run
 log, plus the cross-org 404s and a refused unknown action.
 
-## Not yet
+## Retention
 
-- Retention of `AutomationRun` rows (a retention-registry entry) — follow-up.
+The `automationRun` entry of the retention registry (`src/lib/retentionEntries.ts`):
+90 days, no setting, the same window as the `DomainEvent` a run points at. PENDING and
+RUNNING runs are never pruned.

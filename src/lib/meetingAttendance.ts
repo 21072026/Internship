@@ -18,6 +18,7 @@
 
 import type { AttendanceState } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { emit } from '@/lib/events/emit';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { notifyIfAllowed } from '@/lib/notify';
 import { notificationLink } from '@/lib/notificationLink';
@@ -159,6 +160,12 @@ export async function recordAttendance(target: AttendanceTarget, recorder: Meeti
           select: { id: true },
         });
     result.saved++;
+    // One event per person whose record was written (#1998) — never the note.
+    await emit(
+      'meeting.attendance_recorded',
+      { attendanceId: row.id, meetingId: target.meetingId ?? null, seriesId: target.seriesId ?? null, relationId: target.relationId ?? null, userId: entry.userId, state: entry.state },
+      { orgId: target.orgId ?? null, actor: { id: recorder.id, type: 'user' } },
+    );
     if (entry.state === 'NO_SHOW') await nudgeNoShow(row.id, entry.userId, target, now);
   }
   return result;
@@ -193,7 +200,7 @@ export async function recordLateCancel(
     // cancelled after it started is as late as it gets).
     if (row.scheduledAt.getTime() - now.getTime() > windowMs) continue;
     try {
-      await prisma.meetingAttendance.create({
+      const created = await prisma.meetingAttendance.create({
         data: {
           orgId: row.relation.orgId,
           meetingId: row.id,
@@ -204,8 +211,14 @@ export async function recordLateCancel(
           recordedById: cancellerId,
           recordedAt: now,
         },
+        select: { id: true },
       });
       written++;
+      await emit(
+        'meeting.attendance_recorded',
+        { attendanceId: created.id, meetingId: row.id, seriesId: null, relationId: row.relation.id, userId: cancellerId, state: 'LATE_CANCEL' },
+        { orgId: row.relation.orgId, actor: { id: cancellerId, type: 'user' } },
+      );
     } catch (error) {
       if ((error as { code?: string })?.code !== 'P2002') throw error;
     }

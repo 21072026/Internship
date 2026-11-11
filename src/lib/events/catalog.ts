@@ -252,10 +252,11 @@ export const EVENT_CATALOG = [
     description: 'An acceptance took the last opening of a requisition.',
   },
   {
-    // A pairing paused, resumed, ended or reopened (#1770). Registered, not yet
-    // raised — its first producer calls emit() (a direct dispatcher call is
-    // refused by scripts/check-events.mjs). `from`/`to` are lifecycle states; `reasonCode` is set on an end
-    // only (LIFECYCLE_END_REASON_CODES), null otherwise.
+    // A pairing paused, resumed, ended or reopened (#1770). Raised by every
+    // writer of the lifecycle state through raiseLifecycleChanged()
+    // (src/lib/lifecycleEvents.ts, #1998). `from`/`to` are lifecycle states;
+    // `reasonCode` is a code on an end (LIFECYCLE_END_REASON_CODES, or a
+    // handover's admin code), null otherwise.
     name: 'mentorship.lifecycle_changed',
     version: 1,
     subjectType: 'MentorshipRelation',
@@ -334,6 +335,172 @@ export const EVENT_CATALOG = [
     payload: z.object({ offerId: id, applicationId: id.nullable(), requisitionId: id.nullable() }).strict(),
     visibility: 'public',
     description: 'A sent offer passed its expiry date without a decision.',
+  },
+  // The interview request before it is scheduled (#1998). The company asks
+  // (POST /api/interview-requests), the programme decides (POST
+  // /api/interview-requests/[id]); `.scheduled` / `.cancelled` follow above.
+  // Ids and codes only — never the company's note or the decline note.
+  {
+    name: 'interview_request.created',
+    version: 1,
+    subjectType: 'InterviewRequest',
+    subjectKey: 'requestId',
+    payload: z.object({ requestId: id, requisitionId: id, menteeId: id, companyId: id }).strict(),
+    visibility: 'public',
+    description: 'A company asked to interview a shortlisted candidate for a requisition.',
+  },
+  {
+    name: 'interview_request.approved',
+    version: 1,
+    subjectType: 'InterviewRequest',
+    subjectKey: 'requestId',
+    payload: z.object({ requestId: id, requisitionId: id, menteeId: id }).strict(),
+    visibility: 'public',
+    description: 'The programme approved an interview request; scheduling comes next.',
+  },
+  {
+    name: 'interview_request.declined',
+    version: 1,
+    subjectType: 'InterviewRequest',
+    subjectKey: 'requestId',
+    payload: z.object({ requestId: id, requisitionId: id, menteeId: id, reasonCode: z.string() }).strict(),
+    visibility: 'public',
+    description: 'The programme declined an interview request (`reasonCode` is a decline code, never the note).',
+  },
+  {
+    // One producer: POST /api/company/interests, on a genuine status change
+    // only (a note-only save raises nothing). `from` is null for a new flag.
+    name: 'company_interest.changed',
+    version: 1,
+    subjectType: 'CompanyInterest',
+    subjectKey: 'interestId',
+    payload: z
+      .object({
+        interestId: id,
+        companyId: id,
+        menteeId: id,
+        requisitionId: id.nullable(),
+        from: z.string().nullable(),
+        to: z.string(),
+      })
+      .strict(),
+    visibility: 'public',
+    description: 'A company flagged a candidate as interesting, shortlisted or passed (`from` and `to` are interest states).',
+  },
+  // The rest of the relationship's life (#1998). Ids, states and dates only —
+  // never the report text, the mentor's comment, the file, the goal's title
+  // or an attendance note.
+  {
+    // Two producers, one rule: the mentee hands a report in on creation or
+    // after changes were requested (POST /api/weekly-reports, PATCH …/[id]).
+    name: 'weekly_report.submitted',
+    version: 1,
+    subjectType: 'WeeklyReport',
+    subjectKey: 'reportId',
+    payload: z.object({ reportId: id, relationId: id, weekStart: isoInstant, resubmission: z.boolean() }).strict(),
+    visibility: 'public',
+    description: 'A mentee handed in a weekly report (`resubmission` after the mentor asked for changes).',
+  },
+  {
+    // Two producers: an upload (POST /api/documents) and a generated
+    // certificate (POST /api/mentorship/[id]/certificate).
+    name: 'document.uploaded',
+    version: 1,
+    subjectType: 'Document',
+    subjectKey: 'documentId',
+    payload: z
+      .object({
+        documentId: id,
+        ownerId: id.nullable(),
+        type: z.string(),
+        requirementId: id.nullable(),
+        version: z.number().int().positive(),
+        generated: z.boolean(),
+      })
+      .strict(),
+    visibility: 'public',
+    description: 'A document was added to a person’s file — uploaded, or generated as a certificate.',
+  },
+  {
+    // One producer: PATCH /api/goals/[id], on a genuine OPEN → DONE move. A
+    // PRIVATE goal (#1858) raises nothing: it is its author's alone.
+    name: 'goal.completed',
+    version: 1,
+    subjectType: 'Goal',
+    subjectKey: 'goalId',
+    payload: z.object({ goalId: id, relationId: id }).strict(),
+    visibility: 'public',
+    description: 'A shared goal of a mentorship was marked done.',
+  },
+  {
+    // The one module that writes attendance (src/lib/meetingAttendance.ts):
+    // recorded by a participant or an admin, or derived as LATE_CANCEL from a
+    // late cancellation. One event per person whose record was written.
+    name: 'meeting.attendance_recorded',
+    version: 1,
+    subjectType: 'MeetingAttendance',
+    subjectKey: 'attendanceId',
+    payload: z
+      .object({
+        attendanceId: id,
+        meetingId: id.nullable(),
+        seriesId: id.nullable(),
+        relationId: id.nullable(),
+        userId: id,
+        state: z.string(),
+      })
+      .strict(),
+    visibility: 'public',
+    description: 'Attendance for one person at a meeting was recorded (`state`: attended, no-show, late cancel …).',
+  },
+  {
+    // One producer by construction: createUser() (src/lib/userCreate.ts), the
+    // one writer of a User row (#1998) — every path that makes an account goes
+    // through it, inside its caller's transaction when there is one. `source`
+    // names the path (USER_CREATE_SOURCES). Never the name or the address.
+    name: 'user.created',
+    version: 1,
+    subjectType: 'User',
+    subjectKey: 'userId',
+    payload: z.object({ userId: id, role: z.string(), source: z.string() }).strict(),
+    visibility: 'public',
+    description: 'An account was created (`source`: register, invite, admin, import, sso, api …).',
+  },
+  {
+    // The daily sweep (src/lib/relationEndingSweep.ts), once per agreed end
+    // date (#1786). `expectedEndDate` is a calendar day.
+    name: 'mentorship.ending_soon',
+    version: 1,
+    subjectType: 'MentorshipRelation',
+    subjectKey: 'relationId',
+    payload: z.object({ relationId: id, expectedEndDate: z.string() }).strict(),
+    visibility: 'public',
+    description: 'A mentorship is within its reminder window before the agreed end date (`expectedEndDate`, YYYY-MM-DD).',
+  },
+  {
+    // The one writer of an extension, src/lib/relationExtend.ts (#1786).
+    name: 'mentorship.extended',
+    version: 1,
+    subjectType: 'MentorshipRelation',
+    subjectKey: 'relationId',
+    payload: z.object({ relationId: id, expectedEndDate: z.string(), extendedCount: z.number().int() }).strict(),
+    visibility: 'public',
+    description: 'A mentorship\'s agreed end date was moved later (`expectedEndDate`, YYYY-MM-DD; `extendedCount` extensions so far).',
+  },
+  {
+    // Every writer of Requisition.status (#1998): the create (`from` null), the
+    // edit route, the acceptance that takes the last opening (`to` FILLED,
+    // next to `requisition.filled`) and the sample programme. One event with
+    // `from`/`to` rather than opened/closed names, like
+    // mentorship.lifecycle_changed: DRAFT → OPEN is the opening,
+    // FILLED/CANCELLED the closing, ON_HOLD a pause.
+    name: 'requisition.status_changed',
+    version: 1,
+    subjectType: 'Requisition',
+    subjectKey: 'requisitionId',
+    payload: z.object({ requisitionId: id, from: z.string().nullable(), to: z.string() }).strict(),
+    visibility: 'public',
+    description: 'A requisition was created or changed status (`from` is null on creation; DRAFT, OPEN, ON_HOLD, FILLED, CANCELLED).',
   },
 
   // ── Internal: recorded and subscribable inside the product, never a webhook. ─

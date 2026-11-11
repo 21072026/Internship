@@ -101,6 +101,7 @@ import {
   isHistoricEvent,
   isStaleEvent,
   missingReplayStages,
+  paymentRefusal,
   planAccountEvent,
   shouldUndoHistoricExpiry,
   batchOrder,
@@ -108,7 +109,14 @@ import {
   type EventPlan,
   type IngestIntent,
 } from '@/lib/accountEventRule';
+import {
+  customerRefFor,
+  planAffiliateAttribution,
+  referralCodeKey,
+} from '@/lib/affiliateAttributionRule';
 import type { AccountEvent } from '@/lib/accountEventSchema';
+import { AffiliateWriteError, recordAffiliatePayment } from '@/lib/affiliatePaymentWriter';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 
 /** A `processing` claim older than this belongs to a run that died. */
 export const CLAIM_STALE_MS = 10 * 60 * 1000;
@@ -128,7 +136,9 @@ export type IngestOutcome =
   | 'recorded'
   | 'unknown_account'
   | 'conflict'
-  | 'no_default_owner';
+  | 'no_default_owner'
+  // payment_received (#3355): no partner brought this customer in.
+  | 'no_partner';
 
 export interface IngestResult {
   outcome: IngestOutcome;
@@ -334,6 +344,7 @@ async function claim(db: Db, orgId: string, source: EventSource, event: AccountE
 async function apply(ctx: Ctx): Promise<Applied> {
   const { orgId, source, event, db } = ctx;
   const intent = ingestIntent(event.event_type);
+  if (intent.kind === 'payment') return recordPayment(ctx);
   if (intent.kind === 'record') {
     await note(ctx, {
       action: 'integration.event',
@@ -347,6 +358,7 @@ async function apply(ctx: Ctx): Promise<Applied> {
       const known = await findAccounts(ctx);
       if (known.length === 1) {
         await fillLeadSource(ctx, known[0].id);
+        await attributeToAffiliate(ctx);
         await recordPlan(ctx, known[0].id);
       }
     }
@@ -366,11 +378,15 @@ async function apply(ctx: Ctx): Promise<Applied> {
   const stages = await resolvePipelineStages(orgId);
 
   if (intent.kind !== 'open_trial') {
+    // The affiliate customer's end is its own fact, kept whether or not the CRM
+    // knows the account: a linked customer exists without a Company.
+    if (intent.kind === 'lost' || intent.kind === 'reactivate') await recordAffiliateEnd(ctx, intent.kind);
     // Only a trial event creates an account: a conversion, a loss or a
     // reactivation of an account the CRM never heard of has nothing to act on.
     if (!companyId) return { outcome: 'unknown_account' };
     const result = await moveAccount(ctx, companyId, intent, stages);
     await fillLeadSource(ctx, companyId);
+    await attributeToAffiliate(ctx);
     await recordPlan(ctx, companyId);
     return result;
   }
@@ -380,14 +396,68 @@ async function apply(ctx: Ctx): Promise<Applied> {
     // the feed yet (an older stage set), and the event waits for it.
     if (!stages.some((s) => s.key === TRIAL_ACTIVE_STAGE_KEY)) return missingStage(TRIAL_ACTIVE_STAGE_KEY);
     const created = await createAccount(ctx, stages);
-    if (created.outcome !== 'exists') return created;
+    if (created.outcome !== 'exists') {
+      // A brand-new account is the sign-up a referral link leads to: link it too.
+      if (created.outcome === 'applied') await attributeToAffiliate(ctx);
+      return created;
+    }
     companyId = created.companyId;
   }
   await fillGaps(ctx, companyId);
   const result = await moveAccount(ctx, companyId, intent, stages);
   await fillLeadSource(ctx, companyId);
+  await attributeToAffiliate(ctx);
   await recordPlan(ctx, companyId);
   return result;
+}
+
+/**
+ * `payment_received` (#3355): the customer's payment goes to the ONE affiliate
+ * payment writer, `recordAffiliatePayment({ source: 'API' })` — the same checks,
+ * partner lock and commission reconciliation as the admin's manual entry, so
+ * an API payment and a typed one produce the same commissions. It moves nothing
+ * on the funnel. The customer is the event's `external_id` (customerRefFor, the
+ * reference the referral link stored); a referral code on the same event links
+ * the customer first. Inside a dry run the write runs in the run's transaction
+ * (`ctx.db`) and is rolled back with it. Every refusal writes nothing and
+ * answers through paymentRefusal().
+ */
+async function recordPayment(ctx: Ctx): Promise<Applied> {
+  const { orgId, event, db } = ctx;
+  if (!(await shellCapabilities(orgId)).includes('affiliate')) {
+    return { outcome: 'recorded', detail: 'payment_received: this organisation has no affiliate programme; nothing recorded' };
+  }
+  const payment = event.payment;
+  const customerRef = customerRefFor(event.external_id);
+  if (!payment || !customerRef) return { outcome: 'conflict', detail: 'payment refused: invalid_input' };
+  await attributeToAffiliate(ctx);
+  try {
+    const written = await recordAffiliatePayment(
+      {
+        orgId,
+        customerExternalRef: customerRef,
+        amountMinor: payment.amount_minor,
+        currency: payment.currency,
+        receivedAt: payment.received_at ?? event.occurred_at,
+        externalPaymentRef: payment.id,
+        source: 'API',
+        enteredById: null,
+        now: ctx.now,
+      },
+      db === prisma ? undefined : (db as Prisma.TransactionClient),
+    );
+    await note(ctx, {
+      action: 'integration.affiliate_payment',
+      orgId,
+      targetType: 'AffiliatePartner',
+      targetId: written.partnerId,
+      detail: `${ctx.source.slug}: payment ${payment.id} recorded for customer ${customerRef} (commissions: +${written.created} ~${written.updated} -${written.removed})`,
+    });
+    return { outcome: 'applied', detail: `payment ${payment.id} recorded` };
+  } catch (e) {
+    if (e instanceof AffiliateWriteError) return paymentRefusal(e.code);
+    throw e;
+  }
 }
 
 /** A stage the event needs is missing from the org's funnel: a conflict, and a retryable one. */
@@ -534,6 +604,99 @@ async function fillLeadSource(ctx: Ctx, companyId: string): Promise<void> {
   if (filled.count > 0) tally(ctx, 'source_filled');
 }
 
+/**
+ * Affiliate attribution (#3354): an event whose `referral_code` names an ACTIVE
+ * partner of THIS org links the account's customer row to that partner, so the
+ * partner's customer list shows it and a later payment finds it without an admin
+ * picking a partner. The decision is the pure `planAffiliateAttribution`
+ * (first link wins; suspended/terminated partners never link); this half reads
+ * the partner and the existing row and writes. Every read and write passes
+ * `orgId` explicitly (the ingest is sessionless) and goes through `ctx.db`, so a
+ * dry run's rollback takes the link with it. `createMany({ skipDuplicates })`
+ * is an INSERT IGNORE: a concurrent twin of the same event cannot make the
+ * unique key throw inside a transaction, and the loser simply links nothing.
+ */
+async function attributeToAffiliate(ctx: Ctx): Promise<void> {
+  const { db, event, orgId } = ctx;
+  const code = referralCodeKey(event.referral_code);
+  const externalRef = customerRefFor(event.external_id);
+  if (!code || !externalRef) return;
+  const partner = await db.affiliatePartner.findFirst({
+    where: { orgId, code },
+    select: { id: true, status: true, noticeEffectiveAt: true },
+  });
+  const existing = await db.affiliateCustomer.findFirst({
+    where: { orgId, externalRef },
+    select: { partnerId: true },
+  });
+  const plan = planAffiliateAttribution({ referralCode: code, externalId: event.external_id, partner, existing, eventAt: ctx.at ?? ctx.now });
+  if (plan.kind === 'kept_first') {
+    await keptFirstNote(ctx, externalRef, plan.keptPartnerId, plan.offeredPartnerId);
+    return;
+  }
+  if (plan.kind !== 'link') return;
+  const created = await db.affiliateCustomer.createMany({
+    data: [{ orgId, partnerId: plan.partnerId, externalRef: plan.externalRef, ...(ctx.at ? { createdAt: ctx.at } : {}) }],
+    skipDuplicates: true,
+  });
+  if (created.count === 0) {
+    // Lost a race to a concurrent event: if it linked ANOTHER partner, the
+    // documented first-link-wins line is still owed.
+    const winner = await db.affiliateCustomer.findFirst({ where: { orgId, externalRef: plan.externalRef }, select: { partnerId: true } });
+    if (winner && winner.partnerId !== plan.partnerId) {
+      await keptFirstNote(ctx, plan.externalRef, winner.partnerId, plan.partnerId);
+    }
+    return;
+  }
+  await note(ctx, {
+    action: 'integration.affiliate_linked',
+    orgId,
+    targetType: 'AffiliatePartner',
+    targetId: plan.partnerId,
+    detail: `${ctx.source.slug}: ${event.event_type}: customer ${plan.externalRef} linked to partner ${plan.partnerId}`,
+  });
+}
+
+/**
+ * The affiliate customer's end (#3542): `cancelled` / `deactivated` stamp
+ * `AffiliateCustomer.endedAt` at the event's `occurred_at`, `reactivated` clears
+ * it. Only the customer row of THIS org with the event's external id is touched
+ * (explicit `orgId`, the ingest is sessionless), through `ctx.db` so a dry run
+ * writes nothing. Both writes are guarded and idempotent: a first end is kept
+ * (a second cancel does not move it), and a reactivation clears only an end
+ * that happened at or before it — an older reactivation arriving late cannot
+ * undo a newer cancellation. The status rule reads the column
+ * (src/lib/affiliateCustomerStatusRule.ts).
+ */
+async function recordAffiliateEnd(ctx: Ctx, kind: 'lost' | 'reactivate'): Promise<void> {
+  const { db, event, orgId } = ctx;
+  const externalRef = customerRefFor(event.external_id);
+  if (!externalRef) return;
+  const at = event.occurred_at;
+  const written =
+    kind === 'lost'
+      ? await db.affiliateCustomer.updateMany({ where: { orgId, externalRef, endedAt: null }, data: { endedAt: at } })
+      : await db.affiliateCustomer.updateMany({ where: { orgId, externalRef, endedAt: { lte: at } }, data: { endedAt: null } });
+  if (written.count === 0) return;
+  await note(ctx, {
+    action: kind === 'lost' ? 'integration.affiliate_ended' : 'integration.affiliate_reactivated',
+    orgId,
+    targetType: 'AffiliateCustomer',
+    targetId: externalRef,
+    detail: `${ctx.source.slug}: ${event.event_type}: customer ${externalRef} ${kind === 'lost' ? 'ended' : 'active again'}`,
+  });
+}
+
+async function keptFirstNote(ctx: Ctx, externalRef: string, keptPartnerId: string, offeredPartnerId: string): Promise<void> {
+  await note(ctx, {
+    action: 'integration.affiliate_kept_first',
+    orgId: ctx.orgId,
+    targetType: 'AffiliateCustomer',
+    targetId: externalRef,
+    detail: `${ctx.source.slug}: ${ctx.event.event_type}: the customer stays with partner ${keptPartnerId}; the code named partner ${offeredPartnerId} (first link wins)`,
+  });
+}
+
 /** Did this record ever sign? It is at DEAL_WON, or its history shows the move. */
 async function recordWasWon(ctx: Ctx, relation: RelationRow): Promise<boolean> {
   if (relation.pipelineStatus === WON_STAGE_KEY) return true;
@@ -547,7 +710,7 @@ async function recordWasWon(ctx: Ctx, relation: RelationRow): Promise<boolean> {
 async function moveAccount(
   ctx: Ctx,
   companyId: string,
-  intent: Exclude<IngestIntent, { kind: 'record' }>,
+  intent: Exclude<IngestIntent, { kind: 'record' } | { kind: 'payment' }>,
   stages: Stages,
 ): Promise<Applied> {
   const { orgId, source, event, db } = ctx;

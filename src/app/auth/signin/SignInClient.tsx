@@ -1,5 +1,7 @@
 'use client';
 import { useT, useLocale } from "@/i18n/client";
+import type { TenantSso } from '@/lib/ssoDiscovery';
+import { SocialSignInButtons } from '@/components/SocialSignInButtons';
 
 import { useState, useEffect, useRef } from 'react';
 import { signIn, useSession } from 'next-auth/react';
@@ -15,6 +17,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { roleHome } from '@/lib/roleHome';
+import type { DemoAccount } from '@/lib/demoMode';
 import { sameOriginPath } from '@/lib/safeRedirect';
 import { useVertical } from '@/lib/verticalClient';
 import { verticalHasCapability } from '@/lib/verticals';
@@ -35,11 +38,11 @@ type SignInData = z.infer<typeof signinSchema>;
 
 // Filled in by the server page on the demo instance only; null everywhere else.
 export interface DemoQuickLogin {
-  accounts: { role: 'admin' | 'mentor' | 'mentee'; email: string }[];
+  accounts: DemoAccount[];
   password: string;
 }
 
-export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
+export function SignInClient({ demo, tenantSso = null, social = [] }: { demo: DemoQuickLogin | null; tenantSso?: TenantSso | null; social?: { id: string; label: string }[] }) {
   const t = useT();
   const vertical = useVertical();
   const productName = useProductName();
@@ -103,7 +106,11 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
   // Surface a post-registration notice (pending approval / verify email).
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('pending')) setNotice(t.auth.pendingApproval);
+    // An SSO sign-in held by programme eligibility (#1945) lands here too.
+    const err = params.get('error') ?? '';
+    if (params.get('pending') || err === 'sso_pending_approval' || err === 'social_pending_approval') setNotice(t.auth.pendingApproval);
+    // Social sign-in refusals (#1962): what happened, never which account exists.
+    else if (err.startsWith('social_')) setError((t.auth.socialErrors as Record<string, string>)[err.slice(7)] ?? t.auth.socialErrors.failed);
     else if (params.get('verify')) setNotice(t.auth.verifyEmailSent);
     else if (params.get('registered')) setNotice(t.auth.registeredNotice);
   }, [t]);
@@ -325,6 +332,30 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
             </div>
           )}
 
+          {tenantSso && (
+            <div className="mb-6" data-testid="tenant-sso">
+              {/* A plain link, not a client navigation: the login route answers
+                  with a redirect to the tenant's IdP (#1665). */}
+              <a
+                href={`/api/auth/sso/${encodeURIComponent(tenantSso.slug)}/login`}
+                data-testid="tenant-sso-continue"
+                className="flex w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                {t.auth.ssoTenantContinue.replace('{name}', tenantSso.name)}
+              </a>
+              {tenantSso.enforced && (
+                <p className="mt-2 text-xs text-gray-600 dark:text-gray-300" data-testid="tenant-sso-enforced">
+                  {t.auth.ssoTenantEnforced}
+                </p>
+              )}
+              <div className="mt-6 flex items-center gap-3 text-xs text-gray-400" aria-hidden="true">
+                <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+                {t.auth.ssoTenantOr}
+                <span className="h-px flex-1 bg-gray-200 dark:bg-gray-700" />
+              </div>
+            </div>
+          )}
+
           <form method="post" onSubmit={onSubmit} className="space-y-4">
             <Input
               label={t.auth.email}
@@ -376,6 +407,8 @@ export function SignInClient({ demo }: { demo: DemoQuickLogin | null }) {
               {t.auth.signIn}
             </Button>
           </form>
+
+          <SocialSignInButtons providers={social} />
 
           <p className="text-center text-sm mt-4">
             <Link href="/auth/forgot" className="text-blue-600 hover:underline">

@@ -8,12 +8,13 @@
 // caller saw — an undecided step, a PENDING or APPROVED document — so a double
 // submit or a race loses with a 409 instead of writing twice.
 import { randomBytes } from 'node:crypto';
+import { tenantAdminIds } from '@/lib/tenantAdmins';
 import { prisma } from '@/lib/prisma';
 import { notify } from '@/lib/notify';
 import { logger } from '@/lib/logger';
 import { requirementLabel } from '@/lib/documentRequirements';
 import { canDecideStep, nextStep, validityWindow, type ReviewDecision } from '@/lib/documentReview';
-import type { Locale } from '@/i18n/config';
+import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 
 export const reviewDocumentSelect = {
   id: true,
@@ -53,7 +54,8 @@ function ownerLink(role: string | undefined): string | undefined {
 }
 
 function labelFor(doc: ReviewDocument): string {
-  const locale = (['en', 'tr', 'de'].includes(doc.owner?.preferredLanguage ?? '') ? doc.owner!.preferredLanguage : 'en') as Locale;
+  const pref = doc.owner?.preferredLanguage ?? null;
+  const locale: Locale = isLocale(pref) ? pref : defaultLocale;
   return doc.requirement ? requirementLabel(doc.requirement.labels, locale, doc.requirement.key) : doc.title;
 }
 
@@ -155,9 +157,9 @@ export async function expireDocuments(now: Date = new Date()): Promise<{ checked
       if (doc.ownerId) await notify(doc.ownerId, 'document.expired', { requirement }, ownerLink(doc.owner?.role));
       const orgId = doc.requirement?.orgId ?? doc.owner?.orgId ?? null;
       if (orgId) {
-        const admins = await prisma.user.findMany({ where: { orgId, role: 'ADMIN', isActive: true }, select: { id: true } });
-        for (const admin of admins) {
-          await notify(admin.id, 'document.expired.admin', { requirement, owner: doc.owner?.fullName ?? '' }, '/admin/documents');
+        // An org-level notice: no PROGRAM_ADMIN (#3485).
+        for (const adminId of await tenantAdminIds(orgId)) {
+          await notify(adminId, 'document.expired.admin', { requirement, owner: doc.owner?.fullName ?? '' }, '/admin/documents');
         }
       }
     } catch (e) {

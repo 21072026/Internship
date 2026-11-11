@@ -99,3 +99,8 @@ export function serializeTaskTemplate(
     archived: template.archivedAt !== null,
   };
 }
+
+/** The wording a goal shows to one reader — from the pool, in their language, when it was handed out from it (#1860). */
+export function resolveGoalTitle(goal: TaskTitleSource, language: string | null | undefined): string {
+  return resolveTaskTitle(goal, language);
+}

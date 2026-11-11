@@ -34,7 +34,8 @@ test('an admin can attach an image to a broadcast and every reader sees it', asy
     await expect(page.getByTestId('announcement-image-preview')).toBeVisible();
 
     const postDone = page.waitForResponse(
-      (r) => r.url().includes('/api/admin/announcements') && r.request().method() === 'POST'
+      // The exact path: the audience estimate (#1721) also POSTs, to /api/admin/announcements/estimate.
+      (r) => new URL(r.url()).pathname === '/api/admin/announcements' && r.request().method() === 'POST'
     );
     await page.getByRole('button', { name: /^Broadcast$/i }).click();
     const response = await postDone;
@@ -130,7 +131,8 @@ test('an image pasted into the message box is attached to the broadcast', async 
     expect(await preview.evaluate((img) => new URL((img as HTMLImageElement).src).protocol)).toBe('blob:');
 
     const postDone = page.waitForResponse(
-      (r) => r.url().includes('/api/admin/announcements') && r.request().method() === 'POST'
+      // The exact path: the audience estimate (#1721) also POSTs, to /api/admin/announcements/estimate.
+      (r) => new URL(r.url()).pathname === '/api/admin/announcements' && r.request().method() === 'POST'
     );
     await page.getByRole('button', { name: /^Broadcast$/i }).click();
     expect((await postDone).status()).toBe(201);

@@ -440,8 +440,27 @@ test.describe('the taxonomy covers what the app actually sends', () => {
     return constsIn(src).get(id) ?? allExportedCategoryConsts().get(id) ?? null;
   }
 
+  // Senders in emailService.ts that hand their mail to the router (#1711):
+  // `notifyEvent(userId, …, { email })` with no sendEmail() of their own. Their
+  // recipient is a required `userId: string` the type system enforces, and the
+  // router reads the address, the preferences and the footer from that account —
+  // so their call sites are not send sites in this scan's sense (and carry no `to`).
+  let routedSenders: Set<string> | null = null;
+  function routedSenderNames(): Set<string> {
+    if (routedSenders) return routedSenders;
+    routedSenders = new Set();
+    const src = fs.readFileSync(path.join(SRC, 'services', 'emailService.ts'), 'utf8');
+    const fns = [...src.matchAll(TOP_LEVEL_FN)].map((m) => ({ name: m[1], at: m.index! }));
+    fns.forEach((f, i) => {
+      const body = src.slice(f.at, i + 1 < fns.length ? fns[i + 1].at : src.length);
+      if (/^send[A-Z]\w*Email$/.test(f.name) && body.includes('notifyEvent(') && !body.includes('sendEmail(')) routedSenders!.add(f.name);
+    });
+    return routedSenders;
+  }
+
   function sendSites(): SendSite[] {
     const sites: SendSite[] = [];
+    const routed = routedSenderNames();
     for (const file of walk(SRC)) {
       const src = fs.readFileSync(file, 'utf8');
       if (!src.includes('sendEmail(') && !src.includes('emailService')) continue;
@@ -449,6 +468,7 @@ test.describe('the taxonomy covers what the app actually sends', () => {
       const fns = [...src.matchAll(TOP_LEVEL_FN)].map((m) => ({ name: m[1], at: m.index! }));
       for (const m of src.matchAll(SEND_CALL)) {
         if (m[1]) continue; // a declaration's parameter list, not a call
+        if (routed.has(m[2])) continue; // goes through the router, see routedSenderNames()
         const open = src.indexOf('{', m.index!);
         const end = literalAt(src, open);
         const literal = end === -1 ? src.slice(open) : src.slice(open, end + 1);
@@ -464,7 +484,19 @@ test.describe('the taxonomy covers what the app actually sends', () => {
           owner: owner?.name ?? null,
           ownerAt: owner?.at ?? -1,
           category:
-            literal.match(/\bcategory:\s*'([a-z0-9-]+)'/)?.[1] ?? resolveCategoryConst(src, categoryExpr),
+            literal.match(/\bcategory:\s*'([a-z0-9-]+)'/)?.[1] ??
+            resolveCategoryConst(src, categoryExpr) ??
+            // The event mail (#1719, src/lib/notifications/emailJob.ts) takes its
+            // category per e-mail group from EVENT_MAIL_CATEGORY — a table the
+            // notification-templates-editor unit spec holds against the taxonomy
+            // entry by entry. Judged here by its strictest member, a
+            // non-essential category, so the site must identify its recipient.
+            (/\bcategory:\s*EVENT_MAIL_CATEGORY\[/.test(literal) ? 'nudge' : null) ??
+            // The pre-rendered event mail (#1711, same file) forwards the category
+            // its call site passed in `notifyEvent(…, { email: { category } })` —
+            // a string the router seals and this job opens. Judged the same way:
+            // by a non-essential member, so the site must name its recipient.
+            (rel.endsWith(path.join('notifications', 'emailJob.ts')) && /\bcategory:\s*mail\.category\b/.test(literal) ? 'nudge' : null),
           categoryExpr,
           // Shorthand (`userId,`) as well as `userId: x` — the senders forward it
           // by shorthand and the call sites spell it out.
@@ -504,8 +536,11 @@ test.describe('the taxonomy covers what the app actually sends', () => {
       const src = fs.readFileSync(file, 'utf8');
       // Only files that actually send mail. `category:` is also a cookie-consent
       // and a feature-catalogue field name, and those have nothing to do with
-      // this taxonomy.
-      if (!src.includes('sendEmail(') && !src.includes('emailService')) continue;
+      // this taxonomy. Judged on the code, not the comments: the notification
+      // catalogue (its own `category:` vocabulary) merely MENTIONS sendEmail()
+      // in a comment, and that alone pulled 115 foreign literals in.
+      const code = src.replace(/\/\*[\s\S]*?\*\/|(^|[^:])\/\/[^\n]*/g, '$1');
+      if (!code.includes('sendEmail(') && !code.includes('emailService')) continue;
       for (const m of src.matchAll(/\bcategory:\s*'([a-z0-9-]+)'/g)) {
         seen++;
         if (!groupForCategory(m[1])) offenders.push(`${path.relative(process.cwd(), file)}: ${m[1]}`);

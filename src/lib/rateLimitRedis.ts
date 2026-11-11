@@ -20,20 +20,22 @@ import type { RateLimitCommandReply, RateLimitTransport } from './rateLimitStore
 const CONNECT_TIMEOUT_MS = 2_000;
 const COMMAND_TIMEOUT_MS = 1_000;
 
-function encodeCommand(command: string[]): Buffer {
+export function encodeCommand(command: string[]): Buffer {
   let out = `*${command.length}\r\n`;
   for (const arg of command) out += `$${Buffer.byteLength(arg)}\r\n${arg}\r\n`;
   return Buffer.from(out);
 }
 
-type ParsedValue = RateLimitCommandReply | Error | ParsedValue[];
+export type ParsedValue = RateLimitCommandReply | Error | ParsedValue[];
 
 /**
- * Parse one reply starting at `offset`. Returns null when the buffer holds a
+ * Parse one reply starting at `offset`. Exported for the realtime broker
+ * (src/lib/realtimeBroker.ts, #1698), which speaks the same RESP on its own
+ * sockets rather than carrying a second parser. Returns null when the buffer holds a
  * partial reply (the socket will deliver the rest), and an `Error` *value* for
  * a `-ERR` line — that rejects one command, not the connection.
  */
-function parseReply(buf: Buffer, offset: number): { value: ParsedValue; next: number } | null {
+export function parseReply(buf: Buffer, offset: number): { value: ParsedValue; next: number } | null {
   if (offset >= buf.length) return null;
   const end = buf.indexOf('\r\n', offset);
   if (end === -1) return null;

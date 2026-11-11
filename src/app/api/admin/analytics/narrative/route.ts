@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
@@ -9,6 +8,8 @@ import { isAiConfigured } from '@/lib/ai/provider';
 import { AI_PACK_FEATURE } from '@/lib/aiGate';
 import { getLocale } from '@/i18n/server';
 import { analyticsNarrative } from '@/lib/ai/analyticsNarrative';
+import { tenantWhere } from '@/lib/tenantFilter';
+import { resolveProgramFilter } from '@/lib/programFilter';
 
 // The "what changed" paragraph on /admin/analytics (#2046). ADMIN only.
 //   GET  — the stored paragraph for exactly the current figures, or none.
@@ -24,22 +25,27 @@ import { analyticsNarrative } from '@/lib/ai/analyticsNarrative';
 // reason.
 
 const day = z.string().max(40).optional();
-const bodySchema = z.object({ from: day, to: day, regenerate: z.boolean().optional() }).strict();
+const bodySchema = z.object({ from: day, to: day, program: z.string().max(64).optional(), regenerate: z.boolean().optional() }).strict();
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const locale = await getLocale();
   const q = new URL(request.url).searchParams;
   return withTenantScope(session, async () => {
-    const body = await analyticsNarrative(session, { from: q.get('from'), to: q.get('to') }, locale, { run: false });
+    // The screen's programme filter (#1652): another org's id is a 404 here too.
+    const program = await resolveProgramFilter(q.get('program'), await tenantWhere(session));
+    if ('error' in program) return program.error;
+    const body = await analyticsNarrative(session, { from: q.get('from'), to: q.get('to'), program: program.filter }, locale, { run: false });
     return NextResponse.json({ ...body, configured: isAiConfigured() });
   });
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.settings.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const userLimited = enforceRateLimit(request, 'ai:analytics_narrative', { ...AI_RATE_LIMITS.analytics_narrative, subject: session.user.id });
   if (userLimited) return userLimited;
   if (session.user.orgId) {
@@ -50,7 +56,14 @@ export async function POST(request: Request) {
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input', issues: parsed.error.issues }, { status: 400 });
   const locale = await getLocale();
   return withTenantScope(session, async () => {
-    const body = await analyticsNarrative(session, { from: parsed.data.from ?? null, to: parsed.data.to ?? null }, locale, { run: true, regenerate: parsed.data.regenerate });
+    const program = await resolveProgramFilter(parsed.data.program ?? null, await tenantWhere(session));
+    if ('error' in program) return program.error;
+    const body = await analyticsNarrative(
+      session,
+      { from: parsed.data.from ?? null, to: parsed.data.to ?? null, program: program.filter },
+      locale,
+      { run: true, regenerate: parsed.data.regenerate },
+    );
     if (body.reason === 'not_entitled') {
       return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: AI_PACK_FEATURE }, { status: 403 });
     }

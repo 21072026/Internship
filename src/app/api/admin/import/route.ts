@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { createUser } from '@/lib/userCreate';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
@@ -12,6 +11,7 @@ import { loadDuplicatePool, rankDuplicates } from '@/lib/duplicateDetection';
 import { normalizeEmail, worldOfOrg, worldUserWhere } from '@/lib/userWorld';
 import { candidateTable, planCandidates, validateCandidate, type CandidatePlan, type ImportRow } from '@/lib/csvImport';
 import { runImport, type RowResult, type RowStatus } from '@/lib/importPreview';
+import { requirePermission } from '@/lib/authz';
 
 const schema = z.object({ csv: z.string().min(1).max(200_000), dryRun: z.boolean().optional() });
 
@@ -35,8 +35,9 @@ const schema = z.object({ csv: z.string().min(1).max(200_000), dryRun: z.boolean
 const legacyStatus = (s: RowStatus) => (s === 'CREATE' ? 'create' : s === 'ERROR' ? 'error' : 'skip');
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('user.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json().catch(() => null));
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
         // row's report line, never the chunk's or the file's.
         try {
           password ??= bcrypt.hash(randomBytes(18).toString('hex'), 10);
-          await prisma.user.create({
+          await createUser(prisma, {
             data: {
               ...p.value.data,
               password: await password,
@@ -104,7 +105,7 @@ export async function POST(request: Request) {
               // the tenant's counts/isolation, like every other create path (#678).
               orgId,
             },
-          });
+          }, { source: 'import', actorId: session.user.id });
           out.push(result);
         } catch (error) {
           // Another request took the address between the check and the write.

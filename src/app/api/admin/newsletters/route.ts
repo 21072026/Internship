@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import { resolveOrgId } from '@/lib/orgScope';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import {
   validateAnnouncementImage,
+  imageAltField,
   ANNOUNCEMENT_IMAGE_MAX_BYTES,
   CONTENT_MISMATCH_ERROR,
 } from '@/lib/announcementImage';
@@ -22,6 +22,7 @@ import {
 import { dispatchNewsletter, newsletterQuotaHold } from '@/lib/newsletterDispatch';
 import { mailQueueNotice } from '@/lib/mailOutbox';
 import { broadcastQuotaError } from '@/lib/broadcastQuota';
+import { requirePermission } from '@/lib/authz';
 
 /**
  * Newsletter issues: the history, and creating one (#1469).
@@ -68,10 +69,10 @@ function safeJson(value: FormDataEntryValue | null): unknown {
  * JSON when there is no image, multipart when there is — normalised here so the
  * handler sees one shape. Same arrangement as the announcement composer.
  */
-async function readBody(request: Request): Promise<{ fields: unknown; image: File | null }> {
+async function readBody(request: Request): Promise<{ fields: unknown; image: File | null; imageAlt: string | null }> {
   try {
     if (!(request.headers.get('content-type') || '').includes('multipart/form-data')) {
-      return { fields: await request.json(), image: null };
+      return { fields: await request.json(), image: null, imageAlt: null };
     }
     const form = await request.formData();
     const image = form.get('image');
@@ -84,9 +85,10 @@ async function readBody(request: Request): Promise<{ fields: unknown; image: Fil
         ...(form.get('action') ? { action: form.get('action') } : {}),
       },
       image: image instanceof File && image.size > 0 ? image : null,
+      imageAlt: imageAltField(form.get('imageAlt')),
     };
   } catch {
-    return { fields: null, image: null };
+    return { fields: null, image: null, imageAlt: null };
   }
 }
 
@@ -94,8 +96,9 @@ async function readBody(request: Request): Promise<{ fields: unknown; image: Fil
 // to keep, so nothing is ever filtered out of it: drafts, canceled issues and
 // sent ones all appear, with their per-recipient tallies.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
 
@@ -140,7 +143,7 @@ export async function GET(request: Request) {
         createdAt: true,
         // `select` on the relation, never `include` — an include would drag
         // every hero image's bytes into the history response.
-        image: { select: { id: true } },
+        image: { select: { id: true, altText: true } },
       },
     }),
   ]);
@@ -183,6 +186,7 @@ export async function GET(request: Request) {
         // than a blank author.
         createdBySystem: issue.createdById === 'system',
         imageUrl: image ? newsletterImageUrl(issue.id) : null,
+        imageAlt: image?.altText ?? null,
       };
     }),
     total,
@@ -193,12 +197,16 @@ export async function GET(request: Request) {
 
 // POST — create an issue as a draft, schedule it, or send it now.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
 
-  const { fields, image } = await readBody(request);
+  const { fields, image, imageAlt } = await readBody(request);
+  if (imageAlt && imageAlt.length > TEXT_LIMITS.imageAltText) {
+    return NextResponse.json({ error: 'Validation failed', code: 'too_long' }, { status: 400 });
+  }
   const parsed = schema.safeParse(fields);
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
   const { templateKey, audience, action } = parsed.data;
@@ -249,7 +257,7 @@ export async function POST(request: Request) {
       scheduledAt,
       createdById: session.user.id,
       ...(imageData && image
-        ? { image: { create: { contentType: image.type, size: image.size, data: imageData } } }
+        ? { image: { create: { contentType: image.type, size: image.size, data: imageData, altText: imageAlt } } }
         : {}),
     },
     select: { id: true, status: true, scheduledAt: true },

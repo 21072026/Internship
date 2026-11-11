@@ -74,7 +74,7 @@ COPY --from=builder /app/prisma ./prisma
 # with MODULE_NOT_FOUND on every deploy, hidden by `|| true` (#1385).
 # scripts/test/backfill-registry.test.mjs fails if a registered script is
 # missing here.
-COPY --from=builder /app/scripts/backfill-requisitions.mjs /app/scripts/requisition-backfill-lib.mjs /app/scripts/backfill-applications.mjs /app/scripts/applications-backfill-lib.mjs ./scripts/
+COPY --from=builder /app/scripts/backfill-requisitions.mjs /app/scripts/requisition-backfill-lib.mjs /app/scripts/backfill-applications.mjs /app/scripts/applications-backfill-lib.mjs /app/scripts/backfill-company-memberships.mjs ./scripts/
 
 EXPOSE 3000
 CMD ["npm", "start"]

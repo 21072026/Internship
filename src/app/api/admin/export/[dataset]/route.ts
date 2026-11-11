@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { entitled } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
@@ -10,14 +8,20 @@ import { GET as analyticsGET } from '@/app/api/admin/analytics/route';
 import { GET as agingGET } from '@/app/api/admin/analytics/aging/route';
 import { GET as funnelGET } from '@/app/api/admin/analytics/funnel/route';
 import { GET as dealValueGET } from '@/app/api/admin/analytics/deal-value/route';
+import { GET as skillsGapGET } from '@/app/api/admin/analytics/skills-gap/route';
 import { getServerDictionary } from '@/i18n/server';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
-import { analyticsWorkbook, candidatesSheet, fullAnalyticsWorkbook } from '@/lib/reports/workbooks';
+import { analyticsWorkbook, candidatesSheet, fullAnalyticsWorkbook, skillsGapSheet } from '@/lib/reports/workbooks';
 import { toCsv } from '@/lib/reports/render';
 import { tenantWhere } from '@/lib/tenantFilter';
+import { relationProgramWhere, resolveProgramFilter } from '@/lib/programFilter';
 import { loadSurveyOverview } from '@/lib/surveyOverview';
 import { defaultOutcomePeriod, loadOutcomeReport } from '@/lib/outcomesData';
 import { loadProgramScorecard } from '@/lib/programScorecardData';
+import { requirePermission } from '@/lib/authz';
+import { requireCapability } from '@/lib/capabilityGate';
+import { loadPlacements, placementFiltersFrom } from '@/lib/placementQuery';
+import { placementsSheet } from '@/lib/placementSheet';
 
 // GET /api/admin/export/[dataset] — the ONE door every admin export goes
 // through (#1740), gated by the org's REPORT_EXPORT entitlement (its plan or a
@@ -43,7 +47,7 @@ import { loadProgramScorecard } from '@/lib/programScorecardData';
 // paged candidate list, stay free to view. REPORT_EXPORT sells the file — the
 // whole filtered set in one workbook — not the right to read one's own data.
 
-const DATASETS = ['candidates', 'analytics', 'analytics-full', 'contributor-terms'] as const;
+const DATASETS = ['candidates', 'analytics', 'analytics-full', 'contributor-terms', 'skills-gap', 'placements'] as const;
 type Dataset = (typeof DATASETS)[number];
 
 /** Call another route handler in-process with the caller's query string. */
@@ -57,8 +61,9 @@ async function internal(handler: (req: Request) => Promise<Response>, request: R
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ dataset: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('audit.export', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { dataset } = await params;
   if (!(DATASETS as readonly string[]).includes(dataset)) return NextResponse.json({ error: 'Unknown dataset' }, { status: 404 });
   if (!(await entitled(await settingsOrgOf(session), 'REPORT_EXPORT'))) {
@@ -93,6 +98,26 @@ export async function GET(request: Request, { params }: { params: Promise<{ data
         }
         return NextResponse.json({ sheets: [sheet] });
       }
+      case 'skills-gap': {
+        // The report route itself, every row (#1823): its ADMIN, `mentorship`
+        // and ADVANCED_ANALYTICS gates answer for the file too.
+        const res = await internal(skillsGapGET, request, '/api/admin/analytics/skills-gap', { all: '1' });
+        if (!res.ok) return NextResponse.json({ error: 'Export failed' }, { status: res.status });
+        return NextResponse.json({ sheets: [skillsGapSheet(res.body.rows ?? [], t.skillsGap)] });
+      }
+      case 'placements': {
+        // The ledger screen's own query and filters (#1765), so the file holds
+        // exactly the rows the screen lists.
+        const blocked = await requireCapability(orgId, 'placements');
+        if (blocked) return blocked;
+        const rows = await loadPlacements(orgId, placementFiltersFrom(new URL(request.url).searchParams));
+        return new NextResponse(toCsv(placementsSheet(rows, t.placements)), {
+          headers: {
+            'Content-Type': 'text/csv; charset=utf-8',
+            'Content-Disposition': `attachment; filename="placements-${new Date().toISOString().slice(0, 10)}.csv"`,
+          },
+        });
+      }
       case 'contributor-terms': {
         const { rows } = await buildAcceptanceReport();
         return NextResponse.json({ rows: rows.map((r) => ({ ...r, acceptedAt: r.acceptedAt ? r.acceptedAt.toISOString() : null })) });
@@ -120,7 +145,19 @@ export async function GET(request: Request, { params }: { params: Promise<{ data
           surveys,
           outcomes,
         };
-        const ctx = { orgId, locale, stageOrgId: (session.user as { orgId?: string | null }).orgId ?? null };
+        // The screen's programme filter (#1652): the sub-reads above took it from
+        // the query string; the registry sheets (Funnel, Mentors, …) take it
+        // here, so a workbook exported from a filtered view says what that view
+        // says. An invalid or foreign id has already failed the analytics read.
+        const program = await resolveProgramFilter(new URL(request.url).searchParams.get('program'), await tenantWhere(session));
+        if ('error' in program) return program.error;
+        const relation = relationProgramWhere(program.filter);
+        const ctx = {
+          orgId,
+          locale,
+          stageOrgId: (session.user as { orgId?: string | null }).orgId ?? null,
+          ...(Object.keys(relation).length > 0 ? { relation } : {}),
+        };
         const sheets = dataset === 'analytics'
           ? await analyticsWorkbook(src, ctx, t, label)
           : await fullAnalyticsWorkbook(src, ctx, t, label);

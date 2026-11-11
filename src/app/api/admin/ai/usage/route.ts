@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { currentPeriod, isPeriod, previousPeriod } from '@/lib/meteringRules';
@@ -16,9 +15,9 @@ import { toCsv } from '@/lib/reports/render';
 // ADMIN only, checked here. Aggregated in SQL (src/lib/ai/console.ts).
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.settings.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const params = new URL(request.url).searchParams;
   const month = params.get('month') ?? currentPeriod();
   if (!isPeriod(month)) return NextResponse.json({ error: 'Invalid month' }, { status: 400 });

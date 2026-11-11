@@ -59,6 +59,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      // The mentor shell's first-run tour (#2067). A MARKETING MENTOR is a sales
+      // rep and is sent to /sales, so this is a safety net, not a screen.
+      guidance: { tours: { 'mentor-first-run': { steps: {
+        mentees: { title: 'Your leads', body: 'The leads you look after, with their stage and when you last spoke.' },
+        board: { body: 'Your leads by stage. Move a card on when something changes.' },
+      } } } },
+      // The webhook picker's family heading (#1998), in the sales word.
+      integrations: { familyMentorship: 'Customer journeys' },
       // #1745: the plan-wall prompt, in sales words (the active-pair cap is
       // the internship meter; a MARKETING org sees it only if its plan has one).
       upgrade: {
@@ -122,6 +130,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         createOnePerRole: 'This instrument asks sales reps a differently worded question, so it is one survey per role — create a second one for the other role.',
       },
       nav: {
+        mentorOffers: 'Offer to a lead',
         candidates: 'Leads',
         companyInquiries: 'Demo requests',
         myCompanies: 'My accounts',
@@ -172,6 +181,10 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'company_interest.mentee': 'A company showed interest in your profile. Your contact person will get in touch with you.',
           'mentorship_request.mentorAssigned': 'You have been assigned a contact person: {mentorName}.',
           'mentorship_request.menteeAssigned': 'A new lead was assigned to you: {menteeName}.',
+          'mentor_offer.new': '{mentorName} offered to be your contact person.',
+          'mentor_offer.reminder': 'The offer from {mentorName} expires soon.',
+          'mentor_offer.accepted': '{menteeName} accepted your offer.',
+          'mentor_offer.declined': '{menteeName} declined your offer.',
           'mentorship.mentorChanged': 'Your contact person has changed — {mentorName} is looking after you now.',
           'mentorship.reassignedAway': '{menteeName} was handed over to another rep — your deal with them has ended.',
           'mentorship.assignmentCorrected': '{menteeName} was assigned to you by mistake and is no longer your lead.',
@@ -189,6 +202,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'mentorship_request.newGeneric': 'A new contact request was received.',
           'mentorship_request.approved': 'Your contact request was approved — say hi to your contact person!',
           'mentorship_request.rejected': 'Your contact request was reviewed but could not be approved right now.',
+          'mentorship_request.nudge': '{from}’s contact request has been waiting a week for an answer — it expires in 7 days.',
+          'mentorship_request.expired': 'Your contact request expired after 14 days without an answer. You can send a new one now.',
+          'mentorship_request.cancelled': 'Your contact request was withdrawn: {reason} You can send a new one.',
           'mentorship_request.rematch': '{from} asked for a different contact person.',
           'mentorship_request.rematchGeneric': 'A lead asked for a different contact person.',
           'mentorship_request.rematchApproved': 'You have a new contact person — your previous one no longer looks after you.',
@@ -200,6 +216,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         },
         // The assignment mails (#2558): the rep is asked to book a demo; the
         // lead is a customer and gets a contact person, not a mentor.
+        mentorOfferEmail: {
+          newSubject: '{mentorName} offered to be your contact person',
+          reminderSubject: 'The offer from {mentorName} expires soon',
+          heading: 'A rep would like to look after you',
+          newBody: '{mentorName} read your profile and offered to be your contact person. You can accept or decline in your portal — no reason needed either way.',
+          why: 'You get this because you allowed reps to approach you. You can switch it off in your profile at any time.',
+        },
         menteeAssignedEmail: {
           subject: 'New lead assigned: {mentee}',
           heading: 'You have a new lead',
@@ -422,12 +445,19 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkImport: 'Bulk import people',
         importModeMentees: 'People (leads)',
       },
+      // A promotion to rep and the person's own open lead records (#1506).
+      promotionRelations: {
+        title: 'This person is still a lead in open records',
+        relationLine: 'Owned by {mentor} · {stage}',
+        options: { KEEP: 'Leave them as they are — the person is a rep and a lead at once' },
+      },
       // The report registry (#1903): the mentorship-only reports are refused for
       // a tenant without `mentorship`, but the column labels are shared.
       reports: {
         mentorWorkload: { title: 'Rep workload', description: 'Active deals per rep and how many reached the final stage.' },
         weeklyReportCompliance: { description: 'Owed, handed-in, missing and late weekly reports per person this term.' },
         col: { mentor: 'Rep', intern: 'Person' },
+        role: { MENTOR: 'Sales rep', MENTEE: 'Lead' },
       },
       analytics: {
         subtitle: 'Funnel, rep workload and activity insights',
@@ -1202,6 +1232,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      guidance: { tours: { 'mentor-first-run': { steps: {
+        mentees: { title: 'Potansiyel müşterilerin', body: 'İlgilendiğin potansiyel müşteriler; hangi aşamada olduklarını ve en son ne zaman konuştuğunuzu burada görürsün.' },
+        board: { body: 'Potansiyel müşterilerin aşamalarına göre dizili. Bir şey değiştiğinde kartı ilerlet.' },
+      } } } },
+      // The webhook picker's family heading (#1998), in the sales word.
+      integrations: { familyMentorship: 'Müşteri yolculukları' },
       upgrade: {
         limitBody: '{plan} paketinde {limit} aktif kayıttan {usage} tanesini kullanıyorsunuz.',
         reassurance: 'Mevcut lead ve hesaplar etkilenmez — yalnızca yeni bir aktif kayıt eklemek bekletilir.',
@@ -1259,6 +1295,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         createOnePerRole: 'Bu anket satış temsilcilerine soruyu farklı sözcüklerle soruyor, bu yüzden her rol için ayrı bir anket gerekir — diğer rol için ikincisini oluşturun.',
       },
       nav: {
+        mentorOffers: 'Müşteri adayına teklif et',
         candidates: 'Müşteri Adayları',
         companyInquiries: 'Demo talepleri',
         myCompanies: 'Hesaplarım',
@@ -1303,6 +1340,10 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'company_interest.mentee': 'Bir firma profilinle ilgilendi. Muhatabın seninle iletişime geçecek.',
           'mentorship_request.mentorAssigned': 'Sana bir muhatap atandı: {mentorName}.',
           'mentorship_request.menteeAssigned': 'Sana yeni bir müşteri adayı atandı: {menteeName}.',
+          'mentor_offer.new': '{mentorName} senin ilgili kişin olmayı teklif etti.',
+          'mentor_offer.reminder': '{mentorName} adlı kişinin teklifinin süresi yakında doluyor.',
+          'mentor_offer.accepted': '{menteeName} teklifini kabul etti.',
+          'mentor_offer.declined': '{menteeName} teklifini kabul etmedi.',
           'mentorship.mentorChanged': 'Muhatabın değişti — artık {mentorName} seninle ilgileniyor.',
           'mentorship.reassignedAway': '{menteeName} başka bir temsilciye devredildi — onunla fırsatın sona erdi.',
           'mentorship.assignmentCorrected': '{menteeName} yanlışlıkla sana atanmıştı; artık senin müşteri adayın değil.',
@@ -1320,6 +1361,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'mentorship_request.newGeneric': 'Yeni bir iletişim talebi alındı.',
           'mentorship_request.approved': 'İletişim talebin onaylandı — muhatabına merhaba de!',
           'mentorship_request.rejected': 'İletişim talebin incelendi ancak şu an onaylanamadı.',
+          'mentorship_request.nudge': '{from} adlı kişinin iletişim talebi bir haftadır yanıt bekliyor — 7 gün içinde süresi dolacak.',
+          'mentorship_request.expired': 'İletişim talebin 14 gün yanıtsız kaldığı için kapandı. Şimdi yeni bir talep gönderebilirsin.',
+          'mentorship_request.cancelled': 'İletişim talebin geri çekildi: {reason} Yeni bir talep gönderebilirsin.',
           'mentorship_request.rematch': '{from} farklı bir muhatap talep etti.',
           'mentorship_request.rematchGeneric': 'Bir müşteri adayı farklı bir muhatap talep etti.',
           'mentorship_request.rematchApproved': 'Yeni bir muhatabın var — önceki muhatabın artık seninle ilgilenmiyor.',
@@ -1328,6 +1372,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'application.received': '{name} müşteri adayın olarak kaydoldu.',
           'mentor_application.new': '{name} satış temsilcisi olmak için başvurdu.',
           'mentor_application.approved': 'Satış temsilcisi başvurun onaylandı — aramıza hoş geldin!',
+        },
+        mentorOfferEmail: {
+          newSubject: '{mentorName} senin ilgili kişin olmayı teklif etti',
+          reminderSubject: '{mentorName} adlı kişinin teklifinin süresi yakında doluyor',
+          reminderBody: '{mentorName} adlı kişinin teklifi hâlâ açık ama birkaç gün içinde sona eriyor. Bu tek hatırlatma.',
+          heading: 'Bir temsilci seninle ilgilenmek istiyor',
+          newBody: '{mentorName} profilini okudu ve ilgili kişin olmayı teklif etti. Portalında kabul edebilir ya da reddedebilirsin — iki durumda da gerekçe gerekmez.',
+          why: 'Bu e-postayı temsilcilerin sana ulaşmasına izin verdiğin için alıyorsun. Profilinden istediğin zaman kapatabilirsin.',
         },
         menteeAssignedEmail: {
           subject: 'Yeni müşteri adayı atandı: {mentee}',
@@ -1525,12 +1577,19 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkImport: 'Toplu kişi içe aktar',
         importModeMentees: 'Kişiler (lead)',
       },
+      // A promotion to rep and the person's own open lead records (#1506).
+      promotionRelations: {
+        title: 'Bu kişi hâlâ açık kayıtlarda müşteri adayı',
+        relationLine: 'Sorumlusu {mentor} · {stage}',
+        options: { KEEP: 'Dokunma — kişi hem temsilci hem müşteri adayı olarak kalır' },
+      },
       // Rapor kaydı (#1903): mentorluk raporları `mentorship` yeteneği olmayan
       // kiracıya kapalı, ama sütun etiketleri ortak.
       reports: {
         mentorWorkload: { title: 'Temsilci iş yükü', description: 'Temsilci başına aktif fırsatlar ve kaçının son aşamaya ulaştığı.' },
         weeklyReportCompliance: { description: 'Bu dönem kişi başına beklenen, teslim edilen, eksik ve geç haftalık raporlar.' },
         col: { mentor: 'Temsilci', intern: 'Kişi' },
+        role: { MENTOR: 'Satış temsilcisi', MENTEE: 'Müşteri adayı' },
       },
       analytics: {
         subtitle: 'Satış hunisi, temsilci iş yükü ve etkinlik içgörüleri',
@@ -1885,13 +1944,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       imprint: { intro: 'Bu {product} kurulumunu kim işletiyor ve kendisine nasıl ulaşılır.' },
       privacy: {
-        intro: 'Müşteri adaylarını, hesapları ve fırsatları yönetmek için sağladığın bilgileri saklarız. Bu bildirim; neyi, neden işlediğimizi, kimin görebileceğini, ne kadar sakladığımızı ve haklarını açıklar (GDPR Md. 13–15).',
+        intro: 'Müşteri adaylarını, hesapları ve fırsatları yönetmek için sağladığınız bilgileri saklarız. Bu bildirim; neyi, neden işlediğimizi, kimin görebileceğini, ne kadar sakladığımızı ve haklarınızı açıklar (GDPR Md. 13–15).',
         controllerBody: 'Burada işlenen kişisel verilerin sorumlusu, bu {product} kurulumunu işleten {operator}. Posta adresi ve diğer iletişim bilgileri künyede yayınlanıyor.',
         controllerUnset: 'Veri sorumlusu, bu {product} kurulumunu işleten taraftır; bilgileri bu dağıtımın künyesinde yayınlanır.',
         purposesBody: 'Platformu işletmek için: müşteri adaylarını ve hesapları satış hattında takip etme, satış temsilcilerine atama, etkileşimleri kaydetme, planlama ve iletişim. Bir satış temsilcisi size yazdığı e-postada bu CRM’in adresini gizli kopyaya (BCC) eklerse ya da sizin yanıtınızı bu adrese yönlendirirse, e-postanın tarihi, konusu ve ilgili e-posta adresleri hesabınızda bir etkileşim olarak kaydedilir; içerik ve ekler saklanmaz.',
-        legalBasisBody: 'İşleme, rızana (Md. 6(1)(a)) ve satış sürecini yürütmenin meşru menfaatine (Md. 6(1)(f)) dayanır. İsteğe bağlı işlemeler her zaman ayrı bir rıza gerektirir.',
-        recipientsBody: 'Rolüne göre: bir müşteri adayının kaydı ve etkileşim geçmişi, onu üstlenen satış temsilcisi ve yöneticiler tarafından görülür. Temsilciler yalnızca kendi müşteri adaylarını ve hesaplarını görür. Verini asla satmayız. Herkese açık ana sayfada, yalnızca pazarlama çerezlerini kabul edersen canlı sohbet tawk.to üzerinden yüklenir; IP adresini ve sohbete yazdıklarını alır. Kabul etmezsen ya da sohbete dokunmazsan onlara hiçbir şey gitmez.',
-        use: 'Verilerin yalnızca platformu işletmek için kullanılır — satış hattı takibi ve iletişim.',
+        legalBasisBody: 'İşleme, rızanıza (Md. 6(1)(a)) ve satış sürecini yürütmenin meşru menfaatine (Md. 6(1)(f)) dayanır. İsteğe bağlı işlemeler her zaman ayrı bir rıza gerektirir.',
+        recipientsBody: 'Rolünüze göre: bir müşteri adayının kaydı ve etkileşim geçmişi, onu üstlenen satış temsilcisi ve yöneticiler tarafından görülür. Temsilciler yalnızca kendi müşteri adaylarını ve hesaplarını görür. Verilerinizi asla satmayız. Herkese açık ana sayfada, yalnızca pazarlama çerezlerini kabul ederseniz canlı sohbet tawk.to üzerinden yüklenir; IP adresinizi ve sohbete yazdıklarınızı alır. Kabul etmezseniz ya da sohbete dokunmazsanız onlara hiçbir şey gitmez.',
+        use: 'Verileriniz yalnızca platformu işletmek için kullanılır — satış hattı takibi ve iletişim.',
         aiBody: 'Bir özellik bir yapay zekâ sağlayıcısına metin gönderebilir: bir yönetici bir müşteri adayını bir satış temsilcisine atarken, temsilci önerisi müşteri adayının yetkinliklerini, pozisyonunu ve ilgi alanlarını, en fazla beş temsilcinin de yetkinliklerini, ilgi alanlarını ve mevcut yüklerini gönderir; iki tarafta da ad veya kimlik yoktur. Kimseyi tanımlayan hiçbir şey gönderilmediği için rıza istemez; bir yönetici onu tüm kurum için kapatabilir. Ne gönderilen ne de üretilen metin saklanır. Neyi gönderdiği, neyi bilerek göndermediği ve sağlayıcının kim olduğu yapay zekâ sayfasında tek tek yazılıdır.',
       },
       terms: {
@@ -2201,6 +2260,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      guidance: { tours: { 'mentor-first-run': { steps: {
+        mentees: { title: 'Deine Leads', body: 'Die Leads, die du betreust, mit ihrer Phase und dem letzten Kontakt.' },
+        board: { body: 'Deine Leads nach Phase. Schieb eine Karte weiter, wenn sich etwas ändert.' },
+      } } } },
+      // The webhook picker's family heading (#1998), in the sales word.
+      integrations: { familyMentorship: 'Kundenreisen' },
       upgrade: {
         limitBody: 'Sie nutzen {usage} von {limit} aktiven Datensätzen im Plan {plan}.',
         reassurance: 'Bestehende Leads und Konten sind nicht betroffen — nur ein neuer aktiver Datensatz wird angehalten.',
@@ -2257,6 +2322,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         createOnePerRole: 'Diese Vorlage fragt Vertriebsmitarbeiter mit anderem Wortlaut, daher ist es eine Umfrage pro Rolle — legen Sie für die andere Rolle eine zweite an.',
       },
       nav: {
+        mentorOffers: 'Lead ein Angebot machen',
         candidates: 'Leads',
         companyInquiries: 'Demo-Anfragen',
         myCompanies: 'Meine Accounts',
@@ -2301,6 +2367,10 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'company_interest.mentee': 'Ein Unternehmen hat Interesse an deinem Profil gezeigt. Deine Ansprechperson meldet sich bei dir.',
           'mentorship_request.mentorAssigned': 'Dir wurde eine Ansprechperson zugewiesen: {mentorName}.',
           'mentorship_request.menteeAssigned': 'Dir wurde ein neuer Lead zugewiesen: {menteeName}.',
+          'mentor_offer.new': '{mentorName} bietet an, deine Ansprechperson zu sein.',
+          'mentor_offer.reminder': 'Das Angebot von {mentorName} läuft bald ab.',
+          'mentor_offer.accepted': '{menteeName} hat dein Angebot angenommen.',
+          'mentor_offer.declined': '{menteeName} hat dein Angebot abgelehnt.',
           'mentorship.mentorChanged': 'Deine Ansprechperson hat sich geändert — {mentorName} betreut dich jetzt.',
           'mentorship.reassignedAway': '{menteeName} wurde an einen anderen Vertriebsmitarbeiter übergeben — dein Deal mit der Person ist beendet.',
           'mentorship.assignmentCorrected': '{menteeName} wurde dir versehentlich zugewiesen und ist nicht mehr dein Lead.',
@@ -2318,6 +2388,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'mentorship_request.newGeneric': 'Eine neue Kontaktanfrage ist eingegangen.',
           'mentorship_request.approved': 'Deine Kontaktanfrage wurde genehmigt — sag deiner Ansprechperson Hallo!',
           'mentorship_request.rejected': 'Deine Kontaktanfrage wurde geprüft, konnte aber derzeit nicht genehmigt werden.',
+          'mentorship_request.nudge': 'Die Kontaktanfrage von {from} wartet seit einer Woche auf eine Antwort — sie läuft in 7 Tagen ab.',
+          'mentorship_request.expired': 'Deine Kontaktanfrage ist nach 14 Tagen ohne Antwort abgelaufen. Du kannst jetzt eine neue senden.',
+          'mentorship_request.cancelled': 'Deine Kontaktanfrage wurde zurückgezogen: {reason} Du kannst eine neue senden.',
           'mentorship_request.rematch': '{from} hat um eine andere Ansprechperson gebeten.',
           'mentorship_request.rematchGeneric': 'Ein Lead hat um eine andere Ansprechperson gebeten.',
           'mentorship_request.rematchApproved': 'Du hast eine neue Ansprechperson — deine bisherige betreut dich nicht mehr.',
@@ -2326,6 +2399,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'application.received': '{name} hat sich als dein Lead angemeldet.',
           'mentor_application.new': '{name} hat sich als Vertriebsmitarbeiter beworben.',
           'mentor_application.approved': 'Deine Bewerbung als Vertriebsmitarbeiter wurde angenommen — willkommen an Bord!',
+        },
+        mentorOfferEmail: {
+          newSubject: '{mentorName} bietet an, deine Ansprechperson zu sein',
+          reminderSubject: 'Das Angebot von {mentorName} läuft bald ab',
+          heading: 'Ein Vertriebsmitarbeiter möchte dich betreuen',
+          newBody: '{mentorName} hat dein Profil gelesen und bietet an, deine Ansprechperson zu sein. Du kannst im Portal annehmen oder ablehnen — eine Begründung braucht es in keinem Fall.',
+          why: 'Du bekommst diese E-Mail, weil du Vertriebsmitarbeitern erlaubt hast, dich anzusprechen. Du kannst es jederzeit im Profil ausschalten.',
         },
         menteeAssignedEmail: {
           subject: 'Neuer Lead zugewiesen: {mentee}',
@@ -2523,12 +2603,19 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         bulkImport: 'Personen im Stapel importieren',
         importModeMentees: 'Personen (Leads)',
       },
+      // A promotion to rep and the person's own open lead records (#1506).
+      promotionRelations: {
+        title: 'Diese Person ist noch Lead in offenen Datensätzen',
+        relationLine: 'Betreut von {mentor} · {stage}',
+        options: { KEEP: 'So lassen — die Person ist zugleich Vertriebler und Lead' },
+      },
       // The report registry (#1903): the mentorship-only reports are refused for
       // a tenant without `mentorship`, but the column labels are shared.
       reports: {
         mentorWorkload: { title: 'Vertriebler-Auslastung', description: 'Aktive Deals je Vertriebler und wie viele die letzte Phase erreicht haben.' },
         weeklyReportCompliance: { description: 'Fällige, abgegebene, fehlende und verspätete Wochenberichte je Person im laufenden Zeitraum.' },
         col: { mentor: 'Vertriebler', intern: 'Person' },
+        role: { MENTOR: 'Vertriebler', MENTEE: 'Lead' },
       },
       analytics: {
         subtitle: 'Funnel, Auslastung der Vertriebsmitarbeiter und Aktivitäts-Insights',
@@ -2881,13 +2968,13 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       imprint: { intro: 'Wer diese {product}-Instanz betreibt und wie man ihn erreicht.' },
       privacy: {
-        intro: 'Wir speichern die von dir bereitgestellten Informationen, um Leads, Accounts und Deals zu verwalten. Dieser Hinweis erklärt, was wir verarbeiten, warum, wer es sehen kann, wie lange wir es aufbewahren und welche Rechte du hast (DSGVO Art. 13–15).',
+        intro: 'Wir speichern die von Ihnen bereitgestellten Informationen, um Leads, Accounts und Deals zu verwalten. Dieser Hinweis erklärt, was wir verarbeiten, warum, wer es sehen kann, wie lange wir es aufbewahren und welche Rechte Sie haben (DSGVO Art. 13–15).',
         controllerBody: 'Verantwortlicher für die hier verarbeiteten personenbezogenen Daten ist {operator}, Betreiber dieser {product}-Instanz. Anschrift und weitere Kontaktdaten stehen im Impressum.',
         controllerUnset: 'Verantwortlicher ist, wer diese {product}-Instanz betreibt; die Angaben stehen im Impressum dieses Deployments.',
         purposesBody: 'Zum Betrieb der Plattform: Verfolgung von Leads und Accounts durch die Vertriebs-Pipeline, Zuordnung zu Vertriebsmitarbeitern, Protokollierung von Interaktionen, Terminplanung und Kommunikation. Setzt ein Vertriebsmitarbeiter die Adresse dieses CRM in Blindkopie (BCC) auf eine E-Mail an Sie oder leitet er Ihre Antwort dorthin weiter, werden Datum, Betreff und die beteiligten E-Mail-Adressen als Interaktion an Ihrem Account festgehalten; Inhalt und Anhänge werden nicht gespeichert.',
-        legalBasisBody: 'Die Verarbeitung stützt sich auf deine Einwilligung (Art. 6(1)(a)) und auf das berechtigte Interesse am Betrieb des Vertriebsprozesses (Art. 6(1)(f)). Optionale Verarbeitung erfordert stets eine gesonderte Einwilligung.',
-        recipientsBody: 'Je nach Rolle: Datensatz und Interaktionsverlauf eines Leads sind für den zuständigen Vertriebsmitarbeiter und für Administratoren sichtbar. Vertriebsmitarbeiter sehen nur ihre eigenen Leads und Accounts. Wir verkaufen deine Daten nicht. Auf der öffentlichen Startseite wird der Live-Chat nur nach Zustimmung zu Marketing-Cookies von tawk.to geladen; dabei erhält tawk.to deine IP-Adresse und alles, was du in den Chat schreibst. Lehnst du ab oder nutzt den Chat nicht, wird nichts an sie übermittelt.',
-        use: 'Deine Daten werden nur zum Betrieb der Plattform verwendet — Pipeline-Tracking und Kommunikation.',
+        legalBasisBody: 'Die Verarbeitung stützt sich auf Ihre Einwilligung (Art. 6(1)(a)) und auf das berechtigte Interesse am Betrieb des Vertriebsprozesses (Art. 6(1)(f)). Optionale Verarbeitung erfordert stets eine gesonderte Einwilligung.',
+        recipientsBody: 'Je nach Rolle: Datensatz und Interaktionsverlauf eines Leads sind für den zuständigen Vertriebsmitarbeiter und für Administratoren sichtbar. Vertriebsmitarbeiter sehen nur ihre eigenen Leads und Accounts. Wir verkaufen Ihre Daten nicht. Auf der öffentlichen Startseite wird der Live-Chat nur nach Zustimmung zu Marketing-Cookies von tawk.to geladen; dabei erhält tawk.to Ihre IP-Adresse und alles, was Sie in den Chat schreiben. Lehnen Sie ab oder nutzen Sie den Chat nicht, wird nichts an sie übermittelt.',
+        use: 'Ihre Daten werden nur zum Betrieb der Plattform verwendet — Pipeline-Tracking und Kommunikation.',
         aiBody: 'Eine Funktion kann Text an einen KI-Anbieter senden: Wenn ein Admin einen Lead einem Vertriebsmitarbeiter zuordnet, sendet der Vorschlag passender Vertriebsmitarbeiter Fähigkeiten, Position und Interessen des Leads sowie Fähigkeiten, Interessen und aktuelle Auslastung von bis zu fünf Vertriebsmitarbeitern — ohne Namen oder Kennung auf beiden Seiten. Sie braucht keine Einwilligung, weil nichts gesendet wird, was jemanden identifiziert, und ein Admin kann sie für die ganze Organisation abschalten. Weder der gesendete noch der erzeugte Text wird gespeichert. Was sie sendet, was sie bewusst zurückhält und wer der Anbieter ist, steht vollständig auf der KI-Seite.',
       },
       terms: {

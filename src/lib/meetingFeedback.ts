@@ -14,14 +14,14 @@
 
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { logger } from '@/lib/logger';
 import { effectiveMinResponses } from '@/lib/surveyPrivacy';
 import { settingsOrgOfRow } from '@/lib/settingsOrg';
 import { meetingFeedbackUrl, DID_NOT_MEET } from '@/lib/meetingFeedbackToken';
 import { emailDictionary } from '@/i18n/emailDictionary';
 import { defaultLocale, isLocale, type Locale } from '@/i18n/config';
 import { formatDateTime } from '@/lib/relativeTime';
-import { emailBrand, sendEmail } from '@/services/emailService';
+import { emailBrand } from '@/services/emailService';
+import { notifyEvent } from '@/lib/notifications/router';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -165,15 +165,15 @@ export async function askForMeetingFeedback(meetingIds: string[]): Promise<numbe
         <p>${button(DID_NOT_MEET, t.emailDidNotMeet)}</p>
         <p style="font-size:12px;color:#6b7280;">${esc(t.privacy)} ${esc(t.emailFooter)}</p>
       </div>`;
-    await sendEmail({
-      category: 'meeting-feedback',
-      userId: mentee.id,
+    // Through the router (#1711): it applies the opt-outs and records the
+    // delivery; the mail itself is the copy built above, sent as-is. One ask per
+    // meeting — the claim above already guards it, the key guards a rerun.
+    await notifyEvent(mentee.id, 'meeting.feedbackAsk', { title: m.title }, {
+      channels: ['email'],
       orgId: mentee.orgId,
-      locale,
-      to: mentee.email,
-      subject: t.emailSubject.replace('{title}', m.title),
-      html,
-    }).catch((error) => logger.error('Meeting feedback ask failed', { meetingId: m.id, error: String(error) }));
+      dedupeKey: `meeting-feedback:${m.id}`,
+      email: { subject: t.emailSubject.replace('{title}', m.title), html, category: 'meeting-feedback', locale },
+    });
     asked++;
   }
   return asked;

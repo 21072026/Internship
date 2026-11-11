@@ -81,12 +81,19 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'User',
   // IdP role mapping rules (#1940) — one tenant's SSO config, never another's.
   'SsoClaimMapping',
+  'SsoAttributeMapping',
+  'ProgramEligibilityRule',
+  // An SSO request in flight (#1929): sessionless writers (login route,
+  // callback) pass their own orgId.
+  'SsoAuthRequest',
   'Source',
   'Company',
   'Project',
   'Cohort',
   'MentorshipRelation',
   'MentorApplication',
+  // Mentor Offers (#1809); created with the mentor's orgId, the sweep passes none.
+  'MentorOffer',
   'DocumentRequirement',
   // A document's review chain (#1859); the sweep and the token route bind no context and pass orgId.
   'DocumentReview',
@@ -96,6 +103,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   'UserAttributeValue',
   // Company → candidate message requests (#1840).
   'CandidateOutreach',
+  // A COMPANY user's seat and role at its company (#1870).
+  'CompanyMembership',
   // Scheduled report delivery (#1905).
   'ReportSubscription',
   'ReportSubscriptionSend',
@@ -170,6 +179,13 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // Matching rule sets and their rules (#1781) — one org's weights.
   'MatchRuleSet',
   'MatchRule',
+  // The per-pairing audit record (#1789).
+  'MatchDecision',
+  // Bulk matching rounds and their proposals (#1793) — both scoped on their own.
+  'MatchRound',
+  'MatchProposal',
+  // A person's cached profile themes for the semantic match rule (#2038).
+  'ProfileDigest',
   // Queued background work (#1674). A job's payload belongs to whichever tenant
   // enqueued it, so the row carries orgId and is listed here. The operational
   // readers — /api/health's counters and the daily dead-letter alert — run
@@ -342,6 +358,9 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // request, where no context is bound and the sweep therefore still sees every
   // tenant's due offers — which is what a platform-wide sweep must do.
   'Offer',
+  // The org's offer letter template per locale (#1857). REQUIRED orgId; the
+  // one writer (PUT /api/admin/offer-templates) passes the session's org.
+  'OfferTemplate',
   // A live registration link with a role attached (#1272). Its consumption
   // paths are unauthenticated and bind NO org on purpose: /api/register and
   // /api/invite/opened look a row up BY TOKEN, which is the only thing the
@@ -371,6 +390,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // Stage automation (#1703): a tenant's rules and their run log. The evaluator
   // runs in the worker with no session and passes orgId itself.
   'AutomationRule',
+  // Business-day SLA holiday calendars (#1638); Holiday rows are reached through them.
+  'HolidayCalendar',
   'AutomationRun',
   // Admin-authored nudges (#1684) and what they sent. The evaluator and the
   // send job run in the worker with no session and pass orgId themselves.
@@ -478,12 +499,19 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // orgId on every create and in every WHERE, so it is right without a bound
   // context too (an API import, a migration script).
   'AffiliateProgramSettings',
+  'AffiliateLandingAsset',
   'AffiliatePartner',
   'AffiliateCustomer',
   'AffiliatePayment',
   'AffiliateCommission',
   'AffiliatePayout',
   'AffiliateContractAcceptance',
+  // Partner applications (#3361): written by the sessionless public form, which
+  // passes the host-resolved orgId itself; read by that org's admins only.
+  'AffiliateApplication',
+  // Per-partner daily link clicks (#3541): written by the sessionless /r/<code>
+  // route, which passes the host-resolved orgId itself; counters only.
+  'AffiliateClickDaily',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.

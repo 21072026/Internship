@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { isSavedViewSurface, MAX_VIEW_NAME, SAVED_VIEW_SURFACES, SAVED_VIEW_VISIBILITIES, sanitizeViewFilters, toSavedViewDto as toDto } from '@/lib/savedViews';
+import { requirePermission } from '@/lib/authz';
 
 // Saved views on admin lists (#1900). ADMIN only, the caller's own tenant.
 // GET lists the views of one surface the caller may see: their own, and every
@@ -24,9 +23,9 @@ const createSchema = z.object({
 const VIEW_SELECT = { id: true, name: true, filters: true, visibility: true, createdById: true, createdBy: { select: { fullName: true } } } as const;
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const surface = new URL(request.url).searchParams.get('surface');
   if (!isSavedViewSurface(surface)) return NextResponse.json({ error: 'unknown_surface' }, { status: 400 });
   return withTenantScope(session, async () => {
@@ -40,9 +39,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const parsed = createSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input', issues: parsed.error.issues }, { status: 400 });
   const { surface, name, visibility } = parsed.data;

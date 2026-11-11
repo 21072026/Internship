@@ -20,11 +20,12 @@ import {
   liveVersion,
   type FormEditCode,
 } from '@/lib/forms/definitionRule';
+import { missingLocales, type BuilderField } from '@/lib/forms/builderRule';
 
 /** A write the rules refuse — `status` is what the route answers. */
 export class FormWriteError extends Error {
   constructor(
-    public code: FormEditCode | 'draft_exists' | 'not_latest' | 'already_published' | 'not_published' | 'invalid_answers',
+    public code: FormEditCode | 'draft_exists' | 'not_latest' | 'already_published' | 'not_published' | 'invalid_answers' | 'missing_locales',
     public status: 400 | 409,
     public detail?: Record<string, unknown>,
   ) {
@@ -195,8 +196,16 @@ export async function saveFormDefinition(definitionId: string, input: z.infer<ty
  */
 export async function publishFormDefinition(definitionId: string, now = new Date()): Promise<FormWithFields> {
   return prisma.$transaction(async (tx) => {
-    const def = await tx.formDefinition.findUniqueOrThrow({ where: { id: definitionId }, select: { id: true, orgId: true, key: true, version: true, publishedAt: true } });
+    const def = await tx.formDefinition.findUniqueOrThrow({
+      where: { id: definitionId },
+      select: { id: true, orgId: true, key: true, version: true, publishedAt: true, fields: { select: { key: true, type: true, labels: true, helpText: true, options: true, archivedAt: true } } },
+    });
     if (def.publishedAt) throw new FormWriteError('already_published', 409);
+    // A live field reads in every language the product speaks (#1802): a TR
+    // participant must never meet an empty question. The builder shows the
+    // same list before the button is pressed (missingLocales, builderRule.ts).
+    const missing = missingLocales(def.fields as unknown as BuilderField[]);
+    if (missing.length > 0) throw new FormWriteError('missing_locales', 400, { fields: missing });
     const claimed = await tx.formDefinition.updateMany({ where: { id: def.id, publishedAt: null }, data: { publishedAt: now, archivedAt: null } });
     if (claimed.count !== 1) throw new FormWriteError('already_published', 409);
     await tx.formDefinition.updateMany({
@@ -242,9 +251,15 @@ export async function saveFormResponses(
     if (err) errors[f.key] = err;
   }
   if (Object.keys(errors).length > 0) throw new FormWriteError('invalid_answers', 400, { errors });
-  await prisma.$transaction(
-    active
-      .filter((f) => answers[f.key] !== undefined && answers[f.key] !== null)
+  // A key sent EMPTY (null, '', []) clears that answer — across every version
+  // of the form, or latestFormAnswers() would resurface an older one. A key
+  // left out of `answers` is not touched. A required field never gets here
+  // empty: validateResponse() refused it above.
+  const empty = (v: unknown) => v === null || (typeof v === 'string' && v.trim() === '') || (Array.isArray(v) && v.length === 0);
+  const cleared = active.filter((f) => f.key in answers && empty(answers[f.key])).map((f) => f.key);
+  await prisma.$transaction([
+    ...active
+      .filter((f) => answers[f.key] !== undefined && !empty(answers[f.key]))
       .map((f) =>
         prisma.formResponse.upsert({
           where: { userId_definitionId_fieldKey: { userId, definitionId: definition.id, fieldKey: f.key } },
@@ -252,7 +267,10 @@ export async function saveFormResponses(
           update: { value: answers[f.key] as Prisma.InputJsonValue },
         }),
       ),
-  );
+    ...(cleared.length > 0
+      ? [prisma.formResponse.deleteMany({ where: { userId, fieldKey: { in: cleared }, definition: { orgId: definition.orgId, key: definition.key } } })]
+      : []),
+  ]);
 }
 
 /**

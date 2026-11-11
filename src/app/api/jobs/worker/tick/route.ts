@@ -46,6 +46,8 @@ const holder = globalThis as unknown as { __jobWorker?: JobWorker };
 
 /** SIGTERM → stop claiming; release what is still running just before docker's SIGKILL. */
 const SHUTDOWN_GRACE_MS = 20_000;
+/** Keep claiming within a tick for up to this long — under the 5 s tick interval of src/instrumentation.ts. */
+const DRAIN_MS = 4_000;
 
 function worker(): JobWorker {
   if (holder.__jobWorker) return holder.__jobWorker;
@@ -55,6 +57,7 @@ function worker(): JobWorker {
     registry: jobRegistry,
     workerId: replicaId(),
     concurrency: concurrencyFromEnv(process.env.JOBS_CONCURRENCY),
+    drainMs: DRAIN_MS,
     // The mail outbox drains its own rows (src/lib/mailOutbox.ts).
     ownedElsewhere: ['email.send'],
     logger,

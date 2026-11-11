@@ -1,4 +1,5 @@
 'use client';
+import { SocialSignInButtons } from '@/components/SocialSignInButtons';
 import { useT, useLocale } from "@/i18n/client";
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
@@ -35,7 +36,7 @@ function registerSchemaFor(policy: PasswordPolicy, dict: PasswordPolicyDict) {
         if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, message });
       }),
       confirmPassword: z.string(),
-      consent: z.literal(true, { errorMap: () => ({ message: 'Consent is required' }) }),
+      consent: z.literal(true, { error: 'Consent is required' }),
     })
     .refine((data) => data.password === data.confirmPassword, {
       message: 'Passwords do not match',
@@ -45,7 +46,7 @@ function registerSchemaFor(policy: PasswordPolicy, dict: PasswordPolicyDict) {
 
 type RegisterData = z.infer<ReturnType<typeof registerSchemaFor>>;
 
-function RegisterForm() {
+function RegisterForm({ social }: { social: { id: string; label: string }[] }) {
   const t = useT();
   const locale = useLocale();
   const router = useRouter();
@@ -70,20 +71,13 @@ function RegisterForm() {
   // The invitation decides the account's org, and the org decides the policy.
   const pw = usePasswordPolicy(inviteToken);
   const registerSchema = useMemo(() => registerSchemaFor(pw.policy, t.passwordPolicy), [pw.policy, t.passwordPolicy]);
-  useEffect(() => {
-    if (!inviteToken) return;
-    setShowToken(true);
-    fetch('/api/invite/opened', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: inviteToken }),
-    }).catch(() => {});
-  }, [inviteToken]);
 
   const {
     register,
     handleSubmit,
     watch,
+    getValues,
+    setValue,
     formState: { errors },
   } = useForm<RegisterData>({
     resolver: zodResolver(registerSchema),
@@ -92,6 +86,23 @@ function RegisterForm() {
     },
   });
   const passwordValue = watch('password') ?? '';
+
+  useEffect(() => {
+    if (!inviteToken) return;
+    setShowToken(true);
+    fetch('/api/invite/opened', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: inviteToken }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { email?: string } | null) => {
+        // WCAG 3.3.7: the invitation already knows the address — pre-fill it
+        // (still editable) unless the person has started typing their own.
+        if (d?.email && !getValues('email')) setValue('email', d.email, { shouldValidate: false });
+      })
+      .catch(() => {});
+  }, [inviteToken, getValues, setValue]);
 
   const onSubmit = handleSubmit(async (data) => {
     setLoading(true);
@@ -128,6 +139,9 @@ function RegisterForm() {
       if (!res.ok) {
         // A refused password comes back as a code (#1544) and is shown in the
         // user's language; anything else keeps the server's sentence.
+        // The org has no free admin seat (#1752): the invitee is not the buyer —
+        // a neutral sentence, never the plan or a price.
+        if (body.code === 'plan_limit_reached') throw new Error(t.auth.adminSeatUnavailable);
         throw new Error(passwordRefusalText(body, pw.policy, t.passwordPolicy) ?? body.error ?? 'Registration failed');
       }
 
@@ -248,6 +262,10 @@ function RegisterForm() {
             </Button>
           </form>
 
+          {/* Social sign-up (#1962) is the open door only: an invitation is
+              redeemed by the form above, which carries its role and org. */}
+          {!inviteToken && <SocialSignInButtons providers={social} />}
+
           <p className="text-center text-sm text-gray-500 mt-6">
             {t.auth.alreadyAccount}{' '}
             <Link href="/auth/signin" className="text-blue-600 hover:underline font-medium">
@@ -267,11 +285,11 @@ function RegisterForm() {
   );
 }
 
-export default function RegisterClient() {
+export default function RegisterClient({ social = [] }: { social?: { id: string; label: string }[] }) {
   const t = useT();
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center">{t.common.loading}</div>}>
-      <RegisterForm />
+      <RegisterForm social={social} />
     </Suspense>
   );
 }

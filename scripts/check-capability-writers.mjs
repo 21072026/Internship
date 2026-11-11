@@ -69,6 +69,11 @@ const MODELS = {
 // promise that the path is sessionless and was reasoned about, with the reason
 // in the value — a reader should never have to go find out why.
 const EXEMPT = {
+  'src/lib/interviewRequestDecision.ts':
+    'decideInterviewRequest() (#1949) IS the body of PATCH /api/interview-requests/[id], moved to a lib so the chat ' +
+    "card's Approve/Decline call the same code. Its FIRST statement is requireCapability(session.user.orgId, " +
+    "'placements') — the gate runs inside the writer itself, before the role check and before the guarded " +
+    'updateMany, for both callers (the route, and the chat dispatcher acting as a verified ChatIdentity).',
   'src/lib/applicationStage.ts':
     'moveApplicationStage() is the ONE writer of Application.stage (#1836) and the two write-through hooks ' +
     'beside it (a company shortlist, an approved interview request) run through it. Every caller is a ' +

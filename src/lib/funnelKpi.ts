@@ -21,7 +21,11 @@ import { ENDED_CHURNED } from './relationLifecycle';
 export interface Journey {
   /** The stage the relation started in. */
   startStatus: string;
-  /** When the journey began (ms since epoch). */
+  /**
+   * When the journey began (ms since epoch): the moment the relation ENTERED
+   * the funnel, not the day the pair was made — build it with
+   * `funnelStartedAt()` (src/lib/placement.ts, #1505), never `startDate`.
+   */
   startedAt: number;
   /** Stage arrivals in chronological order. */
   changes: { toStatus: string; at: number }[];

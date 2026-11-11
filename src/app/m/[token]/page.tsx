@@ -4,10 +4,11 @@ import { use, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { BrandMark } from '@/components/BrandMark';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDate } from '@/lib/relativeTime';
 
 // Landing page for the one-click links in a notification email (#1204):
-// "mark as read" and the five emoji reactions.
+// "mark as read", the five emoji reactions and extending a pairing (#1786).
 //
 // The action runs from the browser rather than from the link itself, because
 // mail clients and corporate link scanners (Outlook Safe Links, antivirus
@@ -18,11 +19,13 @@ type Result =
   | { state: 'pending' }
   | { state: 'read'; marked: number }
   | { state: 'reacted'; emoji: string; active: boolean }
+  | { state: 'extended'; date: string }
   | { state: 'error'; message: string };
 
 export default function EmailActionPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = use(params);
   const t = useT();
+  const locale = useLocale();
   const [result, setResult] = useState<Result>({ state: 'pending' });
   // React 18 StrictMode mounts effects twice in development; without this the
   // second run would toggle the reaction straight back off.
@@ -43,14 +46,18 @@ export default function EmailActionPage({ params }: { params: Promise<{ token: s
           setResult(
             data.expired
               ? { state: 'error', message: t.emailAction.expired }
-              : { state: 'error', message: data.error ?? t.emailAction.failed },
+              : data.code === 'stale'
+                ? { state: 'error', message: t.emailAction.extendStale }
+                : { state: 'error', message: data.error ?? t.emailAction.failed },
           );
           return;
         }
         setResult(
           data.kind === 'read'
             ? { state: 'read', marked: data.marked ?? 0 }
-            : { state: 'reacted', emoji: data.emoji, active: data.active },
+            : data.kind === 'extend'
+              ? { state: 'extended', date: data.expectedEndDate }
+              : { state: 'reacted', emoji: data.emoji, active: data.active },
         );
       })
       .catch(() => setResult({ state: 'error', message: t.emailAction.failed }));
@@ -89,6 +96,16 @@ export default function EmailActionPage({ params }: { params: Promise<{ token: s
             </h1>
             <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
               {result.active ? t.emailAction.reactedBody : t.emailAction.reactionRemovedBody}
+            </p>
+          </div>
+        )}
+
+        {result.state === 'extended' && (
+          <div data-testid="email-action-extended">
+            <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-green-600" aria-hidden />
+            <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t.emailAction.extendedTitle}</h1>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+              {t.emailAction.extendedBody.replace('{date}', formatDate(result.date, locale, { timeZone: 'UTC' }))}
             </p>
           </div>
         )}

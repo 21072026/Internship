@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { canAccessUserDocs } from '@/lib/documentAccess';
 import { logActivity } from '@/lib/activity';
@@ -81,7 +82,11 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   if (!doc) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   if (doc.isTemplate) {
-    if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    // A template is the programme's content: an admin's write, by the permission layer (#1571).
+    const actor = await actorFromSession(session);
+    if (!actor || !(await can(actor, 'content.write', undefined, session))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
   } else if (!doc.ownerId || !(await canAccessUserDocs(session.user, doc.ownerId))) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }

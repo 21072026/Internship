@@ -44,7 +44,21 @@ dictionary. No base string carries a placeholder.
 
 ## Not done yet
 
-- A programme picker in the admin card (the API takes `programId` already).
-- A programme-scoped page: request pages resolve the **org** scope; a programme value
-  reaches a caller that resolves `{ orgId, programId }` itself.
 - Turkish inflected forms beyond the four (genitive/dative…) — a catalogue extension.
+
+## Programme pages (#3400)
+
+A programme's vocabulary reaches pages through two bindings, both derived on the
+server, never from request input:
+
+- **The viewer's programme** (`requestProgramId()` in `src/i18n/server.ts`): a MENTEE's
+  active mentorship's programme (one at most, #419); a MENTOR's when all their active
+  mentorships share one programme (a relation outside any programme counts as "none").
+  Admins and companies get none here. One indexed query, only for a signed-in person of
+  an INTERNSHIP org.
+- **An admin's programme page**: `src/app/admin/programs/[id]/layout.tsx` mounts
+  `<ProgramTerminologyScope>` (`src/i18n/programScope.tsx`), which honours the route id
+  only for a programme of the caller's own org and re-provides the segment's namespaces
+  with the programme document applied over the overlaid base (`overlaidDictionary()`) —
+  the programme REPLACES the org document, as the settings chain does. The admin nav
+  around it keeps the org's words.

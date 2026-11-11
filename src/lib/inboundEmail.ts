@@ -1,10 +1,10 @@
 import { prisma } from '@/lib/prisma';
 import { scanMessageForSafeguarding } from '@/lib/safeguardingScan';
 import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
-import { conversationForRelation, mutedParticipants } from '@/lib/conversations';
+import { canPostToConversation, conversationForRelation, mutedParticipants, otherConversationParticipants } from '@/lib/conversations';
 import { verifyReplyToken, extractReplyToken } from '@/lib/replyToken';
 import { notify } from '@/lib/notify';
-import { sendNewMessagePush } from '@/lib/messagePush';
+import { notifyEvent } from '@/lib/notifications/router';
 import { markThreadRead } from '@/lib/threadRead';
 import { logger } from '@/lib/logger';
 
@@ -35,7 +35,7 @@ export type InboundEmail = {
 };
 
 export type InboundResult =
-  | { ok: true; relationId: string; duplicate: boolean }
+  | { ok: true; relationId: string | null; conversationId?: string | null; duplicate: boolean }
   | { ok: false; status: 400 | 403 | 404; reason: string };
 
 export const emailOf = (s: string) => (s.match(/[^<>\s]+@[^<>\s]+/)?.[0] || s).trim().toLowerCase();
@@ -59,6 +59,7 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
   const token = extractReplyToken(input.to);
   const payload = token ? verifyReplyToken(token) : null;
   if (!payload) return { ok: false, status: 400, reason: 'No valid reply token' };
+  if (payload.kind === 'conversation') return routeConversationReply(input, payload.conversationId, payload.recipientUserId);
   const { relationId, recipientUserId } = payload;
 
   const rel = await prisma.mentorshipRelation.findUnique({
@@ -159,14 +160,108 @@ export async function routeInboundEmail(input: InboundEmail): Promise<InboundRes
   // (#1426). Someone who switched Messages off has said they do not want the
   // bell for this conversation, whichever door the reply came through — and
   // that goes for the background push as well (#1464), which is why it sits
-  // inside the same gate. sendNewMessagePush re-checks the preference itself,
-  // so this is about not doing the work, not about correctness.
+  // inside the same gate. The router re-checks the preference itself (and
+  // records why it skipped), so this is about not doing the work.
   // A thread the recipient muted (#1609) interrupts them through no door.
   const muted = await mutedParticipants(conversation?.id, [recipientUser.id]);
   if (notificationCategoryAllowed(recipientUser, 'messages') && !muted.has(recipientUser.id)) {
     await notify(recipientUser.id, 'message.newByEmail', {}, link);
-    await sendNewMessagePush(recipientUser.id, { link, byEmail: true, preview: body });
+    await notifyEvent(
+      recipientUser.id,
+      'message.newByEmail',
+      conversation ? { conversationId: conversation.id } : { relationId },
+      { channels: ['push'], preview: body, dedupeKey: `message:${storedId}` },
+    );
   }
 
   return { ok: true, relationId, duplicate: false };
+}
+
+/**
+ * A reply to a conversation thread with no mentorship behind it — a project
+ * group chat, or a direct chat between two people who share a project (#1713).
+ *
+ * The same policy as the relation path, applied to the conversation's own
+ * participants: the sender is the participant whose address is the `From`, else
+ * the participant the signed token was sent to (logged, the weaker signal). The
+ * token NAMES; it never grants. The right to post is re-checked now, with the
+ * same `canPostToConversation()` the in-app composer uses — someone removed from
+ * the project since the mail went out is refused with 403. As on the relation
+ * path, no account is ever looked up by address: only this conversation's
+ * participants can be picked (docs/worlds.md).
+ */
+async function routeConversationReply(input: InboundEmail, conversationId: string, recipientUserId: string): Promise<InboundResult> {
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: {
+      id: true,
+      type: true,
+      projectId: true,
+      participants: { select: { userId: true, user: { select: { id: true, email: true, role: true, orgId: true } } } },
+    },
+  });
+  if (!conversation) return { ok: false, status: 404, reason: 'Thread not found' };
+
+  const from = emailOf(input.from);
+  const byFrom = conversation.participants.find((p) => p.user.email.toLowerCase() === from);
+  let sender = byFrom?.user ?? null;
+  if (!sender) {
+    const named = conversation.participants.find((p) => p.userId === recipientUserId);
+    if (named) {
+      sender = named.user;
+      logger.info('Inbound reply attributed via reply token, not From', { conversationId, from, senderId: sender.id });
+    }
+  }
+  if (!sender || !(await canPostToConversation({ id: sender.id, role: sender.role, orgId: sender.orgId }, conversation))) {
+    logger.warning('Inbound email from non-participant rejected', { conversationId, from });
+    return { ok: false, status: 403, reason: 'Sender is not a participant' };
+  }
+  const senderId = sender.id;
+
+  const inboundMessageId = input.messageId?.trim() || null;
+  if (inboundMessageId) {
+    const seen = await prisma.message.findUnique({ where: { inboundMessageId } });
+    if (seen) return { ok: true, relationId: null, conversationId, duplicate: true };
+  }
+
+  const body = stripQuoted(input.text ?? '') || '(empty message)';
+  let storedId: string;
+  try {
+    storedId = (
+      await prisma.message.create({
+        data: { conversationId, senderId, channel: 'EMAIL', body, inboundMessageId },
+        select: { id: true },
+      })
+    ).id;
+  } catch (e) {
+    if (inboundMessageId && (e as { code?: string }).code === 'P2002') {
+      return { ok: true, relationId: null, conversationId, duplicate: true };
+    }
+    throw e;
+  }
+
+  await scanMessageForSafeguarding({ messageId: storedId, body, senderId, arrivedByEmail: true });
+  try {
+    await markThreadRead(senderId, { conversationId });
+  } catch (e) {
+    logger.error('Failed to mark thread read after inbound reply', { conversationId, senderId, error: String(e) });
+  }
+
+  // Everyone else in the room, minus a member who left the project and anyone
+  // who muted the thread — the same audience as a message typed in the app.
+  const others = await otherConversationParticipants(conversation, senderId);
+  const muted = await mutedParticipants(conversationId, others);
+  const prefs = await prisma.user.findMany({ where: { id: { in: others } }, select: { id: true, notificationPrefs: true } });
+  const link = `/messages/c/${conversationId}`;
+  for (const r of prefs) {
+    if (muted.has(r.id) || !notificationCategoryAllowed(r, 'messages')) continue;
+    await notify(r.id, 'message.newByEmail', {}, link);
+    await notifyEvent(r.id, 'message.newByEmail', { conversationId }, {
+      channels: ['push'],
+      preview: body,
+      dedupeKey: `message:${storedId}`,
+    });
+  }
+
+  return { ok: true, relationId: null, conversationId, duplicate: false };
 }

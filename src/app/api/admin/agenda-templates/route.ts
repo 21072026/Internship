@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -10,6 +8,7 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { resolveOrgId } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
+import { requirePermission } from '@/lib/authz';
 
 // The guide library's management surface (#1843): list / add / edit / retire
 // the tenant's guided conversations (#1841), in all three languages, with
@@ -87,11 +86,6 @@ function serialize(t: Row) {
   };
 }
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return session;
-}
 
 type ItemInput = z.infer<typeof itemSchema>;
 
@@ -134,9 +128,10 @@ async function syncItems(templateId: string, items: ItemInput[]) {
 }
 
 // GET — the live library, most-used first, with prompts.
-export async function GET() {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // Internship-only surface: closed for an org without mentorship (#2647).
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
@@ -152,8 +147,9 @@ export async function GET() {
 
 // POST — add a guide. At least one language of the title and one prompt.
 export async function POST(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
   return await withTenantScope(session, async () => {
@@ -210,8 +206,9 @@ export async function POST(request: Request) {
 
 // PATCH — reword a guide, its summary and/or its prompts.
 export async function PATCH(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
   return await withTenantScope(session, async () => {
@@ -254,8 +251,9 @@ export async function PATCH(request: Request) {
 // DELETE — retire a guide. Archived, not removed (#1113): the sessions held
 // from it keep reading their prompts here, in each person's language.
 export async function DELETE(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;
   return await withTenantScope(session, async () => {

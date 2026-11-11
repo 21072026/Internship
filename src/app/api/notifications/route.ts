@@ -51,6 +51,19 @@ export async function GET(request: Request) {
   const type = searchParams.get('type') || undefined;
   const q = (searchParams.get('q') || '').trim().slice(0, MAX_SEARCH_LENGTH);
 
+  // The web bell (#3573, src/components/notificationFeed.ts): the newest 20
+  // rows and the unread count — no server-rendered `display` (the web renders
+  // from type/params itself), no total, no type list. Two indexed queries and
+  // no dictionary build, on a request every signed-in page makes. Any other
+  // caller (the native app, /notifications) keeps the default shape below.
+  if (searchParams.get('view') === 'bell') {
+    const [items, unread] = await Promise.all([
+      prisma.notification.findMany({ where: { userId: session.user.id }, orderBy: { createdAt: 'desc' }, take: 20 }),
+      prisma.notification.count({ where: { userId: session.user.id, read: false } }),
+    ]);
+    return NextResponse.json({ items, unread });
+  }
+
   const where = {
     userId: session.user.id,
     ...(read === 'unread' ? { read: false } : read === 'read' ? { read: true } : {}),

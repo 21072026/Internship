@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { withTenantScope } from '@/lib/orgContext';
@@ -17,11 +16,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** Widest window a single request may ask for, so month-hopping can't pull a decade. */
 const MAX_RANGE_DAYS = 400;
 /**
- * The roles with a calendar, spelled out (#2005) — the allowlist idiom of
- * GET /api/meetings. An unlisted role (SOURCE, AFFILIATE, anything added later)
- * is refused, never dropped into the mentee branch to "see nothing" by luck.
+ * The non-admin roles with a calendar, spelled out (#2005) — the allowlist idiom
+ * of GET /api/meetings. An unlisted role (SOURCE, AFFILIATE, anything added later)
+ * is refused, never dropped into the mentee branch to "see nothing" by luck. An
+ * admin is judged by the permission layer (#1571).
  */
-const CALENDAR_ROLES = new Set(['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY']);
+const CALENDAR_ROLES = ['MENTOR', 'MENTEE', 'COMPANY'] as const;
 
 // The window on screen. Omitting both bounds keeps the pre-#1110 contract —
 // every stored event the caller can see, unfiltered — because API clients (and
@@ -49,10 +49,9 @@ function parseRange(url: URL) {
 // the requested window. Returns a flat list the month/week/day/agenda views bucket
 // by day themselves.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-  if (!CALENDAR_ROLES.has(session.user.role)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requireRoleOrPermission(CALENDAR_ROLES, 'program.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
 
   return await withTenantScope(session, async () => {
   const { id, role } = session.user;
@@ -80,11 +79,11 @@ export async function GET(request: Request) {
   // relation's or the project's, which is where the filter goes.
   const tenant = await tenantWhere(session);
   const relWhere: Prisma.MentorshipRelationWhereInput = withinTenant<Prisma.MentorshipRelationWhereInput>(
-    role === 'ADMIN' ? {} : role === 'MENTOR' ? { mentorId: id } : { menteeId: id },
+    admin ? {} : role === 'MENTOR' ? { mentorId: id } : { menteeId: id },
     tenant,
   );
   const roleRelWhere: Prisma.MentorshipRelationWhereInput =
-    role === 'ADMIN' ? {} : role === 'MENTOR' ? { mentorId: id } : { menteeId: id };
+    admin ? {} : role === 'MENTOR' ? { mentorId: id } : { menteeId: id };
 
   // "Overdue" is the one stage-clock rule (#1724) fed the caller's tenant's own
   // stages (#1884), not three default keys a renamed pipeline does not have.
@@ -103,7 +102,7 @@ export async function GET(request: Request) {
             cancelledAt: null,
             ...(from || to ? { startsAt: inWindow } : {}),
             OR:
-              role === 'ADMIN'
+              admin
                 ? [{ publishedAt: { not: null } }, { hostId: id }]
                 : [{ hostId: id }, { publishedAt: { not: null }, registrations: { some: { userId: id, state: 'REGISTERED' } } }],
           },
@@ -179,7 +178,7 @@ export async function GET(request: Request) {
             projectId: { not: null },
             project: {
               is: withinTenant<Prisma.ProjectWhereInput>(
-                role === 'ADMIN'
+                admin
                   ? {}
                   : {
                       OR: [
@@ -247,7 +246,7 @@ export async function GET(request: Request) {
       who: i.relation.mentee.fullName,
       date: i.date.toISOString(),
       link:
-        role === 'ADMIN'
+        admin
           ? `/admin/candidates/${i.relation.menteeId}`
           : role === 'MENTOR'
             ? `/mentor/mentees/${i.relationId}`

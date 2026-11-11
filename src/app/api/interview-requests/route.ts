@@ -1,17 +1,21 @@
 import { NextResponse } from 'next/server';
+import { requireCompanySeat } from '@/lib/companySeatGate';
+import { notifyEvent } from '@/lib/notifications/router';
 import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { emit } from '@/lib/events/emit';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { createInterviewRequestSchema, interviewActiveKey } from '@/lib/interviewRequests';
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!['ADMIN', 'COMPANY', 'MENTOR'].includes(session.user.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requireRoleOrPermission(['COMPANY', 'MENTOR'], 'company.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   if (session.user.role === 'COMPANY' && !session.user.companyId) return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
   const orgId = resolveOrgId(session);
   if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
@@ -74,6 +78,9 @@ export async function POST(request: Request) {
   if (capGate) return capGate;
   if (session.user.role !== 'COMPANY') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (!session.user.companyId) return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
+  // Seats (#1870): the route refuses, never a hidden button.
+  const seatGate = await requireCompanySeat(session, 'interview.request');
+  if (seatGate) return seatGate;
   const orgId = resolveOrgId(session);
   if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
   const parsed = createInterviewRequestSchema.safeParse(await request.json().catch(() => null));
@@ -86,7 +93,7 @@ export async function POST(request: Request) {
     // has no flag, and the application is the record.
     const [requisition, relation, shortlist, shortlistedApplication] = await Promise.all([
       prisma.requisition.findFirst({ where: { id: requisitionId, orgId, companyId: session.user.companyId! }, select: { id: true } }),
-      prisma.mentorshipRelation.findFirst({ where: { orgId, companyId: session.user.companyId!, menteeId, status: 'ACTIVE' }, select: { id: true } }),
+      prisma.mentorshipRelation.findFirst({ where: { orgId, companyId: session.user.companyId!, menteeId, status: 'ACTIVE' }, select: { id: true, mentorId: true, mentee: { select: { fullName: true } } } }),
       prisma.companyInterest.findFirst({ where: { companyId: session.user.companyId!, menteeId, requisitionId, status: 'SHORTLISTED' }, select: { id: true } }),
       prisma.application.findFirst({ where: { orgId, requisitionId, menteeId, stage: 'SHORTLISTED' }, select: { id: true } }),
     ]);
@@ -94,6 +101,26 @@ export async function POST(request: Request) {
     try {
       const created = await prisma.interviewRequest.create({
         data: { requisitionId, menteeId, companyId: session.user.companyId!, orgId, note: note || null, proposedSlots: proposedSlots ?? undefined, activeKey: interviewActiveKey(requisitionId, menteeId) },
+      });
+      await emit(
+        'interview_request.created',
+        { requestId: created.id, requisitionId, menteeId, companyId: created.companyId },
+        { orgId, actor: { id: session.user.id, type: 'user' } },
+      );
+      // The mentee's active mentor decides it (interviewRequestActorWhere), so
+      // they are told — in-app, and on chat with Approve/Decline on the card
+      // (#1949), which call decideInterviewRequest() as them.
+      await notifyEvent(relation.mentorId, 'interview_request.received', { menteeName: relation.mentee.fullName }, {
+        dedupeKey: `interview-request:${created.id}`,
+        chatCard: {
+          subjectKey: `interview-request:${created.id}`,
+          actionUrl: null,
+          supersede: false,
+          buttons: [
+            { label: 'approve', actionId: 'interview_request.approve', value: created.id },
+            { label: 'decline', actionId: 'interview_request.decline', value: created.id },
+          ],
+        },
       });
       return NextResponse.json({ request: created }, { status: 201 });
     } catch (error) {

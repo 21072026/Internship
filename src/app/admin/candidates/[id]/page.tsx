@@ -18,6 +18,7 @@ import { CvManager } from '@/components/CvManager';
 import { nextAction } from '@/lib/matching';
 import { EvaluationPanel } from '@/components/EvaluationPanel';
 import { GoalsPanel } from '@/components/GoalsPanel';
+import { FormAnswersPanel } from '@/components/forms/FormAnswersPanel';
 import { PersonTodos } from '@/components/todos/PersonTodos';
 import { MeetingSchedulerPanel } from '@/components/MeetingSchedulerPanel';
 import { DocumentsManager } from '@/components/DocumentsManager';
@@ -28,9 +29,12 @@ import { CandidateEraseDangerZone } from '@/components/CandidateEraseDangerZone'
 import { AddInteractionForm } from '@/components/AddInteractionForm';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
+import { EmploymentAttributionDialog, useNeedsAttribution } from '@/components/EmploymentAttributionDialog';
+import type { EmploymentAttribution } from '@/lib/placementKind';
 import { OfferManagementPanel } from '@/components/OfferManagementPanel';
 import { CandidateHiringPanel } from '@/components/CandidateHiringPanel';
 import { RelationTimeline } from '@/components/RelationTimeline';
+import { MatchDecisionPanel } from '@/components/admin/MatchDecisionPanel';
 import { ReferrerPicker } from '@/components/ReferrerPicker';
 import { TagEditor } from '@/components/TagEditor';
 import { encodeReferrer, referrerLabel } from '@/lib/referrer';
@@ -45,6 +49,8 @@ import { RelationHealthBadge, useRelationHealth } from '@/components/HealthBadge
 import { TrialEndPanel } from '@/components/TrialEndPanel';
 import { ContractEndPanel } from '@/components/ContractEndPanel';
 import { DealValuePanel } from '@/components/DealValuePanel';
+import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
+import { stageGateFrom, useStageGateDialog } from '@/components/StageGateDialog';
 
 interface Interaction { id: string; date: string; notes: string; type: string; autoLogged?: boolean }
 interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } | null }
@@ -52,10 +58,14 @@ interface Relation {
   id: string;
   status: string;
   pipelineStatus: string;
+  /** PLACEMENT (in the hiring funnel) | COACHING (#1503); absent reads as PLACEMENT. */
+  kind?: string | null;
+  employmentAttribution?: string | null;
   startDate: string;
   completedAt: string | null;
   /** How the pairing ended, when COMPLETED is not the honest answer (#1801). */
   lifecycleState?: string | null;
+  endReasonCode?: string | null;
   stageDeadline?: string | null;
   // The owner's follow-up (#2563), independent of the stage deadline above.
   nextActionAt?: string | null;
@@ -121,6 +131,7 @@ export default function AdminMenteeDetailPage() {
   const label = useStageLabel();
   const stages = useResolvedStages();
   const toast = useToast();
+  const { show: showGate, dialog: gateDialog } = useStageGateDialog();
   const [user, setUser] = useState<MenteeDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -144,15 +155,29 @@ export default function AdminMenteeDetailPage() {
   // is a negative/off-path stage — the caller gates that via DropoffReasonDialog
   // before invoking this, see requestStageChange below.
   const changeStage = useCallback(
-    async (relationId: string, pipelineStatus: string, reasonCode?: string, reasonNote?: string) => {
+    async (relationId: string, pipelineStatus: string, reasonCode?: string, reasonNote?: string, employmentAttribution?: EmploymentAttribution) => {
       setSaving(true);
       try {
         const res = await fetch(`/api/mentorship/${relationId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pipelineStatus, ...(reasonCode ? { reasonCode, reasonNote } : {}) }),
+          body: JSON.stringify({
+            pipelineStatus,
+            ...(reasonCode ? { reasonCode, reasonNote } : {}),
+            // Whose hire it is (#1507), asked by EmploymentAttributionDialog.
+            ...(employmentAttribution ? { employmentAttribution } : {}),
+          }),
         });
-        if (!res.ok) throw new Error();
+        if (!res.ok) {
+          // A gated stage (#1590): say what is missing instead of "save failed".
+          const gate = await stageGateFrom(res);
+          if (gate) {
+            showGate({ gate, stageLabel: label(pipelineStatus), documentsHref: `/admin/candidates/${id}#documents` });
+            await load();
+            return;
+          }
+          throw new Error();
+        }
         await load();
         toast(t.candidateDetail.saved);
       } catch {
@@ -161,7 +186,7 @@ export default function AdminMenteeDetailPage() {
         setSaving(false);
       }
     },
-    [load, toast, t]
+    [id, load, toast, t, showGate, label]
   );
 
   const changeProject = useCallback(
@@ -239,13 +264,50 @@ export default function AdminMenteeDetailPage() {
   >(null);
   const isNegativeStage = useCallback((key: string) => stages.find((s) => s.key === key)?.isOffPath ?? false, [stages]);
 
-  const requestStageChange = (relationId: string, toStatus: string) => {
+  // A move into a hire stage asks whose outcome it is first (#1507): the
+  // answer decides whether it counts as a placement.
+  const needsAttribution = useNeedsAttribution();
+  const [pendingHire, setPendingHire] = useState<{ relationId: string; toStatus: string } | null>(null);
+
+  const requestStageChange = (relationId: string, toStatus: string, kind?: string | null) => {
     if (isNegativeStage(toStatus)) {
       setPendingMove({ kind: 'live', relationId, toStatus });
+    } else if (needsAttribution(toStatus, kind)) {
+      setPendingHire({ relationId, toStatus });
     } else {
       changeStage(relationId, toStatus);
     }
   };
+
+  const confirmPendingHire = (attribution: EmploymentAttribution) => {
+    if (!pendingHire) return;
+    changeStage(pendingHire.relationId, pendingHire.toStatus, undefined, undefined, attribution);
+    setPendingHire(null);
+  };
+
+  // A coaching pair that starts looking for a job (#1507). The server refuses
+  // a kind change from anyone but an ADMIN (kind_admin_only); this page is the
+  // admin's.
+  const moveToPlacement = useCallback(
+    async (relationId: string) => {
+      setSaving(true);
+      try {
+        const res = await fetch(`/api/mentorship/${relationId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: 'PLACEMENT' }),
+        });
+        if (!res.ok) throw new Error();
+        await load();
+        toast(t.relationKind.movedToPlacement);
+      } catch {
+        toast(t.candidateDetail.saveError, 'error');
+      } finally {
+        setSaving(false);
+      }
+    },
+    [load, toast, t]
+  );
 
   const requestHistoryAdd = (relationId: string) => {
     if (isNegativeStage(histTo)) {
@@ -354,6 +416,7 @@ export default function AdminMenteeDetailPage() {
 
   return (
     <div>
+      {gateDialog}
       <div className="mb-6">
         <Link href="/admin/candidates" className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-4">
           <ArrowLeft className="h-4 w-4" />
@@ -367,7 +430,10 @@ export default function AdminMenteeDetailPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {rel && <Badge variant="info">{label(rel.pipelineStatus)}</Badge>}
+            {rel && rel.kind === 'COACHING' && (
+              <Badge variant="default" data-testid="relation-kind-coaching">{t.relationKind.coachingBadge}</Badge>
+            )}
+            {rel && rel.kind !== 'COACHING' && <Badge variant="info">{label(rel.pipelineStatus)}</Badge>}
             {activeRelationId && <RelationHealthBadge health={health[activeRelationId]} testId="relation-health" />}
             {/* Message / view-as shortcuts, right where the profile is read (#51). */}
             <UserQuickActions userId={user.id} role={user.role} />
@@ -460,17 +526,37 @@ export default function AdminMenteeDetailPage() {
               <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
                 <div><span className="text-gray-500">{t.candidateDetail.mentor}:</span> <span className="font-medium" data-testid="mentorship-mentor"><PersonHoverCard personId={rel.mentor.id} name={rel.mentor.fullName} role="MENTOR" /></span></div>
                 {rel.company && <div><span className="text-gray-500">{t.candidateDetail.company}:</span> <span className="font-medium">{rel.company.name}</span></div>}
+                {/* Where the pairing stands (#1774), the end reason on hover. */}
+                <div><RelationLifecycleBadge relation={rel} /></div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg">
-                <Select
-                  label={t.candidateDetail.stage}
-                  data-testid="stage-select"
-                  options={stages.map((s) => ({ value: s.key, label: s.label }))}
-                  value={rel.pipelineStatus}
-                  disabled={saving}
-                  onChange={(e) => requestStageChange(rel.id, e.target.value)}
-                />
+                {/* A coaching pair has no place in the hiring funnel (#1507): no
+                    stage to pick, one way into the funnel instead. */}
+                {rel.kind === 'COACHING' ? (
+                  <div className="sm:col-span-2" data-testid="relation-coaching">
+                    <p className="text-sm text-gray-600 dark:text-gray-300">{t.relationKind.coachingNote}</p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-2"
+                      loading={saving}
+                      onClick={() => moveToPlacement(rel.id)}
+                      data-testid="relation-to-placement"
+                    >
+                      {t.relationKind.toPlacement}
+                    </Button>
+                  </div>
+                ) : (
+                  <Select
+                    label={t.candidateDetail.stage}
+                    data-testid="stage-select"
+                    options={stages.map((s) => ({ value: s.key, label: s.label }))}
+                    value={rel.pipelineStatus}
+                    disabled={saving}
+                    onChange={(e) => requestStageChange(rel.id, e.target.value, rel.kind)}
+                  />
+                )}
                 <Select
                   label={t.candidateDetail.project}
                   options={[{ value: '', label: t.candidateDetail.noProject }, ...projects.map((p) => ({ value: p.id, label: p.name }))]}
@@ -623,6 +709,8 @@ export default function AdminMenteeDetailPage() {
         {/* The merged history (#1702) sits directly under the relation card: the
             stage-history list above stays, this adds everything around it. */}
         {rel && <RelationTimeline relationId={rel.id} />}
+        {/* The pairing's audit record (#1789); draws nothing for a reader without audit.read. */}
+        {rel && <MatchDecisionPanel relationId={rel.id} />}
         {rel && (
           <OfferManagementPanel
             relationId={rel.id}
@@ -631,12 +719,14 @@ export default function AdminMenteeDetailPage() {
             companyName={rel.company?.name}
             pipelineStatus={rel.pipelineStatus}
             stages={stages}
-            onMoveToStage={(stageKey) => changeStage(rel.id, stageKey)}
+            onMoveToStage={(stageKey) => requestStageChange(rel.id, stageKey, rel.kind)}
           />
         )}
         {/* The hiring side (#1398): companies, roles, applications and interview
             requests — independent of a relation, so a candidate without one shows it too. */}
         <CandidateHiringPanel candidateId={id} />
+        {/* Answers to the org's own questions (#1803); nothing when none is asked. */}
+        <FormAnswersPanel userId={id} />
         {rel && <MeetingSchedulerPanel relationId={rel.id} menteeName={user.fullName} menteeTimezone={user.timezone ?? null} />}
         {rel && <EvaluationPanel relationId={rel.id} />}
         {rel && <GoalsPanel relationId={rel.id} />}
@@ -656,7 +746,10 @@ export default function AdminMenteeDetailPage() {
             />
           </Card>
         )}
-        <DocumentsManager targetUserId={id} />
+        {/* The anchor a blocked stage move links to (#1590). */}
+        <div id="documents" className="scroll-mt-20">
+          <DocumentsManager targetUserId={id} />
+        </div>
         <UserActivityPanel userId={id} />
         {user && <CandidateEraseDangerZone userId={id} fullName={user.fullName} onAnonymized={load} />}
       </div>
@@ -667,6 +760,13 @@ export default function AdminMenteeDetailPage() {
         loading={saving || histBusy}
         onConfirm={confirmPendingMove}
         onCancel={() => setPendingMove(null)}
+      />
+      <EmploymentAttributionDialog
+        open={!!pendingHire}
+        stageLabel={pendingHire ? label(pendingHire.toStatus) : ''}
+        loading={saving}
+        onConfirm={confirmPendingHire}
+        onCancel={() => setPendingHire(null)}
       />
     </div>
   );

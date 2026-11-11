@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
@@ -15,16 +14,12 @@ import { loadRun, runResponse } from '@/lib/rosterFeedAdmin';
 // run's hash expected, and a file that changed meanwhile is refused. Audited
 // before it runs, with the approver stamped on the run.
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return session && session.user.role === 'ADMIN' ? session : null;
-}
-
 type Ctx = { params: Promise<{ id: string; runId: string }> };
 
 export async function POST(request: Request, { params }: Ctx) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { id, runId } = await params;
   return withTenantScope(session, async () => {
     const orgId = await settingsOrgOf(session);

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { entitled } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
@@ -36,8 +35,9 @@ import { segmentFromParams } from '@/lib/reports/segmentRule';
 type Format = 'json' | 'csv' | 'xlsx';
 
 export async function GET(request: Request, { params }: { params: Promise<{ key: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const def = getReportDefinition((await params).key);
   if (!def) return NextResponse.json({ error: 'Unknown report' }, { status: 404 });
   const search = new URL(request.url).searchParams;

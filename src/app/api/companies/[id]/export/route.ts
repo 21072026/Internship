@@ -10,6 +10,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { withRequestScope } from '@/lib/requestContext';
 import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { redactCompanyForReader } from '@/lib/companyVisibility';
+import { actorFromSession, can } from '@/lib/authz';
 import { CONTACT_SELECT } from '@/lib/companyContacts';
 import { transliterate } from '@/lib/transliterate';
 
@@ -127,7 +128,9 @@ async function handleGet(request: Request, { params }: { params: Promise<{ id: s
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const isOperator = session.user.role === 'ADMIN' && !session.user.impersonatorId;
+    const actor = await actorFromSession(session);
+    const isAdmin = !!actor && (await can(actor, 'audit.export', undefined, session));
+    const isOperator = isAdmin && !session.user.impersonatorId;
     const scope = isOperator ? await scopeForRole(session.user, 'company') : null;
     const relationScope = scope ? await scopeForRole(session.user, 'relation') : null;
     if (!scope || !relationScope) {

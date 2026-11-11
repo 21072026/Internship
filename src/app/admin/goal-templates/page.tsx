@@ -122,6 +122,7 @@ export default function AdminGoalTemplatesPage() {
         <Input
           key={l}
           label={t.goalTemplateAdmin.langLabel.replace('{lang}', l.toUpperCase())}
+          lang={l}
           value={value[l] ?? ''}
           onChange={(e) => {
             const next = { ...value, [l]: e.target.value };

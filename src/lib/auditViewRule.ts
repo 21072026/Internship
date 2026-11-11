@@ -52,35 +52,10 @@ export function auditRangeFrom(
   return range;
 }
 
-export interface GrantLike {
-  cohortId: string | null;
-  companyId: string | null;
-}
-
-const NOBODY = { id: '__none__' } as const;
-
-/**
- * The people a PROGRAM_ADMIN's grants reach, as a User `where`: either side of
- * a relation inside a granted cohort/company (both, when the grant names
- * both), or a company's own account. A grant naming nothing reaches nobody,
- * and so do zero grants — fail closed, never `{}`.
- */
-export function auditTargetsWhere(grants: readonly GrantLike[]): object {
-  const relationTerms = grants
-    .filter((g) => g.cohortId || g.companyId)
-    .map((g) => ({
-      ...(g.cohortId ? { cohortId: g.cohortId } : {}),
-      ...(g.companyId ? { companyId: g.companyId } : {}),
-    }));
-  if (relationTerms.length === 0) return NOBODY;
-  const companyOnly = grants.filter((g) => g.companyId && !g.cohortId).map((g) => g.companyId as string);
-  const or: object[] = [
-    { menteeRelations: { some: { OR: relationTerms } } },
-    { mentorRelations: { some: { OR: relationTerms } } },
-  ];
-  if (companyOnly.length) or.push({ role: 'COMPANY', companyId: { in: companyOnly } });
-  return { OR: or };
-}
+// The PROGRAM_ADMIN target filter is the shared program-scope rule (#1577):
+// the people a grant reaches are the same for the audit viewer and every list.
+export type { GrantLike } from './programScopeRule';
+export { programPeopleWhere as auditTargetsWhere } from './programScopeRule';
 
 export interface AuditRowLike {
   action: string;

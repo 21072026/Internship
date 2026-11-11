@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
@@ -76,7 +77,15 @@ export async function POST(request: Request) {
       // Host: a mentor always hosts their own session; an admin may name a
       // mentor or admin of the org (read through the scoped client).
       let hostId = session.user.id;
-      if (role === 'ADMIN' && input.hostId && input.hostId !== session.user.id) {
+      // "Admin" is the permission layer's answer (#1571), asked only when a host is named.
+      if (
+        input.hostId &&
+        input.hostId !== session.user.id &&
+        (await (async () => {
+          const actor = await actorFromSession(session);
+          return !!actor && (await can(actor, 'program.write', undefined, session));
+        })())
+      ) {
         const host = await prisma.user.findFirst({ where: { id: input.hostId, orgId, role: { in: ['ADMIN', 'MENTOR'] }, isActive: true }, select: { id: true } });
         if (!host) return NextResponse.json({ error: 'Unknown host', code: 'invalid_host' }, { status: 400 });
         hostId = host.id;

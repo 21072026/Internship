@@ -317,11 +317,10 @@ export default async function ProjectDetailPage({ params }: { params: Promise<{ 
                 <p className="mt-1.5 text-xs text-gray-400">{interns} {t.projects.members}</p>
               </div>
 
-              {/* A MENTEE owner manages their roster too, minus the add pickers:
-                  the member POST refuses them on purpose (#2270) and they grow
-                  the team through join requests instead. */}
+              {/* A MENTEE owner manages their roster too; their add pickers
+                  offer only the people they are connected to (#2272). */}
               {isLead && viewer && (
-                <ProjectMembersPanel projectId={id} myId={viewer.user.id} canAdd={role !== 'MENTEE'} isPublic={p.isPublic} />
+                <ProjectMembersPanel projectId={id} myId={viewer.user.id} viewerRole={viewer.user.role} isPublic={p.isPublic} />
               )}
 
               {isLead && <ProjectJoinRequests projectId={id} />}

@@ -12,6 +12,7 @@ import { useT, useLocale } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { GoalSubtasks, type GoalSubtask } from '@/components/GoalSubtasks';
 import {
   DEFAULT_GOAL_VISIBILITY,
   GOAL_PROGRESS_MAX,
@@ -35,6 +36,14 @@ interface Goal {
   targetDate: string | null;
   progress: number | null;
   visibility: string;
+  // #1860 — `progress` is derived from the steps once there are any; the
+  // figure typed by hand is `manualProgress`. A pooled goal keeps the pool's
+  // wording (`canReword` false) and only its giver deletes it.
+  manualProgress: number | null;
+  canReword: boolean;
+  canDelete: boolean;
+  template: { id: string } | null;
+  subtasks: GoalSubtask[];
 }
 
 /** The optional depth of a goal (#1858), shared by the add form and the inline editor. */
@@ -51,7 +60,7 @@ function detailsOf(g: Goal): GoalDetails {
   return {
     successCriteria: g.successCriteria ?? '',
     targetDate: g.targetDate ? g.targetDate.slice(0, 10) : '',
-    progress: g.progress === null ? '' : String(g.progress),
+    progress: g.manualProgress === null ? '' : String(g.manualProgress),
     visibility: (GOAL_VISIBILITIES as readonly string[]).includes(g.visibility) ? (g.visibility as GoalVisibility) : DEFAULT_GOAL_VISIBILITY,
   };
 }
@@ -89,6 +98,33 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
   const [editSaving, setEditSaving] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<{ id: string; title: string } | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // The shared pool (#1860): a mentor or an admin hands out a starter goal
+  // from it. The route answers 403 to anyone else, and then there is no picker.
+  const [pool, setPool] = useState<{ id: string; title: string; translations: Partial<Record<string, string>> }[]>([]);
+  const [poolPick, setPoolPick] = useState('');
+  useEffect(() => {
+    if (readOnly) return;
+    fetch('/api/todos/templates')
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((d) => setPool(d.templates ?? []))
+      .catch(() => setPool([]));
+  }, [readOnly]);
+
+  const addFromPool = async () => {
+    if (!poolPick) return;
+    setSaving(true);
+    try {
+      const res = await fetch('/api/goals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ relationId, templateId: poolPick }),
+      });
+      if (res.ok) { setPoolPick(''); await load(); }
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/goals?relationId=${relationId}`);
@@ -171,7 +207,8 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          title: editTitle.trim(),
+          // A pooled goal's wording is the pool's (#1860): never sent.
+          ...(g.canReword ? { title: editTitle.trim() } : {}),
           dueDate: editDueDate || null,
           successCriteria: editDetails.successCriteria.trim() || null,
           targetDate: editDetails.targetDate || null,
@@ -274,6 +311,8 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
                   label={t.goals.goalTitle}
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
+                  disabled={!g.canReword}
+                  hint={g.canReword ? undefined : t.goals.pooledHint}
                   autoFocus
                 />
               </div>
@@ -351,6 +390,7 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
                 </span>
               </div>
             )}
+            <GoalSubtasks goalId={g.id} subtasks={g.subtasks ?? []} readOnly={readOnly || g.status === 'DONE'} onChanged={load} />
           </>
         )}
       </span>
@@ -361,9 +401,11 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
               <Pencil className="h-4 w-4" />
             </button>
           )}
+        {g.canDelete !== false && (
         <button onClick={() => remove(g)} aria-label={t.common.delete} className="mt-0.5 text-gray-300 hover:text-red-600">
           <Trash2 className="h-4 w-4" />
         </button>
+        )}
         </>
       )}
     </div>
@@ -427,6 +469,23 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
             <div className="w-40"><Input label={t.goals.dueDate} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} /></div>
             <Button type="submit" size="sm" loading={saving} disabled={!title.trim()}>{t.goals.add}</Button>
           </div>
+          {pool.length > 0 && (
+            <div className="flex flex-wrap items-end gap-2" data-testid="pool-goal-picker">
+              <div className="flex-1 min-w-[160px]">
+                <Select
+                  label={t.goals.fromPool}
+                  value={poolPick}
+                  placeholder={t.goals.fromPoolPlaceholder}
+                  onChange={(e) => setPoolPick(e.target.value)}
+                  options={pool.map((p) => ({ value: p.id, label: p.translations[locale] ?? p.title }))}
+                  data-testid="pool-goal-select"
+                />
+              </div>
+              <Button type="button" size="sm" variant="outline" loading={saving} disabled={!poolPick} onClick={addFromPool} data-testid="pool-goal-add">
+                {t.goals.addFromPool}
+              </Button>
+            </div>
+          )}
           <button
             type="button"
             className="text-xs text-blue-600 hover:underline"

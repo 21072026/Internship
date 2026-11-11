@@ -1,46 +1,17 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession, type Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { actorFromSession, can, type Permission } from '@/lib/authz';
 import { resolveOrgId } from '@/lib/orgScope';
-import { inCallerTenant } from '@/lib/tenantFilter';
-import { z } from 'zod';
-import { TEXT_LIMITS } from '@/lib/textLimits';
-import { INTERACTION_TYPES } from '@/lib/interactionTypes';
+import { interactionAccess, updateInteraction } from '@/lib/interactionWrite';
+import { updateInteractionSchema } from '@/lib/interactionSchema';
 
-const updateInteractionSchema = z.object({
-  date: z.string().optional(),
-  notes: z.string().min(1).max(TEXT_LIMITS.interactionNotes).optional(),
-  // Same five types the create route accepts — this list used to stop at
-  // Email, so a Call or WhatsApp log could be created but never edited by the
-  // PUT handler below (#1354).
-  type: z.enum(INTERACTION_TYPES).optional(),
-});
 
-async function getInteractionAndVerifyAccess(
-  id: string,
-  userId: string,
-  role: string,
-  callerOrgId: string | null
-) {
-  const interaction = await prisma.interactionLog.findUnique({
-    where: { id },
-    include: { relation: true },
-  });
-
-  if (!interaction) return { interaction: null, authorized: false };
-  // InteractionLog has no orgId: its tenant is its relation's, and neither the
-  // top-level lookup nor the nested include is scoped by the middleware. A log
-  // on another tenant's relation reads as not found — 404, never 403, so the id
-  // is not confirmed to exist (#2542). Checked before any write below.
-  if (!(await inCallerTenant(interaction.relation.orgId, callerOrgId))) {
-    return { interaction: null, authorized: false };
-  }
-
-  const authorized =
-    role === 'ADMIN' || interaction.relation.mentorId === userId;
-
-  return { interaction, authorized };
+/** Does the caller act as an admin here? The permission rule answers, not the role string (#1571). */
+async function actsAsAdmin(session: Session, perm: Permission): Promise<boolean> {
+  const actor = await actorFromSession(session);
+  return !!actor && (await can(actor, perm, undefined, session));
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -52,10 +23,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { interaction, authorized } = await getInteractionAndVerifyAccess(
+    const { interaction, authorized } = await interactionAccess(
       id,
       session.user.id,
-      session.user.role,
+      await actsAsAdmin(session, 'program.read'),
       resolveOrgId(session)
     );
 
@@ -83,10 +54,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { interaction, authorized } = await getInteractionAndVerifyAccess(
+    const { interaction, authorized } = await interactionAccess(
       id,
       session.user.id,
-      session.user.role,
+      await actsAsAdmin(session, 'relation.write'),
       resolveOrgId(session)
     );
 
@@ -108,13 +79,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       );
     }
 
-    const updated = await prisma.interactionLog.update({
-      where: { id },
-      data: {
-        ...parsed.data,
-        date: parsed.data.date ? new Date(parsed.data.date) : undefined,
-      },
-    });
+    // The one edit path, shared with the chat card (#1953).
+    const updated = await updateInteraction(id, parsed.data);
 
     return NextResponse.json({ interaction: updated });
   } catch (error) {
@@ -132,10 +98,10 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { interaction, authorized } = await getInteractionAndVerifyAccess(
+    const { interaction, authorized } = await interactionAccess(
       id,
       session.user.id,
-      session.user.role,
+      await actsAsAdmin(session, 'relation.write'),
       resolveOrgId(session)
     );
 

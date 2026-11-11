@@ -140,6 +140,15 @@ export const MATRIX: MatrixEntry[] = [
     ownership: () => true,
   },
   {
+    // The closure report (#1795): the close-loop survey's answers, in
+    // aggregate. Neither participant reads it — the other side's answer is
+    // never read back to the person it is about — nor anyone but an admin.
+    path: '/api/admin/analytics/closure',
+    collection: '',
+    expect: { ADMIN: 'all', MENTOR: 'deny', MENTEE: 'deny', COMPANY: 'deny', SOURCE: 'deny' },
+    ownership: () => true,
+  },
+  {
     path: '/api/admin/activity',
     collection: 'items',
     expect: { ADMIN: 'all', MENTOR: 'deny', MENTEE: 'deny', COMPANY: 'deny', SOURCE: 'deny' },
@@ -243,6 +252,7 @@ export const CROSS_TENANT: CrossTenantEntry[] = [
   { path: '/api/admin/analytics', kind: 'list' },
   { path: '/api/admin/analytics/funnel', kind: 'list' },
   { path: '/api/admin/analytics/aging', kind: 'list' },
+  { path: '/api/admin/analytics/closure', kind: 'list' },
   { path: '/api/invite', kind: 'list' },
   { path: '/api/admin/invitations', kind: 'list' },
   // Relations, meetings and the calendar (#2542 follow-up): the ADMIN relation

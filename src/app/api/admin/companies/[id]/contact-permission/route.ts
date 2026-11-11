@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
@@ -10,6 +8,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { CONTACT_BASES, CONTACT_CHANNELS } from '@/lib/contactPermissionRule';
 import { adminSetContactPermission, revokeContactPermission } from '@/lib/contactPermission';
 import { recordMarketingObjection } from '@/lib/postCampaign';
+import { requirePermission } from '@/lib/authz';
 
 /**
  * PUT — an admin records or revokes one account × channel contact permission
@@ -41,10 +40,9 @@ const schema = z.discriminatedUnion('action', [
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requirePermission('company.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     const gated = await requireCapability(session.user.orgId, 'companies');
     if (gated) return gated;
 

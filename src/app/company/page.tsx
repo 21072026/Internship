@@ -1,6 +1,7 @@
 'use client';
 
 import { DocumentReviewQueue } from '@/components/DocumentReviewQueue';
+import { CompanyOnboardingCard } from '@/components/CompanyOnboardingCard';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
@@ -53,6 +54,8 @@ export default function CompanyOverviewPage() {
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.company.title}</h1>
         <p className="text-gray-500 mt-1">{t.company.subtitle}</p>
       </div>
+      {/* Verification state and the first-hour checklist (#1865); gone once complete. */}
+      <CompanyOnboardingCard />
       {/* Documents waiting on this company's review step (#1859); silent when none. */}
       <DocumentReviewQueue hideWhenEmpty />
 

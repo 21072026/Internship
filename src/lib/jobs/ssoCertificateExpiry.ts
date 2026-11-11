@@ -1,3 +1,4 @@
+import { tenantAdminRows } from '@/lib/tenantAdmins';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
@@ -90,10 +91,8 @@ export async function runSsoCertificateExpiry(
       detail: `IdP certificate ${info.fingerprintSha256} expires ${info.notAfter.toISOString()} (${daysLeft} day(s), ${stage}-day warning)`,
     });
 
-    const admins = await prisma.user.findMany({
-      where: { orgId: org.id, role: 'ADMIN', isActive: true },
-      select: { id: true, email: true, fullName: true, preferredLanguage: true },
-    });
+    // An org-level notice: no PROGRAM_ADMIN (#3485).
+    const admins = await tenantAdminRows(org.id, null, { id: true, email: true, fullName: true, preferredLanguage: true });
     const recipients: { to: string; fullName: string | null; locale: string | null; userId: string | null }[] =
       admins.map((a) => ({ to: a.email, fullName: a.fullName, locale: a.preferredLanguage, userId: a.id }));
     const support = org.supportEmail?.trim();

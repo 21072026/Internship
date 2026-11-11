@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -21,9 +20,9 @@ const schema = z.object({ level: z.number().int().min(SKILL_LEVEL_MIN).max(SKILL
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string; skillId: string }> }) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const gate = await requireRoleOrPermission(['MENTOR'], 'relation.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session, admin } = gate;
     const denied = await requireCapability(resolveOrgId(session), 'mentorship');
     if (denied) return denied;
     const { id, skillId } = await params;
@@ -38,7 +37,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const allowed =
         rel &&
         rel.status === 'ACTIVE' &&
-        (session.user.role === 'ADMIN' ? await inCallerTenant(rel.orgId, resolveOrgId(session)) : rel.mentorId === session.user.id);
+        (admin ? await inCallerTenant(rel.orgId, resolveOrgId(session)) : rel.mentorId === session.user.id);
       if (!rel || !allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
       const outcome = await confirmSkillLevel({

@@ -15,7 +15,7 @@
  * Nothing here assigns anybody. It ranks; a person decides.
  */
 
-import type { MatchBreakdownEntry, MatchRuleKind, MatchScore } from './types';
+import { SOFT_ONLY_DIMENSIONS, type MatchBreakdownEntry, type MatchRuleKind, type MatchScore } from './types';
 import { evaluateDimension, type MatchMentee, type MatchMentor, type ScoreContext } from './dimensions';
 
 export interface MatchRuleInput {
@@ -64,7 +64,8 @@ export function scoreMatch(
   ruleSet?: MatchRuleSetInput | null,
   ctx: ScoreContext = { now: new Date() }
 ): MatchScore {
-  const { rules } = effectiveRuleSet(ruleSet);
+  // A soft-only dimension never blocks (#2038), whatever kind a row says.
+  const rules = effectiveRuleSet(ruleSet).rules.map((r) => (SOFT_ONLY_DIMENSIONS.includes(r.dimension) && r.kind !== 'WEIGHTED' ? { ...r, kind: 'WEIGHTED' as const } : r));
   const totalWeight = rules.reduce((sum, r) => sum + (r.kind === 'WEIGHTED' ? clampWeight(r.weight) : 0), 0);
 
   const blockedBy: string[] = [];

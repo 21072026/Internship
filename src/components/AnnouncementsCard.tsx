@@ -13,6 +13,7 @@ interface AnnouncementItem {
   text: string;
   link: string | null;
   imageUrl: string | null;
+  imageAlt?: string | null;
   createdAt: string;
 }
 
@@ -66,7 +67,7 @@ export function AnnouncementsCard() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={a.imageUrl}
-                    alt=""
+                    alt={a.imageAlt ?? ''}
                     className="h-12 w-12 shrink-0 rounded-md object-cover border border-gray-200 dark:border-gray-700"
                   />
                 )}

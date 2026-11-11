@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -46,10 +45,10 @@ function monthKeys(now: Date): string[] {
 //   acceptanceRate  — per BATCH: did the admin take any suggestion we made?
 //                     This is the "how often is your suggestion taken?" number.
 //   byRank[].rate   — per ROW at that position: does our #1 actually get picked?
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   // Mentor suggestions are the internship product; the screen hides the card
   // for a vertical without `mentorship`, and the report is refused here too.

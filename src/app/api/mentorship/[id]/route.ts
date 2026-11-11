@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
+import { isParticipant } from '@/lib/relationParticipants';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
+import { relationSubject } from '@/lib/authzRule';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { parseEndDate, relationScheduleFields, scheduleOnProgrammeJoin } from '@/lib/relationSchedule';
+import { relationScheduleDefaults } from '@/lib/relationScheduleDefaults';
 import { recordStageMove, stageMoveData } from '@/lib/stageMove';
 import { withTenantScope } from '@/lib/orgContext';
 import { getLocale } from '@/i18n/server';
@@ -13,6 +18,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { RELATION_TARGETS, TARGET_ADMIN_ONLY, refuseForeignTargets } from '@/lib/relationTargets';
 import { isPendingActivation } from '@/lib/menteeAccount';
 import { isStageTransition, validateDropoffReason, validateEmploymentAttribution } from '@/lib/stageChange';
+import { canTransition } from '@/lib/stageGate';
 import { funnelEnteredAtForKindChange, isEmploymentAttribution, isRelationKind } from '@/lib/placementKind';
 import { nextActionPatch, parseNextActionDate, parseNextActionNote, stripNextActionFor } from '@/lib/nextActionRule';
 
@@ -41,6 +47,10 @@ const updateRelationSchema = z.object({
   // The pair's promised meeting cadence, in weeks (#2014); null clears it.
   // Read by src/lib/meetingCadence.ts — "on cadence" means met within it.
   expectedMeetingIntervalWeeks: z.number().int().min(1).max(52).nullable().optional(),
+  // When the pairing is meant to end (#1784), a calendar day; null clears it.
+  // An edit is a correction, never an extension: durationExtendedCount moves
+  // only through POST /api/mentorship/[id]/extend.
+  expectedEndDate: relationScheduleFields.expectedEndDate,
   // What the relation is for (#1503): PLACEMENT | COACHING. ADMIN only, and a
   // whitelist (src/lib/placementKind.ts), never z.enum.
   kind: z.string().max(16).optional(),
@@ -56,6 +66,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // Admin reach from the permission rule, not the role string (#1571).
+    const actor = await actorFromSession(session);
 
     return await withTenantScope(session, async () => {
       // Scoped to the caller's tenant by hand (#2613, the #2542 pattern): with
@@ -113,10 +125,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
       }
 
-      const isAuthorized =
-        session.user.role === 'ADMIN' ||
-        relation.mentorId === session.user.id ||
-        relation.menteeId === session.user.id;
+      // The pair, or a seat beyond it — a group's third member reads the
+      // relation they are in (#1804).
+      // The relation is the subject (#1577): a PROGRAM_ADMIN reaches it only
+      // through a grant naming its cohort or company; out of scope it is a
+      // plain non-participant and gets the 403 below.
+      const isAdmin = !!actor && (await can(actor, 'program.read', relationSubject(relation), session));
+      const isAuthorized = isAdmin || (await isParticipant(relation, session.user.id));
 
       if (!isAuthorized) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -140,7 +155,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       // the chip shows the days but never a breach — the same people the admin
       // aging report keeps out of its overdue list. Only the boolean ships, and
       // only to the roles that can already list the pool (GET /api/re-engagement).
-      const seesPool = session.user.role === 'ADMIN' || session.user.role === 'MENTOR';
+      const seesPool = isAdmin || session.user.role === 'MENTOR';
 
       // The mentoring agreement (#1792), for the two detail screens without a
       // second request. Informational only: nothing on either screen is
@@ -179,6 +194,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+    // Admin reach from the permission rule, not the role string (#1571).
+    const actor = await actorFromSession(session);
 
     return await withTenantScope(session, async () => {
       const relation = await prisma.mentorshipRelation.findFirst({
@@ -189,8 +206,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
       }
 
+      // The relation is the subject (#1577), as in GET above.
+      const isAdmin = !!actor && (await can(actor, 'relation.write', relationSubject(relation), session));
       const isAuthorized =
-        session.user.role === 'ADMIN' || relation.mentorId === session.user.id;
+        isAdmin || relation.mentorId === session.user.id;
 
       if (!isAuthorized) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -214,7 +233,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
       const {
         stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote,
-        kind, employmentAttribution, ...rest
+        kind, employmentAttribution, expectedEndDate, ...rest
       } = parsed.data;
 
       // Kind (#1503): reclassifying a relation moves it in or out of every
@@ -222,7 +241,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       // control). Echoing the current value stays a no-op for anyone.
       const kindChanging = kind !== undefined && kind !== relation.kind;
       if (kindChanging) {
-        if (session.user.role !== 'ADMIN') {
+        if (!isAdmin) {
           return NextResponse.json({ error: 'Only an admin can change the relation kind', code: 'kind_admin_only' }, { status: 403 });
         }
         if (!isRelationKind(kind)) {
@@ -256,7 +275,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         (target) => rest[target] !== undefined && rest[target] !== relation[target]
       );
       if (retargeted.length > 0) {
-        if (session.user.role !== 'ADMIN') {
+        if (!isAdmin) {
           return NextResponse.json(TARGET_ADMIN_ONLY[retargeted[0]], { status: 403 });
         }
         const refused = await refuseForeignTargets(
@@ -264,6 +283,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           Object.fromEntries(retargeted.map((target) => [target, rest[target]]))
         );
         if (refused) return refused;
+        // The relation AFTER the move must be in the admin's scope too
+        // (#1577): a PROGRAM_ADMIN cannot hand a relation to a cohort or a
+        // company it does not hold, nor strip the cohort that put it in reach.
+        const after = relationSubject({ ...relation, ...Object.fromEntries(retargeted.map((t) => [t, rest[t]])) });
+        if (!(await can(actor!, 'relation.write', after, session))) {
+          return NextResponse.json({ error: 'Outside your program scope', code: 'outside_scope' }, { status: 403 });
+        }
       }
 
       // Validate the drop-off reason BEFORE writing anything — a rejected
@@ -288,6 +314,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         if (!attributionCheck.ok) {
           return NextResponse.json({ error: attributionCheck.error, code: 'invalid_attribution' }, { status: 400 });
         }
+        // The stage's entry gate (#1589): who may move it there, and what must
+        // be true first. Open unless the tenant configured one; never gates a
+        // backwards or off-path move.
+        const gate = await canTransition({ actor, session }, relation, pipelineStatus!, await getLocale());
+        if (gate) {
+          return NextResponse.json({ error: 'stage_gate_blocked', gate }, { status: 409 });
+        }
       }
 
       const data: Prisma.MentorshipRelationUncheckedUpdateInput = {
@@ -302,6 +335,26 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         if (entered !== undefined) data.funnelEnteredAt = entered;
       }
       if (employmentAttribution !== undefined) data.employmentAttribution = employmentAttribution;
+      if (expectedEndDate !== undefined) {
+        const end = expectedEndDate === null ? null : parseEndDate(expectedEndDate);
+        if ((end?.getTime() ?? null) !== (relation.expectedEndDate?.getTime() ?? null)) {
+          data.expectedEndDate = end;
+          // A new end date gets its own single ending-soon nudge (#1786).
+          data.endingSoonNotifiedAt = null;
+        }
+      }
+      // Joining a programme (#1784): what the pair has not agreed yet comes
+      // from the programme's defaults — never over an agreement already made.
+      if (retargeted.includes('cohortId') && rest.cohortId) {
+        Object.assign(
+          data,
+          scheduleOnProgrammeJoin(
+            relation,
+            { expectedEndDate, expectedMeetingIntervalWeeks: rest.expectedMeetingIntervalWeeks },
+            await relationScheduleDefaults(relation.orgId, rest.cohortId),
+          ),
+        );
+      }
       if (stageDeadline !== undefined) {
         data.stageDeadline = stageDeadline ? new Date(stageDeadline) : null;
         // A fresh deadline (or cleared) re-arms the overdue reminder.

@@ -133,7 +133,7 @@ export async function pollInboundMailbox(): Promise<PollSummary> {
           if (result.ok) {
             summary.routed++;
             if (result.kind === 'reply' && !result.duplicate) {
-              logger.info('Inbound reply threaded from mailbox', { relationId: result.relationId, from });
+              logger.info('Inbound reply threaded from mailbox', { relationId: result.relationId, conversationId: result.conversationId ?? null, from });
             }
           } else {
             // A permanent rejection (no token, unknown thread, stranger) will

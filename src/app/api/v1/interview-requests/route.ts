@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { withApiKey } from '@/lib/apiKey';
+import { companyOnly, withApiKey } from '@/lib/apiKey';
 import { KEYSET_ORDER, apiOk, keysetWhere, paginate, parseListQuery, parseFilters } from '@/lib/api/v1';
 import { interviewRequestSelect, serializeInterviewRequest } from '@/lib/api/v1Resources';
 
@@ -16,7 +16,7 @@ export async function GET(request: Request) {
 
     const rows = await prisma.interviewRequest.findMany({
       where: {
-        AND: [{ orgId: key.orgId }, keysetWhere(query)],
+        AND: [{ orgId: key.orgId }, companyOnly(key), keysetWhere(query)],
         ...(filters.requisitionId ? { requisitionId: filters.requisitionId } : {}),
         ...(filters.companyId ? { companyId: filters.companyId } : {}),
       },
@@ -26,5 +26,5 @@ export async function GET(request: Request) {
     });
     const { rows: pageRows, page } = paginate(RESOURCE, rows, query.limit);
     return apiOk(pageRows.map(serializeInterviewRequest), page);
-  });
+  }, { companyScoped: true });
 }

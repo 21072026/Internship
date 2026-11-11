@@ -86,6 +86,6 @@ test.describe('report export gate', () => {
 
   test('a non-admin is refused before the entitlement is even asked', async ({ page }) => {
     await signInAndSettle(page, mentorEmail, PW, '/mentor');
-    expect((await page.request.get('/api/admin/export/candidates')).status()).toBe(401);
+    expect((await page.request.get('/api/admin/export/candidates')).status()).toBe(403);
   });
 });

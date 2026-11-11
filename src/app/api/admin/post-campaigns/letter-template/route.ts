@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -9,6 +7,7 @@ import { writeSetting } from '@/lib/settingsWrite';
 import { logActivity } from '@/lib/activity';
 import { letterTemplateSchema } from '@/lib/postCampaignInput';
 import { campaignDefaultsFor } from '@/lib/postCampaign';
+import { requirePermission } from '@/lib/authz';
 
 /**
  * The organization's own default letter for new postal campaigns (#2927).
@@ -23,8 +22,9 @@ import { campaignDefaultsFor } from '@/lib/postCampaign';
  */
 export async function PUT(request: Request) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const authz = await requirePermission('content.write', { request });
+    if ('error' in authz) return authz.error;
+    const { session } = authz;
     const gated = await requireCapability(session.user.orgId, 'companies');
     if (gated) return gated;
 

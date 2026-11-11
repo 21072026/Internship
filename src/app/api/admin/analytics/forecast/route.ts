@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import type { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { entitled } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -13,6 +12,7 @@ import { cutChurnLinks, mergeChainJourney, relationChains, type Journey } from '
 import { computeStageAging } from '@/lib/stageAging';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { capacityRequirement, horizonDaysFrom, projectPlacements, resolvedConversions } from '@/lib/forecast';
+import { funnelStartedAt, OUR_HIRE_WHERE, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
 
 // GET /api/admin/analytics/forecast?horizon=YYYY-MM-DD — the forecast and
 // capacity panel of the executive dashboard (#1897).
@@ -41,6 +41,7 @@ const RELATION_SELECT = {
   status: true,
   pipelineStatus: true,
   startDate: true,
+  funnelEnteredAt: true,
   menteeId: true,
   statusChanges: { orderBy: { createdAt: 'asc' }, select: { fromStatus: true, toStatus: true, createdAt: true } },
 } satisfies Prisma.MentorshipRelationSelect;
@@ -51,7 +52,7 @@ type RelationRow = Prisma.MentorshipRelationGetPayload<{ select: typeof RELATION
 function relationJourney(r: RelationRow): Journey {
   return {
     startStatus: r.statusChanges[0]?.fromStatus ?? r.pipelineStatus,
-    startedAt: r.startDate.getTime(),
+    startedAt: funnelStartedAt(r).getTime(),
     changes: r.statusChanges.map((c) => ({ toStatus: c.toStatus, at: c.createdAt.getTime() })),
   };
 }
@@ -66,9 +67,9 @@ function horizonOf(raw: string | null, now: Date): string {
 }
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const settingsOrg = await settingsOrgOf(session);
   if (!(await entitled(settingsOrg, 'ADVANCED_ANALYTICS'))) {
     return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: 'ADVANCED_ANALYTICS' }, { status: 403 });
@@ -83,7 +84,11 @@ export async function GET(request: Request) {
     // The tenant is a hand-written conjunct (#2542).
     const tenant = await tenantWhere(session);
     const [relations, stages, capabilities] = await Promise.all([
-      prisma.mentorshipRelation.findMany({ where: withinTenant({}, tenant), select: RELATION_SELECT }),
+      // The one placement rule (#3472): the forecast projects OUR placements, so
+      // it learns from — and projects — PLACEMENT relations whose hire is ours.
+      // A coaching pair's stages, or a self-found hire, would teach it a
+      // conversion that was never ours.
+      prisma.mentorshipRelation.findMany({ where: withinTenant({ ...PLACEMENT_RELATION_WHERE, ...OUR_HIRE_WHERE }, tenant), select: RELATION_SELECT }),
       resolvePipelineStages(settingsOrg, locale),
       shellCapabilities(settingsOrg),
     ]);

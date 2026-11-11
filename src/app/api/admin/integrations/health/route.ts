@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { getIntegrationHealth } from '@/lib/integrationHealth';
 import { resolveOrgId } from '@/lib/orgScope';
 
@@ -16,10 +15,9 @@ import { resolveOrgId } from '@/lib/orgScope';
 //
 // The ADMIN check lives here in the handler — the board is a client component,
 // so a check up there would gate the rendering and not the data.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requirePermission('org.integrations.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return NextResponse.json({ connectors: await getIntegrationHealth(resolveOrgId(session)) });
 }

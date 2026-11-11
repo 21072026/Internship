@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { resolveOrgId } from '@/lib/orgScope';
 import { matchRuleSetDraftSchema } from '@/lib/matching/ruleSetSchema';
 import { loadMentees, loadMentorPool } from '@/lib/matching/pool';
 import { simulateRuleSet } from '@/lib/matching/simulate';
+import { requirePermission } from '@/lib/authz';
 
 // POST — dry-run a rule set (#1783). Takes the DRAFT body (no save needed)
 // and one mentee, a cohort, or the unmatched mentees, and answers who could
@@ -31,9 +31,9 @@ const schema = z
   });
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('program.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const refusal = await requireCapability(session.user.orgId, 'mentorship');
   if (refusal) return refusal;
 
@@ -66,7 +66,8 @@ export async function POST(request: Request) {
       menteeIds = rows.map((r) => r.id);
     }
 
-    const [mentees, mentors] = await Promise.all([loadMentees(tenant, menteeIds), loadMentorPool(tenant)]);
+    // Only the mentors the mentor rules admit (#3423), for the cohort's programme when one is named.
+    const [mentees, mentors] = await Promise.all([loadMentees(tenant, menteeIds), loadMentorPool(tenant, { orgId: resolveOrgId(session), programId: body.cohortId ?? null })]);
     if (body.menteeId && mentees.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     const { results, summary } = simulateRuleSet(

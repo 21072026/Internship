@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { jaasAllowanceStatus } from '@/lib/jaasAllowance';
 
 // GET — "18 / 25 monthly active participants" for an operator (#2011).
@@ -17,10 +16,8 @@ import { jaasAllowanceStatus } from '@/lib/jaasAllowance';
 //
 // The ADMIN check is in the handler because the integrations board is a client
 // component — a check up there would gate the rendering, not the data.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requirePermission('org.integrations.read', { request });
+  if ('error' in gate) return gate.error;
   return NextResponse.json(await jaasAllowanceStatus());
 }

@@ -1,3 +1,4 @@
+import { requestExpiresAt } from '@/lib/requestExpiryRule';
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
@@ -11,7 +12,7 @@ import { sendRematchRequestedEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { orgWhere, tenantWhere, withinTenant } from '@/lib/tenantFilter';
-import { tenantAdminWhere } from '@/lib/tenantAdmins';
+import { tenantAdminRows } from '@/lib/tenantAdmins';
 import { requireCapability } from '@/lib/capabilityGate';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { isEndReasonCode } from '@/lib/relationLifecycle';
@@ -65,7 +66,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   return await withTenantScope(session, async () => {
     const relation = await prisma.mentorshipRelation.findUnique({
       where: { id },
-      select: { id: true, menteeId: true, mentorId: true, status: true, orgId: true },
+      select: { id: true, menteeId: true, mentorId: true, status: true, orgId: true, cohortId: true, companyId: true },
     });
     if (!relation) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     if (relation.menteeId !== session.user.id) {
@@ -96,7 +97,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     const [openRematch, latest] = await Promise.all([
       prisma.mentorshipRequest.findFirst({
-        where: { replacesRelationId: relation.id, status: 'PENDING' },
+        // One past its expiry no longer blocks a new one (#1775).
+        where: { replacesRelationId: relation.id, status: 'PENDING', OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
         select: { id: true },
       }),
       prisma.mentorshipRequest.findFirst({
@@ -159,9 +161,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       data: {
         menteeId: session.user.id,
         replacesRelationId: relation.id,
+        // The replacement pairing stays in the same programme (#1626): the
+        // decision copies this onto the relation it creates.
+        programId: relation.cohortId ?? null,
         rematchReason: parsed.data.reason,
         rematchNote: note,
         preferredMentorId,
+        expiresAt: requestExpiresAt(new Date()),
       },
       select: { id: true, status: true, createdAt: true },
     });
@@ -183,18 +189,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     });
 
     const menteeName = session.user.name;
-    // That org's admins only (#2542) — the query used to have no org filter.
-    const admins = await prisma.user.findMany({
-      where: await tenantAdminWhere(relationOrgId),
-      select: {
-        id: true,
-        fullName: true,
-        email: true,
-        orgId: true,
-        preferredLanguage: true,
-        emailNotifications: true,
-        notificationPrefs: true,
-      },
+    // That org's admins only (#2542) — the query used to have no org filter —
+    // and of its PROGRAM_ADMINs only those whose grants cover the relation (#3485).
+    const admins = await tenantAdminRows(relationOrgId, { cohortId: relation.cohortId, companyId: relation.companyId }, {
+      id: true,
+      fullName: true,
+      email: true,
+      orgId: true,
+      preferredLanguage: true,
+      emailNotifications: true,
+      notificationPrefs: true,
     });
     await Promise.all(
       admins.map((a) =>
@@ -215,7 +219,6 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           // open the queue, and the fewer places the mentee's words travel the
           // better. Each admin is written to in their own language.
           await sendRematchRequestedEmail({
-            to: a.email,
             adminName: a.fullName,
             menteeName: menteeName ?? 'a mentee',
             orgId: a.orgId,

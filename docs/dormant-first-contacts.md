@@ -123,6 +123,19 @@ beklemededir. **Devam ettirme** bir yaşam belirtisi sayılır: geçiş (`stageC
 eski bir dönem duraklatmanın öbür tarafına taşınmaz. İki sınır aynen geçerli: üçüncü mail
 yok, otomatik aşama değişikliği/kapatma yok.
 
+## Chat bir kanaldır, üçüncü mesaj değil (#1946)
+
+Mentee Slack/Teams kimliğini doğruladıysa, check-in'lerden biri mail **yerine** chat kartı
+olarak gider; mailin **yanında** asla gitmez. Sayaç tektir ve kanala bakmaz:
+`sendDormantCheckIns` önce `dormantNudgeCount` üzerinden hakkı claim eder, sonra
+`deliverCheckInOnChat()`'e (`src/lib/chat/dormantInChat.ts`) sorar. Kart gittiyse ya da
+sessiz saatlere ertelendiyse mail gönderilmez. Kart gidemediyse mail gider: kimlik
+yoksa, workspace kapalıysa ya da gönderim başarısız olduysa. Kural her durumda aynı: bir
+claim, bir mesaj. Yani kişi başına toplam **mail + chat ≤ 2**. Chat için ayrı bir sayaç
+yoktur. `dormantSince`'in tek yazarı hâlâ `sweepDormantFirstContacts`'tır. Chat hiçbir
+aşamayı değiştirmez, hiçbir ilişkiyi kapatmaz. Kartı susturan şalter mailinkiyle aynıdır:
+`announcements` grubu (`dormant.checkIn.first|final` katalog olayları).
+
 ## Elle çalıştırma
 
 ```
@@ -136,3 +149,5 @@ Günlük cron'da 09:00'da, hatırlatma işlerinden **önce** çalışır.
 - `e2e/dormant-first-contact.spec.ts` — kuralın kendisi ve kuyruğa geri dönmenin beş yolu.
 - `e2e/dormant-check-in.spec.ts` — damga, iki mail kadansı, üst sınır, sayaç sıfırlama,
   opt-out davranışı.
+- `e2e/chat-dormant-cap.spec.ts` — chat + mail birlikte en fazla iki mesaj; kart gidemezse
+  mail; hiçbir aşama/ilişki değişmez (#1946).

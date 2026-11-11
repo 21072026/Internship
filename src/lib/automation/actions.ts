@@ -17,6 +17,7 @@
 // None of them moves a stage, and none restricts what a mentor or a mentee can
 // do (free core).
 
+import { tenantAdminRows } from '@/lib/tenantAdmins';
 import { prisma } from '@/lib/prisma';
 import { notifyIfAllowed } from '@/lib/notify';
 import { notificationLink, type NotificationRole } from '@/lib/notificationLink';
@@ -78,11 +79,9 @@ async function notifyRole(action: Extract<AutomationAction, { type: 'notifyRole'
       take: 50,
     });
   } else {
-    recipients = await prisma.user.findMany({
-      where: { role: 'ADMIN', orgId: ctx.orgId, isActive: true },
-      select: { id: true, preferredLanguage: true },
-      take: 50,
-    });
+    // The relation's admins: of its PROGRAM_ADMINs only those whose grants
+    // cover the relation (#3485).
+    recipients = (await tenantAdminRows(ctx.orgId, { cohortId: rel.cohortId, companyId: rel.companyId }, { id: true, preferredLanguage: true })).slice(0, 50);
   }
   if (recipients.length === 0) return { status: 'skipped', detail: 'no_recipient' };
   const mentee = await prisma.user.findUnique({ where: { id: rel.menteeId }, select: { fullName: true } });

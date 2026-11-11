@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { withRequestScope } from '@/lib/requestContext';
 import { outboxActorFor } from '@/lib/outboxRoute';
 import { listDrafts, outboundApprovalOn, pendingDraftCount } from '@/lib/outboundDrafts';
 import { OUTBOUND_DRAFT_STATUSES, OUTBOUND_TRIGGERS, type OutboundDraftStatus } from '@/lib/outboundApprovalRule';
+import { requireRoleOrPermission } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,10 +15,9 @@ export const dynamic = 'force-dynamic';
 // address — never the full address; the preview route has that.
 export async function GET(request: Request) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requireRoleOrPermission(['MENTOR'], 'mail.read', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     const actor = await outboxActorFor(session);
     if (actor instanceof NextResponse) return actor;
     const url = new URL(request.url);

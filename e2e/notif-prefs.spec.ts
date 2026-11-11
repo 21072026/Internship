@@ -247,3 +247,82 @@ test('unticking a legacy category moves the e-mail group switch it maps to, with
     await cleanupByEmail(email);
   }
 });
+
+// The channel matrix and quiet hours (#1714). Its endpoint merges, and the
+// profile PUT — which replaces the column — must carry its keys over.
+test('the channel matrix and quiet hours save through the account page and survive a category switch', async ({ page }) => {
+  const email = uniqueEmail('np-matrix');
+  await seedUser(email, 'UserPass123', 'MENTEE', 'NP Matrix');
+
+  try {
+    await gotoSettled(page, '/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', email);
+    await page.fill('input[type="password"]', 'UserPass123');
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+
+    await gotoSettled(page, '/account');
+    const deadlinesEmail = page.getByTestId('channel-deadlines-email');
+    await expect(deadlinesEmail).toBeEnabled({ timeout: 15_000 });
+    await expect(deadlinesEmail).toBeChecked();
+    await deadlinesEmail.uncheck();
+    await expect(deadlinesEmail).not.toBeChecked();
+    await expect(deadlinesEmail).toBeEnabled();
+    await page.getByTestId('channel-deadlines-push').check();
+    await expect(page.getByTestId('channel-deadlines-push')).toBeEnabled();
+    // A category that sends no mail by design offers no e-mail box to tick.
+    await expect(page.getByTestId('channel-newsletter-email')).toBeDisabled();
+
+    await page.getByTestId('quiet-hours-toggle').check();
+    await page.getByTestId('quiet-hours-start').fill('22:00');
+    await page.getByTestId('quiet-hours-end').fill('07:30');
+    await page.getByTestId('quiet-hours-save').click();
+    await expect(page.getByTestId('quiet-hours-status')).toBeVisible();
+
+    // A legacy category switch PUTs the whole blob to /api/profile …
+    await page.locator('label', { hasText: 'Mentorship updates' }).getByRole('checkbox').uncheck();
+    await expect
+      .poll(async () => (await (await page.request.get('/api/profile')).json()).user.notificationPrefs?.mentorship)
+      .toBe(false);
+
+    // … and the matrix and quiet hours are still there.
+    const view = await (await page.request.get('/api/account/notification-channels')).json();
+    const deadlines = view.categories.find((c: { id: string }) => c.id === 'deadlines');
+    expect(deadlines.channels.find((c: { channel: string }) => c.channel === 'email').value).toBe(false);
+    expect(deadlines.channels.find((c: { channel: string }) => c.channel === 'push').value).toBe(true);
+    expect(view.quietHours).toEqual({ start: '22:00', end: '07:30' });
+
+    await page.reload();
+    await expect(page.getByTestId('channel-deadlines-email')).not.toBeChecked({ timeout: 15_000 });
+    await expect(page.getByTestId('quiet-hours-start')).toHaveValue('22:00');
+  } finally {
+    await cleanupByEmail(email);
+  }
+});
+
+test('the channel endpoint refuses what the router would ignore', async ({ page }) => {
+  const email = uniqueEmail('np-matrix-api');
+  await seedUser(email, 'UserPass123', 'MENTEE', 'NP Matrix Api');
+
+  try {
+    await gotoSettled(page, '/auth/signin');
+    await page.fill('input[type="email"], input[name="email"]', email);
+    await page.fill('input[type="password"]', 'UserPass123');
+    await page.click('button[type="submit"]');
+    await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+
+    const put = (data: object) => page.request.put('/api/account/notification-channels', { data });
+    expect((await put({ channels: { newsletter: { email: true } } })).status()).toBe(400);
+    expect((await put({ channels: { newsletter: { push: true } } })).status()).toBe(400);
+    expect((await put({ channels: { nope: { push: true } } })).status()).toBe(400);
+    expect((await put({ quietHours: { start: '08:00', end: '08:00' } })).status()).toBe(400);
+    expect((await put({ quietHours: { start: '21:00', end: '08:00', tz: 'Mars/Base' } })).status()).toBe(400);
+    expect((await put({ quietHours: { start: '21:00', end: '08:00', tz: 'Europe/Berlin' } })).ok()).toBeTruthy();
+    // null clears back to the default.
+    expect((await put({ quietHours: null })).ok()).toBeTruthy();
+    const me = await (await page.request.get('/api/profile')).json();
+    expect(me.user.notificationPrefs?.quietHours).toBeUndefined();
+  } finally {
+    await cleanupByEmail(email);
+  }
+});

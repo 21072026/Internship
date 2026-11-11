@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -34,9 +33,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 }
 
 async function handlePost(request: Request, params: Promise<{ id: string }>) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requireRoleOrPermission(['MENTOR'], 'relation.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
   const limited = enforceRateLimit(request, 'ai:outreach_draft', { ...AI_RATE_LIMITS.outreach_draft, subject: session.user.id });
   if (limited) return limited;
   if (session.user.orgId) {
@@ -57,7 +56,7 @@ async function handlePost(request: Request, params: Promise<{ id: string }>) {
       },
     });
     // The mentor of the pair, or an admin of its org; anything else reads as missing.
-    const allowed = rel && (session.user.role === 'ADMIN' ? await inCallerTenant(rel.orgId, resolveOrgId(session)) : rel.mentorId === session.user.id);
+    const allowed = rel && (admin ? await inCallerTenant(rel.orgId, resolveOrgId(session)) : rel.mentorId === session.user.id);
     if (!rel || !allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const locale: Locale = (locales as readonly string[]).includes(rel.mentee.preferredLanguage ?? '') ? (rel.mentee.preferredLanguage as Locale) : 'en';

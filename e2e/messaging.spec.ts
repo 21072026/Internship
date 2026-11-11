@@ -215,7 +215,7 @@ test('a canned response inserts in the writer’s locale and counts the use', as
     // of the picker — the row (and its useCount) stays.
     const res = await page.request.delete('/api/admin/message-templates', { data: { id: template.id } });
     // A mentor is not an admin: the pool is admin-managed.
-    expect(res.status()).toBe(401);
+    expect(res.status()).toBe(403);
     await prisma.messageTemplate.update({ where: { id: template.id }, data: { archivedAt: new Date() } });
     await page.reload();
     await expect(page.getByText(seeded)).toBeVisible({ timeout: 10_000 });

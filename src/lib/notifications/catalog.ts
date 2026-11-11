@@ -45,7 +45,7 @@
 
 import type { NotificationCategory } from '@/lib/notificationPrefs';
 import type { EmailGroupId } from '@/lib/emailGroups';
-import type { LinkKind } from '@/lib/notificationLink';
+import type { LinkKind, NotificationRole } from '@/lib/notificationLink';
 
 /**
  * The channels a notification can travel on. One adapter each, in router.ts.
@@ -53,7 +53,7 @@ import type { LinkKind } from '@/lib/notificationLink';
  * router adds it per recipient, only for a person who confirmed a chat
  * identity — installing an app must not start messaging anybody.
  */
-export const NOTIFICATION_CHANNELS = ['inApp', 'email', 'chat'] as const;
+export const NOTIFICATION_CHANNELS = ['inApp', 'email', 'chat', 'push'] as const;
 export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
 
 /**
@@ -74,9 +74,13 @@ export interface NotificationLinkIds {
   relationId: string;
   menteeId: string;
   projectId: string;
+  /** A `thread` link to a conversation (`/messages/c/<id>`) rather than a relation's thread. */
+  conversationId: string;
+  /** A `requisition` link: the role's applicant board for the company, its record for an admin (#1944). */
+  requisitionId: string;
 }
 
-export const LINK_ID_KEYS = ['relationId', 'menteeId', 'projectId'] as const;
+export const LINK_ID_KEYS = ['relationId', 'menteeId', 'projectId', 'conversationId', 'requisitionId'] as const;
 
 export interface NotificationEventDef {
   /** Matches a key of `notifications.events` in src/i18n/dictionaries.ts. */
@@ -95,7 +99,42 @@ export interface NotificationEventDef {
   readonly link: LinkKind;
   /** Placeholder names the dictionary template interpolates, exactly. */
   readonly params: readonly string[];
+  /**
+   * WHO MAY RECEIVE IT (#1944). The roles this event is written for, declared
+   * here once instead of at each call site. The router SKIPS (`audience`) a
+   * recipient whose role is not listed, whatever the caller passed — so a
+   * hiring card that carries a candidate's name, or an internal approval, can
+   * never land in front of the wrong kind of account by a call-site slip.
+   * Absent = no role restriction (every event that predates the field).
+   */
+  readonly audience?: readonly NotificationRole[];
 }
+
+/** May a recipient of `role` be told this event? (The router's audience check, pure.) */
+export function audienceAllows(def: Pick<NotificationEventDef, 'audience'>, role: NotificationRole): boolean {
+  return !def.audience || def.audience.includes(role);
+}
+
+// ── Which events buzz a phone (#1715) ────────────────────────────────────────
+// `push` in `defaultChannels` is a deliberate, per-event decision, not a default:
+// a push interrupts somebody who closed the app. It goes only to events where
+// waiting until the next visit costs the reader something —
+//   • a meeting that starts, moved or was called off (they are about to travel
+//     or sit in an empty room);
+//   • an offer sent or answered, and a stage change of their own record (the
+//     moments the whole programme exists for);
+//   • the support team's reply (they asked and are waiting);
+//   • an interview scheduled or cancelled;
+//   • the security notices a person must act on now (a new device, a reused
+//     sign-in token, a changed password, every session revoked).
+// NEVER pushed: digests, weekly reports, analytics, newsletter issues, nudges,
+// announcements' bulk copy and every `batched` event (the deadline and SLA
+// reminders among them) — volume a digest may roll up, read when the reader
+// chooses; scripts/test/notification-catalog.test.mjs pins that no event
+// in a digest, report or newsletter group lists `push`. New messages push too
+// (#1464, the channel people expect to interrupt them): their sends pin
+// `channels: ['push']` from the message routes and pass the preview; a `thread`
+// event collapses per thread in the tray (adapters/push.ts).
 
 // ── The catalogue ────────────────────────────────────────────────────────────
 // One entry per `notifications.events` key. Both directions are asserted by
@@ -145,22 +184,27 @@ export const NOTIFICATION_EVENTS = [
   { key: 'event.promoted', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
   { key: 'event.cancelled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
   { key: 'event.updated', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
-  { key: 'meeting_reminder.startingSoon', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title', 'minutes', 'when'] },
+  // Meeting invite, reminder, move and call-off reach chat too (#1942): the
+  // card carries the join link as a button and a move/cancel REWRITES the
+  // earlier card (ChatCard.supersede). The mail for all of them is sent inline
+  // by its own sender, so `email` is deliberately not a default channel here —
+  // the router would otherwise send a second, generic mail.
+  { key: 'meeting_reminder.startingSoon', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'chat', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'minutes', 'when'] },
   { key: 'meeting_reminder.seriesSoon', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'project', params: ['title', 'project', 'when'] },
   { key: 'meeting_reminder.seriesTomorrow', category: 'meetingReminders', emailGroup: 'meeting_reminders', defaultChannels: ['inApp', 'email'], delivery: 'batched', link: 'project', params: ['title', 'project', 'when'] },
   { key: 'meeting_request.new', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['from'] },
   { key: 'meeting_request.newGeneric', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'meeting_request.declined', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'meeting_request.accepted', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['topic'] },
-  { key: 'meeting.started', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['organizer', 'title'] },
-  { key: 'meeting.startedGeneric', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
-  { key: 'meeting.scheduled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
-  { key: 'meeting.scheduledNoTime', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
+  { key: 'meeting.started', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['organizer', 'title'] },
+  { key: 'meeting.startedGeneric', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
+  { key: 'meeting.scheduled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'chat'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
+  { key: 'meeting.scheduledNoTime', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'chat'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
   // A meeting that moved or was called off (#1982) — the mail is sent inline by
   // src/lib/meetingChangeNotices.ts, so the router is asked for in-app only.
-  { key: 'meeting.rescheduled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'from', 'to'] },
-  { key: 'meeting.cancelled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
-  { key: 'meeting.cancelledReason', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when', 'reason'] },
+  { key: 'meeting.rescheduled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'chat', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'from', 'to'] },
+  { key: 'meeting.cancelled', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'chat', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
+  { key: 'meeting.cancelledReason', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp', 'chat', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when', 'reason'] },
   // An RSVP is the organizer's own bookkeeping: in-app only, no mail per answer.
   { key: 'rsvp.accepted', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
   { key: 'rsvp.declined', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
@@ -170,10 +214,10 @@ export const NOTIFICATION_EVENTS = [
   { key: 'guestRsvp.declined', category: 'meetingReminders', emailGroup: 'meeting_invites', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['guest', 'title'] },
 
   // Conversations: everything one human typed at another.
-  { key: 'message.new', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'thread', params: ['from'] },
-  { key: 'message.newGeneric', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'thread', params: [] },
+  { key: 'message.new', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'thread', params: ['from'] },
+  { key: 'message.newGeneric', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'thread', params: [] },
   // Already delivered by mail by definition — an e-mail about an e-mail is noise.
-  { key: 'message.newByEmail', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp'], delivery: 'immediate', link: 'thread', params: [] },
+  { key: 'message.newByEmail', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'push'], delivery: 'immediate', link: 'thread', params: [] },
   { key: 'question.asked', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'thread', params: ['from'] },
   { key: 'question.askedGeneric', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'thread', params: [] },
   { key: 'question.answered', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'thread', params: [] },
@@ -181,13 +225,15 @@ export const NOTIFICATION_EVENTS = [
   { key: 'support.newGeneric', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'support', params: [] },
   { key: 'support.newMessage', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'support', params: ['from'] },
   { key: 'support.newMessageGeneric', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'support', params: [] },
-  { key: 'support.replied', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'support', params: [] },
+  { key: 'support.replied', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'support', params: [] },
   { key: 'support.closed', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'support', params: [] },
   // Safeguarding (#2056): to the org's admins only, in-app only, no params — the
   // bell never says who wrote what; the queue behind its own route check does.
   { key: 'safeguarding.flagged', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'public_contact.message', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name', 'email', 'preview'] },
   { key: 'signup.companyInquiry', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['companyName', 'contactName'] },
+  // An employer signed itself up and waits, PENDING, for an admin (#1865).
+  { key: 'signup.companySelf', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['companyName', 'domain'] },
   // New leads a pull connector imported in one run (docs/integrations/klaviyo.md):
   // to the lead owner, in-app only, a count — never a name.
   { key: 'integration.newLeads', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['count', 'provider'] },
@@ -199,21 +245,29 @@ export const NOTIFICATION_EVENTS = [
   { key: 'automation.stageReachedSelf', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['stage'] },
   { key: 'automation.documentRequired', category: 'documents', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['document'] },
   // An admin-authored nudge (#1684). In-app copy of the rule's own text; the
-  // mail is the evaluator's, sent through sendEmail() under 'nudge'.
+  // mail is the evaluator's, sent through the one mail door under 'nudge'.
   { key: 'nudge.message', category: 'interactions', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['text'] },
-  { key: 'stage.changed', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['from', 'to'] },
+  { key: 'stage.changed', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['from', 'to'] },
   { key: 'outcome.noMatch', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'outcome.placedElsewhere', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   // A prompt to the mentor to write the message themselves — no mail; the point
   // is the draft waiting in the app.
   { key: 'outcome.needsMessage', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: ['name'] },
-  { key: 'offer_sent.new', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['position'] },
-  { key: 'offer_accepted.admin', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'mentee', params: ['menteeName', 'position'] },
-  { key: 'offer_declined.admin', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'mentee', params: ['menteeName', 'position'] },
+  { key: 'offer_sent.new', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['position'], audience: ['MENTEE'] },
+  { key: 'offer_accepted.admin', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'mentee', params: ['menteeName', 'position'], audience: ['ADMIN'] },
+  { key: 'offer_declined.admin', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'mentee', params: ['menteeName', 'position'], audience: ['ADMIN'] },
+  // The hiring loop's offer events for the other two parties (#1944): the
+  // mentee's mentor hears that an offer went out, and the offering company's
+  // seats that may see the candidate hear the answer. In-app — chat rides
+  // along for anyone with a confirmed identity; their mail stays the admin's.
+  { key: 'offer_sent.mentor', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: ['menteeName', 'position'], audience: ['MENTOR'] },
+  { key: 'offer_accepted.company', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'requisition', params: ['menteeName', 'position'], audience: ['COMPANY'] },
+  { key: 'offer_declined.company', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'requisition', params: ['menteeName', 'position'], audience: ['COMPANY'] },
+  { key: 'offer_expired.company', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'requisition', params: ['menteeName', 'position'], audience: ['COMPANY'] },
   // A mentee applied through the job board (#1832): the company's users and the mentee's mentor hear it.
-  { key: 'job_application.received', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['candidate', 'role'] },
-  { key: 'job_application.mentee_applied', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'mentee', params: ['candidate', 'role'] },
-  { key: 'offer_expired.admin', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'mentee', params: ['menteeName', 'position'] },
+  { key: 'job_application.received', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['candidate', 'role'], audience: ['COMPANY', 'MENTOR', 'ADMIN'] },
+  { key: 'job_application.mentee_applied', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'mentee', params: ['candidate', 'role'], audience: ['MENTOR', 'ADMIN'] },
+  { key: 'offer_expired.admin', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'mentee', params: ['menteeName', 'position'], audience: ['ADMIN'] },
   { key: 'company_interest.mentee', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'company_interest.interested', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'mentee', params: ['company', 'mentee'] },
   { key: 'company_interest.shortlisted', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'mentee', params: ['company', 'mentee'] },
@@ -227,28 +281,88 @@ export const NOTIFICATION_EVENTS = [
   { key: 'outreach.declinedCompany', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'outreach.revokedCompany', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
 
+  // Employer verification (#1865): the admin's decision, told to the company's
+  // users in-app and by mail — with the reason on a refusal, because
+  // "rejected" without one is not actionable.
+  { key: 'company.verification.approved', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['company'] },
+  { key: 'company.verification.rejected', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['company', 'reason'] },
+  { key: 'company.verification.suspended', category: 'stageUpdates', emailGroup: 'pipeline_updates', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['company', 'reason'] },
+
   // The mentorship relationship itself.
   { key: 'mentorship_request.new', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['from'] },
   { key: 'mentorship_request.newGeneric', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'mentorship_request.approved', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'mentorship_request.rejected', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // Request expiry (#1775, src/lib/requestExpiry.ts): ONE nudge to whoever holds
+  // the request on day 7, the mentee told on expiry, and an admin's cancellation
+  // with its reason. In-app, like every other step of the request lifecycle.
+  { key: 'mentorship_request.nudge', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['from'] },
+  { key: 'mentorship_request.expired', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'mentorship_request.cancelled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['reason'] },
+  // The pairing DM (#1946): chat only, beside the unchanged bell and mail of
+  // the two `…Assigned` events below, to whoever linked a chat identity. Each
+  // side reads only what the app already shows them about the other person.
+  { key: 'mentorship.matched.mentee', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['chat'], delivery: 'immediate', link: 'thread', params: ['name'] },
+  { key: 'mentorship.matched.mentor', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['chat'], delivery: 'immediate', link: 'thread', params: ['name', 'skills'] },
+  // The "still interested?" check-in on chat (#1946): the SAME nudge as the
+  // mail (sendDormantCheckIns), one of the person's two, sent on chat INSTEAD
+  // of the mail when they linked one — never in addition. `announcements` is
+  // the group whose switch silences the mail, so it silences this too.
+  { key: 'dormant.checkIn.first', category: 'announcements', emailGroup: 'announcements', defaultChannels: ['chat'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'dormant.checkIn.final', category: 'announcements', emailGroup: 'announcements', defaultChannels: ['chat'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // The three digest mails (#1711): pre-rendered by their senders and sent on
+  // the e-mail channel only. 'immediate' because a digest IS the roll-up.
+  { key: 'digest.mentorWeekly', category: 'digest', emailGroup: 'digests', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'digest.activity', category: 'digest', emailGroup: 'digests', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'digest.overdueTodos', category: 'digest', emailGroup: 'digests', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'mentorship_request.mentorAssigned', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['mentorName'] },
   { key: 'mentorship_request.menteeAssigned', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'mentee', params: ['menteeName'] },
+  // Mentor Offers (#1809). The mentee's two (the offer, the one reminder) are
+  // sent by src/lib/mentorOffers.ts only to someone who opted in; their mail
+  // goes inline under the 'mentor-offer' category, so these entries are in-app.
+  { key: 'mentor_offer.new', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['mentorName'] },
+  { key: 'mentor_offer.reminder', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['mentorName'] },
+  { key: 'mentor_offer.accepted', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
+  { key: 'mentor_offer.declined', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
+  // The agreed end of a pairing (#1786, src/lib/relationEndingSweep.ts): ONE
+  // ending-soon notice per end date to both sides, and the extension. The
+  // ending-soon mail goes inline under the 'relation-ending' category.
+  { key: 'mentorship.ending_soon', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name', 'date'] },
+  { key: 'mentorship.extended', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name', 'date'] },
   { key: 'mentorship.connected', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['name'] },
   { key: 'application.received', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  // The post-meeting card (#1953): a meeting that took place was logged with
+  // the placeholder note; its mentor is offered "Add notes" in chat, which edits
+  // that row through the app's own edit path. Chat only — the app already shows
+  // the row with its "add what was discussed" placeholder.
+  { key: 'meeting.logPrompt', category: 'interactions', emailGroup: 'task_reminders', defaultChannels: ['chat'], delivery: 'immediate', link: 'relation', params: ['title'] },
   { key: 'interaction.logged', category: 'interactions', emailGroup: 'task_reminders', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: [] },
   { key: 'interview.assigned', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'interview.assignedBlind', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
-  { key: 'interview.panelComplete', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'interview.panelComplete', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [], audience: ['ADMIN', 'MENTOR', 'COMPANY'] },
   // The outcome of a closed panel, told to the company — the decision only, never a score (#1846).
-  { key: 'interview_panel.outcome.advance', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
-  { key: 'interview_panel.outcome.offer', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
-  { key: 'interview_panel.outcome.reject', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
-  { key: 'interview_request.approved', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
-  { key: 'interview_request.declined', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['reasonCode'] },
+  // In-app (and chat, #1944) — the channels these sends have always used; no mail.
+  { key: 'interview_panel.outcome.advance', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'requisition', params: ['title'], audience: ['COMPANY'] },
+  { key: 'interview_panel.outcome.offer', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'requisition', params: ['title'], audience: ['COMPANY'] },
+  { key: 'interview_panel.outcome.reject', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'requisition', params: ['title'], audience: ['COMPANY'] },
+  // A survey campaign's invitation, on chat (#1953). The invitation MAIL is
+  // sent by the campaign itself (src/lib/surveyCampaigns.ts); this is the same
+  // invitation offered where the person already is — chat only, to people with
+  // a confirmed chat identity who have not switched survey mail off.
+  { key: 'survey.invited', category: 'mentorship', emailGroup: 'surveys', defaultChannels: ['chat'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // A company asked to interview one of the mentor's mentees (#1949). In-app and
+  // chat only — the chat card carries Approve/Decline; there is no mail for it.
+  { key: 'interview_request.received', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'chat'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'], audience: ['MENTOR', 'ADMIN'] },
+  { key: 'interview_request.approved', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'requisition', params: [], audience: ['MENTEE', 'COMPANY'] },
+  { key: 'interview_request.declined', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'requisition', params: ['reasonCode'], audience: ['COMPANY'] },
   // The confirmed interview time, on the recipient's own clock (#1844); the cancellation of it.
-  { key: 'interview_request.scheduled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'] },
-  { key: 'interview_request.cancelled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
+  { key: 'interview_request.scheduled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title', 'when'], audience: ['MENTEE', 'MENTOR', 'COMPANY', 'ADMIN'] },
+  { key: 'interview_request.cancelled', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['title'], audience: ['MENTEE', 'MENTOR', 'COMPANY', 'ADMIN'] },
+  { key: 'affiliate_application.new', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  // A partner's customers whose commission window ends soon (#3556): one mail per
+  // partner and run, sent with the copy src/lib/affiliateWindowNoticeMail.ts builds.
+  // E-mail only — the partner portal has no bell.
+  { key: 'affiliate.windowEnding', category: 'deadlines', emailGroup: 'task_reminders', defaultChannels: ['email'], delivery: 'batched', link: 'dashboard', params: ['count'] },
   { key: 'mentor_application.new', category: 'mentorship', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
   { key: 'mentor_application.approved', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   // Plan-change requests (#1743): to the operators of the org's world, and the
@@ -314,7 +428,10 @@ export const NOTIFICATION_EVENTS = [
   { key: 'mentorship.bulkReassignedAway', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'batched', link: 'dashboard', params: ['count'] },
 
   // Goals, evaluations, and the projects they hang off.
+  { key: 'certificate.issued', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'kudo.received', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['from'] },
   { key: 'goal.assigned', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: ['title'] },
+  { key: 'goal.stepAssigned', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: ['title', 'goal'] },
   { key: 'goal.completed', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'relation', params: ['title'] },
   { key: 'evaluation.added', category: 'goalsEvaluations', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'relation', params: [] },
   // Evaluation due reminders to the mentor (#1891): at most two per evaluation;
@@ -384,17 +501,34 @@ export const NOTIFICATION_EVENTS = [
   // (rule in signInDeviceRule.ts); `deviceTokenReuse` a replayed remember-me
   // cookie (trustedDevice.ts). `sessionsRevoked` is the owner's own "sign out
   // of all devices"; the admin-pressed one is `adminSignedOutAll` above.
-  { key: 'security.newDevice', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['device'] },
-  { key: 'security.deviceTokenReuse', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
-  { key: 'security.passwordChanged', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'security.newDevice', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: ['device'] },
+  { key: 'security.deviceTokenReuse', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'security.passwordChanged', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'security.emailChanged', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['email'] },
   { key: 'security.twoFactorEnabled', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'security.twoFactorDisabled', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'security.recoveryCodesRegenerated', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'security.payoutDetailsChanged', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
-  { key: 'security.sessionsRevoked', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  { key: 'security.sessionsRevoked', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email', 'push'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'role_changed.toMentor', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
   { key: 'role_changed.toMentee', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // An admin tier change (#1579) signs the person out everywhere; this tells
+  // them why when they are back. No params: the new tier is on their screen.
+  { key: 'admin_tier.changed', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: [] },
+  // Account mails (#3399): invitation, password reset and e-mail verification.
+  // They are NEVER published through notifyEvent() — each has its own sender in
+  // emailService.ts, because the mail carries a one-time token. They are here
+  // so the template editor can change their wording; the token link itself is
+  // drawn by renderNotificationEmail() and is not a merge tag.
+  { key: 'account.invitation', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: ['role'] },
+  { key: 'account.passwordReset', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  { key: 'account.verification', category: 'announcements', emailGroup: 'account_security', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: ['name'] },
+  // Mails whose body the call site still renders itself (#1711, batch 2): the
+  // router decides and records them, the site's copy is sent as-is. E-mail only
+  // by default — none of them ever raised a bell row.
+  { key: 'meeting.feedbackAsk', category: 'interactions', emailGroup: 'task_reminders', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: ['title'] },
+  { key: 'relation_health.digest', category: 'digest', emailGroup: 'reports_analytics', defaultChannels: ['email'], delivery: 'immediate', link: 'dashboard', params: ['count'] },
+  { key: 'mentor.directEmail', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['email'], delivery: 'immediate', link: 'relation', params: ['from'] },
 ] as const satisfies readonly NotificationEventDef[];
 
 export type NotificationEventKey = (typeof NOTIFICATION_EVENTS)[number]['key'];

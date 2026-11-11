@@ -20,6 +20,15 @@ Every existing row is backfilled to a single `default` org, so the live app is
 effectively single-tenant and **nothing filters by `orgId` in production** (the
 flag is off).
 
+## The leak matrix runs twice (#3588)
+
+`e2e/isolation/leak-matrix.spec.ts` runs in the `isolation-gate` job with
+`MT_ENFORCE_ISOLATION=true`, and again in the `leak-matrix-flag-off` job with the
+flag **off** — the way every deployment runs. The flag-on run proves the
+middleware scopes; only the flag-off run proves a route's own filter does, which
+is what production depends on. Locally: `npm run test:e2e:leak-matrix:flag-off`.
+A new matrix row must pass in both.
+
 ## The enforcement building blocks (`src/lib/orgScope.ts`)
 
 Explicit, opt-in primitives for scoping an individual query:
@@ -29,8 +38,10 @@ Explicit, opt-in primitives for scoping an individual query:
 - `orgScoped(where, orgId)` — merge an `orgId` filter into a Prisma `where`.
 - `requireOrg(session)` — returns the org to scope by; **throws** when
   enforcement is on but no org resolves (fail-closed).
-- `assertSameOrg(rowOrgId, expectedOrgId)` — post-lookup IDOR guard for
-  find-by-id handlers.
+- `assertSameOrg(rowOrgId, callerOrgId, defaultOrgId)` — post-lookup IDOR guard
+  for find-by-id handlers. **Always enforced** since #3588 (it used to return
+  early with the flag off); NULL on either side is the default org's, the
+  `sameTenant()` rule. Prefer putting the filter in the query.
 - `isIsolationEnforced()` — reads `MT_ENFORCE_ISOLATION` (default **off**).
 
 ## The central enforcement engine (`src/lib/orgContext.ts`)
@@ -283,7 +294,8 @@ for that reason). Proven by `e2e/cross-tenant-project-satellites.spec.ts`.
 Three things to know before copying it:
 
 - **The filter goes in the query.** That is the flag-independent by-id guard —
-  **not** `assertSameOrg()`, which returns early while the flag is off.
+  `assertSameOrg()` holds with the flag off too since #3588, but it runs after
+  the read, so it is the fallback, not the pattern.
 - **The filter is `tenantWhere(session)` (`src/lib/tenantFilter.ts`), not a bare
   `orgScoped()`**, for one reason: a row whose `orgId` is still NULL belongs to
   the default org (the rule `backfill-organization.mjs` applies on every deploy),

@@ -37,7 +37,10 @@ export interface PlanGateResult {
 
 // Can one more ACTIVE relation be added to this org under its plan?
 // Fail-open when no org resolves or the plan is unlimited.
-export async function checkActiveRelationLimit(orgId: string | null | undefined): Promise<PlanGateResult> {
+// `adding` is how many relations the caller is about to create at once — a
+// published matching round (#1796) asks for all of them in one check, so the
+// cap refuses the whole publish rather than half of it.
+export async function checkActiveRelationLimit(orgId: string | null | undefined, adding = 1): Promise<PlanGateResult> {
   if (!orgId) return { allowed: true, plan: null, limit: null, usage: 0 };
   const org = await prisma.organization.findUnique({ where: { id: orgId }, select: { plan: true } });
   const plan = org && isOrgPlan(org.plan) ? org.plan : null;
@@ -47,7 +50,7 @@ export async function checkActiveRelationLimit(orgId: string | null | undefined)
   if (limit == null) return { allowed: true, plan, limit: null, usage: 0 };
 
   const usage = await countActiveRelations(orgId);
-  return { allowed: usage < limit, plan, limit, usage };
+  return { allowed: usage + adding <= limit, plan, limit, usage };
 }
 
 // Resolve the tenant from the mentee, then check the active-relation limit.

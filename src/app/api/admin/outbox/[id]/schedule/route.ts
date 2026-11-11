@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { withRequestScope } from '@/lib/requestContext';
 import { draftActionRoute } from '@/lib/outboxRoute';
+import { requireRoleOrPermission } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,10 +18,9 @@ const schema = z.object({
 // reason code.
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requireRoleOrPermission(['MENTOR'], 'mail.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     const parsed = schema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
     const { id } = await params;

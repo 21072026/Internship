@@ -126,7 +126,7 @@ test.describe('report subscriptions', () => {
     }
     await page.context().clearCookies();
     await signInAndSettle(page, mentor, PW, '/mentor');
-    expect((await page.request.get('/api/admin/report-subscriptions')).status()).toBe(401);
+    expect((await page.request.get('/api/admin/report-subscriptions')).status()).toBe(403);
   });
 });
 

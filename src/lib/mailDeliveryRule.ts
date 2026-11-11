@@ -606,13 +606,16 @@ export type DedupeInput =
   | { kind: 'reset'; tokenId: string }
   // `at`: the meeting's start. A moved meeting is reminded again for its new
   // time, so the start is part of the key when given (#2951).
-  | { kind: 'meeting-reminder'; meetingId: string; userId: string; at?: Date }
-  | { kind: 'guest-reminder'; meetingId: string; guest: string; at?: Date }
+  // `lead` (#1636): minutes ahead; omitted or 60 keeps the pre-#1636 key.
+  | { kind: 'meeting-reminder'; meetingId: string; userId: string; at?: Date; lead?: number }
+  | { kind: 'guest-reminder'; meetingId: string; guest: string; at?: Date; lead?: number }
   | { kind: 'series-reminder'; seriesId: string; userId: string; at: Date; lead: string }
   | { kind: 'survey'; invitationId: string; round: number }
   | { kind: 'digest'; digest: string; userId: string; day: string }
   | { kind: 'newsletter'; newsletterId: string; recipient: string }
   | { kind: 'ops'; alert: string; at: Date }
+  // The ending-soon nudge (#1786): one per participant per agreed end date.
+  | { kind: 'relation-ending'; relationId: string; userId: string; endDay: string }
   | { kind: 'fallback'; category?: string | null; to: string; subject: string; ref?: string | null; at: Date };
 
 /**
@@ -634,14 +637,20 @@ function minuteOf(at: Date): string {
   return String(Math.floor(t / 60_000));
 }
 
+// A second lead for the same start time is a second mail (#1636). The hour-before
+// lead keeps the key it always had, so no queued reminder is re-sent on deploy.
+function leadSuffix(lead: number | undefined): string {
+  return lead === undefined || lead === 60 ? '' : `:L${Math.floor(lead)}`;
+}
+
 export function dedupeKeyFor(input: DedupeInput): string {
   switch (input.kind) {
     case 'reset':
       return `reset:${part(input.tokenId)}`;
     case 'meeting-reminder':
-      return `mrem:${part(input.meetingId)}:${part(input.userId)}${input.at ? `:${minuteOf(input.at)}` : ''}`;
+      return `mrem:${part(input.meetingId)}:${part(input.userId)}${input.at ? `:${minuteOf(input.at)}` : ''}${leadSuffix(input.lead)}`;
     case 'guest-reminder':
-      return `mgrem:${part(input.meetingId)}:${recipientHash(input.guest).slice(0, 32)}${input.at ? `:${minuteOf(input.at)}` : ''}`;
+      return `mgrem:${part(input.meetingId)}:${recipientHash(input.guest).slice(0, 32)}${input.at ? `:${minuteOf(input.at)}` : ''}${leadSuffix(input.lead)}`;
     case 'series-reminder':
       return `srem:${part(input.seriesId)}:${part(input.userId)}:${minuteOf(input.at)}:${part(input.lead)}`;
     case 'survey':
@@ -652,6 +661,8 @@ export function dedupeKeyFor(input: DedupeInput): string {
       return `nl:${part(input.newsletterId)}:${recipientHash(input.recipient).slice(0, 32)}`;
     case 'ops':
       return `ops:${part(input.alert)}:${input.at.toISOString().slice(0, 13)}`;
+    case 'relation-ending':
+      return `rend:${part(input.relationId)}:${part(input.userId)}:${part(input.endDay)}`;
     case 'fallback': {
       const bucket = input.ref ? `ref:${input.ref}` : `min:${input.at.toISOString().slice(0, 16)}`;
       const digest = createHash('sha256')

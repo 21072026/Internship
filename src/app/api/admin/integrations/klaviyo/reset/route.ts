@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requirePermission } from '@/lib/authz';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { withRequestScope } from '@/lib/requestContext';
 import { logActivity } from '@/lib/activity';
 import { klaviyoAdminGate } from '@/lib/klaviyoGate';
@@ -18,9 +17,9 @@ export const runtime = 'nodejs';
 
 export async function GET(request: Request) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const gate = await requirePermission('org.integrations.read', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     const g = await klaviyoAdminGate(session);
     if (!g.ok) return g.response;
     return NextResponse.json(await klaviyoResetPreview(g.orgId));
@@ -31,9 +30,9 @@ const bodySchema = z.object({ expectRemove: z.number().int().min(0).max(1_000_00
 
 export async function POST(request: Request) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const gate = await requirePermission('org.integrations.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     const g = await klaviyoAdminGate(session);
     if (!g.ok) return g.response;
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));

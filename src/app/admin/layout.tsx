@@ -11,6 +11,7 @@ import { CommandPalette } from '@/components/CommandPalette';
 import { BrandWordmark } from '@/components/BrandWordmark';
 import { AdminNav } from '@/components/AdminNav';
 import { isSuperAdmin } from '@/lib/superAdmin';
+import { adminTierFor } from '@/lib/authzRule';
 import { resolveQueueScope } from '@/lib/mailQueueAdmin';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
@@ -24,6 +25,7 @@ import { resolveCustomStages } from '@/lib/pipelineStages';
 import { EvaluationCriteriaProvider } from '@/lib/evaluationCriteriaClient';
 import { resolveCustomCriteria } from '@/lib/evaluationTemplates';
 import { I18nScope } from '@/i18n/scope';
+import { TourProvider } from '@/components/guidance/TourProvider';
 
 // Signed-in area: never in a search result (#1376).
 export const metadata = NO_INDEX;
@@ -64,7 +66,9 @@ async function AdminLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <>
+    <TourProvider role="ADMIN" autostart={!session.user.impersonatorId}>
+      {/* The first-run tour (#2067): offered once per person, recorded server-side. Not
+          while impersonating — the tour belongs to the person, not to whoever is looking. */}
       {/* Mounted once per authenticated shell: ⌘K / Ctrl+K and `?` (#2079). */}
       <CommandPalette role="ADMIN" capabilities={capabilities} superAdmin={superAdmin} operator={operator} />
     <ResponsiveShell
@@ -80,7 +84,7 @@ async function AdminLayout({ children }: { children: React.ReactNode }) {
           <p className="text-xs text-gray-500 mt-1">{t.panel.admin}</p>
         </div>
 
-        <AdminNav capabilities={capabilities} superAdmin={superAdmin} operator={operator} />
+        <AdminNav capabilities={capabilities} superAdmin={superAdmin} operator={operator} adminTier={adminTierFor(session.user.role, session.user.adminLevel)} />
 
         <ModeSwitcher modes={modes} />
 
@@ -101,7 +105,7 @@ async function AdminLayout({ children }: { children: React.ReactNode }) {
         <EvaluationCriteriaProvider criteria={customCriteria}>{children}</EvaluationCriteriaProvider>
       </PipelineStagesProvider>
     </ResponsiveShell>
-    </>
+    </TourProvider>
   );
 }
 

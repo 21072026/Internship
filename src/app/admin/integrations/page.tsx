@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { AlertTriangle, Trash2 } from 'lucide-react';
 import { useT, useLocale } from '@/i18n/client';
+import { groupWebhookEvents, type WebhookEventFamily } from '@/lib/webhookEventFamilies';
 import { formatDate } from '@/lib/relativeTime';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { API_SCOPES, DEFAULT_API_SCOPES, maxApiKeyExpiry, type ApiKeyStatus } from '@/lib/apiScopes';
@@ -25,6 +26,9 @@ interface Hook {
   // Auto-disabled by the delivery job after a failure streak (#1695).
   disabledAt?: string | null;
   disabledReason?: string | null;
+  // A company's or a source's self-served hook (#2006); both null = org-wide.
+  company?: { id: string; name: string } | null;
+  ownerSource?: { id: string; name: string } | null;
 }
 interface Key {
   id: string;
@@ -35,6 +39,9 @@ interface Key {
   lastUsedAt: string | null;
   createdAt: string;
   createdBy: { name: string | null; email: string } | null;
+  // A company's or a source's self-served key (#2006); both null = org-wide.
+  company?: { id: string; name: string } | null;
+  source?: { id: string; name: string } | null;
   status: ApiKeyStatus;
   quotaPeriod: 'day' | 'month' | null;
   quotaLimit: number | null;
@@ -294,13 +301,7 @@ export default function IntegrationsPage() {
           )}
           <form onSubmit={addHook} className="space-y-2 mb-4">
             <Input placeholder="https://example.com/webhook" value={url} onChange={(e) => setUrl(e.target.value)} />
-            <div className="flex flex-wrap gap-3">
-              {eventTypes.map((ev) => (
-                <label key={ev} className="flex items-center gap-1.5 text-xs text-gray-700">
-                  <input type="checkbox" checked={events.includes(ev)} onChange={() => toggleEvent(ev)} /> {ev}
-                </label>
-              ))}
-            </div>
+            <EventPicker eventTypes={eventTypes} selected={events} onToggle={toggleEvent} />
             <Button type="submit" size="sm" disabled={!url || events.length === 0}>{t.integrations.addWebhook}</Button>
           </form>
           {hooks.length === 0 ? <p className="text-sm text-gray-400">{t.integrations.noWebhooks}</p> : (
@@ -318,6 +319,11 @@ export default function IntegrationsPage() {
                         )}
                       </p>
                       <p className="text-xs text-gray-400">{h.events.join(', ')}</p>
+                      {(h.company || h.ownerSource) && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400" data-testid={`webhook-scope-owner-${h.id}`}>
+                          {h.company ? `${t.integrations.ownedByCompany}: ${h.company.name}` : `${t.integrations.ownedBySource}: ${h.ownerSource?.name}`}
+                        </p>
+                      )}
                       {h.disabledAt && (
                         <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-red-700 dark:text-red-300" data-testid={`webhook-disabled-${h.id}`}>
                           <span>
@@ -347,13 +353,7 @@ export default function IntegrationsPage() {
                   {editing === h.id && (
                     <div className="mt-2 space-y-2">
                       <Input data-testid="webhook-edit-url" value={editUrl} onChange={(e) => setEditUrl(e.target.value)} />
-                      <div className="flex flex-wrap gap-3">
-                        {eventTypes.map((ev) => (
-                          <label key={ev} className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300">
-                            <input type="checkbox" checked={editEvents.includes(ev)} onChange={() => toggleEditEvent(ev)} /> {ev}
-                          </label>
-                        ))}
-                      </div>
+                      <EventPicker eventTypes={eventTypes} selected={editEvents} onToggle={toggleEditEvent} />
                       <div className="flex gap-2">
                         <Button size="sm" disabled={!editUrl || editEvents.length === 0} onClick={() => saveEdit(h.id)}>{t.integrations.save}</Button>
                         <Button size="sm" variant="secondary" onClick={() => setEditing(null)}>{t.integrations.cancel}</Button>
@@ -457,6 +457,11 @@ export default function IntegrationsPage() {
                     <p className="text-xs text-gray-500 dark:text-gray-400" data-testid={`api-key-owner-${k.id}`}>
                       {t.integrations.keyOwner}: {k.createdBy?.name || k.createdBy?.email || t.integrations.keyOwnerUnknown}
                     </p>
+                    {(k.company || k.source) && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400" data-testid={`api-key-scope-owner-${k.id}`}>
+                        {k.company ? `${t.integrations.ownedByCompany}: ${k.company.name}` : `${t.integrations.ownedBySource}: ${k.source?.name}`}
+                      </p>
+                    )}
                     <p className="text-xs text-gray-500 dark:text-gray-400" data-testid={`api-key-expiry-${k.id}`}>
                       {k.expiresAt ? `${t.integrations.keyExpires}: ${formatDate(k.expiresAt, locale)}` : t.integrations.keyNoExpiry}
                     </p>
@@ -589,6 +594,37 @@ export default function IntegrationsPage() {
             banner — so this page only mounts it. */}
         <AuditDrainsCard onLocked={() => setApiLocked(true)} />
       </div>
+    </div>
+  );
+}
+
+// The subscribable events grouped by family (#1998, src/lib/webhookEventFamilies.ts),
+// so thirty-odd names read as a few sections instead of one wall of checkboxes.
+function EventPicker({ eventTypes, selected, onToggle }: { eventTypes: string[]; selected: string[]; onToggle: (ev: string) => void }) {
+  const t = useT();
+  const label: Record<WebhookEventFamily, string> = {
+    pipeline: t.integrations.familyPipeline,
+    mentorship: t.integrations.familyMentorship,
+    activity: t.integrations.familyActivity,
+    meetings: t.integrations.familyMeetings,
+    interviews: t.integrations.familyInterviews,
+    hiring: t.integrations.familyHiring,
+    other: t.integrations.familyOther,
+  };
+  return (
+    <div className="space-y-2" data-testid="webhook-event-picker">
+      {groupWebhookEvents(eventTypes).map((g) => (
+        <fieldset key={g.family} data-testid={`webhook-family-${g.family}`}>
+          <legend className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">{label[g.family]}</legend>
+          <div className="flex flex-wrap gap-3">
+            {g.events.map((ev) => (
+              <label key={ev} className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300">
+                <input type="checkbox" checked={selected.includes(ev)} onChange={() => onToggle(ev)} /> {ev}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      ))}
     </div>
   );
 }

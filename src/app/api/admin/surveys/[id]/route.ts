@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { SurveyConflict, updateSurvey, updateSurveySchema } from '@/lib/surveys';
+import { requirePermission } from '@/lib/authz';
 
 // One survey (#1879). Another tenant's survey answers exactly like a missing
 // one. PATCH enforces the write-boundary rules in src/lib/surveys.ts: once the
@@ -19,9 +18,9 @@ async function load(id: string, session: Parameters<typeof tenantWhere>[0]) {
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('content.read', { request: _request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { id } = await params;
   return withTenantScope(session, async () => {
     const survey = await load(id, session);
@@ -31,9 +30,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const { id } = await params;
   const parsed = updateSurveySchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input', issues: parsed.error.issues }, { status: 400 });

@@ -1,4 +1,7 @@
 import { redirect } from 'next/navigation';
+import { programGrantsFor } from '@/lib/authzScope';
+import { programMenteeWhere } from '@/lib/programScopeRule';
+import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -32,8 +35,11 @@ export default async function AdminReEngagementPage() {
   // deployment, so this server component listed every tenant's pool (#2542
   // follow-up). The tenant is therefore also a hand-written conjunct.
   const tenant = await tenantWhere(session);
+  // A PROGRAM_ADMIN sees the pool of its own programmes only (#1577).
+  const grants = await programGrantsFor(session.user);
+  const program = (grants ? programMenteeWhere(grants) : {}) as Prisma.UserWhereInput;
   const people = await withTenantScope(session, () => prisma.user.findMany({
-    where: withinTenant({ role: 'MENTEE' as const, reEngageAt: { not: null } }, tenant),
+    where: withinTenant<Prisma.UserWhereInput>({ AND: [{ role: 'MENTEE', reEngageAt: { not: null } }, program] }, tenant),
     orderBy: { reEngageAt: 'asc' },
     select: { id: true, fullName: true, email: true, reEngageAt: true, reEngageNote: true, reEngageNotifiedAt: true },
   }));

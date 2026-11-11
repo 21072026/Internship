@@ -344,13 +344,59 @@ Kurallar:
   { subject, request })` route guard'ı, `can(actor, permission, subject)` ve kuralın
   saf hali `src/lib/authzRule.ts` (katalog `PERMISSIONS`, kademe tablosu
   `TIER_PERMISSIONS`, birim testli). Route'ların ona taşınması #1571.
+- **Karma rotalar** (admin + başka roller, #1571): `requireRoleOrPermission(['MENTOR'], izin, { request })`
+  — ADMIN izin kuralından geçer (OBSERVER yazamaz, ret denetlenir), listelenen rol rolüyle geçer,
+  diğer herkes 403. Cevaptaki `admin` hangi dalda olunduğunu söyler; "admin tüm org'u görür"
+  için `session.user.role` değil o kullanılır. Bir rotanın içindeki tek bir admin dalı için
+  `can(await actorFromSession(session), izin, …, session)`.
+- **`npm run check:authz`** (CI, #1571): `src/app/api/**/route.*` içinde çağıranın
+  rolünü `'ADMIN'` ile karşılaştıran (`session.user.role !== 'ADMIN'`, çıplak
+  `role === 'ADMIN'`, `['ADMIN', …].includes(role)`) ya da yerel bir `requireAdmin…`
+  yardımcısı tanımlayan her yer sayılır. Henüz taşınmamış olanlar dosya başına
+  `scripts/authz-baseline.json`'da `pending` olarak sabittir ve liste **yalnız
+  küçülür**: listede olmayan veya sayısı artan dosya kırmızıdır; sayısı düşen dosya
+  da `npm run check:authz -- --shrink` ile sayı indirilene kadar kırmızıdır. Rolü
+  erişim için değil **veri şekli** için okuyan bir yer `allowed`'a gerekçesiyle girer.
 
 ### İzin kapısının arkasındaki uçlar / Routes behind the permission guard
+
+**Her uç kendi iznini adlandırır** (#1571): `/api/admin/*` altındaki her işlem ve
+izin katmanından geçen her paylaşılan rota, iç OpenAPI belgesinde (`/admin/api-explorer`,
+`GET /api/admin/openapi`) **`x-permission`** alanıyla ve açıklamasındaki "**Permission**"
+satırıyla hangi izni sorduğunu söyler — rota dosyasından build anında üretilir, elle
+tutulan bir tablo gibi bayatlamaz. `npm run check:openapi` izin adlandırmayan bir
+`/api/admin/` işlemini kırar; `npm run check:authz` rol metnine geri dönüşü.
+
+Alan → izin (okuma / yazma). Bir PROGRAM_ADMIN grant'leriyle daraltılmamış hiçbir uçtan
+geçemez (subject yok → `unscoped_subject`); bir OBSERVER yalnız sol sütunu tutar.
+
+| Alan | Okuma | Yazma |
+|---|---|---|
+| Kişiler (`users/**`, adaylar, kaynaklar, yetim başvurular, mentör limitleri, içe aktarma) | `user.read` | `user.write` · `user.erase` · `user.reset_password` · `user.impersonate` · `user.merge` |
+| Davetler | `user.read` | `org.invite` |
+| Programlar, eşleştirme, journey, kohortlar, mentörlük talepleri | `program.read` | `program.write` · `relation.write` · `pipeline.transition` |
+| Firmalar, teklifler, işe alım, talepler, mülakat panelleri | `company.read` | `company.write` |
+| Analitik, raporlar, sağlık, SLA, haftalık raporlar, 2FA kapsamı | `analytics.read` | `org.settings.write` (eşik/maliyet, AI üretimi) · `program.write` (SLA onay/erteleme, hatırlatma) |
+| Şablonlar ve içerik (formlar, anketler, bültenler, duyurular, beceriler, etiketler …) | `content.read` | `content.write` |
+| Posta (log, kuyruk, outbox, bastırma, CRM BCC) | `mail.read` | `mail.write` |
+| Destek / güvenlik bildirimleri | `support.read` · `safeguarding.read` | `support.write` · `safeguarding.write` |
+| Org ayarları, AI politikası, organizasyonlar, faturalama, planlar | `org.settings.read` | `org.settings.write` · `org.branding.write` |
+| Entegrasyonlar (webhook, audit drain, API anahtarı, roster feed, Klaviyo, chat) | `org.integrations.read` | `org.integrations.write` |
+| Etkinlik / denetim | `activity.read` · `audit.read` | `audit.export` |
+
+Süper-admin'e özgü uçlar (`organizations` POST, `billing/entitlements`, `plan-requests/[id]`,
+`openapi`) kapıda kiracı iznini sorar, ardından mevcut `isSuperAdmin*` kontrolü aynen
+çalışır — reddin cevabı (`super_admin_only`, başka dünya için 404) değişmesin diye.
+`platform.*` adlarına taşınmaları ayrı bir iş.
+
 
 | Uç | İzin | ORG_ADMIN | OBSERVER | PROGRAM_ADMIN | MENTOR / MENTEE / COMPANY / SOURCE | Oturumsuz |
 |---|---|---|---|---|---|---|
 | `GET /api/admin/audit` (`/admin/audit`, #1583) | `audit.read` (listeleme) | ✅ kendi org'u | ✅ kendi org'u | yalnız hedefi grant'lerinin içindeki kişi olan satırlar; **grant yoksa 403** | **403** | 401 |
 | `GET /api/requisitions/[id]/matches` (`/admin/requisitions/[id]`, #1401) | `user.read` | ✅ kendi org'unun talebi; yalnız rızalı aday havuzu (`CONSENTING_POOL_WHERE`) | ✅ aynı | **403** (`unscoped_subject` — talebe göre kapsam henüz verilmiyor, fail-closed) | **403** | 401 |
+| `GET /api/admin/organizations/[id]/export` (#1584, `docs/tenant-lifecycle.md`) | `org.export` (veya dünyanın süper admini: `platform.org.read`) | ✅ yalnız kendi org'u; başka org **403** | **403** | **403** | **403** | 401 |
+| `POST`/`DELETE …/[id]/deletion`, `DELETE /api/admin/organizations/[id]` (#1584, **`TENANT_HARD_DELETE_ENABLED` olmadan hep 403**) | `platform.org.write` | **403** (kendi org'u dahil) | **403** | **403** | **403** | 401 |
+| `POST /api/admin/organizations/[id]/rename`, `POST`/`DELETE …/archive` (#1582) | `platform.org.write` | **403** (kendi org'u dahil) | **403** | **403** | **403** | 401 |
 | `POST /api/requisitions/[id]/shortlist` (#1401) | `company.write` | ✅ kendi org'u; rızasız aday **409 `no_consent`**, kapalı talep 409 | **403** | **403** | **403** (COMPANY kendi kısa listesini `/api/company/interests` ile yazar) | 401 |
 
 Org her zaman oturumdan gelir; süper-admin de burada yalnız kendi org'unu okur.
@@ -383,6 +429,112 @@ Sırayla, ilk eşleşen kazanır:
   sonraki istekte daralır.
 - Her ret, rota adıyla bir `authz.capability_denied` (warning) `ActivityLog`
   satırı yazar; cevap `403 { code: 'permission_denied', permission }`.
+
+### Assigning tiers and scopes (#1579)
+
+The screen is the **Admin tiers** panel on `/admin/users`. Its API is
+`/api/admin/roles`: `GET`; `PATCH { userId, tier }`; `POST { userId, cohortId? | companyId? }`; and
+`DELETE ?grantId=`. All of them ask `requirePermission('admin.grant')`. That
+permission is in `ORG_ADMIN`'s set only, so the one permission rule decides who
+may assign, and there is no second authorization path.
+
+The change guards are pure, in `src/lib/adminTierRule.ts`, and are applied by the one writer, `src/lib/adminTiers.ts`:
+
+| Guard | Answer |
+|---|---|
+| An actor changes their own tier, up or down | `400 self_change` |
+| A tier above the actor's own, or a target above it | `400 above_own` / `target_above_own`. Unreachable while only ORG_ADMIN holds `admin.grant`, but kept as the rule for any later narrower tier. |
+| The org's last **active** ORG_ADMIN would be demoted, deactivated or would delete their account | `409 last_org_admin` (tier change, deactivation) / `400` (self-deletion) |
+| A scope grant on a tier other than PROGRAM_ADMIN, an empty grant, or another org's cohort/company | `400 not_program_admin` / `empty_grant`, `404 outside_org` |
+
+There is no SUPER_ADMIN tier. The platform operator is the per-world
+`isSuperAdmin` flag, set only by `prisma/set-super-admin.mjs` (#2647), so the
+"last super admin" of the issue is the org's last active ORG_ADMIN here.
+
+**A tier change signs the person out.** The tier rides in the JWT, so the
+change stamps `sessionsValidFrom` **and** calls `revokeAllTrustedDevices()`.
+Grants are different: `requirePermission()` reads them live, so a grant
+change applies on the next request without a sign-out.
+
+Every change writes an `AuditLog` row (`ADMIN_LEVEL_CHANGE`,
+`ADMIN_SCOPE_GRANT`, `ADMIN_SCOPE_REVOKE`, carrying `orgId`) and a warning
+activity line. A tier change also sends the target an in-app notice,
+`admin_tier.changed`, in the essential `account_security` group.
+
+Grants on a tier that no longer reads them (after a PROGRAM_ADMIN is
+promoted or demoted) are kept, not deleted. The rule ignores them, and they
+apply again if the tier returns.
+
+`AdminNav` hides the few links whose page needs a write a tier lacks (the
+`permission` tag in `src/lib/navLinks.ts`: automations and nudges). This is
+**cosmetic**: the page's API answers 403, and that is the control.
+
+### Program scope — what a PROGRAM_ADMIN reads and writes (#1577)
+
+A grant is a **query filter**, not only a gate. `scopeForRole()`
+(`src/lib/authzScope.ts`) loads an ADMIN's tier and `AdminScopeGrant` rows
+**live** on every call and narrows the ADMIN builders:
+
+| Tier | `relation` | `project` | `company` |
+|---|---|---|---|
+| `ORG_ADMIN`, empty column | the tenant | the tenant | the tenant |
+| `OBSERVER` | the tenant (reads everything, writes nothing — its grants are not read, the rule of `authzRule.ts`) | the tenant | the tenant |
+| `PROGRAM_ADMIN` | relations whose cohort **or** company a grant names (a grant naming both narrows to both) | projects of those relations | a granted company, or one reached through a relation of a granted cohort |
+| `PROGRAM_ADMIN`, zero grants | **nothing** (`NO_MATCH`) | nothing | nothing |
+
+Every caller of `scopeForRole()` — `GET /api/mentorship`, `/api/projects`,
+`/api/companies`, `/api/interactions`, `/api/requisitions` and the lib readers —
+narrows by itself. A grant of another org never widens anything.
+
+**A relation with no cohort (and no company) is outside every program scope.**
+This is deliberate, not an oversight: a PROGRAM_ADMIN sees a candidate only once
+someone has put them in a programme it runs, and that is why assigning a cohort
+matters. A PROGRAM_ADMIN cannot create a relation either (`POST /api/mentorship`
+carries no cohort, so the subject names nothing → `unscoped_subject`).
+
+**Writes ask about the row, not the route.** `/api/mentorship/[id]` `GET`/`PUT`
+pass the relation as the subject (`relationSubject()` in `authzRule.ts`) to the
+one rule: out of scope the PROGRAM_ADMIN is a plain non-participant and gets
+`403`. A `PUT` that moves the relation's cohort or company is checked twice —
+before **and after** the move — so it cannot hand a relation to a cohort it does
+not hold or strip the cohort that put it in reach (`403 outside_scope`).
+
+**Lists and pages.** The fragments live in one pure module,
+`src/lib/programScopeRule.ts` (`programRelationWhere`, `programMenteeWhere`,
+`programPeopleWhere`; the audit viewer's target filter is the same function):
+
+| Surface | PROGRAM_ADMIN |
+|---|---|
+| `GET /api/candidates` (`/admin/candidates`) | `listing: true`; the mentees of relations inside the grants, and only those relations on each row |
+| `GET /api/users` (every view) | `listing: true`; either side of a relation inside the grants, plus a company-only grant's COMPANY accounts |
+| `/admin` dashboard, `/admin/re-engagement`, `/admin/mentee-activity`, the daily activity digest mail | narrowed through `programGrantsFor()` (`authzScope.ts`, live tier + grants; `null` = whole tenant) |
+| `/admin/contributor-terms` | redirected to `/admin` — an org-wide report with nothing to narrow by |
+| Bulk edit (`/api/admin/candidates/bulk`) | **403** — it asks `user.write`, which the tier does not hold |
+| Duplicate detection (`/api/admin/duplicates`, `/duplicates/check`) and merge (`/duplicates/merge`) | **403** — detection reads every candidate of the org and asks without `listing` (`unscoped_subject`); merge asks `user.merge`, which the tier does not hold. Any cache in front of detection sits **behind** that gate, so it needs no grant in its key while the tier is refused |
+| `GET /api/admin/analytics` (the overview) | `listing: true`; `loadAdminAnalytics({ scope })` computes every number over the grants — funnel, conversion, engagement, RSVP, trends and mentor workload through the covered relations, projects only with one of them, the signup funnel over the people the grants reach (`programPeopleWhere`), the programme picker only the granted cohorts. The `?program=` filter ANDs on top |
+| `GET /api/admin/analytics/aging`, `/funnel` | `listing: true`; every relation (and, in the funnel, the rest of each transfer chain) ANDs `programRelationWhere(grants)` — the same always-on programme filter. The funnel's **mentor capacity** list is `[]` for the tier: a mentor's load counts every pairing, so a load counted inside the grants only would misreport who is over their ceiling |
+| Every other `/api/admin/analytics/*` sub-route, the AI narrative included | **403** (`unscoped_subject`) — refused, so no aggregate leaks; each one opens only with its own narrowing |
+| A single user by id (`/api/users/[id]`, the candidate detail) | **403** — a person is not a cohort-shaped subject yet |
+
+**Who hears about it (#3485).** A notice to "the org's admins" carries names,
+so it is a read and follows the same scope — one pure rule, `adminReceives()`
+in `programScopeRule.ts`:
+
+| Notice | ORG_ADMIN, OBSERVER | PROGRAM_ADMIN |
+|---|---|---|
+| Org-level (sign-up, support ticket or report, company inquiry, mentor application, plan limit, SSO certificate, webhook disabled, document expiry, request nudge, retention summaries) | ✅ | **never** — it has no programme to be inside |
+| About a relation or account (re-match request, SLA escalation/resolution, stage automation to admins, relation-health digest, trial reminder, company outreach) | ✅ | only when a grant covers its cohort/company (`grantCovers()`) |
+| Scheduled analytics report (a subscription naming the admin) | ✅ | **skipped** (`recipient_out_of_scope`) — analytics is org-wide |
+| Daily activity digest | ✅ | its programmes' mentees and to-dos only |
+
+The recipient helpers in `src/lib/tenantAdmins.ts` apply it: `tenantAdminWhere()`
+/ `tenantAdminIds(orgId)` are org-level (no PROGRAM_ADMIN), `tenantAdminIds(orgId,
+subject)` / `tenantAdminRows(orgId, subject, select)` add the PROGRAM_ADMINs whose
+grants cover `subject`. A new fan-out picks one of them — never a raw
+`role: 'ADMIN'` query. Runnable: `e2e/admin-fanout-program-scope.spec.ts` (`@smoke`).
+
+Runnable: `e2e/program-scoped-admin.spec.ts` (`@smoke`); the builders:
+`scripts/test/authz-scope-program-admin.test.mjs`.
 
 ## Süper-admin yalnız uçlar / Super-admin-only endpoints
 
@@ -492,7 +644,7 @@ yazılmışlar; denetimde temiz çıktılar ve **bozulmamalı**:
 | CV erişimi | `canAccessCv()` — sonda açık `return false` | [`src/lib/cvAccess.ts`](../src/lib/cvAccess.ts) |
 | Belge erişimi | aynı desen | [`src/lib/documentAccess.ts`](../src/lib/documentAccess.ts) |
 | Mesajlaşma | `getThreadIfAllowed()` | [`src/lib/messaging.ts`](../src/lib/messaging.ts) |
-| Proje detayı/üyeleri | `isProjectMember()` + sahiplik | [`src/lib/projectAccess.ts`](../src/lib/projectAccess.ts) |
+| Proje detayı/üyeleri | `isProjectMember()` + sahiplik; ekip yönetimi ve eklenebilir küme `canManageProjectTeam()` / `addableSeats()` (#2272) | [`src/lib/projectAccess.ts`](../src/lib/projectAccess.ts), [`src/lib/projectTeamRule.ts`](../src/lib/projectTeamRule.ts) |
 | Rol-kapılı route'lar | Girişte rol allowlist'i → 401 (`/api/users`, `/api/search`, `/api/meetings`, `/api/availability`, `/api/company/*`, `/api/mentor/*`, `/api/admin/*`) | ilgili `route.ts` |
 | Kayıt bazlı yetki | `allowed = ADMIN \|\| katılımcı` (varsayılan `false`) | `/api/evaluations`, `/api/questions/[id]`, `/api/mentorship/[id]`, `/api/users/[id]/activity` |
 
@@ -515,6 +667,8 @@ ellenmedi; en kritikleri:
 | `PUT /api/mentorship/[id]` `{companyId}` | yalnız `ADMIN`, **her dikeyde** — sahip mentor/temsilci **403** `company_change_admin_only` (hiçbir ADMIN-dışı ekran `companyId` göndermez; mevcut değeri geri göndermek no-op). Hedef çağıranın kiracısında çözülür: başka kiracının firması ile var olmayan id **aynı 404** gövdesini alır, isim dönmez, FK hatası oluşmaz (`src/lib/relationTargets.ts`, #2613) |
 | `PUT /api/mentorship/[id]` `{projectId}` / `{cohortId}` | Aynı kural (#2618): yalnız `ADMIN`, sahip **403** `project_change_admin_only` / `cohort_change_admin_only`; hedef kiracı içinde çözülür, yabancı ve yok id aynı **404** `project_not_found` / `cohort_not_found`. `projectId` bir etiket değil: ACTIVE ilişkinin `projectId`'si mentor ve mentee için **proje ekibi üyeliğidir** (`isProjectMember`, `src/lib/projectTeam.ts`) — sahip değiştirebilseydi istediği özel projeye girerdi. Karışık bir istekte bir hedef reddedilirse hiçbiri yazılmaz |
 | `POST /api/projects` | `ADMIN` veya `MENTOR` (mentor daima sahip olur) |
+| `GET/POST/DELETE /api/projects/[id]/members`, `GET …/members/candidates` | Ekibi yöneten: `ADMIN`, OWNER üyesi ya da eski `ownerUserId` — **MENTEE sahibi dahil** (#2272). Kural tek ve saftır: [`src/lib/projectTeamRule.ts`](../src/lib/projectTeamRule.ts) (`canManageProjectTeam`, `addableSeats`, `memberAddRefusal`); rota yalnız olguları yükler ([`projectTeamAccess.ts`](../src/lib/projectTeamAccess.ts)). **Eklenebilir küme:** `ADMIN` kiracıdaki her aktif kişiyi; `MENTOR` her aktif mentor/admin'i ve yalnız kendi mentilerini; `MENTEE` sahibi yalnız **kendi ACTIVE mentor(lar)ını** (OWNER/MENTOR koltuğu) ve **o mentorların diğer mentilerini** (MENTEE koltuğu). Bu çember **koltuklardan** okunur (#3584): 1:1'in mentor/menti çifti **ve** grup ilişkisinin (#1804, `RelationParticipant`) ek koltukları — grubun mentor/kolaylaştırıcıları ve diğer mentileri. Yalnız **etkin katılım** sayılır (`seatCounts()`): ayrılmış koltuk (`leftAt`), ACTIVE olmayan ilişki (tamamlanmış, bitmiş), bench'teki ya da pasif kişi düşer; ilişkinin **ve** kişinin org'u çağıranınkiyle açıkça karşılaştırılır (NULL = varsayılan org). Kümenin dışındaki herkes — bağlantısız aynı-org üyesi, başka kiracının kişisi, var olmayan id — **aynı 404** `not_addable`; kümedeki biri tutamayacağı koltukta istenirse **400** `wrong_seat`. Yöneticisi olmayan çağıran: ekipteyse **403**, değilse projeyi bilmiyor sayılır **404**. Seçici (`candidates`) aynı `addableSeats()`'ten geçer; `ADMIN` için boş döner, admin seçicisi program kapsamını taşıyan `/api/users`'tır |
+| `POST/PUT/DELETE /api/meeting-series` (proje bağlamı) | `canWriteProjectSeries()` (aynı dosya): ekibi yönetenler — **MENTEE sahibi dahil** (#2272) — ve projenin MENTOR üyeleri. Düz menti üyesi **403**, projeyle ilgisi olmayan **404**; bir seriyi başkasının projesine taşımak hedef proje için aynı kuraldan geçer. İlişki bağlamındaki (standing 1:1) seri değişmedi: yazma yalnız ilişkinin mentoru ve `ADMIN`, menti **403** |
 | `POST /api/source/mentees` | yalnız `SOURCE`, kendi `sourceId`'si ile |
 | `GET/POST /api/sources` | `ADMIN` veya `MENTOR` — birleşik "getiren kişi / kaynak" seçiminin listesi ve yerinde kaynak yaratma (#1296). Yönetim uçları (istatistik, silme) `ADMIN`-only `/api/admin/sources` altında kalıyor. |
 

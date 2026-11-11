@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
+import { imageAltField } from '@/lib/announcementImage';
 import { normalizeMachineList } from '@/lib/machineTranslation';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -19,6 +18,7 @@ import {
   canonicalAnnouncementText,
   resolveAnnouncementText,
 } from '@/lib/announcementText';
+import { requirePermission } from '@/lib/authz';
 
 // Editing and deleting a published announcement (#1162). Until this existed a
 // typo in a broadcast was permanent and a superseded one stayed on everyone's
@@ -47,6 +47,8 @@ const schema = z.object({
   // 'keep' (default) leaves the attached image alone, 'remove' detaches it; a
   // new file on the multipart path replaces it.
   imageAction: z.enum(['keep', 'remove']).optional(),
+  // The image's description (#3388). Absent = leave it alone; '' = decorative.
+  imageAlt: z.string().max(TEXT_LIMITS.imageAltText).optional(),
 });
 
 /** A multipart field carrying JSON; an unparseable one is dropped, not thrown. */
@@ -75,6 +77,7 @@ async function readBody(request: Request): Promise<{ fields: unknown; image: Fil
         ...(form.get('machineTranslated') ? { machineTranslated: safeJson(form.get('machineTranslated')) } : {}),
         ...(form.get('link') ? { link: form.get('link') } : {}),
         ...(form.get('imageAction') ? { imageAction: form.get('imageAction') } : {}),
+        ...(form.has('imageAlt') ? { imageAlt: String(form.get('imageAlt')) } : {}),
       },
       image: image instanceof File && image.size > 0 ? image : null,
     };
@@ -84,8 +87,9 @@ async function readBody(request: Request): Promise<{ fields: unknown; image: Fil
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const { id } = await params;
@@ -103,6 +107,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
     const { link, imageAction } = parsed.data;
+    // undefined = leave the description alone; '' (trimmed) = decorative.
+    const imageAlt = parsed.data.imageAlt === undefined ? undefined : imageAltField(parsed.data.imageAlt);
     const translations = normalizeAnnouncementTranslations(parsed.data.translations);
     const text = canonicalAnnouncementText(translations, parsed.data.text);
     if (!text) {
@@ -131,8 +137,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
               // violate AnnouncementImage's unique announcementId.
               image: {
                 upsert: {
-                  create: { contentType: image.type, size: image.size, data: imageData },
-                  update: { contentType: image.type, size: image.size, data: imageData },
+                  create: { contentType: image.type, size: image.size, data: imageData, altText: imageAlt ?? null },
+                  update: { contentType: image.type, size: image.size, data: imageData, altText: imageAlt ?? null },
                 },
               },
             }
@@ -165,9 +171,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       });
     }
 
+    // A new description for the image already attached (#3388). updateMany, not
+    // a nested update: there may be no image, and that is not an error here.
+    if (!imageData && imageAction !== 'remove' && imageAlt !== undefined) {
+      await prisma.announcementImage.updateMany({ where: { announcementId: id }, data: { altText: imageAlt } });
+    }
+
     const withImage = await prisma.announcement.findUnique({
       where: { id },
-      select: { image: { select: { id: true } } },
+      select: { image: { select: { id: true, altText: true } } },
     });
 
     await logActivity({
@@ -175,13 +187,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       actorId: session.user.id,
       actorEmail: session.user.email ?? null,
     });
-    return NextResponse.json({ id, imageUrl: withImage?.image ? announcementImageUrl(id) : null });
+    return NextResponse.json({ id, imageUrl: withImage?.image ? announcementImageUrl(id) : null, imageAlt: withImage?.image?.altText ?? null });
   });
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('content.write', { request: _request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
     const { id } = await params;

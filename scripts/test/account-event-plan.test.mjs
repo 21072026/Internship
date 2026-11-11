@@ -46,7 +46,8 @@ const NOTHING = 'nothing';
 
 function plan(eventType, record, { stages = STAGES, occurredAt = NOW } = {}) {
   const intent = ingestIntent(eventType);
-  if (intent.kind === 'record') return 'record';
+  // Neither a record-only type nor a payment (#3355) reaches the funnel planner.
+  if (intent.kind === 'record' || intent.kind === 'payment') return intent.kind;
   const out = planAccountEvent({
     intent,
     record: { status: 'ACTIVE', wasWon: record.pipelineStatus === 'DEAL_WON', trialEndsAt: null, ...record },
@@ -82,7 +83,7 @@ const COLUMN = {
 test('the table: every event type × every stage of an active record', () => {
   for (const [stage, row] of Object.entries(TABLE)) {
     for (const type of ACCOUNT_EVENT_TYPES) {
-      const expected = COLUMN[type] ? row[COLUMN[type]] : 'record';
+      const expected = COLUMN[type] ? row[COLUMN[type]] : type === 'payment_received' ? 'payment' : 'record';
       const trialEndsAt = stage === 'TRIAL_EXPIRED' ? TRIAL_ENDED : null;
       assert.deepEqual(plan(type, { pipelineStatus: stage, trialEndsAt }), expected, `${type} on ${stage}`);
     }

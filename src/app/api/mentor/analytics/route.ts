@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -10,6 +9,7 @@ import { outcomeStageKeys } from '@/lib/pipelineStages';
 import { getLocale } from '@/i18n/server';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
+import { countsAsPlacement, funnelStartedAt, isPlacementRelation } from '@/lib/placement';
 
 // GET — mentor-scoped analytics: their own pipeline funnel, goal summary and
 // engagement stats (EPIC: mentor analytics / pipeline funnel, roadmap #370).
@@ -24,10 +24,9 @@ import { rangeEnd, rangeStart } from '@/lib/dateRange';
 //   answer a question nobody asked ("who is in stage X *and* started in
 //   March"), so it stays unfiltered and the screen says so.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || (session.user.role !== 'MENTOR' && session.user.role !== 'ADMIN')) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requireRoleOrPermission(['MENTOR'], 'analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
 
   const locale = await getLocale();
 
@@ -37,7 +36,7 @@ export async function GET(request: Request) {
     // MT_ENFORCE_ISOLATION off was every tenant's relations (#2542 follow-up).
     // Interactions and goals have no orgId: their tenant is the relation's.
     const relationWhere = withinTenant<Prisma.MentorshipRelationWhereInput>(
-      session.user.role === 'ADMIN' ? {} : { mentorId: session.user.id },
+      admin ? {} : { mentorId: session.user.id },
       await tenantWhere(session),
     );
     const interactionWhere = { relation: relationWhere };
@@ -62,7 +61,10 @@ export async function GET(request: Request) {
           id: true,
           status: true,
           pipelineStatus: true,
+          kind: true,
+          employmentAttribution: true,
           startDate: true,
+          funnelEnteredAt: true,
           mentee: { select: { id: true, fullName: true } },
           // Real moves only (#2264). Filtering here rather than at each reader
           // fixes all three at once: the "stage moves" count below, the
@@ -88,9 +90,11 @@ export async function GET(request: Request) {
     );
     const interactions = interactionsByRelation.reduce((n, g) => n + g._count._all, 0);
 
-    // Pipeline funnel: count mentees per stage (all relations, not just active).
+    // Pipeline funnel: count mentees per stage (all relations, not just active)
+    // — PLACEMENT relations only (#1504): a COACHING pair's stage means nothing here.
     const funnel: Record<string, number> = {};
     for (const r of relations) {
+      if (!isPlacementRelation(r.kind)) continue;
       funnel[r.pipelineStatus] = (funnel[r.pipelineStatus] ?? 0) + 1;
     }
 
@@ -107,8 +111,11 @@ export async function GET(request: Request) {
 
     const totalRelations = relations.length;
     const activeRelations = relations.filter((r) => r.status === 'ACTIVE').length;
-    const hired = relations.filter((r) => finished.has(r.pipelineStatus)).length;
-    const conversionToHired = totalRelations > 0 ? Math.round((hired / totalRelations) * 100) : 0;
+    // The placement rate (#1504): ours over the PLACEMENT relations only. The
+    // mentor's workload numbers above still count every pairing.
+    const placementRelations = relations.filter((r) => isPlacementRelation(r.kind)).length;
+    const hired = relations.filter((r) => countsAsPlacement(r, finished)).length;
+    const conversionToHired = placementRelations > 0 ? Math.round((hired / placementRelations) * 100) : 0;
 
     // Goal summary across all mentees. OPEN/total are current state; "done" is
     // an event, so it is also reported for the window.
@@ -136,16 +143,16 @@ export async function GET(request: Request) {
 
     // Average days to hired for completed mentees.
     let avgDaysToHired: number | null = null;
-    const hiredRelations = relations.filter((r) => finished.has(r.pipelineStatus));
+    const hiredRelations = relations.filter((r) => countsAsPlacement(r, finished));
     if (hiredRelations.length > 0) {
       const durations = hiredRelations
         .map((r) => {
           const last = r.statusChanges[r.statusChanges.length - 1];
           if (!last) return null;
-          return Math.floor((last.createdAt.getTime() - r.startDate.getTime()) / (24 * 60 * 60 * 1000));
+          return Math.floor((last.createdAt.getTime() - funnelStartedAt(r).getTime()) / (24 * 60 * 60 * 1000));
         })
         // Backdated status changes can put the finishing transition before
-        // the relation's startDate, producing a negative duration — drop it
+        // the relation's funnel entry (#1505), producing a negative duration — drop it
         // rather than average in a nonsensical value.
         .filter((d): d is number => d !== null && d >= 0);
       if (durations.length > 0) {

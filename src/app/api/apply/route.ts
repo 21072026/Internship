@@ -1,13 +1,14 @@
+import { requestExpiresAt } from '@/lib/requestExpiryRule';
 import { NextResponse } from 'next/server';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
+import { createUser } from '@/lib/userCreate';
 import { createPasswordResetToken } from '@/lib/passwordReset';
-import { sendPasswordResetEmail, sendEmail } from '@/services/emailService';
+import { sendPasswordResetEmail } from '@/services/emailService';
 import { notify } from '@/lib/notify';
+import { notifyEvent } from '@/lib/notifications/router';
 import { tenantAdminIds } from '@/lib/tenantAdmins';
-import { emailAllowed } from '@/lib/notificationPrefs';
-import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
 import { emit } from '@/lib/events/emit';
 import { checkActiveRelationLimit } from '@/lib/planGate';
 import { notifyAdminsHeldByPlan } from '@/lib/planGateNotify';
@@ -19,6 +20,8 @@ import { capSkills } from '@/lib/skills';
 import { syncUserSkills } from '@/lib/skillsResolve';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { requireCapability } from '@/lib/capabilityGate';
+import { isEligible } from '@/lib/eligibility';
+import { checkPublicAnswers, publicAnswersSchema, writeStagedAnswers } from '@/lib/forms/publicAnswers';
 
 // The binding capacity rule (#1188): the link is CLOSED when the mentor said
 // "not right now" (acceptingMentees=false), or when a set mentorCapacity is
@@ -73,6 +76,8 @@ const schema = z.object({
   // A list from the current form, a comma-joined string from an older cached
   // bundle or a hand-rolled POST. Both are split by `capSkills` (#2314).
   skills: z.union([z.string(), z.array(z.string())]).optional(),
+  // Answers to the org's REGISTRATION questions for mentees (#1803).
+  formAnswers: publicAnswersSchema,
 });
 
 // POST — public application: creates a mentee linked to the mentor, emails the
@@ -122,6 +127,25 @@ export async function POST(request: Request) {
   // call. The commercial half goes to the org's admins as a notification.
   // e2e/upgrade-prompt.spec.ts fails if a plan name or a price ever reaches
   // this response body.
+  // Programme eligibility (#1945), judged on what the applicant typed, BEFORE
+  // an account exists: in RULES mode an application nobody's rule admits is
+  // refused, not filed. The applicant is told it is not open to them — never
+  // which rule, which is the organisation's business.
+  const eligibility = await isEligible({ orgId: mentor.orgId, profile: { city: city || null, department: department || null, university: university || null } });
+  if (!eligibility.ok) {
+    return NextResponse.json(
+      { error: 'This programme is not open to your profile', code: 'not_eligible' },
+      { status: 403 },
+    );
+  }
+
+  // The org's own questions (#1803), checked with the shared validator BEFORE
+  // the account exists — a refused answer leaves nothing behind.
+  const answers = await checkPublicAnswers(mentor.orgId, 'MENTEE', parsed.data.formAnswers);
+  if (!answers.ok) {
+    return NextResponse.json({ error: 'invalid_answers', code: 'invalid_answers', errors: answers.errors }, { status: 400 });
+  }
+
   const gate = await checkActiveRelationLimit(mentor.orgId);
   if (!gate.allowed) {
     await notifyAdminsHeldByPlan(mentor.orgId, 'plan_limit.application_held', gate.limit);
@@ -131,7 +155,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const mentee = await prisma.user.create({
+  const mentee = await createUser(prisma, {
     data: {
       email,
       password: APPLY_NO_LOGIN_PASSWORD,
@@ -148,9 +172,11 @@ export async function POST(request: Request) {
       // rather than rejected.
       skills: capSkills(skills),
     },
-  });
+  }, { source: 'apply' });
   // Dual-write the canonical twin of the skill list (#1818).
   await syncUserSkills(mentee.id, mentee.orgId, Array.isArray(mentee.skills) ? (mentee.skills as string[]) : []);
+  // The account exists now: the answers checked above go straight onto it.
+  await writeStagedAnswers(mentee.id, answers.staged);
 
   // The application is now a PENDING request the mentor accepts or declines
   // (#1188) — it used to create the ACTIVE relation on the spot, which is
@@ -158,7 +184,7 @@ export async function POST(request: Request) {
   // goes through the shared decision service (notification + e-mail to the
   // applicant either way).
   await prisma.mentorshipRequest.create({
-    data: { menteeId: mentee.id, preferredMentorId: mentor.id },
+    data: { menteeId: mentee.id, preferredMentorId: mentor.id, expiresAt: requestExpiresAt(new Date()) },
   });
   await notify(mentor.id, 'application.received', { name: fullName }, '/mentor/applications');
   await emit('application.created', { mentorId: mentor.id, menteeName: fullName, email }, { orgId: mentor.orgId ?? null, actor: null });
@@ -200,26 +226,21 @@ export async function POST(request: Request) {
   } catch (e) {
     console.error('Applicant set-password email failed:', e);
   }
-  // Notify the mentor — honoring their email opt-out (#668: this send used to
-  // ignore notificationPrefs entirely, so a mentor with email notifications off
-  // still received it).
-  if (emailAllowed(mentor, 'mentorship') && emailGroupAllowedForCategory(mentor, 'mentorship-request')) {
-    try {
-      await sendEmail({
-        to: mentor.email,
-        subject: `New application: ${fullName}`,
-        html: `<div style="font-family: Arial, sans-serif;"><p>${fullName} (${email}) applied to be your mentee.</p></div>`,
-        category: 'mentorship-request',
-        // The MENTOR is the recipient. The applicant (`mentee`, created a few
-        // lines above) is the subject of the mail, and using their id here would
-        // both mint the wrong unsubscribe token and let a stranger's public
-        // application form switch off a mentor's mail.
-        userId: mentor.id,
-      });
-    } catch (e) {
-      console.error('Mentor notification email failed:', e);
-    }
-  }
+  // Notify the mentor by mail — through the router (#1711), which applies their
+  // e-mail opt-out (#668: this send used to ignore notificationPrefs entirely),
+  // the channel matrix and quiet hours, and records a ledger row. The MENTOR is
+  // the recipient: the applicant is the subject of the mail, and keying it to
+  // them would let a stranger's public form switch off a mentor's mail. The bell
+  // row is the notify() above, with its own /mentor/applications link.
+  await notifyEvent(mentor.id, 'application.received', { name: fullName }, {
+    channels: ['email'],
+    dedupeKey: `application-received:${mentee.id}:${mentor.id}`,
+    email: {
+      subject: `New application: ${fullName}`,
+      html: `<div style="font-family: Arial, sans-serif;"><p>${fullName} (${email}) applied to be your mentee.</p></div>`,
+      category: 'mentorship-request',
+    },
+  });
 
   return NextResponse.json({ ok: true });
 }

@@ -30,15 +30,20 @@ export async function POST(request: Request) {
   // not an auth check, and we don't want to leak which tokens exist.
   // An invitation of the other world opened on this host is not "opened": the
   // register route refuses it here, so it must not look clicked to its admin.
-  if (
-    invite &&
+  const live =
+    !!invite &&
     !invite.used &&
     !invite.revokedAt &&
-    !invite.openedAt &&
     invite.expiresAt > new Date() &&
-    (await worldOfOrg(invite.orgId)) === (await hostVertical())
-  ) {
+    (await worldOfOrg(invite.orgId)) === (await hostVertical());
+  if (live && !invite.openedAt) {
     await prisma.invitationToken.update({ where: { id: invite.id }, data: { openedAt: new Date() } });
   }
-  return NextResponse.json({ ok: true });
+  // WCAG 3.3.7 Redundant Entry (#2864): the invitation already names the
+  // address the account must be registered with, so the form is pre-filled
+  // with it instead of asking the invitee to type it again. Only for a live
+  // invitation of this world, and only to the holder of the token — the same
+  // secret the invitation mail delivered to that address. A dead or unknown
+  // token answers exactly as before.
+  return NextResponse.json(live && invite.email ? { ok: true, email: invite.email } : { ok: true });
 }

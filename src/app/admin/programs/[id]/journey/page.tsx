@@ -232,9 +232,9 @@ export default function ProgramJourneyPage() {
             options={[{ value: '', label: T.skipNever }, ...JOURNEY_SKIP_CONDITIONS.map((c) => ({ value: c, label: T.skipIfs[c] }))]}
             data-testid="journey-skip"
           />
-          <Input label={T.titleEn} value={draft.en} maxLength={191} onChange={(e) => set('en', e.target.value)} data-testid="journey-title-en" />
-          <Input label={T.titleTr} value={draft.tr} maxLength={191} onChange={(e) => set('tr', e.target.value)} data-testid="journey-title-tr" />
-          <Input label={T.titleDe} value={draft.de} maxLength={191} hint={T.titleHint} onChange={(e) => set('de', e.target.value)} data-testid="journey-title-de" />
+          <Input label={T.titleEn} lang="en" value={draft.en} maxLength={191} onChange={(e) => set('en', e.target.value)} data-testid="journey-title-en" />
+          <Input label={T.titleTr} lang="tr" value={draft.tr} maxLength={191} onChange={(e) => set('tr', e.target.value)} data-testid="journey-title-tr" />
+          <Input label={T.titleDe} lang="de" value={draft.de} maxLength={191} hint={T.titleHint} onChange={(e) => set('de', e.target.value)} data-testid="journey-title-de" />
           {error && <p role="alert" className="text-sm text-red-600 sm:col-span-2" data-testid="journey-error">{error}</p>}
           <div className="flex gap-2 sm:col-span-2">
             <Button type="submit" loading={saving} data-testid="journey-save">{editing ? t.common.save : T.addStep}</Button>

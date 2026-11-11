@@ -1,14 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { resolveOrgId } from '@/lib/orgScope';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { mergeUsers, MergeError } from '@/lib/mergeUsers';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { requirePermission } from '@/lib/authz';
 
 const bodySchema = z.object({
   primaryId: z.string().min(1),
@@ -37,10 +36,9 @@ const MERGE_ERROR_STATUS: Record<MergeError['code'], number> = {
 // most destructive endpoint after erasure: the duplicate row is deleted after
 // everything attached to it is re-pointed (see src/lib/mergeUsers.ts).
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('user.merge', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // An impersonation session carries the target user's role, so it cannot pass
   // the check above today — assert it anyway, so a merge can never be attributed
   // to an admin who was merely being impersonated.

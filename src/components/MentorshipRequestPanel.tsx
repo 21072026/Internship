@@ -1,5 +1,6 @@
 'use client';
 
+import { daysUntilExpiry, isLivePending } from '@/lib/requestExpiryRule';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -12,13 +13,17 @@ import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { END_REASON_CODES } from '@/lib/relationLifecycle';
 import { useT } from '@/i18n/client';
+import { DynamicFields, useDynamicFields } from '@/components/forms/DynamicFields';
 
 interface Gate { profile: boolean; cv: boolean; complete: boolean; missing: ('profile' | 'cv')[] }
 
 interface RequestRow {
   id: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED' | 'EXPIRED';
   message?: string | null;
+  /** Expiry and an admin's cancellation reason (#1775). */
+  expiresAt?: string | null;
+  cancelReason?: string | null;
   preferredMentor?: { id: string; fullName: string } | null;
   /** Set when this request asks to replace a live pairing (#1801). */
   replacesRelationId?: string | null;
@@ -49,6 +54,9 @@ export function MentorshipRequestPanel({ rematchRelationId }: { rematchRelationI
   const q = t.mentorshipRequests;
   const rm = t.rematchRequest;
   const dir = t.mentorDirectory;
+  // The org's request questions (#1803). Answers are the person's own, saved
+  // before the request so the matcher reads them when it ranks this request.
+  const customFields = useDynamicFields('MENTORSHIP_REQUEST');
   const isRematch = !!rematchRelationId;
   const [rematchOpen, setRematchOpen] = useState(false);
   const [reason, setReason] = useState('');
@@ -143,9 +151,17 @@ export function MentorshipRequestPanel({ rematchRelationId }: { rematchRelationI
   const selectedMentor = mentorOptions.find((m) => m.id === preferredMentorId);
   // In re-match mode "pending" means a re-match open on THIS pairing, not any
   // pending request the mentee happens to have.
+  // A PENDING request past its expiry no longer blocks (#1775) — the server
+  // already lets a new one through before the daily sweep marks it EXPIRED.
+  const now = new Date();
+  const live = (r: RequestRow) =>
+    isLivePending({ status: r.status, createdAt: new Date(r.createdAt), expiresAt: r.expiresAt ? new Date(r.expiresAt) : null }, now);
   const pending = isRematch
-    ? requests.find((r) => r.status === 'PENDING' && r.replacesRelationId === rematchRelationId)
-    : requests.find((r) => r.status === 'PENDING');
+    ? requests.find((r) => live(r) && r.replacesRelationId === rematchRelationId)
+    : requests.find((r) => live(r));
+  const daysLeft = pending
+    ? daysUntilExpiry({ createdAt: new Date(pending.createdAt), expiresAt: pending.expiresAt ? new Date(pending.expiresAt) : null }, now)
+    : null;
   const latest = requests[0];
 
   const submitRematch = async () => {
@@ -183,6 +199,7 @@ export function MentorshipRequestPanel({ rematchRelationId }: { rematchRelationI
   };
 
   const submit = async () => {
+    if (!customFields.validate()) return;
     setBusy(true);
     setErr('');
     const languages = preferredLanguages
@@ -190,6 +207,10 @@ export function MentorshipRequestPanel({ rematchRelationId }: { rematchRelationI
       .map((l) => l.trim())
       .filter(Boolean);
     try {
+      if (await customFields.save()) {
+        setErr(t.dynamicFields.answersFailed);
+        return;
+      }
       const res = await fetch('/api/mentorship-requests', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -312,6 +333,11 @@ export function MentorshipRequestPanel({ rematchRelationId }: { rematchRelationI
           <p className="text-sm text-amber-700 dark:text-amber-400 flex items-center gap-2" data-testid="request-pending">
             <Clock className="h-4 w-4" /> {q.pendingInfo}
           </p>
+          {daysLeft != null && (
+            <p className="mt-1 text-xs text-gray-600 dark:text-gray-400" data-testid="request-expires-in">
+              {daysLeft > 0 ? q.expiresIn.replace('{n}', String(daysLeft)) : q.expiresToday}
+            </p>
+          )}
           {/* A "request this mentor" click that lands here has nowhere to go —
               the form is hidden while a request is pending. Say so, rather than
               dropping the ?mentor= param without a trace (#1773). Not when the
@@ -337,6 +363,16 @@ export function MentorshipRequestPanel({ rematchRelationId }: { rematchRelationI
           {latest?.status === 'REJECTED' && (
             <p className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2 mb-3">
               <XCircle className="h-4 w-4" /> {q.rejectedInfo}
+            </p>
+          )}
+          {(latest?.status === 'EXPIRED' || (latest && latest.status === 'PENDING' && !live(latest))) && (
+            <p className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2 mb-3" data-testid="request-expired">
+              <Clock className="h-4 w-4" /> {q.expiredInfo}
+            </p>
+          )}
+          {latest?.status === 'CANCELLED' && (
+            <p className="text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2 mb-3" data-testid="request-cancelled">
+              <XCircle className="h-4 w-4" /> {q.cancelledInfo.replace('{reason}', latest.cancelReason ?? '')}
             </p>
           )}
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{q.hint}</p>
@@ -393,6 +429,9 @@ export function MentorshipRequestPanel({ rematchRelationId }: { rematchRelationI
             />
           </div>
           <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">{q.preferencesHint}</p>
+          <div className="mb-3">
+            <DynamicFields state={customFields} />
+          </div>
           {err && <p className="text-xs text-red-600 mb-2">{err}</p>}
           {gate && !gate.complete && (
             <div className="mb-2 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 p-3" data-testid="request-gate">

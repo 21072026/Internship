@@ -6,15 +6,21 @@ import Link from 'next/link';
 import { Copy, Check, Share2, UserPlus, X } from 'lucide-react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Textarea';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useT, useLocale } from '@/i18n/client';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { parseGateBody, type GateInfo } from '@/lib/upgradePrompt';
 import { locales, type Locale } from '@/i18n/config';
 import { copyToClipboard } from '@/lib/clipboard';
 import { orgPlanHasFeature, type OrgPlan, type OrgPlanLimits } from '@/lib/orgPlans';
 import { ACCENT_COLORS } from '@/lib/accent';
 import { BRAND_ACCENT, brandAssetPath, isBrandVersion } from '@/lib/brandRule';
 import { SsoRoleMappings } from '@/components/admin/SsoRoleMappings';
+import { ImpersonationPolicyCard } from '@/components/admin/ImpersonationPolicyCard';
+import { SsoAttributeMappings } from '@/components/admin/SsoAttributeMappings';
 import { SsoCertificateBadge, SsoMetadataImport, SsoTestConnection, type CertificateSummary } from '@/components/admin/SsoOnboarding';
 import { ConferencingPolicyCard } from '@/components/admin/ConferencingPolicyCard';
 import { OrgLifecycleCard } from '@/components/admin/OrgLifecycleCard';
@@ -36,6 +42,9 @@ interface Organization {
     brandAccent: string | null;
     brandPalette: string | null;
     brandMarkVersion: string | null;
+    // The tenant welcome page (#1664).
+    welcomeTitle: string | null;
+    welcomeBody: string | null;
   };
   sso: {
     ssoEnabled: boolean;
@@ -45,6 +54,16 @@ interface Organization {
     ssoLogoutUrl: string | null;
     sloUrl: string;
     ssoCertificateSet: boolean;
+    // OpenID Connect (#1926/#1929). The secret is write-only: only whether one is stored.
+    ssoClientId: string | null;
+    ssoDiscoveryUrl: string | null;
+    ssoScopes: string | null;
+    ssoClientSecretSet: boolean;
+    oidcRedirectUri: string;
+    // SAML hardening (#1955).
+    ssoSignRequests: boolean;
+    ssoRequireInResponseTo: boolean;
+    spCertificateSet: boolean;
     certificate: CertificateSummary;
     active: boolean;
     spEntityId: string;
@@ -57,6 +76,8 @@ interface Organization {
   };
   createdAt: string;
   archivedAt: string | null;
+  deletionRequestedAt: string | null;
+  deletionEligibleAt: string | null;
   counts: {
     users: number;
     sources: number;
@@ -150,6 +171,7 @@ function InviteAdminPanel({ org, onClose }: { org: Organization; onClose: () => 
   const [locale, setLocale] = useState<Locale>(uiLocale);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [gate, setGate] = useState<GateInfo | null>(null);
   const [result, setResult] = useState<{ registerUrl: string; emailSent: boolean; email: string | null } | null>(null);
   const [copied, setCopied] = useState(false);
   // Decided after mount: `navigator` does not exist during the server render,
@@ -170,6 +192,10 @@ function InviteAdminPanel({ org, onClose }: { org: Organization; onClose: () => 
         body: JSON.stringify({ email: email.trim(), label: label.trim() || null, locale }),
       });
       const data = await res.json().catch(() => ({}));
+      // The target org's admin-seat quota (#1752).
+      const wall = res.ok ? null : parseGateBody(data);
+      setGate(wall);
+      if (wall) return;
       if (!res.ok) {
         setError(
           data.code === 'email_taken_in_world'
@@ -251,6 +277,7 @@ function InviteAdminPanel({ org, onClose }: { org: Organization; onClose: () => 
             </select>
           </div>
           {error && <p className="text-sm text-red-600" data-testid="invite-admin-error">{error}</p>}
+          {gate && <UpgradePrompt gate={gate} viewer="admin" />}
           <Button type="submit" loading={busy} data-testid="invite-admin-submit" className="w-full sm:w-auto">
             {t.organizations.inviteSubmit}
           </Button>
@@ -324,6 +351,8 @@ export default function AdminOrganizationsPage() {
   // Whether this admin may manage every tenant (#1535). Presentation only — the
   // API refuses a cross-tenant write regardless of what is rendered here.
   const [superAdmin, setSuperAdmin] = useState(false);
+  // Permanent deletion (#1584): off unless the deployment switches it on.
+  const [hardDelete, setHardDelete] = useState<{ enabled: boolean; waitHours: number }>({ enabled: false, waitHours: 72 });
   const [name, setName] = useState('');
   const [slug, setSlug] = useState('');
   // Required (per-world super admins): the server offers only the verticals of
@@ -347,6 +376,7 @@ export default function AdminOrganizationsPage() {
       setVerticals(offered);
       setVertical((v) => (v && offered.includes(v) ? v : offered[0] ?? ''));
       setSuperAdmin(!!data.superAdmin);
+      if (data.hardDelete) setHardDelete(data.hardDelete);
     }
     setLoading(false);
   }, []);
@@ -414,6 +444,8 @@ export default function AdminOrganizationsPage() {
   const [brandTile, setBrandTile] = useState('');
   const [brandAccent, setBrandAccent] = useState('');
   const [brandPalette, setBrandPalette] = useState('');
+  const [welcomeTitle, setWelcomeTitle] = useState('');
+  const [welcomeBody, setWelcomeBody] = useState('');
   const [markFile, setMarkFile] = useState<File | null>(null);
   const [markInputKey, setMarkInputKey] = useState(0);
   const [brandMsg, setBrandMsg] = useState<string | null>(null);
@@ -429,6 +461,8 @@ export default function AdminOrganizationsPage() {
     setBrandTile(o?.branding.brandTileColor ?? '');
     setBrandAccent(o?.branding.brandAccent ?? '');
     setBrandPalette(o?.branding.brandPalette ?? '');
+    setWelcomeTitle(o?.branding.welcomeTitle ?? '');
+    setWelcomeBody(o?.branding.welcomeBody ?? '');
     setMarkFile(null);
     setMarkInputKey((k) => k + 1);
   };
@@ -442,7 +476,7 @@ export default function AdminOrganizationsPage() {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: brandOrgId, brandName, brandLogoUrl, brandColor, supportEmail: brandSupport,
-          brandTileColor: brandTile, brandAccent,
+          brandTileColor: brandTile, brandAccent, welcomeTitle, welcomeBody,
           // The palette is the operator's (#2922): only a super admin sends it,
           // so a tenant admin's save never clears one they cannot see change.
           ...(superAdmin ? { brandPalette } : {}),
@@ -506,6 +540,12 @@ export default function AdminOrganizationsPage() {
   const [ssoEntryPoint, setSsoEntryPoint] = useState('');
   const [ssoLogoutUrl, setSsoLogoutUrl] = useState('');
   const [ssoCertificate, setSsoCertificate] = useState('');
+  const [ssoClientId, setSsoClientId] = useState('');
+  const [ssoClientSecret, setSsoClientSecret] = useState('');
+  const [ssoDiscoveryUrl, setSsoDiscoveryUrl] = useState('');
+  const [ssoScopes, setSsoScopes] = useState('');
+  const [ssoSignRequests, setSsoSignRequests] = useState(false);
+  const [ssoRequireInResponseTo, setSsoRequireInResponseTo] = useState(false);
   const [ssoMsg, setSsoMsg] = useState<string | null>(null);
 
   const selectSsoOrg = (id: string) => {
@@ -518,6 +558,12 @@ export default function AdminOrganizationsPage() {
     setSsoEntryPoint(o?.sso.ssoEntryPoint ?? '');
     setSsoLogoutUrl(o?.sso.ssoLogoutUrl ?? '');
     setSsoCertificate(''); // never prefilled; leave blank to keep the stored cert
+    setSsoClientId(o?.sso.ssoClientId ?? '');
+    setSsoClientSecret(''); // write-only, like the certificate
+    setSsoDiscoveryUrl(o?.sso.ssoDiscoveryUrl ?? '');
+    setSsoScopes(o?.sso.ssoScopes ?? '');
+    setSsoSignRequests(o?.sso.ssoSignRequests ?? false);
+    setSsoRequireInResponseTo(o?.sso.ssoRequireInResponseTo ?? false);
   };
 
   const saveSso = async (e: React.FormEvent) => {
@@ -530,6 +576,18 @@ export default function AdminOrganizationsPage() {
       };
       // Only send the cert when the admin actually typed one (blank = keep).
       if (ssoCertificate.trim()) body.ssoCertificate = ssoCertificate;
+      // OIDC (#1929): the client and discovery fields travel with the form;
+      // the secret, like the certificate, only when one was typed.
+      // SAML hardening (#1955): only for a SAML tenant, and only when changed.
+      if (ssoProvider === 'saml') {
+        const o = orgs.find((x) => x.id === ssoOrgId);
+        if (ssoSignRequests !== (o?.sso.ssoSignRequests ?? false)) body.ssoSignRequests = ssoSignRequests;
+        if (ssoRequireInResponseTo !== (o?.sso.ssoRequireInResponseTo ?? false)) body.ssoRequireInResponseTo = ssoRequireInResponseTo;
+      }
+      if (ssoProvider === 'oidc') {
+        Object.assign(body, { ssoClientId, ssoDiscoveryUrl, ssoScopes });
+        if (ssoClientSecret.trim()) body.ssoClientSecret = ssoClientSecret;
+      }
       const res = await fetch('/api/admin/organizations', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -539,7 +597,7 @@ export default function AdminOrganizationsPage() {
         ? t.organizations.featureLocked
         : data.code === 'sso_super_admin_only' ? t.organizations.ssoTrustOperatorOnly : data.error || t.common.error;
       setSsoMsg(res.ok ? t.organizations.ssoSaved : failure);
-      if (res.ok) { setSsoCertificate(''); await load(); }
+      if (res.ok) { setSsoCertificate(''); setSsoClientSecret(''); await load(); }
     } finally {
       setSaving(false);
     }
@@ -564,7 +622,8 @@ export default function AdminOrganizationsPage() {
   const brandStored = !!(brandOrg && (brandOrg.branding.brandName || brandOrg.branding.brandLogoUrl
     || brandOrg.branding.brandColor || brandOrg.branding.supportEmail
     || brandOrg.branding.brandTileColor || brandOrg.branding.brandAccent
-    || brandOrg.branding.brandPalette || brandOrg.branding.brandMarkVersion));
+    || brandOrg.branding.brandPalette || brandOrg.branding.brandMarkVersion
+    || brandOrg.branding.welcomeTitle || brandOrg.branding.welcomeBody));
   const markVersion = brandOrg?.branding.brandMarkVersion ?? null;
 
   const clearBranding = async () => {
@@ -575,7 +634,7 @@ export default function AdminOrganizationsPage() {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id: brandOrgId, brandName: '', brandLogoUrl: '', brandColor: '', supportEmail: '',
-          brandTileColor: '', brandAccent: '', brandPalette: '',
+          brandTileColor: '', brandAccent: '', brandPalette: '', welcomeTitle: '', welcomeBody: '',
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -792,6 +851,32 @@ export default function AdminOrganizationsPage() {
               </div>
             )}
             {brandOrgId && (
+              // The welcome page `/` shows on the org's verified domain (#1664).
+              // Plain text — the page renders it as text, never as HTML.
+              <div className="space-y-2" data-testid="welcome-section">
+                <Input
+                  label={t.organizations.welcomeTitle}
+                  value={welcomeTitle}
+                  disabled={brandLocked}
+                  maxLength={TEXT_LIMITS.orgWelcomeTitle}
+                  onChange={(e) => setWelcomeTitle(e.target.value)}
+                  data-testid="welcome-title"
+                />
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300" htmlFor="welcome-body">{t.organizations.welcomeBody}</label>
+                <Textarea
+                  id="welcome-body"
+                  showCounter
+                  value={welcomeBody}
+                  disabled={brandLocked}
+                  maxLength={TEXT_LIMITS.orgWelcomeBody}
+                  rows={5}
+                  onChange={(e) => setWelcomeBody(e.target.value)}
+                  data-testid="welcome-body"
+                />
+                <p className="text-xs text-gray-500">{t.organizations.welcomeHint}</p>
+              </div>
+            )}
+            {brandOrgId && (
               <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-3" data-testid="brand-mark-section">
                 <p className="text-sm font-medium text-gray-700 mb-1">{t.organizations.brandMark}</p>
                 <p className="text-xs text-gray-500 mb-3">{t.organizations.brandMarkHint}</p>
@@ -867,11 +952,21 @@ export default function AdminOrganizationsPage() {
                   return (
                     <div data-testid="sp-details" className="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-2">
                       <p className="text-sm font-medium text-gray-700">{t.organizations.spDetails}</p>
-                      <p className="text-xs text-gray-500">{t.organizations.spDetailsHint}</p>
-                      <SpRow label={t.organizations.spEntityId} value={o.sso.spEntityId} testId="sp-entity-id" />
-                      <SpRow label={t.organizations.spAcsUrl} value={o.sso.acsUrl} testId="sp-acs-url" />
-                      <SpRow label={t.organizations.spMetadataUrl} value={o.sso.metadataUrl} testId="sp-metadata-url" link />
-                      <SpRow label={t.organizations.spSloUrl} value={o.sso.sloUrl} testId="sp-slo-url" />
+                      {ssoProvider === 'oidc' ? (
+                        <>
+                          {/* What an OIDC customer registers (#1929): one redirect URI. */}
+                          <p className="text-xs text-gray-500">{t.organizations.oidcDetailsHint}</p>
+                          <SpRow label={t.organizations.oidcRedirectUri} value={o.sso.oidcRedirectUri} testId="oidc-redirect-uri" />
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-xs text-gray-500">{t.organizations.spDetailsHint}</p>
+                          <SpRow label={t.organizations.spEntityId} value={o.sso.spEntityId} testId="sp-entity-id" />
+                          <SpRow label={t.organizations.spAcsUrl} value={o.sso.acsUrl} testId="sp-acs-url" />
+                          <SpRow label={t.organizations.spMetadataUrl} value={o.sso.metadataUrl} testId="sp-metadata-url" link />
+                          <SpRow label={t.organizations.spSloUrl} value={o.sso.sloUrl} testId="sp-slo-url" />
+                        </>
+                      )}
                     </div>
                   );
                 })()}
@@ -881,17 +976,37 @@ export default function AdminOrganizationsPage() {
                     <select value={ssoProvider} disabled={ssoTrustLocked} onChange={(e) => setSsoProvider(e.target.value)} className="block w-full rounded-lg border border-gray-300 px-3 py-2.5 text-sm">
                       <option value="">—</option>
                       <option value="saml">SAML</option>
-                      {/* OIDC is a roadmap item: the login route always builds a
-                          SAML request, so saving it would lock the tenant out.
-                          Shown disabled rather than hidden — it is coming. */}
-                      <option value="oidc" disabled>{`OIDC — ${t.organizations.ssoOidcSoon}`}</option>
+                      <option value="oidc">{t.organizations.ssoProviderOidc}</option>
                     </select>
                   </div>
                   <div className="flex-1 min-w-[200px]"><Input label={t.organizations.ssoIssuer} value={ssoIssuer} disabled={ssoTrustLocked} onChange={(e) => setSsoIssuer(e.target.value)} placeholder="https://idp.example.com/metadata" /></div>
-                  <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoEntryPoint} value={ssoEntryPoint} disabled={ssoTrustLocked} onChange={(e) => setSsoEntryPoint(e.target.value)} placeholder="https://idp.example.com/sso" /></div>
-                  <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoLogoutUrl} value={ssoLogoutUrl} disabled={ssoTrustLocked} onChange={(e) => setSsoLogoutUrl(e.target.value)} placeholder="https://idp.example.com/slo" data-testid="sso-logout-url" /></div>
+                  {ssoProvider !== 'oidc' && (
+                    <>
+                      <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoEntryPoint} value={ssoEntryPoint} disabled={ssoTrustLocked} onChange={(e) => setSsoEntryPoint(e.target.value)} placeholder="https://idp.example.com/sso" /></div>
+                      <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoLogoutUrl} value={ssoLogoutUrl} disabled={ssoTrustLocked} onChange={(e) => setSsoLogoutUrl(e.target.value)} placeholder="https://idp.example.com/slo" data-testid="sso-logout-url" /></div>
+                    </>
+                  )}
                 </div>
-                {!ssoTrustLocked && (
+                {ssoProvider === 'oidc' && (
+                  <div className="flex flex-wrap gap-3" data-testid="sso-oidc-fields">
+                    <div className="flex-1 min-w-[220px]"><Input label={t.organizations.ssoDiscoveryUrl} value={ssoDiscoveryUrl} disabled={ssoTrustLocked} onChange={(e) => setSsoDiscoveryUrl(e.target.value)} placeholder="https://login.example.com/.well-known/openid-configuration" data-testid="sso-discovery-url" /></div>
+                    <div className="flex-1 min-w-[180px]"><Input label={t.organizations.ssoClientId} value={ssoClientId} disabled={ssoTrustLocked} onChange={(e) => setSsoClientId(e.target.value)} data-testid="sso-client-id" /></div>
+                    <div className="flex-1 min-w-[180px]">
+                      <Input
+                        label={t.organizations.ssoClientSecret}
+                        type="password"
+                        autoComplete="off"
+                        value={ssoClientSecret}
+                        disabled={ssoTrustLocked}
+                        onChange={(e) => setSsoClientSecret(e.target.value)}
+                        placeholder={ssoOrg?.sso.ssoClientSecretSet ? t.organizations.ssoClientSecretKeep : ''}
+                        data-testid="sso-client-secret"
+                      />
+                    </div>
+                    <div className="flex-1 min-w-[180px]"><Input label={t.organizations.ssoScopes} value={ssoScopes} disabled={ssoTrustLocked} onChange={(e) => setSsoScopes(e.target.value)} placeholder={t.organizations.ssoScopesPlaceholder} /></div>
+                  </div>
+                )}
+                {!ssoTrustLocked && ssoProvider !== 'oidc' && (
                   <SsoMetadataImport
                     key={`import-${ssoOrgId}`}
                     orgId={ssoOrgId}
@@ -905,6 +1020,7 @@ export default function AdminOrganizationsPage() {
                     }}
                   />
                 )}
+                {ssoProvider !== 'oidc' && (
                 <div>
                   <div className="flex flex-wrap items-center gap-2 mb-1.5">
                     <label className="block text-sm font-medium text-gray-700">{t.organizations.ssoCertificate}</label>
@@ -920,6 +1036,25 @@ export default function AdminOrganizationsPage() {
                   />
                   <p className="text-xs text-gray-400 mt-1">{t.organizations.ssoCertHint}</p>
                 </div>
+                )}
+                {ssoProvider === 'saml' && (
+                  <div className="space-y-2" data-testid="sso-saml-hardening">
+                    <label className="flex items-start gap-2 text-sm">
+                      <input type="checkbox" className="mt-1" data-testid="sso-sign-requests" disabled={ssoLocked} checked={ssoSignRequests} onChange={(e) => setSsoSignRequests(e.target.checked)} />
+                      <span>
+                        {t.organizations.ssoSignRequests}
+                        <span className="block text-xs text-amber-700 dark:text-amber-300">{t.organizations.ssoSignRequestsWarn}</span>
+                      </span>
+                    </label>
+                    <label className="flex items-start gap-2 text-sm">
+                      <input type="checkbox" className="mt-1" data-testid="sso-require-in-response-to" disabled={ssoLocked} checked={ssoRequireInResponseTo} onChange={(e) => setSsoRequireInResponseTo(e.target.checked)} />
+                      <span>
+                        {t.organizations.ssoRequireInResponseTo}
+                        <span className="block text-xs text-amber-700 dark:text-amber-300">{t.organizations.ssoRequireInResponseToWarn}</span>
+                      </span>
+                    </label>
+                  </div>
+                )}
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" data-testid="sso-enabled" disabled={ssoLocked} checked={ssoEnabled} onChange={(e) => setSsoEnabled(e.target.checked)} />
                   {t.organizations.ssoEnable}
@@ -952,6 +1087,7 @@ export default function AdminOrganizationsPage() {
           {ssoMsg && <p className="text-sm text-gray-600 mt-2">{ssoMsg}</p>}
           {/* Keyed by org so switching the selector reloads its own mapping (#1940). */}
           {ssoOrgId && <SsoRoleMappings key={ssoOrgId} orgId={ssoOrgId} locked={ssoLocked} />}
+          {ssoOrgId && <SsoAttributeMappings key={`attr-${ssoOrgId}`} orgId={ssoOrgId} locked={ssoLocked} />}
         </Card>
       )}
 
@@ -959,10 +1095,15 @@ export default function AdminOrganizationsPage() {
           its own route: an org admin sets it for their own tenant, no plan gate. */}
       {orgs.length > 0 && <ConferencingPolicyCard orgs={orgs.map((o) => ({ id: o.id, name: o.name }))} />}
 
-      {superAdmin && orgs.length > 0 && (
+      {orgs.length > 0 && (
         <OrgLifecycleCard
-          orgs={orgs.map((o) => ({ id: o.id, name: o.name, slug: o.slug, ssoEnabled: o.sso.ssoEnabled, archivedAt: o.archivedAt }))}
+          orgs={orgs.map((o) => ({
+            id: o.id, name: o.name, slug: o.slug, ssoEnabled: o.sso.ssoEnabled, archivedAt: o.archivedAt,
+            deletionRequestedAt: o.deletionRequestedAt, deletionEligibleAt: o.deletionEligibleAt,
+          }))}
           onChanged={load}
+          superAdmin={superAdmin}
+          hardDelete={hardDelete}
         />
       )}
 
@@ -978,6 +1119,8 @@ export default function AdminOrganizationsPage() {
           />
         </div>
       )}
+
+      {orgs.length > 0 && <ImpersonationPolicyCard orgs={orgs.map((o) => ({ id: o.id, name: o.name }))} />}
 
       {superAdmin && inviteOrg && (
         <div id="invite-admin-anchor">

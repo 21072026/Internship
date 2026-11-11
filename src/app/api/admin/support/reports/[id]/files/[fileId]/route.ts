@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { reportAdminOrg } from '@/lib/supportReportAccess';
@@ -8,15 +7,10 @@ import { reportAdminOrg } from '@/lib/supportReportAccess';
 // The bytes of one report file (#3130) — the screenshot or an attachment.
 // Reached through its report, so the org check is the report's.
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return { session, orgId: await reportAdminOrg(session) };
-}
-
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string; fileId: string }> }) {
-  const admin = await requireAdmin();
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('support.read', { request: _request });
+  if ('error' in gate) return gate.error;
+  const admin = { session: gate.session, orgId: await reportAdminOrg(gate.session) };
   const { id, fileId } = await params;
   return withTenantScope(admin.session, async () => {
     const file = await prisma.supportReportFile.findFirst({

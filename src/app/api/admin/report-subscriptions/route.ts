@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { getReportDefinition } from '@/lib/reports/definitions';
 import { SUBSCRIPTION_SELECT, subscriptionAdminOrg, subscriptionWriteProblem } from '@/lib/reportSubscriptionAdmin';
+import { requirePermission } from '@/lib/authz';
 
 // /api/admin/report-subscriptions (#1905) — the org's scheduled reports.
 // GET lists them with their recent deliveries; POST creates one. ADMIN and
@@ -28,9 +27,10 @@ const createSchema = z.object({
   segment: z.string().trim().max(191).nullable().optional(),
 });
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+export async function GET(request: Request) {
+  const authz = await requirePermission('content.read', { request });
+  if ('error' in authz) return authz.error;
+  const { session } = authz;
   const gate = await subscriptionAdminOrg(session);
   if ('response' in gate) return gate.response;
   const subscriptions = await prisma.reportSubscription.findMany({
@@ -42,8 +42,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authz = await requirePermission('content.write', { request });
+  if ('error' in authz) return authz.error;
+  const { session } = authz;
   const gate = await subscriptionAdminOrg(session);
   if ('response' in gate) return gate.response;
   const parsed = createSchema.safeParse(await request.json().catch(() => null));

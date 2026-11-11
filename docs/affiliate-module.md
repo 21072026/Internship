@@ -18,12 +18,12 @@ per organisation, and every number in tests and examples here is synthetic.
 | 1 | Where it runs | A module of the CRM, gated by the `affiliate` capability (MARKETING vertical). Every row carries `orgId`. |
 | 2 | Commission rules | **A per-organisation commission plan (data)**, evaluated by one pure engine. The engine has no defaults that mirror a real contract. |
 | 3 | Payment source | **Manual entry by an ADMIN** is the only source in the first milestone. It goes through the one payment writer that a later API import will also use (`source` = `MANUAL` / `API`). No commission is written anywhere else — except the one-off migration (`IMPORT`, below), which takes a previous system's history as recorded. |
-| 4 | Attribution | An ADMIN links a customer (the customer's id on the product side, opaque here) to a partner by hand. Automatic attribution through the `affiliate:<code>` lead source (`src/lib/leadSourceName.ts`) is a later step. |
+| 4 | Attribution | A customer (the customer's id on the product side, opaque here) is linked to a partner **automatically** when an account event carries a matching `referral_code` ([Automatic attribution](#automatic-attribution-3354)), or by an ADMIN on the first manual payment entry. One partner per customer, first link wins. |
 | 5 | Identity | Existing CRM sign-in, new `AFFILIATE` role. Partners moved from a previous system are **invited** (invitation / sign-in link); no password hash from another system is ever imported. |
 | 6 | Referral codes | Permanent once issued, unique per organisation. A migrated partner keeps the exact code the previous system used (a number or a custom slug). |
 | 7 | Payouts | Recorded and approved in the CRM; the bank transfer itself stays manual. |
 | 8 | Contract | Each organisation writes its programme copy and partner contract (per locale). A changed contract bumps its version, and every partner must accept the current version before the portal or its API answers. |
-| 9 | Clicks | Not migrated. New clicks, if recorded, store a keyed hash of the IP, never the raw address. |
+| 9 | Clicks | Not migrated. New clicks are counted through the tracked link `/r/<code>` as **per-partner, per-day counters only** — no IP, user-agent or cookie is stored ([Link clicks](#link-clicks-3541)). |
 
 ## The commission plan
 
@@ -37,7 +37,7 @@ whole organisation. The screens tell such an admin so instead of failing. **The 
 decision for the first release; the engine is currency-agnostic and widening is
 the one list `AFFILIATE_CURRENCIES`. A real plan change bumps `planVersion`, stamps
 `planEffectiveAt`, is audited (`affiliate.plan.update`) and re-evaluates every
-partner; an unchanged save is a no-op. Money is **integer minor units** with an ISO currency
+partner on the queue (see "Re-evaluation after a plan change"); an unchanged save is a no-op. Money is **integer minor units** with an ISO currency
 (same rule as `Offer` / `ProgramCost`). Shape:
 
 | Field | Meaning |
@@ -110,6 +110,34 @@ reconciliation.
 The engine is pure and dependency-free (`src/lib/affiliateCommissionRule.ts`) and
 unit-tested with synthetic plans.
 
+### Re-evaluation after a plan change (#3170)
+
+A plan save returns as soon as the plan is committed, whatever the number of
+partners. In the same transaction it writes `AffiliateProgramSettings.planResync`
+(QUEUED, for the new version), and after the commit it enqueues the job
+`affiliate.planResync` (keyed on the organisation and the version, 5 attempts).
+The job (`src/lib/affiliatePlanResync.ts`; the state rules are pure in
+`affiliatePlanResyncRule.ts`) walks the partners in id order, 100 at a time, each
+through `resyncPartnerCommissions()`. The writer is still the only code that
+touches a commission.
+
+- **Checkpoint.** After every batch the state stores the last partner done
+  (`cursor`), the counts (`total`, `done`, `failed`, `drift`), and the partners whose
+  lock was busy (`retry`, at most 500; past that, `overflow` makes the next attempt
+  walk everyone again). A rerun after a crash, a timeout or a redeploy resumes after
+  the cursor.
+- **Retries.** Partners still outstanding at the end of a pass mean the attempt
+  throws, and the worker backs off. The next attempt judges exactly the retry list.
+  On the last attempt the state ends INCOMPLETE: those partners are re-evaluated by
+  their next payment write, as the writer always does.
+- **Newer plan wins.** Every state write is guarded on the plan version. A job for an
+  older version stops at its first write after a newer plan is saved.
+- **At-least-once.** A second run over a partner changes nothing and reports the
+  same drift.
+- **Visible to the admin.** The settings API returns `planResync`, and the plan card
+  follows it every 3 s while it is QUEUED, RUNNING or RETRYING. It shows the
+  progress, then the result: re-evaluated, still failing, and the drift.
+
 ## Data model
 
 All models carry `orgId` and are registered in `TENANT_MODELS`.
@@ -120,6 +148,16 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
 - **AffiliateCustomer** — `partnerId`, `externalRef` (unique per org; shown to the
   partner, so a customer number — never a name or an address). Ordinals are not
   stored: the engine derives them from the payments every time.
+  `partnerLabel` (#3352, nullable, ≤ 80) is what the partner sees next to that
+  reference: a trade name the admin writes (`PATCH /api/admin/affiliate/customers/[id]`,
+  `affiliate.write`, from the Payments screen; audited as `affiliate.customer.label`
+  without the text). It is never filled automatically, and `externalRef` stays the
+  matching key — account events and API payments find a customer by the reference,
+  so a readable name never goes there. The form's hint asks for a trade name, not
+  a person's name. The rule is `src/lib/affiliateCustomerLabelRule.ts`, the one
+  writer `src/lib/affiliateCustomerLabel.ts`.
+  `createdAt` is the registration (the linking event's time); `endedAt` is the
+  account's cancellation, null while live (#3542, [Customer status](#customer-status-3542)).
 - **AffiliatePayment** — `amountMinor`, `currency`, `receivedAt` (never in the
   future), `source` (MANUAL / API / IMPORT), `externalPaymentRef` (**required,
   unique per organisation**, so a double entry is caught even under a mistyped customer).
@@ -132,15 +170,50 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
 - **AffiliateProgramSettings** — one per organisation: the commission plan (JSON,
   validated by `parseCommissionPlan`) and its `planVersion`, the referral base URL
   (`referralUrl`), landing copy, contract text and `contractVersion`. Without a
-  valid plan the writer refuses payments.
+  valid plan the writer refuses payments. `freeMonths` / `passiveAfterDays` (defaults 2
+  and 45) are the customer-status thresholds — not part of the plan.
 - **InvitationToken.partnerId** — the partner an AFFILIATE invitation links to.
 - **AffiliateContractAcceptance** — one row per partner and contract version.
+- **AffiliateClickDaily** — one row per partner and UTC day: `clicks` and `uniqueClicks`
+  (`@@unique([partnerId, day])`). Counters only ([Link clicks](#link-clicks-3541)).
 
 ## Admin screens
 
 `/admin/affiliates` has one sidebar entry and its own tabs:
 
-- **Settings** — the plan and the contract (above).
+- **Overview** (`src/lib/affiliateOverview.ts`, `/api/admin/affiliate/overview`,
+  #3173) — partners per state, referred customers, commission totals per status,
+  payouts and the latest one, with shortcuts to the commissions waiting for approval
+  (`/admin/affiliates/commissions?status=PENDING`) and to the approved ones to pay.
+  The totals are the Commissions tab's own query and the latest payout is the Payouts
+  tab's first row, so the screens cannot disagree. Six aggregate queries whatever the
+  programme's size (an e2e counts them at 1 and 25 partners). While the plan, the
+  contract or the first partner is missing it shows those setup steps.
+  `affiliate.read` (OBSERVER included).
+- **Funnel** (`/admin/affiliates/funnel`, `/api/admin/affiliate/funnel`, #3544) — one
+  row per partner: clicks, unique clicks, registrations, paying, active, passive,
+  the two conversion rates and the customers left to the plan's switch, with warning
+  badges; a period selector and sortable columns, all three in the URL. The overview
+  shows the org total of the same funnel over the whole programme. See
+  [Admin funnel board](#admin-funnel-board-3544). `affiliate.read` (OBSERVER included).
+- **Settings** — the plan and the contract (above), the referral base URL, and the
+  **public programme page's content** (#3359): `AffiliateProgramSettings.landing`,
+  written only by `saveLanding()` through `PUT /api/admin/affiliate/settings/landing`.
+  The rule is pure in `src/lib/affiliateLandingRule.ts`: copy per locale (EN/TR/DE,
+  plain text, bounded; up to 6 steps and 6 closing points), plus a contact phone, a
+  contact e-mail and the product's https sign-up URL, shared by every locale. Every
+  field is optional and the page falls back field by field (visitor's locale →
+  English → the rest), so a programme can launch in one language. Stored values are
+  compared in a fixed key order, so an unchanged save writes nothing; a change is
+  audited (`affiliate.landing.update`) with the names of the parts that changed,
+  never a value (#3535). The wording — and the page's look, `theme` (§ The page's
+  look) — is the organisation's data; the code carries only generic labels.
+  The **customer-status thresholds** (#3542) sit on the same tab: `freeMonths` and
+  `passiveAfterDays`, written only by `saveCustomerStatusSettings()` through
+  `PUT /api/admin/affiliate/settings/customer-status` (`affiliate.write`), whole
+  numbers in 0…36 and 1…730. They are not part of the commission plan: a change
+  never bumps `planVersion` and re-evaluates nothing. Audited
+  (`affiliate.customer_status.update`) with the old and new values.
 - **Partners** (`src/lib/affiliatePartners.ts`, `/api/admin/affiliate/partners`) —
   the list with customer counts and PENDING / APPROVED / PAID totals summed in SQL,
   a new partner (referral code: letters, digits, `-`, `_`, unique per organisation
@@ -186,6 +259,236 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   row carries their sum, the transfer day (a calendar day, not in the future) and
   an optional bank reference; the commissions become PAID with `payoutId` and
   `paidAt`, and stay frozen for good. Audited (`affiliate.payout.create`).
+  **A partner without payout details can be paid** (#3351): a payout is a
+  record, not a payment order — the transfer happens outside the CRM and may
+  already have gone another way, so refusing it would make the CRM disagree with
+  the bank and leave the commissions "unpaid". The screen asks first ("No payout
+  details — record anyway?"); the server does not refuse. If the CRM ever
+  triggers the transfer itself, this turns into a server-side refusal.
+
+## The public programme page
+
+`/partner` (#3360) is the first page someone who wants to become a partner sees:
+signed out, on the marketing host. The organisation is the one an operator mapped
+the host to (`resolvePublicInquiryTarget`, `src/lib/publicHostOrg.ts` — the same
+resolver and trust note as the public company-inquiry form: the page only shows
+what that org chose to publish). It exists only for a MARKETING org with the
+`affiliate` capability, a valid plan and some copy; anything less is a 404, which
+is also why it is not in `PUBLIC_ROUTES`.
+
+Order: hero (apply · partner portal · the product's sign-up page), introduction,
+commission table, steps, a call button, the closing call to action (apply ·
+e-mail) and the legal footer. The words are the org's
+landing copy (above), with generic dictionary fallbacks (`affiliateLanding`).
+The table is **built from the plan on every render** (`commissionTableRows()`),
+never typed, so the page cannot promise what the engine does not pay; the
+percent phase is one sentence that says what the engine does — from the first
+payment of customer no. N on, every customer's payment earns the rate, each
+within its own window. Without a theme of its own (below), colours and mark
+follow the host's brand.
+`src/lib/affiliatePublicPage.ts` loads it; `e2e/affiliate-public-page.spec.ts`
+pins it.
+
+### The page's look (#3535)
+
+An organisation can make `/partner` and `/partner/apply` look like its own site.
+The look is **data**, like the copy — `landing.theme` in the same JSON column,
+edited under *Look of the page* on `/admin/affiliates/settings` next to a live
+preview, saved by the same `PUT …/settings/landing` through `saveLanding()` — and
+never code: no organisation's colour, font, logo or picture is in this
+repository. `theme: null` (the default) is the page exactly as above.
+
+What a theme may hold is deliberately narrow (`parseTheme()` in
+`src/lib/affiliateLandingRule.ts`, unit-tested):
+
+- **Six colours**, `#rrggbb` only (`primary`, `secondary`, `heading`, `text`,
+  `background`, `surface`) — no names, functions, variables or anything else a
+  stylesheet would read. **Contrast is judged on save (WCAG AA)**, and only for
+  pairs the page renders: body text 4.5:1 on the page and on the cards; headings
+  3:1 (they are large text); the hero's and a `band` call to action's gradient
+  must carry *some* text colour (3:1 for the hero's large text, 4.5:1 for the
+  band's body text). Text on a fill is never chosen by hand: `onFill()` picks
+  white, else black. Themed buttons are rendered as large text (19px bold), so
+  a brand's saturated button colour can keep its white label at 3:1. Small
+  accents fall back to the heading colour where the primary is too light
+  (`themePalette()`: `accentText`, `accentLarge`). A refusal is
+  `theme.colors.<key>` `contrast`, on the colour to change.
+- **Two fonts** from `FONT_KEYS`, self-hosted by `next/font`
+  (`src/lib/partnerThemeFonts.ts`): fetched at build time, served from
+  `/_next/static`, so the visitor's browser never calls a font CDN (CSP
+  `font-src 'self'`). Adding a font is a line in both files.
+- **Named variants** (`THEME_OPTIONS`): hero alignment and height, the scrim over
+  a hero picture/video (`brand` tint, `dark`, `none` — with no scrim the text
+  carries a shadow; a picture cannot be measured, the preview shows the result),
+  centred logo, corners, card style, a band in the heading colour behind the
+  steps, a `band` or `plain` closing call, and the entrance effect.
+- **Media by id, never by address.** The logo (image), the hero and the
+  showcase beside the closing call (image or video) are rows of
+  `AffiliateLandingAsset` (tenant model), uploaded by
+  `POST /api/admin/affiliate/settings/landing/assets` (`affiliate.write`):
+  PNG/JPEG/WebP ≤ 5 MB or MP4/WebM ≤ 15 MB, bytes checked against the declared
+  type (`contentMatchesType`, #888; no SVG — it can carry script; at most 30 per
+  org). The theme stores the id; the save checks each one is this org's and of a
+  kind the slot takes (`theme.media.<slot>` `invalid`). They are served by
+  `GET /api/public/partner-media/<id>` — public, because the page is and because
+  the editor previews an upload before the save; `nosniff`, a sandboxing CSP,
+  `immutable`, and single byte ranges (Safari plays no video without them).
+  Uploads no saved theme points at are swept by the next save after 24 hours.
+- **Motion.** The entrance effect (`fade`, `rise`, `zoom`;
+  `src/components/partnerTheme/Reveal.tsx` + `.pt-reveal` in `globals.css`) is
+  armed only after hydration and only without `prefers-reduced-motion: reduce`;
+  the server renders every section visible. A video plays muted, looped and
+  inline, never under reduced motion, and always has a pause button (WCAG
+  2.2.2; `ThemeVideo.tsx`).
+
+Rendering: `src/app/partner/ThemedPartnerPage.tsx` — the same sections, words,
+doors and test ids as the standard page — and the editor's
+`ThemePreview.tsx` both draw through `themeLook()`
+(`src/lib/partnerThemeLook.ts`). Every colour is an inline style, never a
+Tailwind colour class, so the flat dark-mode overrides cannot repaint part of a
+palette that was checked as one set: **a themed page looks the same in dark
+mode** (`color-scheme: light`). The application form keeps its fields in the
+app's own dark mode, so there the theme's page colours apply in light mode
+only; its logo sits on the theme's gradient, where a logo made for the hero
+stays visible.
+
+**Not the org's WHITE_LABEL branding.** `brandColor` and the brand mark need
+the ENTERPRISE WHITE_LABEL feature, which only a super admin can switch on; the
+partner page is the programme's own marketing page, edited by the programme's
+admin with its copy, so its look does not depend on that feature. Without a
+logo in the theme the host's brand mark is still shown.
+
+The audit row of a landing save (`affiliate.landing.update`) names the parts
+that changed and never a value: `{ changed: ['copy.de', 'phone', 'imprintUrl',
+'stats', 'theme.colors', 'theme.media', …] }` (`changedLandingFields()`); an unchanged
+save writes nothing. `e2e/affiliate-landing-theme.spec.ts` pins uploads,
+refusals, the drawn page and reduced motion.
+
+### The legal footer and the public partner terms (#3363)
+
+The page, the form and the terms page share one footer (`src/app/partner/PartnerFooter.tsx`).
+Its Imprint / Privacy / Terms links are the **organisation's own pages** when it set them
+(`landing.imprintUrl` / `privacyUrl` / `termsUrl`, https only, in the admin's landing
+settings) and this host's own `/imprint`, `/privacy`, `/terms` otherwise
+(`legalLinks()`). The texts stay where the organisation publishes them: we link, we do
+not host them (hosting a versioned AGB would be its own task). The form's privacy link
+follows the same rule.
+
+`/partner/terms` shows the **partner contract** — the same text a partner accepts in the
+portal (`AffiliateProgramSettings.contract`), in its current version, read-only and
+signed out; it is a 404 where the host serves no programme or the programme has no
+contract, and the footer links it only when there is one. With a contract, the
+application form asks the applicant to accept it: the body carries the version the form
+was rendered with, the route accepts only the **current** one (else `400` with field
+`contract`, so a form opened before a new version was published asks again) and stores
+it on `AffiliateApplication.contractVersion`.
+
+### The figure cards (#3364)
+
+Up to three cards under the introduction, configured in the same `landing`
+value (`stats`, edited on `/admin/affiliates/settings`): **active partners**,
+**customers referred** and **partner satisfaction**. Each is `live`, `manual`
+(a figure the admin types, ≤ 20 characters) or `hidden` (the default when absent).
+
+- **Live means the overview's own numbers.** `liveStatCounts()`
+  (`src/lib/affiliatePublicStats.ts`) reads `affiliateOverview()`: active
+  partners and linked customers, so the page cannot disagree with the admin
+  screen. Nothing counts them a second way.
+- **Cached for an hour per organisation** (`makeTtlCache`,
+  `src/lib/affiliatePublicStatsCache.ts`, unit-tested). The page is public, so a
+  stream of visitors costs one overview read an hour. A failed read is cached as
+  "no live card" for the same window. The page reads the counts only when a
+  card asks for them.
+- **Below `STAT_LIVE_MIN_PARTNERS` (10) active partners every live card is
+  hidden.** Advertising "3 partners" says the opposite of what the card is for.
+- **Satisfaction has no source in the product**, so it can be typed or hidden,
+  never `live`; the route refuses `live` there (`stats.satisfaction.mode`
+  `invalid`). The figure is the admin's own, and the editor says so.
+- The rule (`statCards()`, `needsLiveStats()`, the parse) is pure in
+  `src/lib/affiliateLandingRule.ts`, and the stats take part in
+  `canonicalLanding()`, so an unchanged save is still "nothing changed".
+
+### Partner links that land on this page (#3365)
+
+When `/partner` is the programme's referral address, links already in
+circulation (`…/partner?ref=<code>`) bring would-be **customers**, not would-be
+partners. The page then redirects to the landing's `productSignupUrl` with
+`ref=<code>` set — and nothing else from the request is carried (no open
+redirect: the target is the settings value). A value that is not a partner code
+(`REFERRAL_CODE_RE`, the same shape as `PARTNER_CODE_RE`, pinned by the unit
+test) or a programme without a sign-up page shows the page instead. Whether the
+code belongs to an active partner is deliberately not asked, so the redirect
+reveals nothing; the link itself is judged when the account event arrives
+(automatic attribution, #3354). Rule: `customerSignupRedirect()` in
+`src/lib/affiliateLandingRule.ts`.
+
+**Switching an existing programme to this page** (runbook):
+
+1. Fill in the page's content, including the sign-up page
+   (`/admin/affiliates/settings` → Public programme page), and open
+   `https://<marketing host>/partner?ref=<a real code>` once: it must land on the
+   sign-up page with the same code.
+2. Make sure every partner code here is exactly the `ref` value of the old links
+   (the migration, #3118, keeps codes verbatim; codes match case-insensitively).
+3. Set the referral address (same settings page) to
+   `https://<marketing host>/partner`. From now on the portal hands out links to
+   this page.
+4. Outside this repository: have the previous programme page redirect
+   (301, keeping the query string) to `https://<marketing host>/partner`, so links
+   already shared keep working.
+5. Afterwards, check that new accounts arrive with their `referral_code` and are
+   linked to the right partner (#3354).
+
+## Partner applications
+
+The "become a partner" buttons of `/partner` open `/partner/apply` (#3361): a
+public form, no password, no username — **nobody gets an account from it**. An
+admin decides (#3362) and an approval goes through the ordinary partner
+invitation, so the contract gate and every rule of the partner's account stay
+exactly as they are.
+
+- **Fields** (rule pure in `src/lib/affiliateApplicationRule.ts`, unit-tested):
+  first and last name, e-mail (lower-cased), optional company and phone, "how did
+  you hear about us?" (`AFFILIATE_HEARD_FROM`; `other` needs its text) and the
+  privacy consent, required and checked on the server. The row stores when and
+  which privacy text (`consentAt`, `consentTextVersion`), never an IP.
+- **Where it lands:** `POST /api/partner/apply` is sessionless. The org is the one
+  whose programme this host serves (`affiliateProgrammeForHost()`, the same rule
+  as the page); without one the form is closed (503) before the body is read.
+  `AffiliateApplication` is a tenant model and the writer
+  (`src/lib/affiliateApplications.ts`) passes the org on every create and WHERE.
+- **Anti-spam** as on the company-inquiry form: 3/hour per IP for a valid body
+  (30/hour for anything), a honeypot, a minimum render-to-submit time, plus at
+  most one PENDING application and three rows per address and org per day,
+  checked and written under the organisation lock. Every accepted body answers
+  the same 200 in the same time — the notice and the mail run after the response
+  (`after()`) — so the sender never learns whether an address is known.
+- **After the write:** the org's active admins who may read the programme
+  (`affiliate.read`; a PROGRAM_ADMIN without a grant is not told) get an in-app
+  notice (`affiliate_application.new`) and the applicant an acknowledgement in the
+  form's language (`affiliate-application-received`, `inbound_requests` group,
+  exempt from outbound approval as the person's own action).
+- **The decision** (#3362), on the **Applications** tab of `/admin/affiliates`
+  (pending count as a badge): `src/lib/affiliateApplicationReview.ts` is the one
+  writer. A decision moves `PENDING` → `APPROVED` | `REJECTED` once — a guarded
+  `updateMany` on `status: 'PENDING'`, so a second click answers 409
+  `already_decided`. **Approve** takes a referral code (the form suggests one
+  from the name, `suggestPartnerCode()`), creates the partner in the same
+  transaction under the organisation lock `createPartner()` and the migration
+  share, through `createPartnerLocked()` — the same row and `affiliate.partner.create`
+  audit line as a partner added by hand (a taken code is 409 `code_taken`; an
+  address that is already a partner's contact is 409 `email_is_partner`, to be
+  declined as a duplicate; both leave the application pending),
+  then calls the ordinary `invitePartner()` — there is no second way to an
+  account. If the invitation cannot be sent the approval stands and the admin is
+  told why. **Decline** takes a code from `APPLICATION_REJECTION_CODES`; only the
+  code is stored and only its sentence reaches the applicant
+  (`affiliate-application-decision`, held under outbound approval like any
+  decision mail to a contact); the admin's optional note lives in the audit row
+  alone. `affiliate.read` lists, `affiliate.write` decides; another org's id is 404.
+- **Retention:** the `affiliateApplication` entry deletes rows after 180 days,
+  whatever their state (`src/lib/retentionEntries.ts`,
+  `docs/pii-access-lifecycle.md`).
 
 ## Security
 
@@ -278,12 +581,31 @@ the check.
 
 - **Home:** the referral link, the customer count and the totals per commission
   status, and a notice while the partnership is suspended or ending.
+- **Funnel and threshold (#3543):** under the totals, the partner's own
+  [funnel](#the-funnel-35433544) for this month, the last 12 months or all time
+  (`?period=month|year|all`), and — when the plan has a switch to a percent — the
+  "N / target paying customers" indicator. The customer list shows each
+  customer's [status](#customer-status-3542) as a badge and filters by it
+  (`?status=`). Both read `partnerFunnel()` / `partnerCustomers()` in
+  `src/lib/affiliatePartnerView.ts`, narrowed to the session's partner.
+- **Commission terms (#3349):** a read-only box under the totals shows the
+  organisation's current plan — bands, the commission above the last band, the percent
+  phase, due days, the rule after a termination, the plan version and its effective
+  date — so a partner can check its own commissions. `partnerPlanTerms()` reads it
+  from the partner's own org (session, never the request); the reshaping is the pure
+  `src/lib/affiliatePlanTerms.ts`. The admin-only plan API is unchanged and a partner
+  still has no write path. The box says a change applies only to later payments.
 - **Referral link:** organisation data. `AffiliateProgramSettings.referralUrl`
   (admin settings, `PUT /api/admin/affiliate/settings/referral-url`, audited
   `affiliate.referral_url.update`) is an https base URL without credentials,
   fragment or its own `ref`; the link is that URL with `ref=<code>` set
   (`src/lib/affiliateReferralRule.ts`, unit-tested). Without one the portal shows
   the code alone.
+  When the organisation also has a public host this deployment serves
+  (`Organization.publicHost`), the portal shows the **tracked link**
+  `<public host>/r/<code>` first and keeps the direct link beside it as the
+  "old link": links already shared keep working and their customers are still
+  attributed, only the tracked one counts clicks ([Link clicks](#link-clicks-3541)).
 - **Customers, commissions, payouts:** read through `src/lib/affiliatePartnerView.ts`,
   narrowed by `affiliateRowScope()` to the partner's own rows. A partner sees its
   customers' opaque references, payment amounts and dates, commissions and payouts
@@ -292,6 +614,262 @@ the check.
 - **Bank details:** entered on `/affiliate/payout-details` through the existing
   partner API (2FA policy, impersonation refusal, sealed, audited, announced); the
   stored IBAN is shown masked and never read back into the form.
+- **Questions about a row (#3353):** "Ask" on a commission or customer row opens
+  `/affiliate/support?record=affiliate:<kind>:<id>` — the ordinary support channel
+  (#593, `SupportChat`), kept inside the portal because the partner shell never
+  opens `/messages`. The message carries `SupportMessage.recordRef`; `POST
+  /api/support` accepts it only for a row of the sender's own partner
+  (`ownRecord()` in `src/lib/affiliateRecordRef.ts`, the same `{ orgId, partnerId }`
+  scope as every portal read) and answers anything else `404 record_not_found`.
+  The admin's support inbox shows which row it is about (`describeRecords()`,
+  org-scoped). A question changes nothing: a correction is still the admin's, through
+  the one payment writer. No dispute model or status exists by design; one would
+  follow only if questions become frequent.
+
+## Link clicks (#3541)
+
+A partner's direct link goes straight to the product, so its clicks never reach
+us. The **tracked link** `/r/<code>` passes through the CRM and redirects on.
+Route: `src/app/r/[code]/route.ts`; rule (pure, unit-tested in
+`scripts/test/affiliate-click-rule.test.mjs`): `src/lib/affiliateClickRule.ts`;
+server half: `src/lib/affiliateClicks.ts`.
+
+- **Which organisation.** The request's host, through the same resolver as the
+  public programme page (`resolvePublicInquiryTarget`): the org mapped to the host,
+  MARKETING, with the `affiliate` capability. The code is looked up in that org
+  only, so another org's code is never counted on this host.
+- **Where the visitor goes.** Always a 302, never an error page. A well-formed code
+  goes to `referralLink(referralUrl, code)`; a malformed one to the bare
+  `referralUrl`; no programme or no referral URL here → this host's home page (`/`).
+  The target comes **only from the settings** — nothing of the request reaches it
+  (no open redirect). Whether the code belongs to a partner is not asked for the
+  redirect, so the `Location` reveals nothing (the same rule as `/partner?ref=`,
+  #3365). When the referral URL is the `/partner` page itself, that page forwards
+  to the sign-up page as before.
+- **What is counted.** After the response (`after()`, so timing reveals nothing
+  either), one click for an **ACTIVE** partner of the host's org, when the request is
+  a GET, not a browser prefetch (`Sec-Purpose`/`Purpose`), and not a known bot,
+  link-preview fetcher or command-line client (`isBotUserAgent`; an empty
+  user-agent counts as a bot). Unknown codes, suspended or terminated partners,
+  another org's codes and bots are redirected and counted never.
+- **Unique clicks.** The first click of a visitor for a partner on a UTC day. The
+  visitor key is `HMAC(dayKey, IP + user-agent)`, where `dayKey` is derived from
+  the server secret and the UTC date — the same on every replica, and a new one
+  every day, so yesterday's keys cannot be linked to today's. The key lives only
+  in the rate-limit store, in a window that ends at the next UTC midnight (≤ 24 h).
+- **Rate limit.** At most 30 counted clicks per visitor (hashed IP) and hour
+  (`CLICK_RATE_LIMIT`). Over it the visitor is **still redirected**, the click is
+  not counted. The limiter is called directly (`rateLimit()`), not through
+  `enforceRateLimit()`, because that one writes the client IP into the activity
+  log on a breach.
+- **Write.** One upsert on `(partnerId, day)` incrementing `clicks` (and
+  `uniqueClicks` for a unique click); a lost race on the first click of the day
+  retries as the update. The orgId is passed explicitly (sessionless route).
+
+**What is NOT stored**, anywhere — database, rate-limit store, logs:
+
+- the visitor's IP address (only an HMAC of it, in the rate-limit store, for at
+  most the rest of the UTC day);
+- the user-agent (likewise only inside the HMAC visitor key);
+- any cookie: the route sets none and reads none;
+- the referring page, the time of the click beyond its UTC day, or anything that
+  ties a click to a later registration — attribution stays with the
+  `referral_code` of the account event (below).
+
+## Automatic attribution (#3354)
+
+A partner's link is `<base URL>?ref=<code>` (`src/lib/affiliateReferralRule.ts`). The
+customer's site sends the visitor on to the product's sign-up with the same `ref`;
+that redirect is the source system's business. When the sign-up completes, the source
+system reports the account through the [account-event feed](integrations/account-events.md)
+with `referral_code: "<code>"`, and the ingest links the customer:
+
+- The partner is the org's `AffiliatePartner` whose `code` equals the trimmed
+  `referral_code` — **in the event's own organisation only** (the API key's org; the
+  lookup is explicit on `orgId`, the ingest being sessionless). A code of another
+  org's partner matches nothing.
+- The row is `AffiliateCustomer { orgId, partnerId, externalRef = the event's external_id }`
+  (stored lower-cased by the envelope; an id longer than 120 characters cannot be a
+  customer reference and links nothing).
+- **Only a partner that can still bring a new customer gets a link**, by the payment
+  writer's own test: `ACTIVE` does, `SUSPENDED` never, `TERMINATED` only while the
+  event's time (`occurred_at` on a replay) is before `noticeEffectiveAt` (a terminated
+  partner with no date is refused: a link is permanent).
+- **First link wins.** An existing customer row is never re-pointed. A later event
+  naming another active partner leaves an `integration.affiliate_kept_first` activity
+  line (partner ids only) and changes nothing — also when two events race: the loser
+  re-reads the row and writes that line. The same partner again is a no-op, so
+  a repeated or later event of the same account writes no second row.
+- **An unknown code writes nothing here**; the `affiliate:<code>` lead source the
+  ingest already writes stays the only trace.
+- The decision is the pure `planAffiliateAttribution()`
+  (`src/lib/affiliateAttributionRule.ts`, `scripts/test/affiliate-attribution-rule.test.mjs`);
+  `attributeToAffiliate()` in `src/lib/accountEventIngest.ts` reads, asks and writes
+  through the ingest's own handle, so a batch dry run (rolled back) links nobody. The
+  insert is `INSERT IGNORE` on the `(orgId, externalRef)` unique key, so two racing
+  copies of one event cannot throw or double-link. A linked customer is written for any
+  event type that carries the code, not only `account_created`; a historic event dates
+  the row at `occurred_at` and counts into the replay line (`affiliate_linked`).
+- **The later payment needs no partner.** The manual entry form's partner field is
+  optional: the writer finds the customer by `customerExternalRef` and takes its
+  partner. An admin who does pick a different partner gets `customer_of_another_partner`.
+- Migrated partner codes must equal the previous system's `ref` values (#3118), or
+  links in circulation attach to no partner.
+
+Pinned by `e2e/affiliate-auto-attribution.spec.ts` (@smoke: the four-step flow, repeat
+and dry run, another org's code, suspended/terminated partners).
+
+## Customer status (#3542)
+
+Every affiliate customer stands at one point of the partner's funnel, derived by
+ONE pure rule, `customerStatus()` in `src/lib/affiliateCustomerStatusRule.ts`
+(`scripts/test/affiliate-customer-status-rule.test.mjs`), from the registration
+(`AffiliateCustomer.createdAt`), the newest payment's `receivedAt`, `endedAt`, the
+clock and the two programme settings:
+
+| Status | When |
+|---|---|
+| `FREE_PERIOD` | No payment, not ended, and fewer than `freeMonths` calendar months (UTC, clamped to month end) since registration. |
+| `NEVER_PAID` | No payment, and the free period has run out or the account ended. |
+| `ACTIVE` | The last payment is less than `passiveAfterDays` × 24 h old, and the account has not ended since. |
+| `PASSIVE` | Paid before, but the last payment is `passiveAfterDays` × 24 h old or older, or the account ended after it. |
+
+- **A payment after the end brings the customer back.** An end counts only when no
+  payment was received after it (an end at the same instant as the payment counts).
+- **The end comes from the feed**: `cancelled` / `deactivated` account events stamp
+  `endedAt`, `reactivated` clears it
+  ([account-events.md](integrations/account-events.md#affiliate-customer-end-3542)),
+  in the event's own org only, never in a dry run.
+- **The status is never stored.** It moves with the clock, so it is computed when
+  read. `partnerCustomerStatusCounts(orgId, { partnerIds })`
+  (`src/lib/affiliateCustomerStatus.ts`) is the one query the partner portal and
+  the admin screens read the counts from: three queries whatever the programme's
+  size (settings, customers, newest payment per customer), the status judged in
+  memory by the rule — never a SQL copy of it.
+
+## The funnel (#3543/#3544)
+
+One aggregate, `src/lib/affiliateFunnel.ts`, feeds the partner portal and the
+admin screens, so a partner and the programme team read the same numbers. The
+rules are pure in `src/lib/affiliateFunnelRule.ts`
+(`scripts/test/affiliate-funnel-rule.test.mjs`).
+
+- **`partnerFunnels(orgId, { partnerIds?, period })`** → per partner:
+  - **clicks** (and unique clicks) — the tracked link's daily counter
+    ([Link clicks](#link-clicks-3541)) summed over the period's UTC days;
+  - **registrations** — customers registered (`AffiliateCustomer.createdAt`) in
+    the period, split into *in free period* (`FREE_PERIOD`) and *left without
+    paying* (`NEVER_PAID`);
+  - **paying** — of those, `ACTIVE` + `PASSIVE`;
+  - **active / passive** — the paying ones by their status today.
+- **A cohort, judged today.** Every step after the clicks counts the customers who
+  registered in the period, with today's [status](#customer-status-3542). A
+  customer who registered before the period and paid in it is not in it.
+- **Periods** are UTC calendar months: `month` from the first of this month,
+  `year` this month and the eleven before it, `all` no lower bound.
+- **Rates** are each step's share of the step before, rounded to a whole percent,
+  none when the step before is zero. Registrations may exceed clicks: a customer
+  who came through the direct (old) link registers without a click.
+- **`partnerThresholds(orgId, { partnerIds? })`** → "N / target" towards the
+  current plan's `switchAtCustomer`: the partner's payments run through the
+  engine's own `evaluatePartner()`, so N is the number of eligible paying
+  customers ordered by first-payment date (`customerOrder`), and the date shown
+  once reached is its `switchedAt` — exactly what the commissions use. No entry
+  (and no indicator) when the plan has no threshold or a 0 % rate.
+- The statuses come from `partnerCustomerStatusCounts()` with `registeredFrom`;
+  the customer list filters `partnerCustomerStatuses()`, the list those counts
+  fold, so a filter count and a funnel number cannot disagree. A partner reads
+  only its own partner id (session scope); every query names `orgId`.
+
+## Admin funnel board (#3544)
+
+The admin's Funnel tab (`/admin/affiliates/funnel`, `GET /api/admin/affiliate/funnel`,
+`affiliate.read`) and the overview's org total show the SAME numbers as the partner
+portal (#3543): the steps come from the shared `partnerFunnels()` and the threshold
+from `partnerThresholds()` in `src/lib/affiliateFunnel.ts` (the engine's own ordinal,
+through `evaluatePartner()`). The board adds only admin-only pieces on top, in
+`src/lib/affiliateFunnelBoard.ts` and the pure `src/lib/affiliateFunnelBoardRule.ts`
+(`scripts/test/affiliate-funnel-board-rule.test.mjs`) — never a second count.
+
+- **Columns**: clicks, unique clicks, registrations, paying, active, passive, click →
+  registration and registration → paying (whole %, the portal card's `stepRate`;
+  empty when there is nothing to divide by), and the customers left to the plan's
+  switch (lifetime whatever the period; "Reached" at 0; empty without a switch).
+- **Periods**: the shared vocabulary, `month` / `year` / `all`.
+- **Badges** (thresholds fixed in the rule file, not settings):
+  `CLICKS_NO_SIGNUPS` (more than 100 clicks, no registration in the period),
+  `MOSTLY_PASSIVE` (at least 3 paying, more than half of them passive),
+  `WINDOW_ENDING` (ACTIVE customers of a partner already in the percent phase whose
+  `windowMonths` window, counted from their first valid payment, ends within 30
+  days; none after a `STOP_ALL` termination, none for a customer first paid at or
+  after the termination). The window warning is lifetime.
+- **Sorting** takes a key from `FUNNEL_SORTS` and `asc`/`desc`; an unknown key,
+  direction, period or page is a 400. Sorting and paging (50 rows) happen on the
+  server over the computed rows — a request string never reaches a query — with the
+  partner id as the tiebreak and empty values last in both directions. Period,
+  sort and page are in the URL.
+- **Org total**: the sum of the partners' funnels (`funnelTotal()`); the overview
+  shows it for `all`.
+- A fixed number of queries whatever the programme's size: the partners, the shared
+  funnel and threshold queries, and for the window warning every customer's status
+  (`partnerCustomerStatuses()`) and the first valid payment per customer.
+
+## Payments from the source system (#3355)
+
+A customer's payment can arrive through the account-event feed as
+`payment_received` ([account-events.md](integrations/account-events.md#customer-payments-3355))
+instead of being typed on `/admin/affiliates`. It calls the same writer,
+`recordAffiliatePayment()`, with `source: 'API'` and `enteredById: null`, so the
+commission, the partner lock, the duplicate rule (`externalPaymentRef`, unique per
+org) and the `affiliate.payment.record` audit row are identical. The writer takes
+an optional transaction (`recordAffiliatePayment(input, tx)`): the feed's batch
+dry run passes its own, which is rolled back with everything else. Refunds and
+cancellations are not handled yet (#3475).
+
+## Window notice (#3556)
+
+A partner hears, once per customer, that the customer's percent window is about to
+end, so it knows when that customer's commissions stop.
+
+- **The date is the engine's.** `customerWindowEndsAt()` in
+  `src/lib/affiliateCommissionRule.ts` (first valid payment + `windowMonths`, clamped
+  to the month's last day) is the one computation; the engine stores it on every
+  commission and the notice reads it from the engine's evaluation. The portal column
+  (#3557) reads the same value.
+- **Who is told** is the pure `dueWindowNotices()` in `src/lib/affiliateWindowNoticeRule.ts`
+  (unit-tested): the plan has a percent phase and a window, the partner has reached
+  the percent phase, the customer has an ordinal (first paid before a termination
+  took effect), and the end lies in `(now, now + windowNoticeDays]`. A window that
+  has already ended is never announced late. Under `STOP_ALL` a termination that
+  ends the earning before the window does drops the notice; under `RUN_OUT` the
+  partner keeps hearing about the customers that keep earning.
+- **The lead time** is `AffiliateProgramSettings.windowNoticeDays` (default 30,
+  0…180, 0 = off): admin settings, `PUT /api/admin/affiliate/settings/window-notice`
+  (`affiliate.write`), audited `affiliate.window_notice.update`. It is not part of the
+  plan, so a change bumps no plan version and re-evaluates nothing.
+- **The job** `affiliate.windowNotices` (daily 05:35 UTC, `src/lib/jobs/affiliateWindowNotices.ts`;
+  by hand `GET /api/cron?job=affiliate-window-notices`, the caller's own org; `&at=`
+  only for a super admin, since a run stamps what it announces)
+  claims each due customer with one conditional update on
+  `AffiliateCustomer.windowNoticeSentAt` (`null` in the WHERE) **before** the mail
+  leaves: a rerun claims nothing and sends nothing. A partner without a portal
+  account, with an erased one, or a suspended partner is skipped without a claim,
+  so it still hears about the customer if that changes before the end. At most 200 partner
+  mails per run; the rest are picked up the next day.
+- **The mail** (`src/lib/affiliateWindowNoticeMail.ts`) is one per partner and run,
+  listing the customers claimed in it: the customer as the portal shows it (its
+  label, else its reference) and the end day, in the partner's language
+  (`emailDictionary`), with a link to `/affiliate/customers` on the org's own host.
+  No amount, nothing about the customer as a person. It goes through
+  `notifyEvent(…, 'affiliate.windowEnding', …)` with the prerendered mail, e-mail
+  only (the portal has no bell), category `affiliate-window-ending` in the
+  `task_reminders` group; under outbound approval it is held like the other
+  deadline reminders.
+- **The first run** needs no backfill: only ends still ahead and within the lead
+  time are announced.
+- **Known limit:** the stamp is per customer, not per date. If the end moves after
+  the notice (a plan change lengthens `windowMonths`, or a back-dated first payment is
+  corrected), the new date is not announced again; the portal column shows it.
 
 ## Migration from a previous system
 
@@ -352,5 +930,5 @@ run only after a clean dry run of exactly the files it checked.
 | 7 | Migration screen with reconciliation. |
 | 8 | Release fragment, `features.ts`, `@smoke` security specs, review, PR. |
 
-Out of scope for this milestone: automatic payment import, automatic attribution,
+Out of scope for this milestone: automatic payment import,
 automatic bank transfer, multi-level partners, click analytics.

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requirePermission } from '@/lib/authz';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { writeSetting } from '@/lib/settingsWrite';
@@ -32,10 +31,10 @@ async function read(orgId: string) {
   };
 }
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('safeguarding.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const orgId = await settingsOrgOf(session);
   return withTenantScope(session, async () => NextResponse.json(await read(orgId)));
 }
@@ -50,9 +49,9 @@ const schema = z.object({
 });
 
 export async function PUT(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('safeguarding.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });

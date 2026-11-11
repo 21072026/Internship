@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { SUBSCRIPTION_SELECT, subscriptionAdminOrg, subscriptionWriteProblem } from '@/lib/reportSubscriptionAdmin';
+import { requirePermission } from '@/lib/authz';
 
 // PATCH / DELETE one report subscription (#1905). The row must be the caller's
 // org's — another tenant's id is a 404, never a 403, so ids cannot be probed.
@@ -26,8 +25,9 @@ async function own(id: string, orgId: string) {
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authz = await requirePermission('content.write', { request });
+  if ('error' in authz) return authz.error;
+  const { session } = authz;
   const gate = await subscriptionAdminOrg(session);
   if ('response' in gate) return gate.response;
   const sub = await own((await params).id, gate.orgId);
@@ -78,8 +78,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const authz = await requirePermission('content.write', { request });
+  if ('error' in authz) return authz.error;
+  const { session } = authz;
   const gate = await subscriptionAdminOrg(session);
   if ('response' in gate) return gate.response;
   const sub = await own((await params).id, gate.orgId);

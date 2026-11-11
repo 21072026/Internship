@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { APP_VERSION } from '@/lib/version';
 import { brandProductName, hostBrandFor } from '@/lib/orgBrand';
 import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
+import { requirePermission } from '@/lib/authz';
 
 // The OpenAPI description of the ENTIRE internal API, for the admin API
 // explorer at /admin/api-explorer.
@@ -14,8 +13,8 @@ import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
 // which guard each one runs, and which request bodies they accept. That is an
 // attack map: it is exactly the reconnaissance an attacker would otherwise have
 // to spend weeks assembling by hand, and it must never be reachable without a
-// signed-in ADMIN session. The guard below is the same requireAdmin() shape as
-// src/app/api/admin/api-keys/route.ts, and returns the same 401 body.
+// signed-in ADMIN session. The guard below is requirePermission() (#1571): 401
+// without a session, 403 for a signed-in account without an admin tier.
 //
 // And why it is SUPER-ADMIN only (#1575). It is not tenant data: it is one map
 // of the whole deployment — every tenant's routes, the guard class of each, and
@@ -32,11 +31,6 @@ import { isSuperAdmin, logCrossTenantDenial } from '@/lib/superAdmin';
 // nothing in src/ imports a generated file, so `npx tsc --noEmit` on a fresh
 // clone has nothing to miss, and the document cannot drift from the code it
 // describes - it is rebuilt by the same command that builds the code.
-
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  return session && session.user.role === 'ADMIN' ? session : null;
-}
 
 // Inlined at build time by webpack's DefinePlugin (next.config.js -> env).
 const RAW_SPEC = process.env.APP_OPENAPI_SPEC || '';
@@ -73,8 +67,9 @@ function loadSpec(): Spec | null {
 }
 
 export async function GET(request: Request) {
-  const session = await requireAdmin();
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.integrations.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   if (!(await isSuperAdmin(session))) {
     await logCrossTenantDenial(session, 'GET /api/admin/openapi', null);
     return NextResponse.json({ code: 'super_admin_only', error: 'The internal API description is for the platform operator only' }, { status: 403 });

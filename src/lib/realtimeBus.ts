@@ -8,15 +8,18 @@
  * care, and every SSE connection those users hold picks it up and forwards it
  * (see src/app/api/realtime/stream/route.ts).
  *
- * Deliberately in-process, with no Redis/SignalR-style broker behind it: the app
- * is one Node process per environment (one container, see the deployment table in
- * CLAUDE.md), so a broker would be infrastructure to run and monitor for zero
- * additional reach. The cost of that choice is that an event published in one
- * replica cannot reach a listener in another — which is why the stream ALSO
- * re-checks the unread counters against the database on every heartbeat. The bus
- * makes delivery instant; the database re-check is what makes it correct. Adding
- * replicas later degrades this to "correct within one heartbeat" rather than
- * breaking it.
+ * In-process first. Every publish is delivered to this process's listeners
+ * directly, always — so with no broker configured this is exactly the bus it
+ * always was, and the stream ALSO re-checks the unread counters against the
+ * database on every heartbeat: the bus makes delivery instant, the re-check is
+ * what makes it correct.
+ *
+ * Across replicas (#1698): with REALTIME_REDIS_URL set, the same publish also
+ * goes out on a Redis pub/sub channel (src/lib/realtimeBroker.ts), and every
+ * other replica delivers it to ITS listeners; a replica ignores its own echo.
+ * What crosses the broker is the signal only — type, ids, recipients — checked
+ * on both ends by src/lib/realtimeBrokerRule.ts; never a message body. A broker
+ * outage degrades to the single-replica behaviour above, never to silence.
  */
 
 export type RealtimeEventType =
@@ -65,6 +68,42 @@ const globalForBus = globalThis as unknown as {
 // every module reload would orphan the connections held by the previous one.
 const listeners: Map<string, Set<Listener>> = (globalForBus.realtimeListeners ??= new Map());
 
+// ── The broker (#1698) ───────────────────────────────────────────────────────
+// Started lazily on first use, once per process (on globalThis, like the
+// listener map), and only when REALTIME_REDIS_URL is a redis:// URL — so an
+// install without one never imports node:net and behaves exactly as before.
+const globalForBroker = globalThis as unknown as {
+  realtimeBroker?: { publish(payload: string): void } | null;
+  realtimeBrokerOrigin?: string;
+};
+const origin = (globalForBroker.realtimeBrokerOrigin ??= `r${Math.random().toString(36).slice(2, 12)}${Date.now().toString(36)}`);
+
+function ensureBroker(): void {
+  if (globalForBroker.realtimeBroker !== undefined) return;
+  const url = (process.env.REALTIME_REDIS_URL || '').trim();
+  if (!/^rediss?:\/\//i.test(url)) {
+    globalForBroker.realtimeBroker = null;
+    return;
+  }
+  // Publishes made before the connection is up are local-only, like an outage.
+  globalForBroker.realtimeBroker = null;
+  void Promise.all([import('./realtimeBroker'), import('./realtimeBrokerRule'), import('./logger')])
+    .then(([{ startRealtimeBroker }, { decodeEnvelope, realtimeChannel }, { logger }]) => {
+      globalForBroker.realtimeBroker = startRealtimeBroker({
+        url,
+        channel: realtimeChannel(process.env),
+        logger,
+        onMessage: (payload) => {
+          const envelope = decodeEnvelope(payload);
+          if (envelope && envelope.o !== origin) deliverLocal(envelope.u, envelope.e);
+        },
+      });
+    })
+    .catch(() => {
+      /* no broker: in-process delivery, as before */
+    });
+}
+
 /** How many live connections this user currently holds in this process. */
 export function connectionCount(userId: string): number {
   return listeners.get(userId)?.size ?? 0;
@@ -75,6 +114,7 @@ export function connectionCount(userId: string): number {
  * when the user is already at {@link MAX_CONNECTIONS_PER_USER}.
  */
 export function subscribeRealtime(userId: string, listener: Listener): (() => void) | null {
+  ensureBroker();
   const set = listeners.get(userId) ?? new Set<Listener>();
   if (set.size >= MAX_CONNECTIONS_PER_USER) return null;
   set.add(listener);
@@ -92,7 +132,21 @@ export function subscribeRealtime(userId: string, listener: Listener): (() => vo
  * failed request.
  */
 export function publishRealtime(userIds: Iterable<string>, event: RealtimeEvent): void {
-  for (const userId of new Set(userIds)) {
+  const recipients = [...new Set(userIds)];
+  deliverLocal(recipients, event);
+  ensureBroker();
+  const broker = globalForBroker.realtimeBroker;
+  if (!broker || recipients.length === 0) return;
+  void import('./realtimeBrokerRule')
+    .then(({ encodeEnvelope }) => {
+      const payload = encodeEnvelope(origin, recipients, event);
+      if (payload) broker.publish(payload);
+    })
+    .catch(() => {});
+}
+
+function deliverLocal(userIds: Iterable<string>, event: RealtimeEvent): void {
+  for (const userId of userIds) {
     const set = listeners.get(userId);
     if (!set) continue;
     for (const listener of [...set]) {

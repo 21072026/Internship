@@ -18,6 +18,10 @@
     "methods": ["GET", "POST"],
     "why": "The public 'apply to this mentor' link (#1188). The applicant has no account — creating one is what POST does — so the mentor id in the URL is the whole address. GET only says whether the link is open and who the mentor is; POST is rate-limited to 15/10min."
   },
+  "src/app/api/forms/public/route.ts": {
+    "methods": ["GET"],
+    "why": "The questions an org added to its PUBLIC application forms (#1803) — the per-mentor apply link and the become-a-mentor form — read by a visitor who has no account yet. The org comes from the link (the mentor's org, or the default org), the same address the public POSTs already use. It returns only the question definitions every visitor of that page is shown: never an answer, never the matchable flag, nothing per caller."
+  },
   "src/app/api/auth/forgot/route.ts": {
     "methods": ["POST"],
     "why": "Password reset request: whoever needs it cannot sign in by definition. Answers the same 200 for every address so it cannot enumerate accounts, and is rate-limited to 5/15min."
@@ -41,6 +45,18 @@
   "src/app/api/auth/sso/[slug]/acs/route.ts": {
     "methods": ["POST"],
     "why": "SAML Assertion Consumer Service: the IdP posts a signed assertion through the browser and the signature, checked against the tenant's stored certificate, is the credential. Pre-auth by definition — this is where the session is issued."
+  },
+  "src/app/api/auth/sso/[slug]/callback/route.ts": {
+    "methods": ["GET"],
+    "why": "The OIDC redirect URI (#1929): the IdP sends a signed-out browser here with code + state. Pre-auth by nature; the caller is authenticated by the single-use state row, the browser-binding cookie and the ID token verified against the IdP's JWKS."
+  },
+  "src/app/api/auth/social/consent/route.ts": {
+    "methods": ["POST"],
+    "why": "Social sign-up's consent step (#1962): a signed-out browser accepts the privacy notice before its new account exists. The caller is authenticated by the sealed, httpOnly, browser-bound ticket the callback minted after verifying the provider's ID token; the session is still minted by the `magic` provider."
+  },
+  "src/app/api/auth/social/[provider]/callback/route.ts": {
+    "methods": ["GET"],
+    "why": "The social sign-in redirect URI (#1962): the provider sends a signed-out browser here with code + state. Pre-auth by nature; the caller is authenticated by the single-use state row, the browser-binding cookie and the ID token verified against the provider's JWKS — and the session is still minted only by the `magic` provider (every account rule, 2FA included)."
   },
   "src/app/api/auth/sso/[slug]/login/route.ts": {
     "methods": ["GET"],
@@ -66,9 +82,18 @@
     "methods": ["GET"],
     "why": "Personal ICS subscription feed (#915). Calendar apps cannot sign in; the per-user token from /api/account/ics-feed is the credential and is rotatable there. Deliberately PII-minimal — a title and a time per event, no join links, no participant names."
   },
+  "src/app/api/partner/apply/route.ts": { "methods": ["POST"], "why": "public partner application form (#3361): sessionless by design, the org comes from the host mapping, per-IP rate limit + honeypot + per-address cap; creates no account" },
   "src/app/api/company-inquiry/route.ts": {
     "methods": ["POST"],
-    "why": "The public /for-companies enquiry form. Companies have no self-service sign-up (a COMPANY user is only born from an InvitationToken), so this form is the only bridge. Anti-spam is a honeypot field, a minimum render-to-submit time and a per-IP rate limit — our CSP blocks third-party captchas."
+    "why": "The public /for-companies enquiry form — the conversational way in beside the employer self-signup (#1865). A COMPANY user is only born from an InvitationToken. Anti-spam is a honeypot field, a minimum render-to-submit time and a per-IP rate limit — our CSP blocks third-party captchas."
+  },
+  "src/app/api/public/employers/[slug]/route.ts": {
+    "methods": ["GET"],
+    "why": "The public employer page's data (#1867, docs/employer-page.md). 404 unless the company opted in AND is verified; the tenant comes from the host; the select carries no contact e-mail or address. Rate-limited per IP."
+  },
+  "src/app/api/public/signup/company/route.ts": {
+    "methods": ["POST"],
+    "why": "Employer self-signup (#1865, docs/company-verification.md). Creates a PENDING company — invisible to every candidate until verified — and an invitation mailed to the work address, never returned. Per-IP rate limit, honeypot, minimum fill time, free-mail domains refused, and the same 202 for a taken address so nothing can be probed."
   },
   "src/app/api/contact-permission/confirm/route.ts": {
     "methods": ["POST"],
@@ -102,6 +127,26 @@
     "methods": ["POST"],
     "why": "Drains one batch from the reply mailbox, ticked by a timer in src/instrumentation.ts. INBOUND_SECRET is mandatory here (timingSafeEqual) precisely because the handler makes the server open an outbound IMAP connection; the 'imap-bridge' lease gate deliberately sits behind the secret check."
   },
+  "src/app/api/integrations/chat/[platform]/interactions/route.ts": {
+    "methods": ["POST"],
+    "why": "The one public entry point for Slack/Teams buttons (#1948). Platforms have no session; the caller is authenticated by Slack's HMAC over the raw body (SLACK_SIGNING_SECRET, 5-minute window, each signature accepted once) or the Bot Framework JWT (published keys, our TEAMS_APP_ID, serviceUrl-bound) before anything is parsed — every refusal is the same 401. The person is then re-derived from an enabled workspace and a person-confirmed ChatIdentity; an unlinked member gets a link-your-account reply and no action runs."
+  },
+  "src/app/api/integrations/chat/[platform]/messages/route.ts": {
+    "methods": ["POST"],
+    "why": "The Teams bot's messaging endpoint (#3322). The Bot Framework has no session; every request carries its RS256 JWT, verified against the Bot Framework's published keys (issuer, our TEAMS_APP_ID as audience, expiry, and the activity's own serviceUrl) — anything else is 401 and changes nothing. The only effect is switching a tenant's Teams workspace off and clearing its tokens on installationUpdate/remove; Slack is 404 here."
+  },
+  "src/app/api/integrations/chat/[platform]/session/route.ts": {
+    "methods": ["POST"],
+    "why": "The Teams tab redeems a ChatLoginGrant for its embed session (#1954, docs/teams-tab-sso.md). There is no session yet - this IS the sign-in door. 404 unless CHAT_APPS_ENABLED and TEAMS_SSO_CLIENT_ID are set. The grant is a hashed, 60-second, host-bound bearer value minted only after an Entra token verified; redeemChatLoginGrant() applies the magic link's refusals (inactive/unverified/pending, enforced SSO, archived tenant, world/host, an enrolled 2FA code before the spend) and spends it by one conditional UPDATE."
+  },
+  "src/app/api/integrations/chat/[platform]/sso/route.ts": {
+    "methods": ["POST"],
+    "why": "The Teams tab trades its Entra token for a grant (#1954). There is no session yet. 404 unless Teams SSO is configured; the token is verified against Entra's published keys (RS256, our client id as audience, an issuer naming the token's own tid, a registered enabled TEAMS workspace, expiry) and never logged. Only a person-confirmed ChatIdentity gets a grant; anyone else gets { link: true } and nothing is created. Rate limited per IP and per tenant."
+  },
+  "src/app/api/integrations/chat/[platform]/uninstall/route.ts": {
+    "methods": ["POST"],
+    "why": "Slack's app_uninstalled / tokens_revoked event (#1935). Slack has no session; the caller is authenticated by Slack's HMAC signature over the raw body with SLACK_SIGNING_SECRET and a timestamp within 5 minutes — an unsigned or stale request is 401 and changes nothing. The only effect is switching that Slack team's workspace off and clearing its sealed tokens."
+  },
   "src/app/api/webhooks/email/[provider]/route.ts": {
     "methods": ["POST"],
     "why": "The mail provider's bounce/complaint webhook (#1692). A provider holds no session: the credential is the EMAIL_WEBHOOK_SECRET shared secret (header, bearer or Basic password; timingSafeEqual), required outright in production like the inbound-email webhook (#870). Rate-limited per IP before the body is read; it only ever writes suppression rows."
@@ -121,6 +166,10 @@
   "src/app/api/mail/drain/route.ts": {
     "methods": ["POST"],
     "why": "One tick of the outbound mail queue drain (#2944), fired every 5 s by a timer in src/instrumentation.ts. A boot timer has no session: the credential is CRON_SECRET (or the per-process MAIL_DRAIN_SECRET minted by that same hook where CRON_SECRET is unset) in x-cron-secret, compared with timingSafeEqual; neither set answers 503. It only delivers mail that is already queued and never takes input from the request."
+  },
+  "src/app/api/developers/sandbox-key/route.ts": {
+    "methods": ["POST"],
+    "why": "The developer portal's sandbox key (#1992) is for a visitor with no account. It answers 404 everywhere but the public demo deployment (DEMO_MODE AND a database whose name ends in _demo, src/lib/api/sandboxKeyRule.ts), so it can never mint against a real organisation; on the demo the key is read-only, bound to the synthetic default org, expires in a day, carries a daily allowance, and minting is rate-limited per address and capped deployment-wide."
   },
   "src/app/api/mentor-applications/route.ts": {
     "methods": ["POST"],
@@ -145,6 +194,10 @@
   "src/app/api/public-contact/[userId]/route.ts": {
     "methods": ["POST"],
     "why": "The contact form on a public profile: the sender has no account. Anti-spam is a honeypot field, a minimum render-to-submit time and 3 messages/hour/IP; the message goes to the profile owner's own notifications, nowhere else."
+  },
+  "src/app/api/public/partner-media/[id]/route.ts": {
+    "methods": ["GET"],
+    "why": "A picture or video of a public partner page's theme (#3535): the signed-out /partner page shows it, and the admin's editor previews an upload before the landing is saved. Read-only, looked up by an unguessable cuid only; the bytes were signature-checked on upload (raster images and mp4/webm, no SVG) and are served with nosniff, an inline disposition and a sandboxing CSP. Nothing private is ever stored in that table."
   },
   "src/app/api/public/signup/org/route.ts": {
     "methods": ["POST"],

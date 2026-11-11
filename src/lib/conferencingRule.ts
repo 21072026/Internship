@@ -12,6 +12,12 @@
 //   3. a room of ours (JaaS tenant or the public instance)
 //      — unless the policy is REQUIRE_EXTERNAL, which refuses instead
 //
+// GENERATE_PROVIDER (#2009) puts one more level in front of 2: a Google Meet
+// room created on the organiser's OWN connected calendar
+// (src/lib/conferenceGeneration.ts). Only when they have connected one and the
+// meeting has a time; otherwise it behaves exactly like PREFER_PERSONAL — the
+// saved room, then a room of ours — and never refuses.
+//
 // BUILTIN stays the default and ignores a saved room on purpose: the tenant has
 // not opted into other people's rooms, and today's behaviour must not change
 // under anyone's feet. REQUIRE_EXTERNAL is the "our IT forbids third-party
@@ -24,7 +30,7 @@
 // organisers hand out, and the one refusal it can produce says exactly what is
 // missing and who can fix it (the organiser, with a link).
 
-export const CONFERENCING_POLICIES = ['BUILTIN', 'PREFER_PERSONAL', 'REQUIRE_EXTERNAL'] as const;
+export const CONFERENCING_POLICIES = ['BUILTIN', 'PREFER_PERSONAL', 'REQUIRE_EXTERNAL', 'GENERATE_PROVIDER'] as const;
 export type ConferencingPolicyKey = (typeof CONFERENCING_POLICIES)[number];
 
 /** A stored or posted value → a policy; anything unknown reads as BUILTIN. */
@@ -88,10 +94,11 @@ export function checkExternalMeetingLink(
 
 // ── Choosing the source ──────────────────────────────────────────────────────
 
-export type MeetingLinkSource = 'pasted' | 'personal' | 'builtin';
+export type MeetingLinkSource = 'pasted' | 'provider' | 'personal' | 'builtin';
 
 export type MeetingLinkChoice =
   | { source: 'pasted' | 'personal'; link: string }
+  | { source: 'provider' }
   | { source: 'builtin' }
   | { refused: 'external_link_required' };
 
@@ -104,9 +111,12 @@ export function chooseMeetingLinkSource(input: {
   policy: ConferencingPolicyKey;
   pasted?: string | null;
   personal?: string | null;
+  /** The organiser has a connected calendar and the meeting has a time (#2009). */
+  providerAvailable?: boolean;
 }): MeetingLinkChoice {
   const pasted = input.pasted?.trim();
   if (pasted) return { source: 'pasted', link: pasted };
+  if (input.policy === 'GENERATE_PROVIDER' && input.providerAvailable) return { source: 'provider' };
   const personal = input.personal?.trim();
   if (personal && input.policy !== 'BUILTIN') return { source: 'personal', link: personal };
   if (input.policy === 'REQUIRE_EXTERNAL') return { refused: 'external_link_required' };

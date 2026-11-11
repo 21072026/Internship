@@ -84,7 +84,7 @@ export async function GET(request: Request) {
         audience: true,
         content: true,
         sentAt: true,
-        image: { select: { id: true } },
+        image: { select: { id: true, altText: true } },
       },
     }),
   ]);
@@ -118,6 +118,7 @@ export async function GET(request: Request) {
         // text as if it had been meant for them.
         languageFallback: isNewsletterFallback(variants, me.preferredLanguage),
         imageUrl: image ? newsletterImageUrl(issue.id) : null,
+        imageAlt: image?.altText ?? null,
       }];
     }),
     total,

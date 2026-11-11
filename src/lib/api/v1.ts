@@ -31,6 +31,10 @@ export const API_ERROR_TYPES = [
   'quota_exceeded',
   'validation_failed',
   'not_found',
+  // A COMPANY owner's key on a route that is not narrowed to its company (#2006).
+  'company_key_not_allowed',
+  // A SOURCE owner's key on a route that is not narrowed to its source (#2006).
+  'source_key_not_allowed',
   // Writes (#1994, src/lib/api/v1Write.ts).
   'idempotency_key_reused',
   'idempotency_in_progress',
@@ -40,6 +44,8 @@ export const API_ERROR_TYPES = [
   'duplicate_candidate',
   'invalid_transition',
   'stage_conflict',
+  // The target stage's entry gate is not met (#1589, src/lib/stageGate.ts).
+  'stage_gate_blocked',
   // A signed export link that is tampered, expired or no longer backed by its key (#3002).
   'invalid_link',
 ] as const;

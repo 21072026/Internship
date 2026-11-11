@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma } from './helpers/db';
+import { dismissConsentBanner } from './helpers/consent';
 
 test.afterAll(async () => {
   await prisma.$disconnect();
@@ -23,7 +24,7 @@ test('an enquiry is captured and shows up for admins', async ({ page }) => {
   const email = `company-${Date.now()}@e2e.local`;
   try {
     await page.goto('/for-companies');
-    await page.getByRole('button', { name: /Necessary only/i }).click().catch(() => {});
+    await dismissConsentBanner(page);
 
     await page.fill('#company', 'E2E Talent GmbH');
     await page.fill('#your-name', 'Ada Lovelace');

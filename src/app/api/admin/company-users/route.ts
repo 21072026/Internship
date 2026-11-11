@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
@@ -10,6 +8,8 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
+import { requirePermission } from '@/lib/authz';
+import { createUser } from '@/lib/userCreate';
 
 const schema = z.object({
   companyId: z.string().min(1),
@@ -20,10 +20,9 @@ const schema = z.object({
 // POST — admin provisions a read-only COMPANY login for a company. The user is
 // created unverified with a placeholder password and emailed a set-password link.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('company.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());
@@ -47,11 +46,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
   }
 
-  const user = await prisma.user.create({
+  const user = await createUser(prisma, {
     // `orgId` by hand: with MT_ENFORCE_ISOLATION off nothing fills it in, and
     // the admin's own (org-scoped) user list would not show the account.
     data: { email, fullName, role: 'COMPANY', companyId, orgId, password: '!company-no-login', emailVerified: false, skills: [] },
-  });
+  }, { source: 'admin', actorId: session.user.id });
 
   const token = await createPasswordResetToken(user.id, 'SET_INITIAL');
   // #1720: the account is seconds old and has no `preferredLanguage` yet, so the

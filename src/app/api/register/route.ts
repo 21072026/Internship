@@ -1,7 +1,11 @@
 import { NextResponse } from 'next/server';
+import { ensureCompanyMembership } from '@/lib/companyTeam';
+import { enforceQuota } from '@/lib/quota';
+import { quotaError, takesAdminSeat } from '@/lib/quotaRule';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
+import { createUser } from '@/lib/userCreate';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { DEFAULT_VERTICAL } from '@/lib/verticals';
 import { emailTakenInOrgWorld, worldOfOrg } from '@/lib/userWorld';
@@ -26,6 +30,7 @@ import { findActiveMentorship } from '@/lib/activeMentorship';
 import { isOrgEnforcingSso, SSO_REQUIRED_CODE, SSO_REQUIRED_MESSAGE } from '@/lib/ssoEnforcement';
 import { PartnerInviteError, linkPartnerAccount } from '@/lib/affiliateInvite';
 import type { Prisma } from '@prisma/client';
+import { carryMentorApplicationAnswers } from '@/lib/forms/publicAnswers';
 
 const registerSchema = z.object({
   token: z.string().optional(),
@@ -118,6 +123,9 @@ export async function POST(request: Request) {
     // `User.companyId` — and the invitee has no way to supply it, so it rides on
     // the invitation from the moment the conversion minted it.
     let invitedCompanyId: string | null = null;
+    // The seat a teammate invitation carries (#1870); null for a company's first login.
+    let invitedSeatRole: string | null = null;
+    let invitedSeatBy: string | null = null;
     // The affiliate partner an invited AFFILIATE account is linked to (#3117).
     let invitedPartnerId: string | null = null;
     let autoLink: { mentorId?: string | null; menteeId?: string | null; projectId?: string | null } = {};
@@ -176,6 +184,8 @@ export async function POST(request: Request) {
       invitedOrgId = invitation.orgId;
       invitationLocale = isLocale(invitation.locale) ? invitation.locale : null;
       invitedCompanyId = invitation.companyId;
+      invitedSeatRole = invitation.role === 'COMPANY' ? invitation.companySeatRole : null;
+      invitedSeatBy = invitation.invitedById;
       // A COMPANY invitation without a company that still exists cannot make a
       // usable account: every company-side screen reads `User.companyId`, and
       // `User.companyId` has a foreign key — so a pointer to a company an admin
@@ -229,6 +239,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'An account with this email already exists' }, { status: 409 });
     }
 
+    // Accepting an ADMIN invitation takes an admin seat (#1752): refused when
+    // the org is already at its plan's band. ADMIN only — a MENTOR or MENTEE
+    // acceptance is the free core and is never checked or counted. The open
+    // invitation itself is not counted here (it is the seat being taken).
+    if (takesAdminSeat(role)) {
+      const seats = await enforceQuota(orgId, 'ADMIN_SEATS');
+      if (!seats.allowed) return NextResponse.json(quotaError(seats), { status: 403 });
+    }
+
     // The org's password policy, then the breach screening (#1544) — the one
 
     // entry point every new-password path calls (src/lib/password.ts).
@@ -280,7 +299,7 @@ export async function POST(request: Request) {
       const partnerId = invitedPartnerId;
       try {
         user = await prisma.$transaction(async (tx) => {
-          const created = await tx.user.create(userData);
+          const created = await createUser(tx, userData, { source: selfRegistered ? 'register' : 'invite' });
           await linkPartnerAccount(tx, { orgId, partnerId, userId: created.id });
           return created;
         });
@@ -291,8 +310,16 @@ export async function POST(request: Request) {
         throw e;
       }
     } else {
-      user = await prisma.user.create(userData);
+      user = await createUser(prisma, userData, { source: selfRegistered ? 'register' : 'invite' });
     }
+    // A COMPANY login gets its seat at the company (#1870): the role the
+    // teammate invitation named, or OWNER for the company's first login.
+    if (user.role === 'COMPANY' && invitedCompanyId && orgId) {
+      await ensureCompanyMembership({ orgId, companyId: invitedCompanyId, userId: user.id, seatRole: invitedSeatRole, invitedById: invitedSeatRole ? invitedSeatBy : null });
+    }
+    // A mentor arriving through an approved application's invitation brings the
+    // answers they gave on it (#1803). Nothing to do for anyone else.
+    if (user.role === 'MENTOR') await carryMentorApplicationAnswers(user);
 
     // Record which privacy-notice version was accepted, so consent is auditable
     // and re-consent can be requested when the notice changes (GDPR Art. 7).

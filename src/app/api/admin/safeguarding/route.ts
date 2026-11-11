@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { requirePermission } from '@/lib/authz';
 import type { Prisma } from '@prisma/client';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -30,9 +29,9 @@ const KINDS = ['CONTACT_DETAIL', 'KEYWORD'] as const;
 type Kind = (typeof KINDS)[number];
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('safeguarding.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const url = new URL(request.url);
   const statusParam = url.searchParams.get('status');

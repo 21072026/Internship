@@ -115,7 +115,9 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     bulk: false,
     categories: [
       'mentorship-request', 'mentorship-decision', 'mentor-assigned',
-      'mentee-assigned', 'mentor-application', 'goals-evaluation',
+      'mentee-assigned', 'mentor-application', 'goals-evaluation', 'mentor-offer',
+      // The one ending-soon nudge per agreed end date (#1786).
+      'relation-ending',
     ],
     legacy: ['mentorship', 'goalsEvaluations'],
   },
@@ -170,7 +172,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     // the meeting reminders themselves, which live in their own group.
     // 'nudge' (#1684): an admin-authored reminder about the reader's own work;
     // non-essential by definition, so it always carries the reader's userId.
-    categories: ['interaction-reminder', 'stage-deadline', 'weekly-report', 'document-reminder', 'meeting-feedback', 'nudge'],
+    categories: ['interaction-reminder', 'stage-deadline', 'weekly-report', 'document-reminder', 'meeting-feedback', 'nudge', 'affiliate-window-ending'],
     legacy: ['deadlines', 'documents', 'weeklyReports', 'interactions'],
   },
   {
@@ -204,7 +206,7 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
     id: 'inbound_requests',
     essential: false,
     bulk: false,
-    categories: ['public-contact', 'company-inquiry', 'project-join-request', 'mentor-application-received', 'support-report'],
+    categories: ['public-contact', 'company-inquiry', 'project-join-request', 'mentor-application-received', 'affiliate-application-received', 'affiliate-application-decision', 'support-report'],
     // The two coarse keys these sites gated on: 'messages' for an enquiry
     // through a public profile, 'mentorship' for a project join request.
     legacy: ['messages', 'mentorship'],

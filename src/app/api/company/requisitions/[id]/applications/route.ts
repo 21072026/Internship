@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { seatScopedActor } from '@/lib/companySeatGate';
 import { getServerSession } from 'next-auth';
 import { Prisma } from '@prisma/client';
 import { authOptions } from '@/lib/auth';
@@ -7,6 +8,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { resolveOrgId } from '@/lib/orgScope';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { APPLICATION_STAGES, type ApplicationStage } from '@/lib/applications';
 import { visibleApplicationsWhere } from '@/lib/applicationStage';
 import { answerPath, answeredCount, columnsToLoad, matchedSkills, parseBoardFilters } from '@/lib/requisitionBoard';
@@ -37,10 +39,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const capGate = await requireCapability(session.user.orgId, 'placements');
     if (capGate) return capGate;
     const role = session.user.role;
-    if (role !== 'COMPANY' && role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const gate = await requireRoleOrPermission(['COMPANY'], 'company.read', { request });
+    if ('error' in gate) return gate.error;
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
-    const scope = visibleApplicationsWhere({ id: session.user.id, role, orgId, companyId: session.user.companyId ?? null });
+    const scope = visibleApplicationsWhere(await seatScopedActor({ id: session.user.id, role, orgId, companyId: session.user.companyId ?? null }));
     if (!scope) return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
     const parsed = parseBoardFilters(new URL(request.url).searchParams);
     if (!parsed.ok) return NextResponse.json({ error: 'Invalid filter', code: parsed.code }, { status: 400 });

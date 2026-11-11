@@ -35,6 +35,7 @@ const ERASURE_FILES = [
   'src/lib/externalProfileErasure.ts',
   'src/lib/outboundDrafts.ts',
   'src/lib/googleCalendarClient.ts',
+  'src/lib/microsoftCalendarClient.ts',
 ];
 
 const ERASED = 'ERASED';
@@ -57,20 +58,25 @@ const DECISIONS = new Map([
   ['SupportReport.description', ERASED],
   ['MentorshipRequest.message', ERASED],
   ['MentorshipRequest.rematchNote', ERASED],
+  ['MentorshipRelation.closurePlan', ERASED],
+  ['MentorshipRequest.cancelReason', ERASED],
   ['CompanyInquiry.message', ERASED],
   ['CompanyInquiry.note', ERASED],
   ['MentorApplication.experience', ERASED],
   ['MentorApplication.motivation', ERASED],
   ['MentorApplication.rejectReason', ERASED],
   ['MentorApplication.adminNote', ERASED],
+  ['MentorOffer.message', ERASED],
   ['MentorApplication.interviewNotes', ERASED],
   ['MentorApplication.referenceOutcome', ERASED],
   ['Offer.compensationNote', ERASED],
   ['Offer.declineNote', ERASED],
+  // The frozen offer letter names the person and states their pay (#1857).
+  ['Offer.letterSnapshot', ERASED],
   ['AiArtifact.content', ERASED],
   ['RequisitionFit.reason', ERASED],
+  ['ProfileDigest.digest', ERASED], // #2038 — a summary OF the person, deleted with them
   ['CompanyInterest.note', ERASED],
-  ['RequisitionFit.reason', ERASED],
   ['CandidateOutreach.firstMessage', ERASED],
   ['ProjectJoinRequest.message', ERASED],
   ['ProjectJoinRequest.decisionNote', ERASED],
@@ -80,6 +86,7 @@ const DECISIONS = new Map([
   ['MentorQuestion.answer', ERASED],
   ['PersonalNote.body', ERASED],
   ['RelationNote.body', ERASED],
+  ['Kudo.reason', ERASED],
   ['SessionNote.body', ERASED],
   ['SessionNoteRevision.body', ERASED],
   ['Goal.description', ERASED],
@@ -109,6 +116,8 @@ const DECISIONS = new Map([
   ['ApplicationEvent.note', ERASED],
   ['MatchFeedback.reasonNote', ERASED],
   ['Placement.note', ERASED],
+  ['MatchProposal.note', ERASED],
+  ['MatchDecision.note', ERASED],
   ['RosterRowResult.message', ERASED],
   ['SurveyAnswer.text', ERASED],
   ['MeetingFeedback.note', ERASED],
@@ -116,6 +125,11 @@ const DECISIONS = new Map([
   ['GoogleCalendarConnection.accessTokenEnc', ERASED],
   ['GoogleCalendarConnection.refreshTokenEnc', ERASED],
   ['GoogleCalendarConnection.lastError', ERASED],
+  // Its provider-neutral successor (#1989): disconnect() deletes both rows.
+  ['CalendarConnection.scope', ERASED],
+  ['CalendarConnection.accessTokenEnc', ERASED],
+  ['CalendarConnection.refreshTokenEnc', ERASED],
+  ['CalendarConnection.lastError', ERASED],
 
   // ── Reached another way ─────────────────────────────────────────────────────
   ['DocumentReview.note', 'cascades with its Document, which both erasure paths delete (Document.ownerId)'],
@@ -137,12 +151,17 @@ const DECISIONS = new Map([
   // ── Not about a person ──────────────────────────────────────────────────────
   ['Organization.brandLogoUrl', CONFIG],
   ['Organization.brandPalette', CONFIG],
+  // The tenant's public welcome page (#1664): the organization's own copy, not a person's.
+  ['Organization.welcomeBody', CONFIG],
   ['Organization.ssoEntryPoint', CONFIG],
   ['Organization.ssoCertificate', CONFIG],
   ['Organization.ssoLogoutUrl', CONFIG],
   ['Organization.ssoSpKey', CONFIG],
   ['Organization.ssoSpCert', CONFIG],
+  ['Organization.ssoClientSecretEnc', CONFIG],
+  ['Organization.ssoDiscoveryUrl', CONFIG],
   ['NotificationTemplate.body', CONFIG],
+  ['OfferTemplate.bodyMarkdown', CONFIG],
   ['ContributorTerms.body', CONFIG],
   ['MentoringAgreement.body', CONFIG],
   ['Announcement.text', CONFIG],
@@ -162,6 +181,10 @@ const DECISIONS = new Map([
   ['PostCampaign.letterBody', BUSINESS],
   ['PostCampaignRecipient.addressBlock', "a company's postal address on a sent letter campaign"],
   ['ProgramCost.note', BUSINESS],
+  // Why an admin rejected or suspended an employer account (#1865) — a decision about the company, not about a person.
+  ['Company.rejectionReason', BUSINESS],
+  // The employer page's own public copy (#1867), written by the company about itself.
+  ['Company.about', BUSINESS],
   ['OrgEntitlement.note', BUSINESS],
   ['PlanChangeRequest.reason', BUSINESS],
   ['PlanChangeRequest.note', BUSINESS],

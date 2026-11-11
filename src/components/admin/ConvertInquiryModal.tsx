@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 import { useT } from '@/i18n/client';
+import { UpgradePrompt } from '@/components/UpgradePrompt';
+import { parseGateBody, type GateInfo } from '@/lib/upgradePrompt';
 
 export interface ConvertibleInquiry {
   id: string;
@@ -48,6 +50,7 @@ export function ConvertInquiryModal({
   const [size, setSize] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [gate, setGate] = useState<GateInfo | null>(null);
   const [success, setSuccess] = useState('');
   // The account the conversion created: the success link opens it directly
   // (#2560), the same target the enquiries list links a converted row to.
@@ -85,6 +88,12 @@ export function ConvertInquiryModal({
         );
         setCreatedCompanyId(typeof data.companyId === 'string' ? data.companyId : null);
         onConverted();
+        return;
+      }
+      // The plan's company band (#1752).
+      const wall = parseGateBody(data);
+      if (wall) {
+        setGate(wall);
         return;
       }
       if (data.error === 'already_converted') {
@@ -199,6 +208,7 @@ export function ConvertInquiryModal({
               />
             </div>
 
+            {gate && <UpgradePrompt gate={gate} viewer="admin" className="mb-3" />}
             {error && (
               <p data-testid="convert-inquiry-error" className="mt-4 bg-red-50 text-red-700 rounded-lg p-3 text-sm">
                 {error}

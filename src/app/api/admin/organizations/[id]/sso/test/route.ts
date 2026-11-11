@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { isSuperAdminFor, logCrossTenantDenial } from '@/lib/superAdmin';
 import { resolveOrgId } from '@/lib/orgScope';
 import { isSsoConfigComplete, isSsoProviderImplemented } from '@/lib/sso';
+import { probeOidcProvider } from '@/lib/ssoOidc';
 import { samlForOrg } from '@/lib/ssoSaml';
 import { certificateInfo } from '@/lib/ssoMetadata';
 import { certificateStatus } from '@/lib/ssoCertificateRule';
 import { SsoFetchError, probePublicUrl } from '@/lib/ssoFetch';
+import { requirePermission } from '@/lib/authz';
 
 // POST /api/admin/organizations/[id]/sso/test — "Test connection" (#1933).
 // Runs the READ-ONLY half of a SAML sign-in against the org's STORED config and
@@ -31,8 +31,9 @@ type Check = { check: string; ok: boolean; detail?: string };
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.settings.write', { request: _req });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   if (!(await isSuperAdminFor(session, id))) {
     const ownOrgId = resolveOrgId(session);
     if (!ownOrgId || ownOrgId !== id) {
@@ -42,7 +43,10 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   }
   const org = await prisma.organization.findUnique({
     where: { id },
-    select: { id: true, slug: true, ssoProvider: true, ssoIssuer: true, ssoEntryPoint: true, ssoCertificate: true },
+    select: {
+      id: true, slug: true, ssoProvider: true, ssoIssuer: true, ssoEntryPoint: true, ssoCertificate: true,
+      ssoClientId: true, ssoClientSecretEnc: true, ssoDiscoveryUrl: true, ssoScopes: true, ssoJwksCache: true, ssoJwksFetchedAt: true,
+    },
   });
   if (!org) return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
 
@@ -52,7 +56,19 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const supported = isSsoProviderImplemented(org.ssoProvider);
   checks.push({ check: 'provider_supported', ok: supported, ...(supported ? {} : { detail: String(org.ssoProvider ?? '') }) });
 
-  if (complete && supported) {
+  // OIDC (#1929): fetch the discovery document and the JWKS through the same
+  // SSRF-guarded path a sign-in uses — nobody is signed in, the cache is
+  // refreshed as a side effect.
+  if (complete && supported && org.ssoProvider === 'oidc') {
+    try {
+      const { keys } = await probeOidcProvider(org);
+      checks.push({ check: 'oidc_discovery', ok: keys > 0, detail: `${keys} key(s)` });
+    } catch (e) {
+      checks.push({ check: 'oidc_discovery', ok: false, detail: e instanceof Error ? e.message.slice(0, 200) : 'failed' });
+    }
+  }
+
+  if (complete && supported && org.ssoProvider === 'saml') {
     const info = certificateInfo(org.ssoCertificate);
     if (!info) {
       checks.push({ check: 'certificate', ok: false, detail: 'unparseable' });

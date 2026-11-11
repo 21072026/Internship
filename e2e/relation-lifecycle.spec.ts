@@ -79,6 +79,16 @@ test('lifecycle moves are authorized and validated by the server', { tag: '@smok
     expect(row.pausedAt).toBeNull();
 
     // An ended pairing cannot be paused, and a mentor cannot reopen it.
+    // The bus (#1998): exactly the two committed moves, the end's code and
+    // never its note; the refused calls raised nothing.
+    const raised = await prisma.domainEvent.findMany({
+      where: { name: 'mentorship.lifecycle_changed', subjectId: seeded.relationId },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(raised.map((e) => e.payload)).toEqual([
+      { relationId: seeded.relationId, from: 'ACTIVE', to: 'PAUSED', reasonCode: null },
+      { relationId: seeded.relationId, from: 'PAUSED', to: 'ENDED_EARLY', reasonCode: 'mentor_unavailable' },
+    ]);
     const illegal = await mentor.post(url, { data: { to: 'PAUSED' } });
     expect(illegal.status()).toBe(409);
     expect(await illegal.json()).toMatchObject({ code: 'illegal_transition', from: 'ENDED_EARLY', to: 'PAUSED' });
@@ -113,7 +123,7 @@ test('admin pauses and resumes on /admin/mentorship; the mentor ends with a reas
     const dialog = page.getByTestId('lifecycle-dialog');
     await dialog.getByTestId('lifecycle-submit').click();
     await expect(dialog).toBeHidden();
-    await expect(row.getByTestId('lifecycle-state-badge')).toBeVisible();
+    await expect(row.getByTestId('relation-lifecycle-badge')).toHaveAttribute('data-state', 'PAUSED');
     await expect(row.getByTestId('lifecycle-resume')).toBeVisible();
 
     // A paused pair keeps its portal (free core: pause is never a feature gate).
@@ -123,7 +133,7 @@ test('admin pauses and resumes on /admin/mentorship; the mentor ends with a reas
 
     await row.getByTestId('lifecycle-resume').click();
     await expect(row.getByTestId('lifecycle-pause')).toBeVisible();
-    await expect(row.getByTestId('lifecycle-state-badge')).toHaveCount(0);
+    await expect(row.getByTestId('relation-lifecycle-badge')).toHaveCount(0);
 
     // The mentor ends their own pairing — the dialog cannot submit without a reason.
     await page.context().clearCookies();

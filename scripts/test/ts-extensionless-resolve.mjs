@@ -63,6 +63,18 @@ export async function resolve(specifier, context, nextResolve) {
     if (error?.code === 'ERR_MODULE_NOT_FOUND' && relative && extensionless) {
       return nextResolve(`${specifier}.ts`, context);
     }
+    // A specifier that names a directory: Node's ESM resolver refuses it, where
+    // tsc and the bundler take the sibling file first (`./subscribers` is
+    // subscribers.ts even with a subscribers/ folder next to it) and only then
+    // the folder's index.ts.
+    if (error?.code === 'ERR_UNSUPPORTED_DIR_IMPORT' && relative && extensionless) {
+      const bare = specifier.replace(/\/$/, '');
+      try {
+        return await nextResolve(`${bare}.ts`, context);
+      } catch {
+        return nextResolve(`${bare}/index.ts`, context);
+      }
+    }
     throw error;
   }
 }

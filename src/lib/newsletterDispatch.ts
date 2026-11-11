@@ -208,6 +208,7 @@ export async function renderNewsletterFor(options: {
   preferredLanguage: string | null | undefined;
   /** `cid:` for a real send, a browser-loadable URL for the preview, null for neither. */
   imageSrc?: string | null;
+  imageAlt?: string | null;
   /** Omitted for the preview: there is no subscription to cancel from there. */
   userId?: string | null;
   /**
@@ -219,7 +220,7 @@ export async function renderNewsletterFor(options: {
   /** Per-run memo, so a fan-out over one tenant reads its branding once. */
   brandCache?: NewsletterBrandCache;
 }): Promise<{ subject: string; html: string; locale: Locale }> {
-  const { variants, canonical, audience, role, preferredLanguage, imageSrc, userId, orgId, brandCache } = options;
+  const { variants, canonical, audience, role, preferredLanguage, imageSrc, imageAlt, userId, orgId, brandCache } = options;
   const locale = resolveNewsletterLocale(variants, preferredLanguage);
   const content = resolveNewsletterContent(variants, canonical, preferredLanguage);
   const brand = await brandFor(orgId, brandCache);
@@ -241,6 +242,7 @@ export async function renderNewsletterFor(options: {
       labels: labelsFor(locale),
       withMentorNote: showsMentorNote(audience, role),
       imageSrc: imageSrc ?? null,
+      imageAlt: imageAlt ?? null,
       archiveUrl: newsletterArchiveUrl(origin),
       preferencesUrl: newsletterPreferencesUrl(origin),
       unsubscribeUrl: userId ? newsletterUnsubscribeUrl(userId, origin) : null,
@@ -433,7 +435,7 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
 
   const image = await prisma.newsletterImage.findUnique({
     where: { newsletterId },
-    select: { contentType: true, data: true },
+    select: { contentType: true, data: true, altText: true },
   });
   const attachments = image
     ? [{
@@ -475,6 +477,7 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
       role: user.role,
       preferredLanguage: user.preferredLanguage,
       imageSrc: image ? `cid:${IMAGE_CID}` : null,
+      imageAlt: image?.altText ?? null,
       userId: user.id,
       orgId: user.orgId,
       brandCache,

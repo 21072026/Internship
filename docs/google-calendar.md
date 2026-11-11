@@ -46,8 +46,8 @@ All of it. The pieces the earlier note listed as "remaining" now exist:
 
 | Piece | Where |
 |---|---|
-| Encrypted token store | `GoogleCalendarConnection` (AES-256-GCM via `src/lib/secretBox.ts`) |
-| Meeting → event mapping | `GoogleCalendarEventLink`, per **(meeting, user)** |
+| Encrypted token store | `CalendarConnection` with `provider = GOOGLE` (AES-256-GCM via `src/lib/secretBox.ts`) — see § Provider-neutral tables below |
+| Meeting → event mapping | `CalendarEventLink`, per **(meeting, connection)** |
 | Connect | `GET /api/integrations/google/connect` → signed state → Google |
 | Callback | `GET /api/integrations/google/callback` → state check → token exchange → sealed store |
 | Event push | `src/lib/googleCalendarSync.ts`, called from `POST /api/meetings` |
@@ -62,7 +62,7 @@ Design notes worth knowing before changing any of it:
   different Google event id; one column on `Meeting` could only ever remember one
   of them.
 - **A recurring series is ONE recurring event per connected member (#2654)**,
-  keyed by `GoogleCalendarEventLink.seriesId` (exactly one of `meetingId` /
+  keyed by `CalendarEventLink.seriesId` (exactly one of `meetingId` /
   `seriesId` is set). Its occurrences have no `Meeting` row (#1110) and must
   never get one for this: the event carries `recurrence: ['RRULE:FREQ=WEEKLY;BYDAY=…']`
   (`src/lib/seriesRrule.ts`, unit-tested) and the series' own `timeZone`, which
@@ -127,9 +127,27 @@ Unset `GOOGLE_CALENDAR_ENABLED` (or set it to `0`) and redeploy. Every entry
 point checks it, so the connect button disappears and no meeting is mirrored;
 stored connections are left untouched and resume if it is switched back on.
 To also cut existing connections, have people press **Disconnect** (which
-revokes at Google) or delete the `GoogleCalendarConnection` rows — the tokens
+revokes at Google) or delete the `CalendarConnection` rows with `provider = GOOGLE` — the tokens
 are then gone from this side, though a row deleted directly is *not* revoked at
 Google, so prefer the button.
+
+## Provider-neutral tables (#1989)
+
+Since #1989 the connection and the event mapping live in `CalendarConnection`
+(key `(userId, provider)`, so one person can hold a Google **and** a Microsoft
+connection) and `CalendarEventLink` (`externalEventId`). This is the **expand**
+half of an expand/contract change:
+
+- The old `GoogleCalendarConnection` / `GoogleCalendarEventLink` tables are still
+  in the schema, **no longer read or written** — except that **Disconnect**
+  deletes the person's old row too, so a token they asked us to forget does not
+  survive there. They are the rollback.
+- `prisma/backfill-calendar-connections.mjs` (registry `0035`, **once**) copies
+  them across at deploy, insert-only; its log line prints the old and new counts.
+- The **contract** step — dropping the two old models — is a separate PR, and
+  only after the production log reads `old <= new` for both. Renaming instead
+  would have been a drop-and-recreate under `db push --accept-data-loss` and
+  destroyed every stored consent.
 
 ## What is tested, and what only real credentials can prove
 

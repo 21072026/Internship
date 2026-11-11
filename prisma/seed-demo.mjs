@@ -415,6 +415,14 @@ async function main() {
   await assignDefaultOrg(prisma, defaultOrg.id);
   console.log('backfilled default org onto demo rows');
   await grantAiPack(defaultOrg.id, 'internship');
+  // The developer portal's sandbox key (#1992) reads /api/v1, which is the
+  // INTEGRATIONS_API feature: without the grant every sandbox call answers 403
+  // feature_locked. Same shape and idempotency as the AI pack above.
+  await prisma.orgEntitlement.upsert({
+    where: { orgId_feature: { orgId: defaultOrg.id, feature: 'INTEGRATIONS_API' } },
+    create: { orgId: defaultOrg.id, feature: 'INTEGRATIONS_API', note: 'Demo tenant (internship): API access so the /developers sandbox key reaches the demo data (#1992).' },
+    update: {},
+  });
 
   // ---------------------------------------------------------------------------
   // Development / oversight half (#2062): weekly reports, to-dos, mentor

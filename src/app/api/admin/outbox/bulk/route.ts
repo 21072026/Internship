@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { withRequestScope } from '@/lib/requestContext';
 import { outboxActorFor } from '@/lib/outboxRoute';
 import { applyBulkDraftAction } from '@/lib/outboundDrafts';
 import { OUTBOUND_BULK_MAX } from '@/lib/outboundApprovalRule';
+import { requireRoleOrPermission } from '@/lib/authz';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,10 +23,9 @@ const schema = z
 // skipped with its reason code, never retried.
 export async function POST(request: Request) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session || (session.user.role !== 'ADMIN' && session.user.role !== 'MENTOR')) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requireRoleOrPermission(['MENTOR'], 'mail.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     const parsed = schema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
     const actor = await outboxActorFor(session);

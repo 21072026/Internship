@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
@@ -16,15 +15,15 @@ const bodySchema = z.object({
 // of the relation's own tenant. RelationNote has no orgId — its tenant is its
 // relation's — so the relation is loaded for an ADMIN too (it used to be
 // skipped, which let any tenant's admin read and write these notes, #2542).
+// Who may ask at all (an admin, or a MENTOR) is the route guard's answer.
 async function canAccessRelation(
   userId: string,
-  role: string,
+  admin: boolean,
   relationId: string,
   callerOrgId: string | null
 ) {
-  if (role !== 'ADMIN' && role !== 'MENTOR') return false;
   const rel = await prisma.mentorshipRelation.findFirst({
-    where: { id: relationId, ...(role === 'MENTOR' ? { mentorId: userId } : {}) },
+    where: { id: relationId, ...(admin ? {} : { mentorId: userId }) },
     select: { orgId: true },
   });
   return !!rel && await inCallerTenant(rel.orgId, callerOrgId);
@@ -33,12 +32,13 @@ async function canAccessRelation(
 // GET ?relationId=... — mentor-private notes on a mentorship relation
 // (EPIC: mentor private notes). Never exposed to the mentee.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requireRoleOrPermission(['MENTOR'], 'program.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
   return await withTenantScope(session, async () => {
     const relationId = new URL(request.url).searchParams.get('relationId');
     if (!relationId) return NextResponse.json({ error: 'relationId is required' }, { status: 400 });
-    if (!(await canAccessRelation(session.user.id, session.user.role, relationId, resolveOrgId(session)))) {
+    if (!(await canAccessRelation(session.user.id, admin, relationId, resolveOrgId(session)))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -53,14 +53,15 @@ export async function GET(request: Request) {
 
 // POST — add a note.
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requireRoleOrPermission(['MENTOR'], 'relation.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session, admin } = gate;
   return await withTenantScope(session, async () => {
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     const { relationId, body } = parsed.data;
 
-    if (!(await canAccessRelation(session.user.id, session.user.role, relationId, resolveOrgId(session)))) {
+    if (!(await canAccessRelation(session.user.id, admin, relationId, resolveOrgId(session)))) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 

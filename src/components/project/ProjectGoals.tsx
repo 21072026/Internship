@@ -382,6 +382,7 @@ export function ProjectGoals({
                           {locales.map((l) => (
                             <input
                               key={l}
+                              lang={l}
                               value={templateDraft[l] ?? ''}
                               onChange={(e) => setTemplateDraft((prev) => ({ ...prev, [l]: e.target.value }))}
                               placeholder={t.goalTemplateAdmin.langLabel.replace('{lang}', l.toUpperCase())}

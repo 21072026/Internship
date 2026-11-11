@@ -440,3 +440,43 @@ test('support attachments API: text-only and attachment-only both accepted', asy
     await cleanupSupportData(user.id, email);
   }
 });
+
+// EN 301 549 11.8.2 / Section 508 504.3 (#3407): the support composer asks for
+// a description of an attached image; it is stored and rendered as the image's
+// alt text in the thread (the filename stays the fallback).
+test('support attachments: an image carries the description its sender typed', async ({ page }) => {
+  test.slow();
+  const email = uniqueEmail('sa-alt');
+  const user = await seedUser(email, 'AttPass123', 'MENTEE', 'SA Alt User');
+  const description = 'Error dialog saying the upload failed at 80 percent';
+  try {
+    await signIn(page, email, 'AttPass123', '/portal');
+    await page.setExtraHTTPHeaders(freshIp('sa alt send'));
+    await page.goto('/messages/support');
+    await expect(page.getByTestId('support-chat')).toBeVisible({ timeout: 10_000 });
+
+    await page.getByTestId('support-file-input').setInputFiles({ name: 'error.png', mimeType: 'image/png', buffer: PNG_BYTES });
+    const alt = page.getByTestId('pending-attachment-alt');
+    await expect(alt).toBeVisible({ timeout: 5_000 });
+    await alt.fill(description);
+
+    const done = page.waitForResponse((r) => r.url().includes('/api/support') && r.request().method() === 'POST');
+    await page.getByTestId('support-send').click();
+    expect((await done).status()).toBe(201);
+
+    // Attached, not visible: a 1x1 PNG renders with no height of its own here.
+    await expect(page.locator(`img[alt="${description}"]`)).toBeAttached({ timeout: 10_000 });
+    await expect(page.getByRole('button', { name: `View ${description} full size` })).toBeVisible();
+    const row = await prisma.supportAttachment.findFirst({ where: { message: { ticket: { requesterId: user.id } } } });
+    expect(row?.altText).toBe(description);
+
+    // Over the column's width is a 400, never a 500.
+    const tooLong = await page.request.post('/api/support', {
+      headers: freshIp('sa alt too long'),
+      multipart: { body: '', files: { name: 'x.png', mimeType: 'image/png', buffer: PNG_BYTES }, altText: 'a'.repeat(501) },
+    });
+    expect(tooLong.status()).toBe(400);
+  } finally {
+    await cleanupSupportData(user.id, email);
+  }
+});

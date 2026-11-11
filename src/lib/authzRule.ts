@@ -1,3 +1,4 @@
+// i18n-scopes: no-dictionary — permission names ('org.settings.write') are not namespaces (#3599).
 // The permission rule (#1569, story #1565): "may this actor do this action to
 // this subject?" — pure, dependency-free and unit-tested
 // (scripts/test/authz-rule.test.mjs). The server half that reads the session,
@@ -33,10 +34,16 @@ export const PERMISSIONS = [
   'platform.openapi.read',
   'platform.benchmark.read',
   // The organization itself.
+  'org.settings.read',
   'org.settings.write',
   'org.branding.write',
   'org.invite',
+  'org.integrations.read',
   'org.integrations.write',
+  // The tenant's own offboarding export (#1584): every row of the org, no
+  // credentials. ORG_ADMIN only — it is a write-tier power although it writes
+  // nothing, because it hands out the whole tenant at once.
+  'org.export',
   // People.
   'user.read',
   'user.write',
@@ -45,11 +52,32 @@ export const PERMISSIONS = [
   'user.reset_password',
   'user.role_convert',
   'user.merge',
+  // Who holds which admin tier and which scope grants (#1579). Only ORG_ADMIN
+  // holds it (it is in no narrower tier), so nobody can mint a tier above
+  // their own; the remaining guards are src/lib/adminTierRule.ts.
+  'admin.grant',
   // Programmes and the pipeline.
   'program.read',
   'program.write',
   'relation.write',
   'pipeline.transition',
+  // Reporting: dashboards, analytics, health and SLA read-outs (#1571).
+  'analytics.read',
+  // Templates and authored content an admin publishes to the programme:
+  // forms, surveys, newsletters, announcements, message/goal/agenda templates,
+  // skills and attributes (#1571).
+  'content.read',
+  'content.write',
+  // The mail pipeline of the tenant: log, queue, held drafts, suppressions (#1571).
+  'mail.read',
+  'mail.write',
+  // In-app support tickets and bug reports, and safeguarding concerns (#1571).
+  // Safeguarding is its own pair: a report about a person's safety is not a
+  // support ticket, and a later tier may hold one without the other.
+  'support.read',
+  'support.write',
+  'safeguarding.read',
+  'safeguarding.write',
   // Trails.
   'audit.read',
   'audit.export',
@@ -138,6 +166,15 @@ export interface Subject {
   userId?: string | null;
 }
 
+/**
+ * A mentorship relation as a subject (#1577): its org, cohort and company —
+ * what a PROGRAM_ADMIN grant is matched against. A relation with no cohort and
+ * no company is outside every grant (`unscoped_subject`), deliberately.
+ */
+export function relationSubject(r: { orgId?: string | null; cohortId?: string | null; companyId?: string | null }): Subject {
+  return { orgId: r.orgId ?? null, cohortId: r.cohortId ?? null, companyId: r.companyId ?? null };
+}
+
 /** One AdminScopeGrant row, as far as the rule needs it. */
 export interface ScopeGrant {
   orgId: string;
@@ -181,7 +218,7 @@ export interface DecideInput {
 const DENY = (reason: DenialReason): Decision => ({ allow: false, reason });
 
 /** Does one grant cover the subject? A grant naming both narrows to both. */
-export function grantCovers(grant: ScopeGrant, subject: Subject): boolean {
+export function grantCovers(grant: Pick<ScopeGrant, 'cohortId' | 'companyId'>, subject: Subject): boolean {
   if (!grant.cohortId && !grant.companyId) return false; // names nothing → grants nothing
   if (grant.cohortId && grant.cohortId !== subject.cohortId) return false;
   if (grant.companyId && grant.companyId !== subject.companyId) return false;

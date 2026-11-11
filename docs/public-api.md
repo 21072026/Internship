@@ -117,7 +117,7 @@ so no key can exist there and the write API is unreachable — no entry of its o
 |---|---|---|---|
 | `POST /candidates` | `candidates:write` | `prisma.user.create` as MENTEE in the key's org, password nobody knows (claimed by reset) — like the CSV import | `409 duplicate_candidate` (`matches[]`): e-mail in use in this world (id only if in the key's org); a look-alike by `findPossibleDuplicates` unless `allowPossibleDuplicate: true` |
 | `PATCH /candidates/{id}` | `candidates:write` | `planFieldUpdates(…, { authoritative: true })` (`src/lib/externalSyncPolicy.ts`) — a blank value is no opinion | `.strict()`: `role`, `orgId`, `email`, credentials → `422 unrecognized_keys` |
-| `PATCH /relationships/{id}/stage` | `relationships:write` | `stageMoveData()` + guarded `updateMany` + `recordStageMove()` (actor null, cause `api key <id>`) — history, notification, webhook, SLA | `422 unknown_stage` (keys, not labels), `422` drop-off reason, `409 invalid_transition` (not ACTIVE), `409 stage_conflict` (moved meanwhile) |
+| `PATCH /relationships/{id}/stage` | `relationships:write` | `stageMoveData()` + guarded `updateMany` + `recordStageMove()` (actor null, cause `api key <id>`) — history, notification, webhook, SLA | `422 unknown_stage` (keys, not labels), `422` drop-off reason, `409 invalid_transition` (not ACTIVE), `409 stage_gate_blocked` (the stage's entry gate is not met; `gate` names what is missing — #1589), `409 stage_conflict` (moved meanwhile) |
 | `POST /interactions` | `interactions:write` | `createInteraction()` (`src/lib/interactionWrite.ts`), shared with `POST /api/interactions` — one `interaction.logged` | `404` for another org's relationship |
 
 The free-core rule holds: the scopes gate *programmatic* access only; a mentor
@@ -144,6 +144,74 @@ import is #3015.
 key-owned subscription stops receiving the moment its key is revoked or expires.
 `/api/v1/hooks` is on the demo blocklist for the same reason as
 `/api/admin/webhooks`.
+
+## Company-owned keys (#2006, `src/lib/companyApiKeyRule.ts`)
+
+A COMPANY owner mints keys for their own data at
+`POST/GET/DELETE /api/company/integrations/api-keys` — no ADMIN involved. Such a
+key carries `ApiKey.companyId` and three rules hold for it:
+
+- **Ceiling.** Its scopes never exceed `COMPANY_KEY_SCOPE_CEILING` (`hiring:read`
+  today). A request above it is `403 scope_above_ceiling` naming the scopes, never
+  a narrowed grant. Self-served keys always expire (≤ 12 months).
+- **Fail-closed door.** `withApiKey(request, scope, handler, { companyScoped: true })`
+  is how a route says "I narrow every read to `key.companyId`" (via
+  `companyOnly(key)`). A company key on any other route — exports included, though
+  its scope would match — answers `403 company_key_not_allowed`. A new route is
+  therefore closed to company keys until it opts in **and** filters.
+- **Oversight.** The admin key list (`/api/admin/api-keys`) shows the company a
+  key belongs to and who issued it; the admin can revoke it like any other. The
+  company list and revoke only ever match the caller's own company (another
+  company's id is a 404). Mint and revoke write `apikey.created` /
+  `apikey.revoked` at `warning`, like the admin path.
+
+Today's company-scoped routes: `/requisitions`, `/offers`, `/interview-requests`
+(list and item) and `/me`.
+
+### Source-owned keys (`src/lib/sourceApiKeyRule.ts`)
+
+A SOURCE owner (a referring institution) gets the same surface with the same
+three rules, over the candidates it referred:
+`POST/GET/DELETE /api/source/integrations/api-keys` and the `/source/integrations`
+page (the shared `OwnerApiKeys` screen). The key carries `ApiKey.sourceId`; the
+ceiling is `SOURCE_KEY_SCOPE_CEILING` (`candidates:read`); a route opts in with
+`{ sourceScoped: true }` and filters with `sourceOnly(key)` (`User.sourceId`);
+anything else answers `403 source_key_not_allowed`. Which source is the caller's
+is `ownSource()` (`src/lib/sourceIntegrations.ts`, through `sourceIdForUser`), and a
+SOURCE account without one gets `403 source_not_assigned`. Source-scoped routes:
+`GET /candidates` (list and item) and `/me`.
+
+### Source-owned webhooks (`src/lib/sourceWebhookRule.ts`, `sourceWebhookScope.ts`)
+
+`POST/GET/DELETE /api/source/integrations/webhooks` registers a hook with
+`Webhook.sourceId` (`source: 'source'`, at most 10 per source) — the company
+hook's twin. Its events must be in `SOURCE_WEBHOOK_EVENTS`, the events whose
+subject is one candidate: `user.created` (a MENTEE account) and the mentorship
+events (`mentorship.created`, `pipeline.stage_change`, `mentorship.lifecycle_changed`,
+`mentorship.transferred`, `mentorship.ending_soon`, `mentorship.extended`). Hiring
+records stay the company's. At delivery `sourceReceiverCheck(event)` resolves the
+candidate (the account, or the relation's mentee) in the event's org and delivers
+only when its `sourceId` is the hook's; anything unresolvable is not delivered.
+Fan-out and `replayRecentEvents()` apply both owner checks through one
+`ownerReceiverCheck()` in `src/lib/webhookDelivery.ts`. The `/source/integrations`
+page uses the shared `OwnerWebhooks` screen.
+
+### Company-owned webhooks (`src/lib/companyWebhookRule.ts`, `companyWebhookScope.ts`)
+
+`POST/GET/DELETE /api/company/integrations/webhooks` registers a hook with
+`Webhook.companyId` (`source: 'company'`, at most 10 per company). Its events must
+be in `COMPANY_WEBHOOK_EVENTS` — the hiring events whose subject is one company's
+(applications, interview requests, panel outcomes, offers, a filled requisition,
+the company's own interest flags); anything else is `403 event_above_ceiling`.
+Same SSRF guard, plan gate, one-time secret and warning-level audit as the admin form.
+
+**The check is at delivery, not only at registration.** `fanOutWebhookEvent()`
+asks `companyReceiverCheck(event)` per company hook: the event must be in the list
+**and** its subject record (looked up by the payload's id, in the event's org) must
+belong to the hook's company. An event that cannot be resolved is not delivered.
+So an admin widening a company hook's event list later still sends it nothing of the
+programme's, and `replayRecentEvents()` applies the same filter. Org-wide hooks are
+untouched.
 
 ## Bulk candidate import (#3015, `src/lib/api/v1Imports.ts`)
 
@@ -214,7 +282,23 @@ A full snapshot of one resource without walking the cursor:
 - Expired exports are deleted in the nightly 03:40 slot
   (`purgeExpiredExports`); they stop being served at `expiresAt`.
 
+## Sandbox key (#1992, `src/lib/api/sandboxKeyRule.ts`)
+
+`POST /api/developers/sandbox-key` (no session — the `/developers` button) mints a key **only on
+the public demo**: `DEMO_MODE=true` **and** a database whose name ends in `_demo` (the guard
+`prisma/reset-demo.mjs` uses). Everywhere else it answers 404, so it cannot mint against a real
+organisation even with the flag set by mistake. The key holds every `*:read` scope and nothing
+that writes (`interactions:read_notes` is not a `:read` scope), is bound to the deployment's
+default org (the synthetic seed), expires after 24 h and carries a daily allowance of 1000; minting
+is limited to 3 an hour per address and 200 live keys. The demo seed grants the default org
+`INTEGRATIONS_API` so those reads are not `feature_locked`.
+
 ## Deprecations
+
+The policy (6-month window, `Deprecation`/`Sunset` headers, what counts as breaking) is
+[`api-lifecycle.md`](api-lifecycle.md); the list below is `API_DEPRECATIONS` in
+`src/lib/api/v1Lifecycle.ts` — add a row there and here together. The public portal is
+`/developers` (#1992), rendered from this API's own OpenAPI document, never the admin one.
 
 | What | Since | Removed on |
 |---|---|---|

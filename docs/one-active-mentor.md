@@ -43,6 +43,7 @@ No hand-rolled copy of the filter is left in `src/`. There is exactly one seam:
 | `POST /api/mentor/mentees` | no guard (safe only because the mentee row was three statements old) | account + relation in one transaction, with the assertion inside it |
 | `src/lib/mergeUsers.ts` | **nothing** — re-pointing `menteeId` carried a duplicate's differently-mentored `ACTIVE` relation over *alongside* the primary's | refused with `active_mentor_conflict` (409), naming both mentors; nothing is written |
 | `src/lib/mentorTransfer.ts` (change a mentee's mentor, #2289) | **did not exist** — an admin closed the relation by hand and assigned again, two unlinked writes with the invariant false in between | one transaction, the guard inside it with `exceptRelationId`, and the old pairing closed as `ENDED_REASSIGNED` rather than `COMPLETED` |
+| `POST /api/admin/relations/group` and `POST /api/admin/relations/[id]/participants` (group seats, #1804) | **did not exist** | every mentee of a GROUP — the pair's and each seat — is mentored by it; `findActiveMentorship` counts an open MENTEE seat, and both routes ask it per mentee inside the write's transaction (`src/lib/groupRelations.ts`) |
 | `scripts/import-csv.mjs` | owner-scoped, no status filter — importing the same sheet as a second `--owner` added a second `ACTIVE` relation | the row is skipped, listed under `SKIPPED — already has an active mentor`, and the process exits 1 |
 
 Seeders are clean by construction and stay that way: `prisma/seed-demo.mjs`

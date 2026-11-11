@@ -8,7 +8,7 @@ import { pickAcceptLanguage } from './acceptLanguage';
 import { LOCALE_HEADER } from '@/lib/localePath';
 import { getDictionary } from './dictionaries';
 import { applyVerticalOverlay } from './verticalOverlays';
-import { toVerticalKey, type VerticalKey } from '@/lib/verticals';
+import { DEFAULT_VERTICAL, toVerticalKey, type VerticalKey } from '@/lib/verticals';
 import { hostVertical } from '@/lib/hostVertical';
 import { hostBrand, productNameIn, requestProductName } from '@/lib/hostBrand';
 import { applyTerminologyMemo } from '@/lib/terminology';
@@ -153,7 +153,42 @@ export const resolveRequestOrg = cache(async (): Promise<{ vertical: VerticalKey
 // render outside a request scope has no settings memo of its own.
 const requestTerminology = cache(async () => {
   const { vertical, orgId } = await resolveRequestOrg();
-  return terminologyFor(vertical, { orgId });
+  // The programme layer (#3400) only matters where a terminology is read at all.
+  const programId = orgId && vertical === DEFAULT_VERTICAL ? await requestProgramId(orgId) : null;
+  return terminologyFor(vertical, { orgId, programId });
+});
+
+// The programme the signed-in person's pages belong to (#3400), for the
+// terminology's programme layer — derived from the DATABASE, never from the
+// request (a query string or a header would let anyone pick a vocabulary).
+//   * MENTEE: the programme (cohort) of their active mentorship — one at most
+//     (the one-active-mentor invariant, #419).
+//   * MENTOR: the programme all their active mentorships share; a mentor in two
+//     programmes reads the org's words, since no single programme is "theirs".
+//   * everyone else (admins, companies): none here — an admin's programme pages
+//     bind theirs through <ProgramTerminologyScope> (src/i18n/programScope.tsx).
+// One indexed query, only for a signed-in person of an INTERNSHIP org.
+const requestProgramId = cache(async (orgId: string): Promise<string | null> => {
+  try {
+    const session = await requestSession();
+    const role = session?.user?.role;
+    if (!session?.user?.id || (role !== 'MENTEE' && role !== 'MENTOR')) return null;
+    const rows = await prisma.mentorshipRelation.findMany({
+      where: {
+        status: 'ACTIVE',
+        ...(role === 'MENTEE' ? { menteeId: session.user.id } : { mentorId: session.user.id }),
+        orgId,
+      },
+      select: { cohortId: true },
+      take: 50,
+    });
+    // A relation outside any programme counts as "no programme": a mentor with
+    // one pair in a programme and one outside it reads the org's words.
+    const ids = new Set(rows.map((r) => r.cohortId));
+    return ids.size === 1 ? ([...ids][0] ?? null) : null;
+  } catch {
+    return null;
+  }
 });
 
 // The full dictionary a signed-in page renders: the base translation, the
@@ -162,11 +197,19 @@ const requestTerminology = cache(async () => {
 // walked, the overlaid object itself. The root layout builds the client payload
 // from this same call, so server render and browser agree.
 export async function requestDictionary(locale: Locale) {
-  const { vertical } = await resolveRequestOrg();
-  const product = await requestProductName(vertical);
-  const overlaid = applyVerticalOverlay(getDictionary(locale), locale, vertical, { product });
+  const { vertical, product, overlaid } = await overlaidDictionary(locale);
   const terms = await requestTerminology();
   return { product, t: applyTerminologyMemo(`${vertical}\u0000${product}`, overlaid, locale, terms) };
+}
+
+// The request's dictionary BEFORE any terminology: base + vertical overlay with
+// `{product}` filled. A programme's vocabulary (#3400, src/i18n/programScope.tsx)
+// replaces the org's rather than stacking on it — the settings chain — so it is
+// applied over this, not over requestDictionary()'s result.
+export async function overlaidDictionary(locale: Locale) {
+  const { vertical } = await resolveRequestOrg();
+  const product = await requestProductName(vertical);
+  return { vertical, product, overlaid: applyVerticalOverlay(getDictionary(locale), locale, vertical, { product }) };
 }
 
 // The page's dictionary: the base translation with the request's vertical

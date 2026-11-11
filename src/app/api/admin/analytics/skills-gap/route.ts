@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { entitled } from '@/lib/entitlements';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -28,16 +27,20 @@ import { buildSkillsGap } from '@/lib/skillsGapRule';
 // demand stays the org's hiring requisitions (a requisition has no cohort).
 export async function GET(request: Request) {
   return withRequestScope(request, async () => {
-    const session = await getServerSession(authOptions);
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    const gate = await requirePermission('analytics.read', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
     const callerOrgId = (session.user as { orgId?: string | null }).orgId ?? null;
     const gated = await requireCapability(callerOrgId, 'mentorship');
     if (gated) return gated;
     if (!(await entitled(await settingsOrgOf(session), 'ADVANCED_ANALYTICS'))) {
       return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: 'ADVANCED_ANALYTICS' }, { status: 403 });
     }
-    const cohortId = new URL(request.url).searchParams.get('cohortId') || null;
+    const params = new URL(request.url).searchParams;
+    const cohortId = params.get('cohortId') || null;
+    // `all=1`: every skill row too — what the export writes (#1823). The panel
+    // reads the two ranked lists only.
+    const all = params.get('all') === '1';
     const locale = await getLocale();
 
     return withTenantScope(session, async () => {
@@ -72,7 +75,7 @@ export async function GET(request: Request) {
         requisitions.map((r) => ({ ...r, skillIds: r.skills.map((s) => s.skillId) })),
       );
 
-      const ids = [...new Set([...report.underSupplied, ...report.unused].map((r) => r.skillId))];
+      const ids = [...new Set([...report.underSupplied, ...report.unused, ...(all ? report.rows : [])].map((r) => r.skillId))];
       const skills = ids.length
         ? await prisma.skill.findMany({ where: { id: { in: ids } }, select: { id: true, labelEn: true, labelTr: true, labelDe: true } })
         : [];
@@ -87,6 +90,7 @@ export async function GET(request: Request) {
         requisitionsWithoutSkills: report.requisitionsWithoutSkills,
         supplyPeople: report.supplyPeople,
         cohortId,
+        ...(all ? { rows: named(report.rows) } : {}),
       });
     });
   });

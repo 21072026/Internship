@@ -7,6 +7,7 @@
 // conditional `updateMany` (or a unique-keyed insert), so two overlapping
 // sweeps — or a sweep racing a stage move — cannot both win a transition.
 
+import { tenantAdminRows } from '@/lib/tenantAdmins';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -69,20 +70,20 @@ export async function claimEscalation(id: string, fromLevel: number, now: Date):
   return count === 1;
 }
 
-/** The people level 2 tells: the active administrators of the relation's org. */
-export async function escalationRecipients(orgId: string | null) {
-  return prisma.user.findMany({
-    where: { orgId, role: 'ADMIN', isActive: true },
-    select: {
-      id: true,
-      role: true,
-      email: true,
-      fullName: true,
-      preferredLanguage: true,
-      emailNotifications: true,
-      notificationPrefs: true,
-      orgId: true,
-    },
+/**
+ * The people level 2 tells: the active administrators of the relation's org —
+ * of its PROGRAM_ADMINs only those whose grants cover the relation (#3485).
+ */
+export async function escalationRecipients(orgId: string | null, relation: { cohortId: string | null; companyId: string | null }) {
+  return tenantAdminRows(orgId, relation, {
+    id: true,
+    role: true,
+    email: true,
+    fullName: true,
+    preferredLanguage: true,
+    emailNotifications: true,
+    notificationPrefs: true,
+    orgId: true,
   });
 }
 
@@ -110,7 +111,7 @@ export async function resolveBreaches(
         orgId: true,
         level: true,
         relationId: true,
-        relation: { select: { menteeId: true, mentee: { select: { fullName: true } } } },
+        relation: { select: { menteeId: true, cohortId: true, companyId: true, mentee: { select: { fullName: true } } } },
       },
     });
     for (const b of open) {
@@ -121,7 +122,7 @@ export async function resolveBreaches(
       if (count !== 1) continue;
       resolved++;
       if (b.level >= SLA_LEVEL_ADMIN) {
-        const admins = await escalationRecipients(b.orgId);
+        const admins = await escalationRecipients(b.orgId, b.relation);
         await notifyEvent(
           admins,
           'deadline.slaResolved',

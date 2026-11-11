@@ -19,6 +19,8 @@
 // Scheduled as the queued job `reports.subscriptions` (src/lib/jobs/schedules.ts,
 // handler in src/jobs/platform.ts, #1677); `runReportSubscriptions()` is the body.
 
+import { adminTierFor } from '@/lib/authzRule';
+import { adminReceives, ORG_LEVEL_ADMIN_WHERE } from '@/lib/programScopeRule';
 import { Prisma, type ReportSubscription } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -91,9 +93,15 @@ export async function sendReportSubscription(
     if (userId) {
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        select: { email: true, fullName: true, isActive: true, emailNotifications: true, notificationPrefs: true },
+        select: { email: true, fullName: true, isActive: true, emailNotifications: true, notificationPrefs: true, role: true, adminLevel: true },
       });
       if (!user || !user.isActive) return await finish('SKIPPED', 'recipient_inactive');
+      // An org-wide report is an org-level notice (#3485): an ADMIN whose tier
+      // does not read the whole org (a PROGRAM_ADMIN, which /api/admin/analytics
+      // refuses too) gets none, whoever subscribed them.
+      if (user.role === 'ADMIN' && !adminReceives(adminTierFor('ADMIN', user.adminLevel), [], null)) {
+        return await finish('SKIPPED', 'recipient_out_of_scope');
+      }
       // People who already opted out of the analytics report stay opted out.
       if (!emailGroupAllowedForCategory(user, 'analytics-report')) {
         // On the delivery log AND in EmailLog, like every honoured opt-out (#2054).
@@ -246,7 +254,8 @@ async function claimLegacySeed(orgId: string, now: Date): Promise<boolean> {
 export async function seedLegacyWeeklyReports(opts: { now?: Date; orgIds?: string[] } = {}): Promise<{ orgs: number; subscriptions: number }> {
   const now = opts.now ?? new Date();
   const admins = await prisma.user.findMany({
-    where: { role: 'ADMIN', isActive: true },
+    // Org-level recipients only: no PROGRAM_ADMIN (#3485).
+    where: { AND: [{ role: 'ADMIN', isActive: true }, ORG_LEVEL_ADMIN_WHERE as Prisma.UserWhereInput] },
     select: { id: true, orgId: true, preferredLanguage: true },
   });
   const byOrg = new Map<string, typeof admins>();

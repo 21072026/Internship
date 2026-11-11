@@ -137,10 +137,12 @@ export async function POST(request: Request) {
           viewport: d.viewport,
           context: sanitizeFeedbackContext(rawContext) as object,
           contactAllowed: d.contactAllowed === 'true',
+          // `altText` (#3441) belongs to a support-conversation image; a report
+          // file has no such column, so only the file's own fields go in.
           files: {
             create: [
-              ...shot.attachments.map((a) => ({ ...a, kind: 'SCREENSHOT' as const })),
-              ...extra.attachments.map((a) => ({ ...a, kind: 'ATTACHMENT' as const })),
+              ...shot.attachments.map(({ altText: _alt, ...a }) => ({ ...a, kind: 'SCREENSHOT' as const })),
+              ...extra.attachments.map(({ altText: _alt, ...a }) => ({ ...a, kind: 'ATTACHMENT' as const })),
               ...(replay
                 ? [{ kind: 'REPLAY' as const, filename: 'replay.json.gz', contentType: 'application/gzip', size: replay.length, data: replay }]
                 : []),

@@ -72,6 +72,11 @@ export const DEMO_BLOCKED_WRITES: readonly (readonly [RegExp, string])[] = [
   [/^\/api\/v1\/hooks/, 'would POST from the production host to any URL'],
   [/^\/api\/admin\/audit-drains/, 'would stream the audit trail from the production host to any URL'],
   [/^\/api\/admin\/api-keys/, 'mints a real API credential'],
+  // The COMPANY owner's self-served key (#2006): the same credential, minted by another role.
+  [/^\/api\/company\/integrations\/api-keys/, 'mints a real API credential for a company'],
+  [/^\/api\/company\/integrations\/webhooks/, 'would POST from the production host to any URL'],
+  [/^\/api\/source\/integrations\/api-keys/, 'mints a real API credential for a referring source'],
+  [/^\/api\/source\/integrations\/webhooks/, 'would POST from the production host to any URL'],
   [/^\/api\/admin\/roster-feeds/, 'stores a real remote credential and fetches from the production host'],
   [/^\/api\/admin\/email-test$/, 'sends mail to an arbitrary address'],
   [/^\/api\/admin\/import$/, 'bulk-imports data from an uploaded file'],
@@ -159,7 +164,11 @@ export function demoUrl(placement: DemoLinkPlacement): string {
   return url.toString();
 }
 
-export const DEMO_ACCOUNTS: readonly { role: 'admin' | 'mentor' | 'mentee'; email: string }[] = [
+// The demo sign-in rows. The sign-in client reads the type through a TYPE
+// import (#2707): spelled out there, `'mentor'` counted as a dictionary
+// namespace for scripts/i18n-scopes.mjs and shipped all of `mentor` to /auth.
+export type DemoAccount = { role: 'admin' | 'mentor' | 'mentee'; email: string };
+export const DEMO_ACCOUNTS: readonly DemoAccount[] = [
   { role: 'admin', email: `admin.demo@${DEMO_DOMAIN}` },
   { role: 'mentor', email: `mentor.aylin@${DEMO_DOMAIN}` },
   { role: 'mentee', email: `mentee.deniz@${DEMO_DOMAIN}` },

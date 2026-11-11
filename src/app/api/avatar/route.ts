@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { contentMatchesType, CONTENT_MISMATCH_ERROR } from '@/lib/fileType';
@@ -20,8 +21,12 @@ export async function POST(request: Request) {
   const file = form.get('file');
   const targetUserId = (form.get('targetUserId') as string) || session.user.id;
 
-  if (targetUserId !== session.user.id && session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // Someone else's avatar is an admin's write — the permission layer's answer (#1571).
+  if (targetUserId !== session.user.id) {
+    const actor = await actorFromSession(session);
+    if (!actor || !(await can(actor, 'user.write', undefined, session))) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
   }
   // An admin sets avatars in their own org only (#2542): AvatarFile carries no
   // orgId, so the target user's org is the boundary; a foreign one reads as 404.
@@ -47,7 +52,9 @@ export async function POST(request: Request) {
     create: { userId: targetUserId, contentType: file.type, size: file.size, data },
     update: { contentType: file.type, size: file.size, data },
   });
-  await prisma.user.update({ where: { id: targetUserId }, data: { avatarUrl: `/api/avatar/${targetUserId}` } });
+  // An upload is the user's own photo: clearing the hash tells the SSO
+  // directory sync (#1943) not to replace it unless the IdP is authoritative.
+  await prisma.user.update({ where: { id: targetUserId }, data: { avatarUrl: `/api/avatar/${targetUserId}`, ssoPhotoUrlHash: null } });
 
   return NextResponse.json({ ok: true, avatarUrl: `/api/avatar/${targetUserId}` });
   });

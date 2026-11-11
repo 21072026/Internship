@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { revokeAllTrustedDevices } from '@/lib/trustedDevice';
+import { checkPromotionChoice, type PromotionChoice } from '@/lib/promotionRelationsRule';
+import { afterPromotionEnded, applyPromotionChoice, openMenteeRelations, PromotionConflictError, type EndedRelation } from '@/lib/promotionRelations';
 import { isPendingActivation, isErasedAccount, isUnusableEmail, isPlaceholderEmail } from '@/lib/menteeAccount';
 import { verticalFor } from '@/lib/verticalContext';
 import { IS_DEMO_MODE } from '@/lib/demoMode';
@@ -17,21 +18,21 @@ import { getLastContacts } from '@/lib/lastContact';
 import { blockingSkillIssue, parseSkills, skillErrorBody } from '@/lib/skills';
 import { syncUserSkills } from '@/lib/skillsResolve';
 import { countExemptAdmins } from '@/lib/ssoEnforcement';
+import { isLastActiveOrgAdmin } from '@/lib/adminTiers';
 
 // Tenant (#2542): every lookup by id in this file is narrowed to the caller's
 // own tenant (`tenantWhere`, src/lib/tenantFilter.ts), so a record of another
 // tenant answers exactly like an id that does not exist — 404, confirming
-// nothing. Not `assertSameOrg()`: that guard is a no-op while
-// MT_ENFORCE_ISOLATION is off, which is every deployment today, and a
+// nothing. Not `assertSameOrg()`: that guard was a no-op while
+// MT_ENFORCE_ISOLATION was off until #3588 (every deployment), and a
 // MARKETING admin could read (and switch off) an INTERNSHIP mentee by id.
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requirePermission('user.read', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     return await withTenantScope(session, async () => {
       const user = await prisma.user.findFirst({
@@ -151,10 +152,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const session = await getServerSession(authOptions);
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    const gate = await requirePermission('user.write', { request });
+    if ('error' in gate) return gate.error;
+    const { session } = gate;
 
     return await withTenantScope(session, async () => {
       const tenant = await tenantWhere(session);
@@ -181,6 +181,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         rosterAbsentSince?: null;
       } = {};
       let roleUnchanged = false;
+      // The admin's choice for a promoted mentee's own open relations (#1506).
+      let promotionChoice: PromotionChoice | null = null;
       let previousRole: string | null = null;
       let convertedUser: { email: string; fullName: string; preferredLanguage: string | null; orgId: string | null } | null = null;
 
@@ -188,6 +190,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         // Guard against an admin locking themselves out.
         if (id === session.user.id && body.isActive === false) {
           return NextResponse.json({ error: 'You cannot deactivate your own account' }, { status: 400 });
+        }
+        // The org keeps an active ORG_ADMIN (#1579, src/lib/adminTierRule.ts):
+        // the same guard a tier change and account deletion ask.
+        if (body.isActive === false) {
+          const row = await prisma.user.findUnique({ where: { id }, select: { id: true, role: true, adminLevel: true, orgId: true } });
+          if (row && (await isLastActiveOrgAdmin(row))) {
+            return NextResponse.json({ error: 'This is the last active org admin', code: 'last_org_admin' }, { status: 409 });
+          }
         }
         data.isActive = body.isActive;
         // An admin decision outranks the self-service door, so activating always
@@ -381,6 +391,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           // the state that exists.
           roleUnchanged = true;
         } else {
+          // A mentee promoted to MENTOR may still be the mentee of open
+          // relations (#1506): the admin decides what happens to them, or the
+          // conversion does not go through. Applied with the role change below,
+          // in one transaction.
+          if (body.role === 'MENTOR') {
+            const open = await openMenteeRelations(prisma, id);
+            const check = checkPromotionChoice(open.length, body.promotionChoice);
+            if (!check.ok) {
+              return NextResponse.json(
+                { error: 'Choose what happens to this person’s open mentee relations', code: check.code, openRelations: open },
+                { status: 400 },
+              );
+            }
+            promotionChoice = check.choice;
+          }
           previousRole = target.role;
           convertedUser = target;
           data.role = body.role;
@@ -412,11 +437,26 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         return NextResponse.json({ error: 'No supported fields to update' }, { status: 400 });
       }
 
-      const user = await prisma.user.update({
-        where: { id },
-        data,
-        select: { id: true, isActive: true, sourceId: true, referredById: true, skills: true, mentorCapacity: true, role: true, orgId: true },
-      });
+      const userSelect = { id: true, isActive: true, sourceId: true, referredById: true, skills: true, mentorCapacity: true, role: true, orgId: true } as const;
+      let promotion: { changed: string[]; ended: EndedRelation[] } = { changed: [], ended: [] };
+      let user;
+      if (promotionChoice) {
+        // The relations and the role change together or not at all (#1506).
+        try {
+          user = await prisma.$transaction(async (tx) => {
+            promotion = await applyPromotionChoice(tx, { userId: id, choice: promotionChoice!, actorId: session.user.id });
+            return tx.user.update({ where: { id }, data, select: userSelect });
+          });
+        } catch (e) {
+          if (e instanceof PromotionConflictError) {
+            return NextResponse.json({ error: 'A relation changed meanwhile', code: 'promotion_conflict' }, { status: 409 });
+          }
+          throw e;
+        }
+        await afterPromotionEnded(promotion.ended, session.user.id);
+      } else {
+        user = await prisma.user.update({ where: { id }, data, select: userSelect });
+      }
       // Dual-write the canonical twin of the list just saved (#1818).
       if (data.skills !== undefined) {
         await syncUserSkills(user.id, user.orgId, Array.isArray(user.skills) ? (user.skills as string[]) : []);
@@ -457,7 +497,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           actorEmail: session.user.email ?? null,
           targetType: 'user',
           targetId: id,
-          detail: `role ${previousRole} → ${data.role}`,
+          detail:
+            `role ${previousRole} → ${data.role}` +
+            (promotionChoice ? ` · open relations ${promotionChoice} (${promotion.changed.length})` : ''),
           request,
         });
       }

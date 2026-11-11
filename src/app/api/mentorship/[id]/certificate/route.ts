@@ -3,6 +3,8 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { emit } from '@/lib/events/emit';
+import { actorFromSession, can } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
@@ -12,6 +14,7 @@ import { canIssueCertificate } from '@/lib/certificateEligibility';
 import { certificateTitle } from '@/lib/certificateTemplates';
 import { generateCertificatePdf } from '@/lib/certificatePdf';
 import { logActivity } from '@/lib/activity';
+import { notifyIfAllowed } from '@/lib/notify';
 import type { DocumentType } from '@prisma/client';
 
 // Kept in sync with the single-page layout budget in certificatePdf.ts — long
@@ -52,6 +55,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
+  // Admin reach from the permission rule, not the role string (#1571).
+  const actor = await actorFromSession(session);
+  const isAdmin = !!actor && (await can(actor, 'relation.write', undefined, session));
 
   return withTenantScope(session, async () => {
     const relation = await prisma.mentorshipRelation.findUnique({
@@ -67,7 +73,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
     }
 
-    const isAuthorized = session.user.role === 'ADMIN' || relation.mentorId === session.user.id;
+    const isAuthorized = isAdmin || relation.mentorId === session.user.id;
     if (!isAuthorized) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const json = await request.json().catch(() => null);
@@ -128,6 +134,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       targetId: doc.id,
       detail: docTitle,
     });
+    // The second writer of a Document (#1998): a generated certificate.
+    await emit(
+      'document.uploaded',
+      { documentId: doc.id, ownerId: relation.menteeId, type: 'CERTIFICATE', requirementId: null, version: (prior?.version ?? 0) + 1, generated: true },
+      { actor: { id: session.user.id, type: 'user' } },
+    );
+
+    // The mentee learns it is ready (#1410) — under their own 'mentorship'
+    // preference, linked to the portal card that downloads it. Only for the
+    // certificate: that card (PortalCertificateCard) shows the CERTIFICATE
+    // variant alone, so a reference letter would point at nothing. No text or
+    // title travels — the title is in the generator's locale, not the reader's.
+    if (variant === 'CERTIFICATE') {
+      await notifyIfAllowed(relation.menteeId, 'mentorship', 'certificate.issued', {}, '/portal/journey');
+    }
 
     return NextResponse.json({ document: doc }, { status: 201 });
   });

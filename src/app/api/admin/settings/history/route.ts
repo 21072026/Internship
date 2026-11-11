@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { GLOBAL_SETTING_KEYS, SETTING_DEFAULTS, type SettingKey } from '@/lib/settings';
 import { settingsOrgOf } from '@/lib/settingsOrg';
@@ -19,8 +18,9 @@ import { isSuperAdmin } from '@/lib/superAdmin';
 const MAX_LIMIT = 100;
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('org.settings.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   const params = new URL(request.url).searchParams;
   const key = params.get('key');

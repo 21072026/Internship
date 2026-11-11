@@ -29,10 +29,24 @@ import { E2E_MARKETING_HOST } from './marketingHost';
  * depend on background requests ever going quiet.
  */
 export async function signInAndSettle(page: Page, email: string, password: string, landing: string) {
+  // The switch-user race (the same one `signInAsFreshUser` documents below):
+  // a spec that signs a second person in after `clearCookies()` leaves the
+  // previous page alive, its `/api/auth/session` poll re-issues the OLD session
+  // cookie, and `/auth/signin` then redirects to the previous user's dashboard
+  // while this helper is still typing — the fill lands nowhere and
+  // `waitForURL(landing)` times out (decision-window, contract-end and ~30 other
+  // specs do exactly this). So tear the old page down first, drop the session
+  // cookie only once it can no longer be re-issued, and submit the form that
+  // holds the password field rather than whatever `button[type="submit"]` is on
+  // the page. Two cheap navigations — no network-idle wait, which SSE pages
+  // never reach.
+  await leaveForBlank(page);
+  await page.context().clearCookies({ name: /next-auth\.session-token/ });
   await page.goto('/auth/signin');
-  await page.fill('input[type="email"], input[name="email"]', email);
-  await page.fill('input[type="password"]', password);
-  await page.click('button[type="submit"]');
+  const form = page.locator('form', { has: page.locator('input[type="password"]') });
+  await form.locator('input[type="email"], input[name="email"]').fill(email);
+  await form.locator('input[type="password"]').fill(password);
+  await form.locator('button[type="submit"]').click();
   await page.waitForURL((u) => u.pathname.startsWith(landing), { timeout: 20_000 });
   await page.getByTestId('account-menu-button').waitFor({ state: 'visible', timeout: 20_000 });
   // The landing page is reached by a redirect, not by `gotoSettled`, so the
@@ -105,10 +119,11 @@ export async function submitSignInForm(page: Page, email: string, password: stri
   await form.locator('button[type="submit"]').click();
 }
 
-async function dropSessionAndOpenSignIn(page: Page) {
+/** Leave the current page for about:blank, so nothing on it can still write a cookie. */
+async function leaveForBlank(page: Page) {
   // The previous sign-in's own redirect (e.g. to /mentor) can still be in
   // flight here and win the race against about:blank (#2625). Let it land,
-  // then leave — the session is dropped below either way.
+  // then leave — the session is dropped by the caller either way.
   try {
     await page.goto('about:blank');
   } catch (error) {
@@ -116,6 +131,10 @@ async function dropSessionAndOpenSignIn(page: Page) {
     await page.waitForLoadState('load').catch(() => {});
     await page.goto('about:blank');
   }
+}
+
+async function dropSessionAndOpenSignIn(page: Page) {
+  await leaveForBlank(page);
   await page.context().clearCookies({ name: /next-auth\.session-token/ });
   await page.goto('/auth/signin');
   await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {});

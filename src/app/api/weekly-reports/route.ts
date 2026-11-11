@@ -5,6 +5,8 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere } from '@/lib/tenantFilter';
+import { emit } from '@/lib/events/emit';
 import { withTenantScope } from '@/lib/orgContext';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { utcWeekStart } from '@/lib/week';
@@ -24,7 +26,7 @@ export async function GET(request: Request) {
   return withTenantScope(session, async () => {
     const query = new URL(request.url).searchParams;
     const relationId = query.get('relationId') || '';
-    const relation = await weeklyReportRelation(relationId);
+    const relation = await weeklyReportRelation(relationId, await tenantWhere(session));
     if (!relation) return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
     if (!canReadWeeklyReports(session.user, relation)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     const page = Math.max(1, Number(query.get('page')) || 1);
@@ -54,7 +56,7 @@ export async function POST(request: Request) {
   return withTenantScope(session, async () => {
     const parsed = createSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
-    const relation = await weeklyReportRelation(parsed.data.relationId);
+    const relation = await weeklyReportRelation(parsed.data.relationId, await tenantWhere(session));
     if (!relation) return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
     if (relation.menteeId !== session.user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     if (relation.status !== 'ACTIVE') return NextResponse.json({ error: 'The mentorship is not active', code: 'inactive_relation' }, { status: 409 });
@@ -75,6 +77,9 @@ export async function POST(request: Request) {
           submittedAt: parsed.data.status === 'SUBMITTED' ? new Date() : null,
         },
       });
+      if (report.status === 'SUBMITTED') {
+        await emit('weekly_report.submitted', { reportId: report.id, relationId: relation.id, weekStart: report.weekStart.toISOString(), resubmission: false }, { orgId, actor: { id: session.user.id, type: 'user' } });
+      }
       return NextResponse.json({ report }, { status: 201 });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {

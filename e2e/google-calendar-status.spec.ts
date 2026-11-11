@@ -44,7 +44,7 @@ test('non-admin cannot read google calendar status', async ({ page }) => {
     await page.click('button[type="submit"]');
     await page.waitForURL((u) => !u.pathname.startsWith('/auth'), { timeout: 20_000 });
 
-    expect((await page.request.get('/api/admin/integrations/google/status')).status()).toBe(401);
+    expect((await page.request.get('/api/admin/integrations/google/status')).status()).toBe(403);
   } finally {
     await cleanupByEmail(menteeEmail);
   }
@@ -62,10 +62,11 @@ test('non-admin cannot read google calendar status', async ({ page }) => {
 // write failed. The token columns hold deliberately recognisable strings: the
 // point of the assertions below is that they never come back out.
 async function seedBrokenConnection(userId: string) {
-  return prisma.googleCalendarConnection.create({
+  return prisma.calendarConnection.create({
     data: {
       userId,
-      googleEmail: 'broken.calendar@gmail.example',
+      provider: 'GOOGLE',
+      accountEmail: 'broken.calendar@gmail.example',
       scope: 'https://www.googleapis.com/auth/calendar.events openid email',
       accessTokenEnc: 'v1.e2e-sealed-access-token-value',
       refreshTokenEnc: 'v1.e2e-sealed-refresh-token-value',
@@ -85,10 +86,11 @@ test('calendar status returns only my own connection and never a token', async (
     await seedBrokenConnection(mine.id);
     // A second person's connection exists at the same time — the endpoint must
     // not widen from "mine" to "everyone's" just because a second row is there.
-    await prisma.googleCalendarConnection.create({
+    await prisma.calendarConnection.create({
       data: {
         userId: other.id,
-        googleEmail: 'someone.else@gmail.example',
+        provider: 'GOOGLE',
+        accountEmail: 'someone.else@gmail.example',
         scope: 'openid email',
         accessTokenEnc: 'v1.other-persons-access-token',
         expiresAt: new Date(Date.now() + 3600_000),
@@ -178,10 +180,11 @@ test('a healthy connection shows no warning strip', async ({ page }) => {
   const email = uniqueEmail('cal-healthy');
   const user = await seedUser(email, 'CalHealthy123', 'MENTOR', 'Cal Healthy');
   try {
-    await prisma.googleCalendarConnection.create({
+    await prisma.calendarConnection.create({
       data: {
         userId: user.id,
-        googleEmail: 'healthy.calendar@gmail.example',
+        provider: 'GOOGLE',
+        accountEmail: 'healthy.calendar@gmail.example',
         scope: 'openid email',
         accessTokenEnc: 'v1.e2e-sealed-access-token-value',
         expiresAt: new Date(Date.now() + 3600_000),

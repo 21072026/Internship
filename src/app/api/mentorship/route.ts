@@ -2,19 +2,20 @@ import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can, requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { z } from 'zod';
+import { relationScheduleFields, scheduleCreateData } from '@/lib/relationSchedule';
+import { relationScheduleDefaults } from '@/lib/relationScheduleDefaults';
+import { isBenched, MENTOR_BENCHED_ERROR } from '@/lib/participantState';
 import { DEFAULT_RELATION_KIND, isRelationKind } from '@/lib/placementKind';
-import { emit } from '@/lib/events/emit';
 import { checkActiveRelationLimit, planLimitError } from '@/lib/planGate';
 import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { withTenantScope } from '@/lib/orgContext';
 import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
-import { notify } from '@/lib/notify';
-import { emailAllowed } from '@/lib/notificationPrefs';
-import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
-import { sendMentorAssignedEmail, sendMenteeAssignedEmail } from '@/services/emailService';
 import { resolveOrgId } from '@/lib/orgScope';
+import { relationProgramWhere, resolveProgramFilter } from '@/lib/programFilter';
 import { resolveStartStage } from '@/lib/pipelineStages';
 import { stageTrialWindow } from '@/lib/trialWindow';
 import { daysInStage } from '@/lib/stageClock';
@@ -29,15 +30,30 @@ import { refuseForeignTargets } from '@/lib/relationTargets';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { agreementStatusesFor, agreementStatusWhere, getActiveAgreement } from '@/lib/mentoringAgreement';
 import { isAgreementStatus } from '@/lib/mentoringAgreementRule';
+import { announceNewRelation, createGuardedRelation } from '@/lib/relationCreate';
+import { MATCH_DECISION_NOTE_MAX } from '@/lib/matching/decisionRule';
+import { getLocale } from '@/i18n/server';
+import { isEligible } from '@/lib/eligibility';
+import { boardPageParams, listIsPaged, recipientPageParams } from '@/lib/boardPage';
 
 const createRelationSchema = z.object({
   mentorId: z.string().min(1),
   menteeId: z.string().min(1),
   companyId: z.string().optional(),
   projectId: z.string().optional(),
+  // The programme (the Cohort row) the pairing joins (#1626). Checked against
+  // the caller's tenant and, for a PROGRAM_ADMIN, its grants; never defaulted.
+  cohortId: z.string().min(1).max(64).optional(),
   startDate: z.string().optional(),
   // PLACEMENT (default) | COACHING (#1503); whitelisted below, never z.enum.
   kind: z.string().max(16).optional(),
+  // The audit record (#1789): the suggestion batch the admin was shown and
+  // their note on why this mentor — stored on the decision row only.
+  suggestionBatchId: z.string().min(1).max(64).optional(),
+  decisionNote: z.string().max(MATCH_DECISION_NOTE_MAX).optional(),
+  // What the pair agrees to (#1784): an end day or a duration, and a meeting
+  // interval. Optional; the programme → org defaults fill what is left out.
+  ...relationScheduleFields,
 });
 
 export async function GET(request: Request) {
@@ -54,21 +70,55 @@ export async function GET(request: Request) {
     if (session.user.role === 'COMPANY' && !companyOrgId) {
       return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
     }
+    // Does this caller read as an admin (the org-wide agreement column, the
+    // re-engagement flag)? The permission rule answers, not the role string (#1571).
+    const actor = await actorFromSession(session);
+    const isAdmin = !!actor && (await can(actor, 'program.read', undefined, session));
 
     // Bind the request's tenant so every query below is auto-scoped once
     // MT_ENFORCE_ISOLATION is on (no-op while it's off). See orgContext.ts (#543).
     return await withTenantScope(session, async () => {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status');
+    // The lifecycle filter (#1774): PAUSED, a real COMPLETED, or ENDED — every
+    // other ending (early, re-matched, reassigned, won back). Separate from
+    // `status`, whose ACTIVE/COMPLETED meaning many callers rely on.
+    const lifecycle = searchParams.get('lifecycle');
+    const lifecycleWhere: Prisma.MentorshipRelationWhereInput | undefined =
+      lifecycle === 'PAUSED'
+        ? { status: 'ACTIVE', lifecycleState: 'PAUSED' }
+        : lifecycle === 'COMPLETED'
+          ? { status: 'COMPLETED', OR: [{ lifecycleState: 'COMPLETED' }, { lifecycleState: null }] }
+          : lifecycle === 'ENDED'
+            ? { status: 'COMPLETED', lifecycleState: { notIn: ['COMPLETED', 'ACTIVE', 'PAUSED'] } }
+            : undefined;
     const search = searchParams.get('search');
+    // The programme filter (#1626) — the analytics screens' own rule (#1652):
+    // another org's (or a malformed) id is a 404 before anything is read, and
+    // the fragment is ANDed with the caller's scope below, so it only ever
+    // narrows: a programme outside a PROGRAM_ADMIN's grants lists nothing. The
+    // "unassigned" bucket is an org admin's view and lists nothing for a
+    // PROGRAM_ADMIN, whose company-only grants could otherwise reach it.
+    const programParam = searchParams.get('program');
+    let programWhere: Prisma.MentorshipRelationWhereInput | undefined;
+    if (programParam) {
+      const resolved = await resolveProgramFilter(programParam, await tenantWhere(session));
+      if ('error' in resolved) return resolved.error;
+      programWhere =
+        resolved.filter.kind === 'unassigned' && actor?.adminLevel === 'PROGRAM_ADMIN'
+          ? { id: { in: [] } }
+          : relationProgramWhere(resolved.filter);
+    }
     // The mentoring agreement column and filter (#1792) — ADMIN only, and only
     // in a vertical with pairs. A report, never a gate on the relation.
     const agreementParam = searchParams.get('agreement');
-    const showsAgreement = session.user.role === 'ADMIN' && (await shellCapabilities(session.user.orgId)).includes('mentorship');
+    const showsAgreement = isAdmin && (await shellCapabilities(session.user.orgId)).includes('mentorship');
     const activeAgreement = showsAgreement ? await getActiveAgreement(resolveOrgId(session)) : null;
-    // Pagination is opt-in: only applied when `page` is explicitly passed, so
-    // the many callers that expect the full list (board views, mentee/mentor
-    // dashboards, meeting/email composers) keep working unchanged.
+    // Pagination is opt-in, so the callers that expect the full list
+    // (mentee/mentor dashboards, meeting/email composers) keep working. It used
+    // to switch on `page` alone, which made `?pageSize=20` silently return the
+    // whole list (#1438); either parameter pages now (src/lib/boardPage.ts).
+    const paged = listIsPaged(searchParams);
     const pageParam = searchParams.get('page');
     const page = Math.max(1, parseInt(pageParam || '1', 10) || 1);
     const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10) || 20));
@@ -98,6 +148,8 @@ export async function GET(request: Request) {
       // Unvalidated on purpose, exactly as before: an unknown value is a Prisma
       // error, not a silently wider list.
       status ? { status: status as Prisma.MentorshipRelationWhereInput['status'] } : undefined,
+      lifecycleWhere,
+      programWhere,
       search
         ? {
             OR: [
@@ -154,7 +206,7 @@ export async function GET(request: Request) {
     // only the boolean ships, and only to the two roles that can already list
     // the pool through GET /api/re-engagement, so COMPANY and SOURCE callers
     // see exactly the payload they saw before.
-    const seesPool = session.user.role === 'ADMIN' || session.user.role === 'MENTOR';
+    const seesPool = isAdmin || session.user.role === 'MENTOR';
     const withStageClock = <
       T extends { mentorId: string; startDate: Date; statusChanges: { createdAt: Date }[]; mentee: { reEngageAt: Date | null } },
     >(
@@ -179,7 +231,56 @@ export async function GET(request: Request) {
       return rows.map((r) => ({ ...r, agreementStatus: statuses.get(r.id) ?? null }));
     };
 
-    if (!pageParam) {
+    // The pipeline board (#1438): each column's TRUE count, plus only that
+    // column's first page of cards — or, with `stage`, one further page of one
+    // column. Same `where` (scope, search, filters) as every other read here,
+    // so a count can never include a card the caller may not see.
+    if (searchParams.get('view') === 'board') {
+      const board = boardPageParams(searchParams);
+      if ('error' in board) return NextResponse.json({ error: 'Invalid stage', code: board.error }, { status: 400 });
+      const counts = await prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where, _count: { _all: true } });
+      const countByStage = Object.fromEntries(counts.map((c) => [c.pipelineStatus, c._count._all]));
+      const stages = board.stage ? [board.stage] : Object.keys(countByStage);
+      const pages = await Promise.all(
+        stages.map((stage) =>
+          prisma.mentorshipRelation.findMany({
+            where: andScope<Prisma.MentorshipRelationWhereInput>(where, { pipelineStatus: stage }),
+            include,
+            orderBy: [{ startDate: 'desc' }, { id: 'asc' }],
+            skip: (board.page - 1) * board.perStage,
+            take: board.perStage,
+          })
+        )
+      );
+      return NextResponse.json({
+        relations: await withAgreement(withStageClock(pages.flat())),
+        counts: countByStage,
+        perStage: board.perStage,
+        page: board.page,
+      });
+    }
+
+    // The e-mail composer's recipient list (#1438): the relation id and the
+    // mentee's name and language only — the composer needs no e-mail, no
+    // counts, no stage clock. A page for the list on screen, or every match
+    // (bounded) for "select all matching". Same `where` as everything else.
+    if (searchParams.get('view') === 'recipients') {
+      const rp = recipientPageParams(searchParams);
+      const rWhere = rp.relationId ? andScope<Prisma.MentorshipRelationWhereInput>(where, { id: rp.relationId }) : where;
+      const [total, recipients] = await Promise.all([
+        prisma.mentorshipRelation.count({ where: rWhere }),
+        prisma.mentorshipRelation.findMany({
+          where: rWhere,
+          select: { id: true, mentee: { select: { id: true, fullName: true, preferredLanguage: true } } },
+          orderBy: [{ startDate: 'desc' }, { id: 'asc' }],
+          skip: (rp.page - 1) * rp.take,
+          take: rp.take,
+        }),
+      ]);
+      return NextResponse.json({ recipients, total, page: rp.page, pageSize: rp.take });
+    }
+
+    if (!paged) {
       const relations = await prisma.mentorshipRelation.findMany({ where, include, orderBy: { startDate: 'desc' } });
       return NextResponse.json({ relations: await withAgreement(withStageClock(relations)) });
     }
@@ -205,15 +306,34 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const session = await getServerSession(authOptions);
-
-    if (!session || session.user.role !== 'ADMIN') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const body = await request.json().catch(() => null);
+    // With a programme named, the permission is asked WITH it (#1626): an org
+    // admin, or a PROGRAM_ADMIN holding a grant for that programme. Without
+    // one the question is exactly what it always was — tier only, which a
+    // PROGRAM_ADMIN never passes (a cohort-less pairing is outside every grant).
+    const askedCohort = body && typeof body.cohortId === 'string' && body.cohortId ? body.cohortId : null;
+    const caller = askedCohort ? await getServerSession(authOptions) : null;
+    const gate = await requirePermission('relation.write', {
+      request,
+      ...(askedCohort
+        ? { subject: { orgId: resolveOrgId(caller), cohortId: askedCohort, companyId: typeof body.companyId === 'string' ? body.companyId : null } }
+        : {}),
+    });
+    if ('error' in gate) {
+      // A programme outside a PROGRAM_ADMIN's grants reads as missing, never
+      // as "exists but not yours" — the same 404 as another org's programme.
+      if (askedCohort && gate.error.status === 403) {
+        const actor = await actorFromSession(caller);
+        if (actor?.adminLevel === 'PROGRAM_ADMIN' && !actor.impersonatorId) {
+          return NextResponse.json({ error: 'Programme not found', code: 'program_not_found' }, { status: 404 });
+        }
+      }
+      return gate.error;
     }
+    const { session } = gate;
 
     return await withTenantScope(session, async () => {
-    const body = await request.json();
-    const parsed = createRelationSchema.safeParse(body);
+    const parsed = createRelationSchema.safeParse(body ?? {});
 
     if (!parsed.success) {
       return NextResponse.json(
@@ -222,7 +342,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const { mentorId, menteeId, companyId, projectId, startDate, kind: rawKind } = parsed.data;
+    const { mentorId, menteeId, companyId, projectId, cohortId, startDate, kind: rawKind, suggestionBatchId, decisionNote, expectedEndDate, durationMonths, expectedMeetingIntervalWeeks } = parsed.data;
     if (rawKind !== undefined && !isRelationKind(rawKind)) {
       return NextResponse.json({ error: 'Unknown kind', code: 'invalid_kind' }, { status: 400 });
     }
@@ -235,10 +355,23 @@ export async function POST(request: Request) {
     // the same 404.
     const foreignTarget = await refuseForeignTargets(session, { companyId, projectId });
     if (foreignTarget) return foreignTarget;
+    // The programme must be this tenant's (#1626); another org's id is the
+    // same 404 as a missing one and is never written.
+    if (cohortId) {
+      const program = await prisma.cohort.findFirst({
+        where: withinTenant({ id: cohortId }, await tenantWhere(session)),
+        select: { id: true },
+      });
+      if (!program) return NextResponse.json({ error: 'Programme not found', code: 'program_not_found' }, { status: 404 });
+    }
 
+    // Both people from the caller's tenant (#3588): the middleware that would
+    // narrow these lookups is off in every deployment, so another org's user was
+    // paired — and the relation filed in their org. A foreign id is "invalid".
+    const tenant = await tenantWhere(session);
     const [mentor, mentee] = await Promise.all([
-      prisma.user.findUnique({ where: { id: mentorId } }),
-      prisma.user.findUnique({ where: { id: menteeId } }),
+      prisma.user.findFirst({ where: withinTenant({ id: mentorId }, tenant) }),
+      prisma.user.findFirst({ where: withinTenant({ id: menteeId }, tenant) }),
     ]);
 
     // Either side may be an admin, a mentor or a mentee (#1141): admins mentor,
@@ -250,6 +383,8 @@ export async function POST(request: Request) {
     if (!mentor || !PARTICIPANT_ROLES.includes(mentor.role)) {
       return NextResponse.json({ error: 'Invalid mentor' }, { status: 400 });
     }
+    // A benched mentor (#1778) is not assignable: refused here, not hidden.
+    if (isBenched(mentor)) return NextResponse.json(MENTOR_BENCHED_ERROR, { status: 409 });
 
     if (!mentee || !PARTICIPANT_ROLES.includes(mentee.role)) {
       return NextResponse.json({ error: 'Invalid mentee' }, { status: 400 });
@@ -257,6 +392,27 @@ export async function POST(request: Request) {
 
     if (mentorId === menteeId) {
       return NextResponse.json({ error: 'A user cannot mentor themselves' }, { status: 400 });
+    }
+
+    // Programme eligibility (#1945): in RULES mode only an ALLOW rule admits
+    // the mentee. With a programme (#1626) its rules decide on top of the
+    // organisation's; without one, the organisation's own rules decide. The refusal names the deciding rule —
+    // this route is ADMIN-only, and the admin is the one who can fix it.
+    const eligibility = await isEligible({ id: menteeId, orgId: mentee.orgId }, cohortId ?? null);
+    if (!eligibility.ok) {
+      return NextResponse.json(
+        { error: 'This mentee is not eligible for the programme', code: 'not_eligible', side: 'mentee', reason: eligibility.reason, ruleId: eligibility.ruleId ?? null },
+        { status: 403 },
+      );
+    }
+    // …and the mentor, by the rules that target mentors (#3423). No such rule
+    // = every mentor stands, so an org that never wrote one sees no change.
+    const mentorEligibility = await isEligible({ id: mentorId, orgId: mentee.orgId }, cohortId ?? null, 'MENTOR');
+    if (!mentorEligibility.ok) {
+      return NextResponse.json(
+        { error: 'This mentor is not eligible for the programme', code: 'not_eligible', side: 'mentor', reason: mentorEligibility.reason, ruleId: mentorEligibility.ruleId ?? null },
+        { status: 403 },
+      );
     }
 
     // Cheap pre-flight for the common case; the real guard is re-run inside the
@@ -306,6 +462,13 @@ export async function POST(request: Request) {
     // A tenant whose first stage is TRIAL_ACTIVE gets the trial window with
     // the create (#2551); for every other start stage this is `{}`, no query.
     const trialWindow = await stageTrialWindow({ orgId: mentee.orgId, toStage: pipelineStatus, enteredAt: new Date() });
+    // The agreed duration and rhythm (#1784): what the admin chose, else the
+    // programme's, then the org's defaults (#1626).
+    const schedule = scheduleCreateData(
+      { expectedEndDate, durationMonths, expectedMeetingIntervalWeeks },
+      start,
+      await relationScheduleDefaults(mentee.orgId, cohortId ?? null),
+    );
 
     // The guard and the write, adjacent and atomic (#419). The pre-flight above
     // ran before the plan gate, the availability count and resolveStartStage —
@@ -316,31 +479,23 @@ export async function POST(request: Request) {
     // a transaction open across two SMTP sends.
     let relation;
     try {
-      relation = await prisma.$transaction(async (tx) => {
-        const active = await findActiveMentorship(tx, menteeId);
-        if (active) throw new AlreadyMentoredError(menteeId, active.id);
-        return tx.mentorshipRelation.create({
-          data: {
-            mentorId,
-            menteeId,
-            orgId: mentee.orgId,
-            pipelineStatus,
-            ...trialWindow,
-            companyId: companyId || null,
-            projectId: projectId || null,
-            startDate: start,
-            kind,
-            // A placement enters the funnel when it starts; coaching never does (#1503).
-            funnelEnteredAt: kind === 'PLACEMENT' ? start : null,
-          },
-          include: {
-            mentor: { select: { id: true, fullName: true, email: true } },
-            mentee: { select: { id: true, fullName: true, email: true } },
-            company: { select: { id: true, name: true } },
-            project: { select: { id: true, name: true } },
-          },
-        });
-      });
+      relation = await prisma.$transaction((tx) =>
+        createGuardedRelation(tx, {
+          mentorId,
+          menteeId,
+          orgId: mentee.orgId,
+          pipelineStatus,
+          ...trialWindow,
+          companyId: companyId || null,
+          projectId: projectId || null,
+          cohortId: cohortId || null,
+          startDate: start,
+          ...schedule,
+          kind,
+          // A placement enters the funnel when it starts; coaching never does (#1503).
+          funnelEnteredAt: kind === 'PLACEMENT' ? start : null,
+        }),
+      );
     } catch (e) {
       if (e instanceof AlreadyMentoredError) {
         return NextResponse.json(await alreadyMentoredBody(prisma, e.existingRelationId), { status: 409 });
@@ -348,58 +503,21 @@ export async function POST(request: Request) {
       throw e;
     }
 
-    await emit('mentorship.created', { relationId: relation.id, mentorId, menteeId, companyId: companyId || null }, { orgId: session.user.orgId ?? null, actor: { id: session.user.id, type: 'user' } });
-
-    // A direct admin assignment used to be completely silent — neither side heard
-    // about it until they happened to log in (#668). In-app is unconditional,
-    // email honors the `mentorship` opt-out and never fails the assignment.
-    await notify(mentee.id, 'mentorship_request.mentorAssigned', { mentorName: mentor.fullName }, '/portal');
-    await notify(mentor.id, 'mentorship_request.menteeAssigned', { menteeName: mentee.fullName }, '/mentor');
-    // The kickoff prompt (#1792): each side is asked to read the agreement.
-    // A prompt only — nothing waits on the answer.
-    if ((await shellCapabilities(relation.orgId)).includes('mentorship')) {
-      await notify(mentee.id, 'agreement.review', {}, '/portal');
-      await notify(mentor.id, 'agreement.review', {}, `/mentor/mentees/${relation.id}`);
-    }
-
-    // Both halves of the pair are notified, so both `userId`s matter and they are
-    // not interchangeable: the "you have a mentor" mail is addressed to the
-    // mentee and the "you have a new mentee" mail to the mentor. Swapping them
-    // would hand each person an unsubscribe token for the other's account.
-    if (
-      mentee.email &&
-      emailAllowed(mentee, 'mentorship') &&
-      emailGroupAllowedForCategory(mentee, 'mentor-assigned')
-    ) {
-      try {
-        await sendMentorAssignedEmail({
-          to: mentee.email,
-          menteeName: mentee.fullName,
-          mentorName: mentor.fullName,
-          orgId: mentee.orgId,
-          userId: mentee.id,
-        });
-      } catch (e) {
-        console.error('Mentor assignment email failed:', e);
-      }
-    }
-    if (
-      mentor.email &&
-      emailAllowed(mentor, 'mentorship') &&
-      emailGroupAllowedForCategory(mentor, 'mentee-assigned')
-    ) {
-      try {
-        await sendMenteeAssignedEmail({
-          to: mentor.email,
-          mentorName: mentor.fullName,
-          menteeName: mentee.fullName,
-          orgId: mentor.orgId,
-          userId: mentor.id,
-        });
-      } catch (e) {
-        console.error('Mentee assignment email failed:', e);
-      }
-    }
+    // Webhook, decision record, both sides' notices and mails — the shared
+    // post-commit half (#1796), the same one a published round runs.
+    await announceNewRelation({
+      relation,
+      mentor,
+      mentee,
+      companyId: companyId || null,
+      actor: { id: session.user.id, orgId: session.user.orgId ?? null },
+      decision: {
+        source: 'ADMIN_DIRECT',
+        suggestionBatchId: suggestionBatchId ?? null,
+        note: decisionNote ?? null,
+        locale: await getLocale(),
+      },
+    });
 
     return NextResponse.json({ relation, warnings }, { status: 201 });
     });

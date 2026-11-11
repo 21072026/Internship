@@ -105,9 +105,15 @@ test('the thread view loads one bounded page and scrolls back on demand', { tag:
   expect(reads.every((q) => !q.includes('before='))).toBe(true);
 
   // Scrolling up to the top asks for the page before; the button does the same.
-  await list.hover();
-  await page.mouse.wheel(0, -50_000);
-  await expect(list.locator('[data-message-id]')).toHaveCount(100);
+  // The open smooth-scrolls down to the newest message; a wheel that lands while
+  // that scroll is still running is swallowed by it (e2e-full, 2026-10-30). So
+  // wheel again until the page before arrives — it is still the scroll that
+  // loads it, never the button.
+  await expect(async () => {
+    await list.hover();
+    await page.mouse.wheel(0, -50_000);
+    await expect.poll(() => list.locator('[data-message-id]').count(), { timeout: 2_000 }).toBeGreaterThanOrEqual(100);
+  }).toPass({ timeout: 20_000 });
   // The last page: the button — unless the wheel's momentum already scrolled
   // the list to its top again and loaded it first, which the production build
   // does often enough that the button can vanish under the click.

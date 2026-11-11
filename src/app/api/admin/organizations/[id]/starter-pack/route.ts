@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { recordOrgWrite } from '@/lib/orgAudit';
 import { getLocale } from '@/i18n/server';
 import { applyOrgStarterPack } from '@/lib/orgStarterPack';
 import { orgAdminRefusal } from '@/lib/orgAdminGate';
+import { requirePermission } from '@/lib/authz';
 
 // POST /api/admin/organizations/[id]/starter-pack (#2066) — apply the tenant
 // starter pack: stages, service levels, document requirements, an evaluation
@@ -20,9 +19,9 @@ const bodySchema = z.object({ sampleProgram: z.boolean().optional() }).strict();
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('org.settings.write', { request: req });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const refusal = await orgAdminRefusal(session, id, 'POST /api/admin/organizations/[id]/starter-pack');
   if (refusal) return refusal;
 

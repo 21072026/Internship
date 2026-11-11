@@ -92,6 +92,8 @@ const FUNNEL: Route[] = [
     '/admin/hiring',
     '/admin/requisitions',
     '/admin/offers',
+    // The placement ledger (#1765) — in the sidebar without an entry here.
+    '/admin/placements',
     '/admin/interview-requests',
     '/admin/duplicates',
     '/admin/mentor-applications',
@@ -130,6 +132,9 @@ const SETUP: Route[] = [
     // Mentoring agreements (#1790) — in the sidebar without an entry here,
     // which turned this gate red on main.
     '/admin/agreements',
+    // Admin-built intake and feedback forms — in the sidebar without an entry
+    // here, the same miss as the agreements line above.
+    '/admin/forms',
     '/admin/sources',
     '/admin/invite'
   ),
@@ -142,6 +147,15 @@ const OUTBOUND: Route[] = shell(
   // Measured at 320px by the reflow case, but never with the full four rules at
   // phone width — a month grid is the densest thing in the product.
   '/admin/calendar',
+  // Any mentor's hours, run by the admin (#2005) — in the sidebar without an
+  // entry here, which turned this gate red on main.
+  '/admin/availability',
+  // Group sessions and office hours (#1856) — the same miss.
+  '/admin/events',
+  // Admin-authored nudges (#1686) and stage automations (#1704) — both reached
+  // the sidebar without an entry here, the same miss as the two above.
+  '/admin/nudges',
+  '/admin/automations',
   '/admin/announcements',
   '/admin/newsletters',
   '/admin/testimonials',
@@ -222,6 +236,8 @@ const AUDITED_ELSEWHERE = [
   '/admin/companies',
   '/admin/mentors',
   '/admin/mentorship',
+  // The German admin walk measures the operations console (#1607).
+  '/admin/operations',
   '/admin/support',
   '/admin/users',
 ];

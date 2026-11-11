@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere } from '@/lib/tenantFilter';
@@ -22,11 +21,10 @@ import { findMenteesWithMultipleActiveMentors } from '@/lib/activeMentorship';
 // value, this would say clean and the constraint would still fail on deploy.
 // The same numbers are printed on every deploy by
 // prisma/check-active-mentor-duplicates.mjs.
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+export async function GET(request: Request) {
+  const gate = await requirePermission('analytics.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
 
   // An admin sees their own org's violations. That used to be left to the
   // tenant middleware, which is dormant with MT_ENFORCE_ISOLATION off, so the

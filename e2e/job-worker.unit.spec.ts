@@ -16,7 +16,7 @@ setQueueLogger({ warning: () => {} });
 
 const T0 = new Date('2026-10-20T09:00:00Z');
 
-function harness(opts: { random?: () => number; clock?: { now: Date } } = {}) {
+function harness(opts: { random?: () => number; clock?: { now: Date }; drainMs?: number } = {}) {
   const store = createMemoryQueueStore();
   const registry = createJobRegistry();
   const logs: { level: string; message: string; context?: Record<string, unknown> }[] = [];
@@ -32,6 +32,7 @@ function harness(opts: { random?: () => number; clock?: { now: Date } } = {}) {
     registry,
     workerId: 'replica-a#1',
     concurrency: 2,
+    drainMs: opts.drainMs,
     now: () => clock.now,
     random: opts.random ?? (() => 0.5),
     logger,
@@ -193,6 +194,35 @@ test.describe('job worker', () => {
     expect((await h.worker.tick()).claimed).toBe(1);
     const others = h.store.jobs.filter((j) => j.name !== 'test.ok');
     expect(others.every((j) => j.status === 'PENDING' && j.attempts === 0)).toBe(true);
+  });
+
+  test('with drainMs, a tick keeps claiming while claims come back full — and stops at a short one', async () => {
+    const h = harness({ drainMs: 60_000 });
+    const ran: number[] = [];
+    h.registry.register('test.ok', async (payload) => {
+      ran.push((payload as { n: number }).n);
+    });
+    for (let i = 0; i < 5; i++) await h.add('test.ok', { n: i });
+    await h.add('nobody.handles.this');
+
+    // 2 + 2 + 1: the third claim is short, so the tick ends without a fourth.
+    expect(await h.worker.tick()).toMatchObject({ claimed: 5, succeeded: 5 });
+    expect(ran.sort()).toEqual([0, 1, 2, 3, 4]);
+    expect(h.store.jobs.find((j) => j.name === 'nobody.handles.this')!.status).toBe('PENDING');
+  });
+
+  test('with drainMs, a retry is not re-claimed in the same tick — it is not due yet', async () => {
+    const h = harness({ drainMs: 60_000 });
+    let calls = 0;
+    h.registry.register('test.flaky', async () => {
+      calls += 1;
+      throw new Error('boom');
+    });
+    await h.add('test.flaky', {}, { maxAttempts: 5 });
+    await h.add('test.flaky', {}, { maxAttempts: 5 });
+
+    expect(await h.worker.tick()).toMatchObject({ claimed: 2, retried: 2 });
+    expect(calls).toBe(2);
   });
 
   test('an unregistered job name is reported at start, the mail queue is not', async () => {

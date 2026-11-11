@@ -56,6 +56,8 @@ const TASK_WRITERS = [
   'src/app/api/todos/route.ts',
   'src/app/api/projects/[id]/tasks/route.ts',
   'src/app/api/project-tasks/[taskId]/route.ts',
+  'src/app/api/goals/[id]/subtasks/route.ts',
+  'src/components/GoalSubtasks.tsx',
   'src/components/todos/MyTodos.tsx',
   'src/components/todos/PersonTodos.tsx',
   'src/components/todos/TodoRow.tsx',
@@ -102,6 +104,16 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
       exempt:
         'written by the account-event writer only (#2846): the feed carries the plan as 1–40 characters of A–Z a–z 0–9 . _ - (src/lib/accountEventSchema.ts), the width of this column. No person and no form writes it.',
     },
+    // The public employer page (#1867).
+    // Written only by the company PUT (the admin form and the company's own profile page post to it).
+    about: { limit: 'companyAbout', files: ['src/app/api/companies/[id]/route.ts'] },
+    websiteUrl: { limit: 'companyWebsiteUrl', files: ['src/app/api/companies/[id]/route.ts'] },
+    slug: SERVER_SET,
+    // Employer verification (#1865).
+    verificationStatus: ENUMERATED,
+    verifiedById: ID,
+    signupDomain: SERVER_SET,
+    rejectionReason: { limit: 'companyVerificationReason', files: ['src/app/api/admin/companies/[id]/verification/route.ts'] },
     createdBySource: {
       exempt:
         'written by the server only (#2959): the account-event writer stamps the slug of the registered IntegrationSource it resolved, and a slug is 2–40 characters by SOURCE_SLUG_PATTERN (src/lib/accountEventRule.ts), the width of this column and of IntegrationEvent.provider. No person and no request body writes it.',
@@ -130,6 +142,7 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     assigneeId: ID,
     createdById: ID,
     templateId: ID,
+    goalId: ID,
     title: { limit: 'todoTitle', files: TASK_WRITERS },
   },
   ProjectTaskTemplate: {
@@ -156,6 +169,14 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     demoUrl: { limit: 'projectUrl', files: PROJECT_WRITERS },
     boardUrl: { limit: 'projectUrl', files: PROJECT_WRITERS },
   },
+  Kudo: {
+    id: ID,
+    relationId: ID,
+    senderId: ID,
+    recipientId: ID,
+    reason: { limit: 'kudoReason', files: ['src/app/api/kudos/route.ts', 'src/components/KudosPanel.tsx'] },
+    presetKey: ENUMERATED,
+  },
   Goal: {
     id: ID,
     relationId: ID,
@@ -164,12 +185,13 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     createdById: ID,
     successCriteria: { limit: 'goalSuccessCriteria', files: GOAL_WRITERS },
     visibility: ENUMERATED,
+    templateId: ID,
   },
   MeetingRequest: {
     id: ID,
     relationId: ID,
     requestedById: ID,
-    topic: { limit: 'meetingTopic', files: ['src/app/api/meeting-requests/route.ts'] },
+    topic: { limit: 'meetingTopic', files: ['src/lib/meetingRequestCreate.ts'] },
     counterOfMeetingId: ID,
   },
   Document: {
@@ -183,6 +205,10 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     reviewStatus: SERVER_SET,
   },
   User: {
+    // SSO directory sync (#1943): a short refusal code and a sha256 hex digest,
+    // both computed by src/lib/ssoDirectorySync.ts; the code is sliced to 191.
+    ssoSyncError: SERVER_SET,
+    ssoPhotoUrlHash: SERVER_SET,
     deactivatedBy: {
       exempt:
         'written by the server only (#1966): "roster:<feedId>" (a cuid) by the roster-feed deprovisioning, or the acting admin\'s user id by /api/users/[id]. No request body supplies the value.',
@@ -228,6 +254,11 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     bio: { limit: 'bio', files: PROFILE_WRITERS },
     interests: { exempt: '@db.Text, capped by the profile schema' },
     reEngageNote: { exempt: '@db.Text, written by an admin through its own route' },
+    // The bench (#1778): the state is a whitelist, the actor an id, the reason
+    // typed by an admin through the two bench routes.
+    participantState: ENUMERATED,
+    benchedById: ID,
+    benchedReason: { limit: 'benchReason', files: ['src/app/api/admin/users/[id]/bench/route.ts', 'src/app/api/admin/users/bench/route.ts'] },
   },
   MentorApplication: {
     id: ID,
@@ -247,6 +278,13 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     referenceName: { limit: 'mentorScreeningReference', files: ['src/app/api/mentor-applications/[id]/screening/route.ts'] },
     referenceContact: { limit: 'mentorScreeningReference', files: ['src/app/api/mentor-applications/[id]/screening/route.ts'] },
     referenceOutcome: { limit: 'mentorScreeningReferenceOutcome', files: ['src/app/api/mentor-applications/[id]/screening/route.ts'] },
+  },
+  MentorOffer: {
+    id: ID,
+    orgId: ID,
+    mentorId: ID,
+    menteeId: ID,
+    message: { limit: 'mentorOfferMessage', files: ['src/app/api/mentor/offers/route.ts'] },
   },
   CompanyInquiry: {
     id: ID,
@@ -284,11 +322,16 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     lastError: { exempt: '@db.Text, written by the drain job through sanitizeError, never from a request' },
   },
   Organization: {
+    // OPEN | RULES, checked by isEligibilityMode() before any write (#1945).
+    eligibilityMode: ENUMERATED,
+    // full | read_only | off, checked by isImpersonationPolicy() before any write (#1586).
+    impersonationPolicy: ENUMERATED,
     id: ID,
     stripeCustomerId: ID,
     // Minted by the server for the DNS ownership proof (#1661/#1662), never typed.
     publicHostToken: SERVER_SET,
     archivedById: SERVER_SET,
+    deletionRequestedById: SERVER_SET,
     name: { exempt: 'capped at 120 by the create schema and by planRename() (#1582); written by a super-admin only' },
     slug: { exempt: 'slugified and sliced to 60 (slugifyOrg) before it is written, on create and on rename (#1582)' },
     vertical: ENUMERATED,
@@ -304,6 +347,12 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     ssoSpKey: SERVER_SET,
     ssoSpCert: SERVER_SET,
     ssoCertificate: { exempt: '@db.Text, capped at 20000 by the route' },
+    // OpenID Connect (#1926): the route's caps equal the VarChar columns; the
+    // secret is sealed by the server before it is stored, never typed into the column.
+    ssoClientId: { exempt: 'VarChar(255), capped at 255 by the route (#1926)' },
+    ssoScopes: { exempt: 'VarChar(255), capped at 255 by the route (#1926)' },
+    ssoDiscoveryUrl: { exempt: '@db.Text, capped at 2000 by the route (#1926)' },
+    ssoClientSecretEnc: SERVER_SET,
     billingEmail: { exempt: 'written by the billing flow, not typed into this form' },
     vatId: { exempt: 'written by the billing flow, not typed into this form' },
     billingCountry: ENUMERATED,
@@ -311,6 +360,9 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     brandTileColor: { limit: 'orgBrandTileColor', files: ORG_WRITERS },
     brandAccent: { limit: 'orgBrandAccent', files: ORG_WRITERS },
     brandPalette: { limit: 'orgBrandPalette', files: ORG_WRITERS },
+    // The tenant welcome page (#1664): the route's zod and the editor's maxLength.
+    welcomeTitle: { limit: 'orgWelcomeTitle', files: [...ORG_WRITERS, 'src/app/admin/organizations/page.tsx'] },
+    welcomeBody: { limit: 'orgWelcomeBody', files: [...ORG_WRITERS, 'src/app/admin/organizations/page.tsx'] },
     brandMarkVersion: { exempt: 'a 16-character hash written by src/lib/brandAssets.ts after an upload, never typed into a form' },
   },
   // An organization's generated brand icons (#2922): every column is set by the

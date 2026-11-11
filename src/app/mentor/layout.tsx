@@ -24,6 +24,7 @@ import { shellCapabilities } from '@/lib/shellCapabilities';
 import { availableModes, canUseMentorShell } from '@/lib/dualRole';
 import { mentorlessShellTarget } from '@/lib/salesSurface';
 import { I18nScope } from '@/i18n/scope';
+import { TourProvider } from '@/components/guidance/TourProvider';
 
 // Signed-in area: never in a search result (#1376).
 export const metadata = NO_INDEX;
@@ -76,7 +77,10 @@ async function MentorLayout({ children }: { children: React.ReactNode }) {
   const modes = await availableModes(session.user);
 
   return (
-    <>
+    <TourProvider role="MENTOR" autostart={session.user.role === 'MENTOR' && !session.user.impersonatorId}>
+      {/* The first-run tour (#2067). Only a MENTOR account is offered it here: an admin
+          working their own mentees in this shell is not a new mentor, and impersonation
+          must not record anything as the impersonated person. */}
       {/* Mounted once per authenticated shell: ⌘K / Ctrl+K and `?` (#2079). */}
       <CommandPalette role="MENTOR" capabilities={capabilities} />
     <ResponsiveShell
@@ -119,7 +123,7 @@ async function MentorLayout({ children }: { children: React.ReactNode }) {
         <EvaluationCriteriaProvider criteria={customCriteria}>{children}</EvaluationCriteriaProvider>
       </PipelineStagesProvider>
     </ResponsiveShell>
-    </>
+    </TourProvider>
   );
 }
 

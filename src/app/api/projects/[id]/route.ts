@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { actorFromSession, can } from '@/lib/authz';
 import { z } from 'zod';
 import { canViewProject, resolveOwner, isProjectOwner, isProjectMember, projectInCallerTenant } from '@/lib/projectAccess';
 import { logActivity } from '@/lib/activity';
@@ -154,7 +155,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     // Transfer (admin only): change the owner, preserving the invariant.
     let transferred: string | null = null;
-    if (d.ownerType && session.user.role === 'ADMIN') {
+    // Admin reach from the permission rule, not the role string (#1571).
+    const actor = d.ownerType ? await actorFromSession(session) : null;
+    const isAdmin = !!actor && (await can(actor, 'program.write', undefined, session));
+    if (d.ownerType && isAdmin) {
       // For ADMIN ownership default to the acting admin when no specific user is
       // given (the UI has no admin picker), so a transfer to "Admin (me)" works
       // even if the client didn't send an id.

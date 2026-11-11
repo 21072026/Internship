@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
+import { requirePermission, type Permission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { writeSetting } from '@/lib/settingsWrite';
@@ -16,17 +15,17 @@ import { SCREENING_ITEMS, parseRequired, serializeRequired } from '@/lib/mentorS
 // Empty = none required = approval as before. Enforced in the approve handler,
 // never by a disabled button. ADMIN only, checked here.
 
-async function guard() {
-  const session = await getServerSession(authOptions);
-  if (!session) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) };
-  if (session.user.role !== 'ADMIN') return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) };
+async function guard(request: Request, permission: Permission) {
+  const gate = await requirePermission(permission, { request });
+  if ('error' in gate) return { error: gate.error };
+  const { session } = gate;
   const capGate = await requireCapability(session.user.orgId, 'mentorship');
   if (capGate) return { error: capGate };
   return { session, orgId: await settingsOrgOf(session) };
 }
 
-export async function GET() {
-  const g = await guard();
+export async function GET(request: Request) {
+  const g = await guard(request, 'org.settings.read');
   if ('error' in g) return g.error;
   return NextResponse.json({ required: parseRequired(await resolveSettingRaw('mentorScreeningRequired', { orgId: g.orgId })) });
 }
@@ -34,7 +33,7 @@ export async function GET() {
 const schema = z.object({ required: z.array(z.enum(SCREENING_ITEMS)).max(SCREENING_ITEMS.length) }).strict();
 
 export async function PUT(request: Request) {
-  const g = await guard();
+  const g = await guard(request, 'org.settings.write');
   if ('error' in g) return g.error;
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });

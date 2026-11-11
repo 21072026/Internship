@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { actorFromSession, can } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { requireCapability } from '@/lib/capabilityGate';
 import { inCallerTenant } from '@/lib/tenantFilter';
@@ -31,7 +32,10 @@ export async function GET(request: Request) {
       ? await prisma.mentorshipRelation.findUnique({ where: { id: relationId }, select: { id: true, orgId: true, mentorId: true, menteeId: true, cohortId: true } })
       : null;
     if (!rel || !(await inCallerTenant(rel.orgId, session.user.orgId))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    const seat = rel.mentorId === session.user.id ? 'MENTOR' : rel.menteeId === session.user.id ? 'MENTEE' : session.user.role === 'ADMIN' ? 'ADMIN' : null;
+    // Admin reach from the permission rule, not the role string (#1571).
+    const actor = await actorFromSession(session);
+    const isAdmin = !!actor && (await can(actor, 'program.read', undefined, session));
+    const seat = rel.mentorId === session.user.id ? 'MENTOR' : rel.menteeId === session.user.id ? 'MENTEE' : isAdmin ? 'ADMIN' : null;
     if (!seat) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
     const now = new Date();

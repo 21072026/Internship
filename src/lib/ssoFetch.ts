@@ -1,7 +1,8 @@
-// Outbound requests the SSO onboarding screens make on an admin's say-so
-// (#1933): fetching an IdP's metadata document by URL, and probing the entry
-// point in "Test connection". Both URLs are admin-supplied and fetched from the
-// server's network position, so every hop goes through `assertPublicHttpsUrl()`
+// Outbound requests the SSO screens make (#1933): fetching an IdP's metadata
+// document by URL, probing the entry point in "Test connection", and — since
+// #1943 — downloading the profile photo an IdP claim points at on sign-in.
+// Every URL is admin- or IdP-supplied and fetched from the server's network
+// position, so every hop goes through `assertPublicHttpsUrl()`
 // — including each redirect target, which `fetch`'s own redirect following
 // would never show us — with a short timeout and a byte cap.
 
@@ -46,14 +47,20 @@ async function guardedFetch(raw: string): Promise<Response> {
   throw new SsoFetchError('fetch_failed', `More than ${MAX_REDIRECTS} redirects`);
 }
 
-/** The body of a 2xx answer as text, refused past `maxBytes` (read incrementally). */
-export async function fetchPublicText(url: string, maxBytes: number): Promise<string> {
+/** The body of a 2xx answer as bytes, refused past `maxBytes` (read incrementally). */
+export async function fetchPublicBytes(url: string, maxBytes: number): Promise<Buffer> {
   const res = await guardedFetch(url);
-  if (!res.ok) throw new SsoFetchError('fetch_failed', `The server answered HTTP ${res.status}`);
+  if (!res.ok) {
+    await res.body?.cancel().catch(() => {});
+    throw new SsoFetchError('fetch_failed', `The server answered HTTP ${res.status}`);
+  }
   const declared = Number(res.headers.get('content-length') ?? '0');
-  if (declared > maxBytes) throw new SsoFetchError('too_large', 'The document is too large');
+  if (declared > maxBytes) {
+    await res.body?.cancel().catch(() => {});
+    throw new SsoFetchError('too_large', 'The document is too large');
+  }
   const reader = res.body?.getReader();
-  if (!reader) return '';
+  if (!reader) return Buffer.alloc(0);
   const chunks: Uint8Array[] = [];
   let size = 0;
   for (;;) {
@@ -66,7 +73,12 @@ export async function fetchPublicText(url: string, maxBytes: number): Promise<st
     }
     chunks.push(value);
   }
-  return Buffer.concat(chunks).toString('utf8');
+  return Buffer.concat(chunks);
+}
+
+/** The body of a 2xx answer as text, refused past `maxBytes`. */
+export async function fetchPublicText(url: string, maxBytes: number): Promise<string> {
+  return (await fetchPublicBytes(url, maxBytes)).toString('utf8');
 }
 
 /** The HTTP status an entry point answers with (body discarded). */

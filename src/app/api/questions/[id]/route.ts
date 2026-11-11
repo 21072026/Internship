@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { notify } from '@/lib/notify';
@@ -26,7 +27,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!q || !(await inCallerTenant(q.relation.orgId, resolveOrgId(session)))) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
-  const allowed = session.user.role === 'ADMIN' || q.relation.mentorId === session.user.id;
+  // "Admin" is the permission layer's answer (#1571), asked only for a non-mentor.
+  const allowed =
+    q.relation.mentorId === session.user.id ||
+    (await (async () => {
+      const actor = await actorFromSession(session);
+      return !!actor && (await can(actor, 'relation.write', undefined, session));
+    })());
   if (!allowed) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const parsed = schema.safeParse(await request.json());

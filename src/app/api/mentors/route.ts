@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -10,6 +9,7 @@ import { applyScanCap, matchesTextFilters, pageSlice, toStringArray } from '@/li
 import { skillTermWhere } from '@/lib/skillFilter';
 import type { Prisma } from '@prisma/client';
 import { requireCapability } from '@/lib/capabilityGate';
+import { notBenched } from '@/lib/participantState';
 
 // Upper bound on the rows the in-memory filter branch is allowed to scan
 // (#1820). The skill filter is SQL now (`skillTermWhere`, over the taxonomy
@@ -27,15 +27,13 @@ const JS_FILTER_SCAN_CAP = 2000;
 // consent removes the card immediately. The select below is a strict
 // allowlist: email/phone/whatsapp are never read, so they can never leak.
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   // Fail-closed role gate (#831): only the roles that are explicitly part of
   // the mentee↔mentor matching flow may browse the directory. COMPANY and
   // SOURCE (and anything added later) get 403 — they have their own,
   // separately-consented surfaces (e.g. the talent pool).
-  if (!['MENTEE', 'MENTOR', 'ADMIN'].includes(session.user.role)) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-  }
+  const gate = await requireRoleOrPermission(['MENTEE', 'MENTOR'], 'user.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // The directory belongs to the `mentorship` module, like its page (/mentors).
   const denied = await requireCapability(resolveOrgId(session), 'mentorship');
   if (denied) return denied;
@@ -64,6 +62,8 @@ export async function GET(request: Request) {
     const where: Prisma.UserWhereInput = {
       role: 'MENTOR',
       isActive: true,
+      // A benched mentor (#1778) is not offered to a mentee choosing one.
+      ...notBenched(),
       publicProfile: true,
       orgId: resolveOrgId(session),
       consents: { some: { type: 'MENTOR_DIRECTORY_VISIBILITY', grantedAt: { not: null }, revokedAt: null } },

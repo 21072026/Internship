@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { forgetCompanyContact } from '@/lib/accountErasure';
@@ -11,6 +9,7 @@ import { normalizeContactEmail } from '@/lib/companyContactErasure';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { requirePermission } from '@/lib/authz';
 
 // POST — forget a company contact who never had an account (#2559, DSGVO
 // Art. 17). A web enquiry's sender or an imported account's named person
@@ -30,10 +29,9 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('company.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   if (session.user.impersonatorId) {
     return NextResponse.json({ error: 'Cannot erase contacts while impersonating' }, { status: 400 });
   }

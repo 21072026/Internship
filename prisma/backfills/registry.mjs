@@ -151,4 +151,25 @@ export const BACKFILLS = [
     optional: true,
     why: 'A derived convenience column: a failed fill leaves relations exactly as before #1640, so it must not block a deploy.',
   },
+  // Google calendar connections and event links into the provider-neutral
+  // tables (#1989, expand). ONCE: after the switch a disconnect deletes only the
+  // new row, so re-copying the old one every deploy would reconnect the person.
+  // Insert-only and never touches the old tables, which stay as the rollback.
+  {
+    id: '0035-calendar-connections',
+    script: 'prisma/backfill-calendar-connections.mjs',
+    once: true,
+    optional: true,
+    why: 'Copies into new tables only; a failure leaves the old Google tables intact and is visible in the ledger, and the code reads the new tables, so a failed copy shows as "not connected" (reconnect repairs it) rather than a broken deploy.',
+  },
+  // The scalar pair's mirror seats for every relation (#1804). Insert-only
+  // with skipDuplicates on (relationId, userId): a re-run writes nothing, and
+  // a seat that exists is never touched. Nothing reads them for access — the
+  // scalars stay the pair's truth — so a failed run changes no behaviour.
+  { id: '0036-relation-participants', script: 'prisma/backfill-relation-participants.mjs', args: ['--apply'], once: false, optional: true, why: 'New in #1804; the mirror seats grant nothing, so a failure is visible in the ledger and harmless.' },
+  // Company team seats (#1870): one OWNER membership per existing COMPANY
+  // login — the flat permission set every login already had. Only ever adds
+  // rows (skipDuplicates), so a re-run reports created=0. AFTER the push: it
+  // writes the CompanyMembership table the push creates.
+  { id: '0037-company-memberships', script: 'scripts/backfill-company-memberships.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
 ];

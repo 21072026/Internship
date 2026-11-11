@@ -87,7 +87,7 @@ test.describe('org attributes', () => {
     // A mentor is refused.
     const mentorPage = await browser.newPage();
     await signInAndSettle(mentorPage, mentor, PW, '/mentor');
-    expect((await mentorPage.request.get('/api/admin/attributes')).status()).toBe(401);
+    expect((await mentorPage.request.get('/api/admin/attributes')).status()).toBe(403);
     await mentorPage.close();
 
     // A subscription slices by department: deleting asks first, then degrades it.

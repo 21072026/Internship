@@ -1,0 +1,176 @@
+import { test, expect } from '@playwright/test';
+import { prisma } from './helpers/db';
+import { MARKETING_HOST, asHost } from './helpers/auth';
+
+// The public partner-programme page (docs/affiliate-module.md, #3360).
+//
+// What this pins:
+//   1. on the marketing host the org that claims the host (`publicHost`) shows its
+//      own copy, a commission table built from ITS plan, and doors that lead to
+//      the application form, the partner portal, the product's sign-up page, a
+//      phone call, an e-mail and this host's legal pages;
+//   2. no copy saved yet → 404, never a half-empty page; the internship host → 404.
+//
+// Serial and host-borrowing, like e2e/marketing-demo-form.spec.ts: `publicHost`
+// is unique, so whoever held MARKETING_HOST before gets it back in afterAll.
+// SYNTHETIC ONLY.
+
+test.describe.configure({ mode: 'serial' });
+
+const stamp = `${Date.now()}-${Math.round(performance.now())}`;
+let orgId = '';
+let previousHolderId: string | null = null;
+
+const PLAN = {
+  currency: 'EUR',
+  tiers: [
+    { upToMinor: 2_000, commissionMinor: 5_000 },
+    { upToMinor: 5_000, commissionMinor: 10_000 },
+  ],
+  topCommissionMinor: 15_000,
+  percentBps: 1_000,
+  switchAtCustomer: 3,
+  boundaryCustomer: 'PERCENT',
+  windowMonths: 6,
+  payoutDays: 30,
+  afterNotice: 'RUN_OUT',
+};
+const LANDING = {
+  copy: {
+    en: {
+      heroTitle: 'Acme Sales partner programme',
+      intro: 'Synthetic introduction for a test run.',
+      steps: [{ title: 'Apply', text: 'Tell us about you.' }],
+      bullets: ['Free to join'],
+    },
+  },
+  phone: '+49 30 1234567',
+  email: 'partners@acme.example',
+  productSignupUrl: 'https://app.acme.example/register',
+};
+
+test.beforeAll(async () => {
+  const holder = await prisma.organization.findUnique({ where: { publicHost: MARKETING_HOST }, select: { id: true, slug: true } });
+  if (holder && !holder.slug.startsWith('aff-public-')) previousHolderId = holder.id;
+  if (holder) await prisma.organization.update({ where: { id: holder.id }, data: { publicHost: null } });
+  orgId = (
+    await prisma.organization.create({
+      data: { name: `Acme Sales ${stamp}`, slug: `aff-public-${stamp}`, vertical: 'MARKETING', publicHost: MARKETING_HOST },
+    })
+  ).id;
+  await prisma.affiliateProgramSettings.create({ data: { orgId, plan: PLAN, planVersion: 1, planEffectiveAt: new Date() } });
+});
+
+test.afterAll(async () => {
+  if (orgId) {
+    await prisma.affiliateProgramSettings.deleteMany({ where: { orgId } }).catch(() => {});
+    await prisma.organization.deleteMany({ where: { id: orgId } }).catch(() => {});
+  }
+  if (previousHolderId) {
+    await prisma.organization
+      .update({ where: { id: previousHolderId }, data: { publicHost: MARKETING_HOST } })
+      .catch((e) => console.error(`affiliate-public-page: could not restore publicHost ${MARKETING_HOST}:`, e));
+  }
+  await prisma.$disconnect();
+});
+
+test('without saved copy the page does not exist', async ({ page }) => {
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  expect((await page.goto('/partner'))?.status()).toBe(404);
+});
+
+test('the marketing host shows the org’s copy, a table from its plan and every door', async ({ page }) => {
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { landing: LANDING } });
+  await page.context().setExtraHTTPHeaders({ ...asHost(MARKETING_HOST), 'accept-language': 'en' });
+  const res = await page.goto('/partner');
+  expect(res?.status()).toBe(200);
+
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Acme Sales partner programme');
+  await expect(page.getByText('Synthetic introduction for a test run.')).toBeVisible();
+
+  const rows = page.getByTestId('partner-commission-table').locator('tbody tr');
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(0)).toContainText('20');
+  await expect(rows.nth(0)).toContainText('50');
+  await expect(rows.nth(2)).toContainText('150');
+  await expect(page.getByTestId('partner-percent')).toContainText('3');
+  // The plan's boundary customer earns the percent (PERCENT): no "still earns its one-off commission" clause.
+  await expect(page.getByTestId('partner-percent')).not.toContainText('one-off');
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { plan: { ...PLAN, boundaryCustomer: 'TIER' } } });
+  await page.reload();
+  await expect(page.getByTestId('partner-percent')).toContainText('one-off commission from the table');
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { plan: PLAN } });
+
+  await expect(page.getByTestId('partner-apply')).toHaveAttribute('href', '/partner/apply');
+  await expect(page.getByTestId('partner-cta-apply')).toHaveAttribute('href', '/partner/apply');
+  await expect(page.getByTestId('partner-portal')).toHaveAttribute('href', /\/auth\/signin\?callbackUrl=%2Faffiliate$/);
+  await expect(page.getByTestId('partner-product-signup')).toHaveAttribute('href', 'https://app.acme.example/register');
+  await expect(page.getByTestId('partner-call')).toHaveAttribute('href', 'tel:+49301234567');
+  await expect(page.getByTestId('partner-contact-mail')).toHaveAttribute('href', 'mailto:partners@acme.example');
+  for (const href of ['/imprint', '/privacy', '/terms']) await expect(page.locator(`footer a[href="${href}"]`)).toHaveCount(1);
+  // The organisation's own legal pages replace this host's (#3363); an empty one keeps the fallback.
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { landing: { ...LANDING, imprintUrl: 'https://acme.example/impressum', termsUrl: 'https://acme.example/agb' } } });
+  await page.reload();
+  await expect(page.getByTestId('partner-legal-imprintUrl')).toHaveAttribute('href', 'https://acme.example/impressum');
+  await expect(page.getByTestId('partner-legal-privacyUrl')).toHaveAttribute('href', '/privacy');
+  await expect(page.getByTestId('partner-legal-termsUrl')).toHaveAttribute('href', 'https://acme.example/agb');
+  await expect(page.getByTestId('partner-legal-contract')).toHaveCount(0); // no partner contract in this programme
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { landing: LANDING } });
+  // A visitor can pick the language of the page (and of the form behind it).
+  await expect(page.getByTestId('language-switcher')).toBeVisible();
+});
+
+test('the figure cards show live counts, a typed figure and nothing for a hidden card', async ({ page }) => {
+  // #3364. Ten active partners (the live threshold), one suspended, two linked
+  // customers — the live cards must count only the active partners. Seeded
+  // BEFORE the first read: the counts are cached for an hour per organisation.
+  const partners = await Promise.all(
+    Array.from({ length: 11 }, (_, i) =>
+      prisma.affiliatePartner.create({
+        data: { orgId, code: `olabel-${stamp}-${i}`, displayName: `Synthetic Partner ${i}`, ...(i === 10 ? { status: 'SUSPENDED' } : {}) },
+      }),
+    ),
+  );
+  await prisma.affiliateCustomer.createMany({
+    data: [0, 1].map((i) => ({ orgId, partnerId: partners[0].id, externalRef: `cust-${stamp}-${i}` })),
+  });
+  await prisma.affiliateProgramSettings.update({
+    where: { orgId },
+    data: { landing: { ...LANDING, stats: { activePartners: { mode: 'live' }, customers: { mode: 'live' }, satisfaction: { mode: 'manual', value: '96 %' } } } },
+  });
+  await page.context().setExtraHTTPHeaders({ ...asHost(MARKETING_HOST), 'accept-language': 'en' });
+  expect((await page.goto('/partner'))?.status()).toBe(200);
+  await expect(page.getByTestId('partner-stat-activePartners')).toContainText('10');
+  await expect(page.getByTestId('partner-stat-activePartners')).toContainText('Active partners');
+  await expect(page.getByTestId('partner-stat-customers')).toContainText('2');
+  await expect(page.getByTestId('partner-stat-satisfaction')).toContainText('96 %');
+
+  // A hidden card is not on the page at all.
+  await prisma.affiliateProgramSettings.update({
+    where: { orgId },
+    data: { landing: { ...LANDING, stats: { activePartners: { mode: 'live' }, customers: { mode: 'hidden' }, satisfaction: { mode: 'manual', value: '96 %' } } } },
+  });
+  await page.reload();
+  await expect(page.getByTestId('partner-stat-activePartners')).toBeVisible();
+  await expect(page.getByTestId('partner-stat-customers')).toHaveCount(0);
+
+  await prisma.affiliateCustomer.deleteMany({ where: { orgId } });
+  await prisma.affiliatePartner.deleteMany({ where: { orgId } });
+});
+
+test('the internship host has no partner page', async ({ page }) => {
+  expect((await page.goto('/partner'))?.status()).toBe(404);
+});
+
+test('a partner link sends the visitor to the sign-up page with the code only (#3365)', async ({ request }) => {
+  const get = (q: string) => request.get(`/partner${q}`, { headers: asHost(MARKETING_HOST), maxRedirects: 0 });
+  const res = await get('?ref=demo-1&next=https://evil.example');
+  expect(res.status()).toBeGreaterThanOrEqual(300);
+  expect(res.status()).toBeLessThan(400);
+  expect(res.headers()['location']).toBe('https://app.acme.example/register?ref=demo-1');
+  // Not a code: the page itself, never a redirect.
+  for (const q of ['?ref=https://evil.example', '?ref=', `?ref=${'x'.repeat(101)}`]) expect((await get(q)).status(), q).toBe(200);
+  // No sign-up page configured: the page itself.
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { landing: { ...LANDING, productSignupUrl: null } } });
+  expect((await get('?ref=demo-1')).status()).toBe(200);
+});

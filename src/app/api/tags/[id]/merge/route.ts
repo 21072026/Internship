@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { z } from 'zod';
 
@@ -25,13 +24,15 @@ const schema = z.object({ into: z.string().min(1) });
  * Admin-only, like delete: it rewrites the org's whole vocabulary at once.
  */
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   return await withTenantScope(session, async () => {
     const { id } = await params;
-    const orgId = resolveOrgId(session);
+    // Never `undefined` (#3603): an org-less session (a token minted before the
+    // backfill) is the default org's — `orgId ?? undefined` dropped the filter
+    // and let it act on every org's tags. Tag.orgId is required, so strict.
+    const orgId = await settingsOrgOf(session);
 
     const parsed = schema.safeParse(await request.json().catch(() => ({})));
     if (!parsed.success) {
@@ -44,8 +45,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // Both ends scoped to the caller's org: a merge that could name a foreign
     // id would be a way to move markings between tenants.
     const [source, target] = await Promise.all([
-      prisma.tag.findFirst({ where: { id, orgId: orgId ?? undefined }, select: { id: true, name: true } }),
-      prisma.tag.findFirst({ where: { id: parsed.data.into, orgId: orgId ?? undefined }, select: { id: true, name: true } }),
+      prisma.tag.findFirst({ where: { id, orgId }, select: { id: true, name: true } }),
+      prisma.tag.findFirst({ where: { id: parsed.data.into, orgId }, select: { id: true, name: true } }),
     ]);
     if (!source || !target) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 

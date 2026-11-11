@@ -2,7 +2,7 @@ import { type Locale } from '@/i18n/config';
 import { getDictionary, type Dictionary } from '@/i18n/dictionaries';
 
 /**
- * The built-in survey instrument library (#1883) — six ready instruments in
+ * The built-in survey instrument library (#1883) — ready instruments in
  * EN/TR/DE.
  *
  * WHY THE CONTENT SHIPS IN THE REPO
@@ -57,7 +57,8 @@ export type SurveyTemplateKey =
   | 'pulse'
   | 'nps_only'
   | 'post_meeting'
-  | 'outcome_destination';
+  | 'outcome_destination'
+  | 'relation_close';
 
 /** A dictionary selector — see "HOW THE WORDING IS RESOLVED" above. */
 type Text = (d: Dictionary) => string;
@@ -316,6 +317,26 @@ export const SURVEY_TEMPLATES: SurveyTemplate[] = [
         label: (d) => d.surveyTemplates.outcomeDestination.q.consent,
         required: true,
       },
+    ],
+  },
+  {
+    // The close-loop survey (#1795): both sides of a pairing, once it ended —
+    // run by a DAYS_AFTER_END campaign at day 0, set up from the closure report
+    // (src/lib/closureReport.ts). CONFIDENTIAL: a participant never reads the
+    // other side's answer (an honest "this did not work" stays honest only if
+    // it is not read back by the person it is about); admins read aggregates.
+    // Three questions plus the NPS item — the cap above — so "would you
+    // recommend it" is the shipped NPS question rather than a fourth item.
+    key: 'relation_close',
+    audience: 'BOTH',
+    anonymityDefault: 'CONFIDENTIAL',
+    title: (d) => d.surveyTemplates.relationClose.title,
+    description: (d) => d.surveyTemplates.relationClose.description,
+    questions: [
+      { key: 'overall', type: 'SCALE', label: (d) => d.surveyTemplates.relationClose.q.overall, ...FIVE_POINT, required: true },
+      { key: 'goals_met', type: 'SCALE', label: (d) => d.surveyTemplates.relationClose.q.goalsMet, ...FIVE_POINT, required: true },
+      NPS_ITEM,
+      { key: 'comment', type: 'TEXT', label: (d) => d.surveyTemplates.relationClose.q.comment, required: false },
     ],
   },
 ];

@@ -1,22 +1,20 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
 import { requireCapability } from '@/lib/capabilityGate';
 import { z } from 'zod';
-import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
 import { addAlias } from '@/lib/skillCuration';
+import { requirePermission } from '@/lib/authz';
 
 // Add a spelling to a skill (#1817). A spelling another skill already owns —
 // as its key or an alias — is refused (409 duplicate): that is a merge.
 const bodySchema = z.object({ alias: z.string().min(1).max(200) });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   // The skill vocabulary feeds mentor and requisition matching — an internship module.
   const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
   if (capabilityRefusal) return capabilityRefusal;

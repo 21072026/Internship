@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -10,6 +8,7 @@ import { createSurvey, createSurveySchema } from '@/lib/surveys';
 import { allowedAudiences, surveyInputFromTemplate } from '@/lib/surveyTemplateInput';
 import { listSurveyTemplates, renderSurveyTemplate } from '@/lib/surveyTemplates';
 import { getLocale } from '@/i18n/server';
+import { requirePermission } from '@/lib/authz';
 
 // The survey engine's admin surface (#1879): list and create. A survey is
 // created either from a built-in instrument (#1877 — `{ templateKey, audience,
@@ -25,10 +24,10 @@ const fromTemplateSchema = z
   })
   .strict();
 
-export async function GET() {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+export async function GET(request: Request) {
+  const gate = await requirePermission('content.read', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const locale = await getLocale();
   // The picker's choices, resolved here so the browser never ships the three
   // dictionaries the template selectors read.
@@ -47,9 +46,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (session.user.role !== 'ADMIN') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const gate = await requirePermission('content.write', { request });
+  if ('error' in gate) return gate.error;
+  const { session } = gate;
   const body = await request.json().catch(() => null);
   let input: unknown = body;
   if (body && typeof body === 'object' && !('questions' in body)) {

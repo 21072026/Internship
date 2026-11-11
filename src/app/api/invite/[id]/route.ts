@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
+import { getServerSession, type Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { actorFromSession, can } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { sendInvitationEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
@@ -16,13 +17,16 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 // guess or be handed — so the lookup is narrowed to the caller's own tenant BY
 // HAND (`tenantWhere`, src/lib/tenantFilter.ts): `withTenantScope` (#1559) is a
 // passthrough with MT_ENFORCE_ISOLATION off, which is every deployment, and
-// `mayManage` only looks at the role. A foreign invitation therefore reads as
+// `mayManage` does not look at the tenant. A foreign invitation therefore reads as
 // "not found" (404) instead of being resent, extended or cancelled. A missing
 // one reads the same, so the answer says nothing about another tenant's ids.
-const mayManage = (
-  session: { user: { id: string; role: string } },
-  invite: { invitedById: string | null }
-) => session.user.role === 'ADMIN' || invite.invitedById === session.user.id;
+// "Admin" is the permission layer's `org.invite` (#1571), asked only for an
+// invitation the caller did not send.
+const mayManage = async (session: Session, invite: { invitedById: string | null }) => {
+  if (invite.invitedById === session.user.id) return true;
+  const actor = await actorFromSession(session);
+  return !!actor && (await can(actor, 'org.invite', undefined, session));
+};
 
 // POST — resend an invitation. Re-emails the link; if the token has expired it
 // is extended by 7 days. Used (accepted) invitations cannot be resent. For an
@@ -37,7 +41,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
 
     const invite = await prisma.invitationToken.findFirst({ where: withinTenant({ id }, await tenantWhere(session)) });
     if (!invite) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (!mayManage(session, invite)) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    if (!(await mayManage(session, invite))) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     if (invite.used) return NextResponse.json({ error: 'This invitation was already accepted' }, { status: 409 });
     // A revoked invitation (#2071) is unusable: extending its expiry or re-mailing
     // its link would hand out a token registration is going to refuse.
@@ -90,7 +94,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
       select: { invitedById: true },
     });
     if (!invite) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-    if (!mayManage(session, invite)) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+    if (!(await mayManage(session, invite))) return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
     await prisma.invitationToken.delete({ where: { id } }).catch(() => null);
     return NextResponse.json({ ok: true });
   });

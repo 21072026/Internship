@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
+import { TEXT_LIMITS } from '@/lib/textLimits';
 import { scanMessageForSafeguarding } from '@/lib/safeguardingScan';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { z } from 'zod';
-import { getThreadIfAllowed, otherParticipant } from '@/lib/messaging';
+import { getThreadIfAllowed, otherParticipant, threadRecipients } from '@/lib/messaging';
 import {
   getConversationIfAllowed,
   otherConversationParticipants,
@@ -18,10 +19,10 @@ import {
 } from '@/lib/conversations';
 import { markThreadRead } from '@/lib/threadRead';
 import { publishRealtime } from '@/lib/realtimeBus';
-import { sendNewMessagePush } from '@/lib/messagePush';
+import { notifyEvent } from '@/lib/notifications/router';
 import { loadProjectTeam } from '@/lib/projectTeam';
 import { notify } from '@/lib/notify';
-import { replyAddress } from '@/lib/replyToken';
+import { conversationReplyAddress, replyAddress } from '@/lib/replyToken';
 import { reactionLinksHtml, markReadUrl } from '@/lib/emailActionToken';
 import { sendEmail, appUrlFor } from '@/services/emailService';
 import { getOrgBranding } from '@/lib/orgBranding';
@@ -37,7 +38,7 @@ import { withRequestScope } from '@/lib/requestContext';
 import { accountState, type AccountState } from '@/lib/accountState';
 import { decodePageCursor, olderThan, parsePageLimit, toPage } from '@/lib/messagePage';
 
-const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true } as const;
+const ATTACHMENT_SELECT = { id: true, filename: true, contentType: true, size: true, altText: true } as const;
 
 // GET ?relationId= — messages in a thread (participants/admin only).
 //
@@ -268,6 +269,9 @@ async function handlePost(request: Request) {
     let conversationId = '';
     let body: string;
     let files: File[] = [];
+    // One `altText` field per `file` field, in the same order (#2864); '' when
+    // the sender gave none or the file is not an image.
+    let altTexts: (string | null)[] = [];
 
     if (contentType.includes('multipart/form-data')) {
       const form = await request.formData();
@@ -275,7 +279,17 @@ async function handlePost(request: Request) {
       conversationId = String(form.get('conversationId') || '');
       body = String(form.get('body') || '');
       // Accept multiple files (pasted images + picked files). Cap the count.
-      files = form.getAll('file').filter((f): f is File => f instanceof File && f.size > 0).slice(0, 10);
+      const rawAlts = form.getAll('altText').map((v) => (typeof v === 'string' ? v : ''));
+      const paired = form
+        .getAll('file')
+        .map((f, i) => ({ f, alt: rawAlts[i] ?? '' }))
+        .filter((p): p is { f: File; alt: string } => p.f instanceof File && p.f.size > 0)
+        .slice(0, 10);
+      files = paired.map((p) => p.f);
+      altTexts = paired.map((p) => (p.f.type.startsWith('image/') && p.alt.trim() ? p.alt.trim() : null));
+      if (altTexts.some((a) => a !== null && a.length > TEXT_LIMITS.imageAltText)) {
+        return NextResponse.json({ error: 'Validation failed', code: 'too_long' }, { status: 400 });
+      }
       if ((!relationId && !conversationId) || (!body.trim() && files.length === 0) || body.length > 5000) {
         return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
       }
@@ -310,7 +324,7 @@ async function handlePost(request: Request) {
     // Read each file once into a Buffer, reused for both DB storage and the
     // recipient's email attachments.
     const fileBufs = await Promise.all(
-      files.map(async (f) => ({ filename: f.name, contentType: f.type, size: f.size, data: Buffer.from(await f.arrayBuffer()) })),
+      files.map(async (f, i) => ({ filename: f.name, contentType: f.type, size: f.size, data: Buffer.from(await f.arrayBuffer()), altText: altTexts[i] ?? null })),
     );
     // The MIME check above trusts a client-written header; now that the bytes
     // are in hand, check they agree (#888).
@@ -338,7 +352,7 @@ async function handlePost(request: Request) {
         body,
         channel: 'IN_APP',
         ...(fileBufs.length
-          ? { attachments: { create: fileBufs.map((fb) => ({ filename: fb.filename, contentType: fb.contentType, size: fb.size, data: fb.data })) } }
+          ? { attachments: { create: fileBufs.map((fb) => ({ filename: fb.filename, contentType: fb.contentType, size: fb.size, data: fb.data, altText: fb.altText })) } }
           : {}),
       },
       include: { attachments: { select: ATTACHMENT_SELECT } },
@@ -353,7 +367,7 @@ async function handlePost(request: Request) {
     // thread, or every other participant of a conversation. An admin posting
     // into someone else's thread isn't a recipient of their own message.
     const recipients = (
-      rel ? [otherParticipant(rel, session.user.id)] : await otherConversationParticipants(conversation!, session.user.id)
+      rel ? await threadRecipients(rel, session.user.id) : await otherConversationParticipants(conversation!, session.user.id)
     ).filter((id) => id && id !== session.user.id);
     // Always the thread the recipient will actually read it in.
     const threadConversationId = relConversationId ?? conversation?.id ?? null;
@@ -385,14 +399,24 @@ async function handlePost(request: Request) {
     // recipient inside the loop would add that latency N times to a group
     // chat's POST. Still awaited before responding, so a slow push service
     // cannot log after the response is gone; never able to fail the send,
-    // because sendNewMessagePush swallows everything.
+    // because notifyEvent() never throws. Through the router (#1715): the push
+    // is a ledger row (a muted category or the matrix is a recorded SKIPPED,
+    // a phone-less recipient is `no_device`), keyed on the message id so a
+    // retried POST never buzzes twice.
     // Whoever muted this thread (#1609) is not interrupted by it at all: no
     // push, no e-mail mirror, no bell. The realtime publish above still went to
     // them — it only refreshes a tab that already has the thread open.
     const muted = await mutedParticipants(threadConversationId, recipients);
+    // The same thread link the bell row carries (`link` above), built by the router.
+    const threadIds = threadConversationId ? { conversationId: threadConversationId } : { relationId: rel!.id };
+    const pushOpts = { channels: ['push'] as const, preview: body, dedupeKey: `message:${message.id}` };
     const pushes = recipients
       .filter((recipient) => !muted.has(recipient))
-      .map((recipient) => sendNewMessagePush(recipient, { senderName, link, preview: body }));
+      .map((recipient) =>
+        senderName
+          ? notifyEvent(recipient, 'message.new', { from: senderName, ...threadIds }, pushOpts)
+          : notifyEvent(recipient, 'message.newGeneric', { ...threadIds }, pushOpts),
+      );
 
 
     for (const recipient of recipients) {
@@ -447,8 +471,14 @@ async function handlePost(request: Request) {
               `<a href="${markReadUrl(replyRelationId, recipient, origin)}" style="color:#6b7280;">Mark this conversation as read</a>`
             }</p>`
           : '';
-        // Only invite a reply by e-mail when a reply address exists (#2217).
-        const replyTo = replyRelationId ? replyAddress(replyRelationId, recipient) : undefined;
+        // Only invite a reply by e-mail when a reply address exists (#2217). A
+        // thread with no mentorship behind it (a project group chat, a project
+        // DM) is answered through a conversation-scoped token (#1713).
+        const replyTo = replyRelationId
+          ? replyAddress(replyRelationId, recipient)
+          : threadConversationId
+            ? conversationReplyAddress(threadConversationId, recipient)
+            : undefined;
         sendEmail({
           to: rcpt.email,
           category: 'message',
@@ -463,8 +493,6 @@ async function handlePost(request: Request) {
           fromName: brand?.name,
           subject: `New message from ${sender}`,
           html: `<p>${sender} sent you a message:</p>${safe.trim() ? `<blockquote style="border-left:3px solid #ccc;padding-left:12px;color:#444">${safe.replace(/\n/g, '<br>')}</blockquote>` : ''}${attachCount ? `<p>📎 ${attachCount} attachment(s) included.</p>` : ''}<p>${replyTo ? 'Reply to this email or open the conversation in the app.' : 'Open the conversation in the app to reply.'}</p>${actions}`,
-          // Project DMs with no mentorship behind them get the same notification
-          // without a Reply-To (see replyRelationId above).
           ...(replyTo ? { replyTo } : {}),
           // Mirror the attachments (incl. pasted images) into the email too.
           attachments: fileBufs.map((fb) => ({ filename: fb.filename, content: fb.data, contentType: fb.contentType })),

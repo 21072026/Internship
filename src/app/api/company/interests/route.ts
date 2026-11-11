@@ -1,10 +1,12 @@
 import { NextResponse } from 'next/server';
+import { requireCompanySeat } from '@/lib/companySeatGate';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { logActivity } from '@/lib/activity';
+import { emit } from '@/lib/events/emit';
 import { resolveOrgId } from '@/lib/orgScope';
 import { companyInterestScopeKey } from '@/lib/companyInterests';
 import { notify, notifyIfAllowed } from '@/lib/notify';
@@ -67,6 +69,9 @@ export async function POST(request: Request) {
   if (capGate) return capGate;
   if (session.user.role !== 'COMPANY') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   if (!session.user.companyId) return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
+  // Seats (#1870): the route refuses, never a hidden button.
+  const seatGate = await requireCompanySeat(session, 'application.stage.write');
+  if (seatGate) return seatGate;
   const companyId = session.user.companyId;
   const orgId = resolveOrgId(session);
   if (!orgId) return NextResponse.json({ error: 'Organization is required', code: 'organization_required' }, { status: 403 });
@@ -123,6 +128,12 @@ export async function POST(request: Request) {
     PASS: 'company_interest.passed',
   };
   if (statusChanged) {
+    // The note stays off the bus (#1998): the company's own words.
+    await emit(
+      'company_interest.changed',
+      { interestId: interest.id, companyId, menteeId, requisitionId: requisitionId ?? null, from: existing?.status ?? null, to: status },
+      { orgId, actor: { id: session.user.id, type: 'user' } },
+    );
     const mentee = relation.mentee.fullName;
     await notify(
       relation.mentorId,

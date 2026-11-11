@@ -18,6 +18,10 @@ const PLATFORM: Record<string, JobName> = {
   'weekly-reports': 'reports.weeklyReportReminders',
   'email-health': 'email.healthCheck',
   'stage-deadlines': 'reminders.stageDeadline',
+  // One nudge on day 7, expiry on day 14 (#1775).
+  'mentorship-requests': 'requests.expirySweep',
+  // The one ending-soon nudge per agreed end date (#1786).
+  'relation-ending': 'reminders.relationEnding',
   'meeting-logs': 'meetings.autoLog',
   retention: 'reminders.retentionReconsent',
   newsletters: 'newsletter.dispatch',
@@ -41,6 +45,7 @@ const OWN_ORG: Record<string, JobName> = {
   'program-journey': 'programJourney.run',
   surveys: 'surveys.campaigns',
   'report-subscriptions': 'reports.subscriptions',
+  'affiliate-window-notices': 'affiliate.windowNotices',
 };
 
 export const ENQUEUEABLE_KEYS: readonly string[] = [...Object.keys(PLATFORM), ...Object.keys(OWN_ORG)].sort();

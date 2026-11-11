@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolvePipelineStages, outcomeStageKeysFrom } from '@/lib/pipelineStages';
@@ -29,6 +28,9 @@ import { getMentorAvailability } from '@/lib/mentorAvailability';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { tenantWhere, withinTenant, type TenantWhere } from '@/lib/tenantFilter';
+import { relationProgramWhere, resolveProgramFilter } from '@/lib/programFilter';
+import { programRelationWhere } from '@/lib/programScopeRule';
+import { funnelStartedAt } from '@/lib/placement';
 
 // Hiring-funnel KPIs (#815): the two numbers HR reports upward — stage-to-stage
 // conversion and time-to-hire — plus mentor capacity, all from the StatusChange
@@ -88,6 +90,7 @@ const RELATION_SELECT = {
   lifecycleState: true,
   pipelineStatus: true,
   startDate: true,
+  funnelEnteredAt: true,
   trialStartedAt: true,
   trialEndsAt: true,
   mentee: { select: { sourceId: true, role: true } },
@@ -105,7 +108,8 @@ function relationJourney(r: RelationRow): Journey {
     // Where the journey began: the stage the first recorded move came FROM,
     // else — for a relation that never moved — where it sits now.
     startStatus: r.statusChanges[0]?.fromStatus ?? r.pipelineStatus,
-    startedAt: r.startDate.getTime(),
+    // When it entered the funnel, not when the pair was made (#1505).
+    startedAt: funnelStartedAt(r).getTime(),
     changes: r.statusChanges.map((c) => ({ toStatus: c.toStatus, at: c.createdAt.getTime() })),
   };
 }
@@ -121,7 +125,7 @@ const MAX_CHAIN_ROUNDS = 20;
  * query already loaded every link, and the successor lookup would be an IN list
  * the size of the whole table.
  */
-async function loadWholeChains(relations: RelationRow[], tenant: TenantWhere): Promise<void> {
+async function loadWholeChains(relations: RelationRow[], tenant: TenantWhere, scope: Prisma.MentorshipRelationWhereInput): Promise<void> {
   const known = new Set(relations.map((r) => r.id));
   let frontier = relations;
   for (let round = 0; round < MAX_CHAIN_ROUNDS && frontier.length > 0; round++) {
@@ -132,10 +136,10 @@ async function loadWholeChains(relations: RelationRow[], tenant: TenantWhere): P
     ];
     const [parents, children] = await Promise.all([
       missingParents.length > 0
-        ? prisma.mentorshipRelation.findMany({ where: withinTenant({ id: { in: missingParents } }, tenant), select: RELATION_SELECT })
+        ? prisma.mentorshipRelation.findMany({ where: withinTenant({ id: { in: missingParents }, ...scope }, tenant), select: RELATION_SELECT })
         : Promise.resolve([] as RelationRow[]),
       prisma.mentorshipRelation.findMany({
-        where: withinTenant({ previousRelationId: { in: frontier.map((r) => r.id) } }, tenant),
+        where: withinTenant({ previousRelationId: { in: frontier.map((r) => r.id) }, ...scope }, tenant),
         select: RELATION_SELECT,
       }),
     ]);
@@ -149,10 +153,12 @@ async function loadWholeChains(relations: RelationRow[], tenant: TenantWhere): P
 }
 
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  // A list read (#1577): a PROGRAM_ADMIN with grants passes, and every
+  // relation below — the window's and the rest of their chains — is ANDed
+  // with them, an always-on programme filter. Other tiers: unchanged.
+  const gate = await requirePermission('analytics.read', { request, listing: true });
+  if ('error' in gate) return gate.error;
+  const { session, grants } = gate;
 
   return await withTenantScope(session, async () => {
     // Optional window. TWO populations come out of it, because the sections of
@@ -186,9 +192,21 @@ export async function GET(request: Request) {
     // MT_ENFORCE_ISOLATION off, so this report used to fold every org's
     // journeys into one funnel (leak audit WP3).
     const tenant = await tenantWhere(session);
+    // The programme filter (#1652): every relation this report reads — the
+    // window's and the rest of their transfer chains — narrows to one
+    // programme (or to the ones with none). Free on every plan; another org's
+    // programme id is a 404. 'all' adds nothing, so the unfiltered report is
+    // unchanged. Mentor capacity is about people, not a programme, and stays
+    // tenant-wide.
+    const program = await resolveProgramFilter(searchParams.get('program'), tenant);
+    if ('error' in program) return program.error;
+    const programWhere: Prisma.MentorshipRelationWhereInput = grants
+      ? { AND: [relationProgramWhere(program.filter), programRelationWhere(grants) as Prisma.MentorshipRelationWhereInput] }
+      : relationProgramWhere(program.filter);
     const relations = await prisma.mentorshipRelation.findMany({
       where: withinTenant(rangeOk
         ? {
+            ...programWhere,
             // Started in the window, OR started earlier and moved inside it —
             // a win IS a StatusChange, so this is exactly the superset the
             // retention cohorts need and nothing more.
@@ -202,9 +220,13 @@ export async function GET(request: Request) {
               // this a past month's trial count would change with the range
               // preset.
               { trialStartedAt: { gte: from!, lte: to! } },
+              // A journey starts at funnel entry (#1505), and a kind change
+              // stamps that with no StatusChange — without this a pair that
+              // entered the funnel inside the window would be invisible to it.
+              { funnelEnteredAt: { gte: from!, lte: to! } },
             ],
           }
-        : {}, tenant),
+        : { ...programWhere }, tenant),
       select: RELATION_SELECT,
     });
     // The rest of every transfer chain the window touched (#2556), so a chain
@@ -213,7 +235,7 @@ export async function GET(request: Request) {
     // opened after the window must not drop the win it recorded.
     // Unranged, the first query already loaded every relation of the tenant,
     // so the set is closed under both chain directions — skip the lookups.
-    if (rangeOk) await loadWholeChains(relations, tenant);
+    if (rangeOk) await loadWholeChains(relations, tenant, programWhere);
 
     const orgId = (session.user as { orgId?: string | null }).orgId ?? null;
     const [stages, capabilities] = await Promise.all([resolvePipelineStages(orgId), shellCapabilities(orgId)]);
@@ -339,7 +361,11 @@ export async function GET(request: Request) {
     // never asked; the empty list is what the screen and the Excel export
     // already read as "no capacity section". INTERNSHIP carries the module, so
     // its report is unchanged.
-    const capacity = capabilities.includes('mentorship') ? await mentorCapacity(tenant) : [];
+    // Never for a PROGRAM_ADMIN (#1577): a mentor's load counts every pairing
+    // of theirs, inside the grants or not, and a load counted inside them only
+    // would misreport who is over their ceiling. The empty list is the
+    // screen's "no capacity section".
+    const capacity = capabilities.includes('mentorship') && !grants ? await mentorCapacity(tenant) : [];
 
     return NextResponse.json({
       order,

@@ -18,6 +18,17 @@ import type { Locale } from '@/i18n/config';
 import { outcomeStageKeys, type OutcomeStageKeys } from '@/lib/pipelineStages';
 import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { attributedLeadWhere, sourceAttributionRows } from '@/lib/leadAttribution';
+import { countsAsPlacement, PLACEMENT_RELATION_WHERE } from '@/lib/placement';
+
+/**
+ * A lead's stage as the source report reads it (#1504): a finished stage whose
+ * hire is not ours (SELF_FOUND / ALREADY_EMPLOYED) is still a lead that was in
+ * the pipeline, but not a conversion — so it reads as a stage no finished set
+ * contains.
+ */
+const NOT_OUR_HIRE_STAGE = 'NOT_OUR_HIRE';
+const leadStage = (r: { pipelineStatus: string; employmentAttribution: string | null }, finished: ReadonlySet<string>) =>
+  finished.has(r.pipelineStatus) && !countsAsPlacement(r, finished) ? NOT_OUR_HIRE_STAGE : r.pipelineStatus;
 
 /**
  * The scope a computation runs in. `stageOrgId` is the org whose stage set
@@ -35,6 +46,11 @@ export interface AnalyticsScope {
    * not change; src/lib/reports/segments.ts builds it.
    */
   person?: Prisma.UserWhereInput;
+  /**
+   * A narrowing of the RELATIONS counted — the analytics programme filter
+   * (#1652). Absent everywhere else, so those numbers do not change.
+   */
+  relation?: Prisma.MentorshipRelationWhereInput;
 }
 
 export interface CohortComparisonRow {
@@ -50,11 +66,72 @@ export interface CohortComparisonRow {
   interactionsPerRelation: number;
 }
 
+const COMPARISON_RELATION_SELECT = (finishedKeys: string[]) =>
+  ({
+    pipelineStatus: true,
+    employmentAttribution: true,
+    startDate: true,
+    _count: { select: { interactions: true } },
+    statusChanges: {
+      // Time-to-hire is measured to the tenant's OWN finished stage,
+      // never to a key its pipeline may not contain.
+      where: { toStatus: { in: finishedKeys } },
+      orderBy: { createdAt: 'asc' as const },
+      take: 1,
+      select: { createdAt: true },
+    },
+  }) satisfies Prisma.MentorshipRelationSelect;
+
+type ComparisonRelation = {
+  pipelineStatus: string;
+  employmentAttribution: string | null;
+  startDate: Date;
+  _count: { interactions: number };
+  statusChanges: { createdAt: Date }[];
+};
+
+/** One comparison row over a set of relations — the programmes' and the unassigned bucket's alike. */
+function comparisonRow(
+  head: { id: string; name: string; term: string | null },
+  relations: ComparisonRelation[],
+  outcome: OutcomeStageKeys,
+): CohortComparisonRow {
+  const finished = new Set(outcome.finished);
+  const offPath = new Set(outcome.offPath);
+  const total = relations.length;
+  // Callers pass PLACEMENT relations only (#1504). A finished relation whose
+  // hire is not ours is neither a hire nor still in progress: it finished.
+  const placed = relations.filter((r) => countsAsPlacement(r, finished));
+  const hired = placed.length;
+  const dropped = relations.filter((r) => offPath.has(r.pipelineStatus)).length;
+  const inProgress = relations.filter((r) => !finished.has(r.pipelineStatus) && !offPath.has(r.pipelineStatus)).length;
+  const interactions = relations.reduce((n, r) => n + r._count.interactions, 0);
+
+  // Average days from relation start to the first transition INTO a
+  // finished stage, over relations that actually got there (with a
+  // recorded transition).
+  const hireDurations = placed
+    .map((r) => (r.statusChanges[0] ? (r.statusChanges[0].createdAt.getTime() - r.startDate.getTime()) / 86_400_000 : null))
+    .filter((d): d is number => d !== null && d >= 0);
+  const avgDaysToHired = hireDurations.length
+    ? Math.round(hireDurations.reduce((a, b) => a + b, 0) / hireDurations.length)
+    : null;
+
+  return {
+    ...head,
+    total,
+    hired,
+    dropped,
+    inProgress,
+    conversionToHired: total ? Math.round((hired / total) * 100) : 0,
+    avgDaysToHired,
+    interactionsPerRelation: total ? Math.round((interactions / total) * 10) / 10 : 0,
+  };
+}
+
 export async function cohortComparison(scope: AnalyticsScope): Promise<{ rows: CohortComparisonRow[]; outcome: OutcomeStageKeys }> {
   const { tenant } = scope;
   const outcome = await outcomeStageKeys(scope.stageOrgId, scope.locale);
-  const finished = new Set(outcome.finished);
-  const offPath = new Set(outcome.offPath);
   const cohorts = await prisma.cohort.findMany({
     where: withinTenant({}, tenant),
     orderBy: { createdAt: 'desc' },
@@ -63,55 +140,26 @@ export async function cohortComparison(scope: AnalyticsScope): Promise<{ rows: C
       name: true,
       term: true,
       relations: {
-        where: withinTenant(scope.person ? { mentee: { is: scope.person } } : {}, tenant),
-        select: {
-          pipelineStatus: true,
-          startDate: true,
-          _count: { select: { interactions: true } },
-          statusChanges: {
-            // Time-to-hire is measured to the tenant's OWN finished stage,
-            // never to a key its pipeline may not contain.
-            where: { toStatus: { in: outcome.finished } },
-            orderBy: { createdAt: 'asc' },
-            take: 1,
-            select: { createdAt: true },
-          },
-        },
+        where: withinTenant({ ...PLACEMENT_RELATION_WHERE, ...(scope.person ? { mentee: { is: scope.person } } : {}) }, tenant),
+        select: COMPARISON_RELATION_SELECT(outcome.finished),
       },
     },
   });
-
-  const rows = cohorts.map((c) => {
-    const total = c.relations.length;
-    const hired = c.relations.filter((r) => finished.has(r.pipelineStatus)).length;
-    const dropped = c.relations.filter((r) => offPath.has(r.pipelineStatus)).length;
-    const inProgress = total - hired - dropped;
-    const interactions = c.relations.reduce((n, r) => n + r._count.interactions, 0);
-
-    // Average days from relation start to the first transition INTO a
-    // finished stage, over relations that actually got there (with a
-    // recorded transition).
-    const hireDurations = c.relations
-      .map((r) => (r.statusChanges[0] ? (r.statusChanges[0].createdAt.getTime() - r.startDate.getTime()) / 86_400_000 : null))
-      .filter((d): d is number => d !== null && d >= 0);
-    const avgDaysToHired = hireDurations.length
-      ? Math.round(hireDurations.reduce((a, b) => a + b, 0) / hireDurations.length)
-      : null;
-
-    return {
-      id: c.id,
-      name: c.name,
-      term: c.term,
-      total,
-      hired,
-      dropped,
-      inProgress,
-      conversionToHired: total ? Math.round((hired / total) * 100) : 0,
-      avgDaysToHired,
-      interactionsPerRelation: total ? Math.round((interactions / total) * 10) / 10 : 0,
-    };
-  });
+  const rows = cohorts.map((c) => comparisonRow({ id: c.id, name: c.name, term: c.term }, c.relations, outcome));
   return { rows, outcome };
+}
+
+/**
+ * The relations of the tenant that belong to NO programme, as one comparison
+ * row (#1652) — so the programme rows plus this one add up to the tenant total
+ * instead of the comparison silently losing whoever was never assigned.
+ */
+export async function unassignedProgramRow(scope: AnalyticsScope, outcome: OutcomeStageKeys): Promise<CohortComparisonRow> {
+  const relations = await prisma.mentorshipRelation.findMany({
+    where: withinTenant({ cohortId: null, ...PLACEMENT_RELATION_WHERE, ...(scope.person ? { mentee: { is: scope.person } } : {}) }, scope.tenant),
+    select: COMPARISON_RELATION_SELECT(outcome.finished),
+  });
+  return comparisonRow({ id: 'unassigned', name: '', term: null }, relations, outcome);
 }
 
 export async function sourceConversion(scope: AnalyticsScope) {
@@ -125,16 +173,19 @@ export async function sourceConversion(scope: AnalyticsScope) {
       name: true,
       users: {
         where: withinTenant(scope.person ? { AND: [attributedLeadWhere(), scope.person] } : attributedLeadWhere(), tenant),
-        select: { menteeRelations: { select: { pipelineStatus: true } } },
+        // The placement funnel only (#1504): a COACHING relation says nothing
+        // about whether a source's leads get placed.
+        select: { menteeRelations: { where: PLACEMENT_RELATION_WHERE, select: { pipelineStatus: true, employmentAttribution: true } } },
       },
     },
   });
 
+  const finishedKeys = new Set(outcome.finished);
   const rows = sourceAttributionRows(
     sources.map((s) => ({
       id: s.id,
       name: s.name,
-      leads: s.users.map((u) => ({ stages: u.menteeRelations.map((r) => r.pipelineStatus) })),
+      leads: s.users.map((u) => ({ stages: u.menteeRelations.map((r) => leadStage(r, finishedKeys)) })),
     })),
     outcome.finished,
   );
@@ -177,7 +228,7 @@ export async function mentorWorkload(scope: AnalyticsScope, outcome?: OutcomeSta
       select: {
         id: true,
         fullName: true,
-        mentorRelations: { where: withinTenant({}, tenant), select: { pipelineStatus: true } },
+        mentorRelations: { where: withinTenant({ ...(scope.relation ?? {}) }, tenant), select: { pipelineStatus: true, kind: true, employmentAttribution: true } },
       },
     }),
     outcome ?? outcomeStageKeys(scope.stageOrgId, scope.locale),
@@ -188,7 +239,8 @@ export async function mentorWorkload(scope: AnalyticsScope, outcome?: OutcomeSta
       id: m.id,
       fullName: m.fullName,
       active: m.mentorRelations.length,
-      hired: m.mentorRelations.filter((r) => finished.has(r.pipelineStatus)).length,
+      // Workload counts every pairing; a hire only a placement that is ours (#1504).
+      hired: m.mentorRelations.filter((r) => countsAsPlacement(r, finished)).length,
     }))
     .sort((a, b) => b.active - a.active);
 }

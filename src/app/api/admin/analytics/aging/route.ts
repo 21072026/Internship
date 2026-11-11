@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
+import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
@@ -10,7 +9,10 @@ import { daysInStage, isStageOverdue } from '@/lib/stageClock';
 import { isStageTransition } from '@/lib/stageChange';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { relationProgramWhere, resolveProgramFilter } from '@/lib/programFilter';
 import { shellCapabilities } from '@/lib/shellCapabilities';
+import { programRelationWhere } from '@/lib/programScopeRule';
+import type { Prisma } from '@prisma/client';
 
 // GET — hiring-funnel aging & SLA.
 // - stageAging: average/median time actually SPENT in each stage, computed from
@@ -31,10 +33,12 @@ import { shellCapabilities } from '@/lib/shellCapabilities';
 //   board/candidate-detail reason gate honors it. A pre-existing StatusChange
 //   with no reasonCode groups under UNSPECIFIED_REASON ("Unspecified" in the UI).
 export async function GET(request: Request) {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  // A list read (#1577): a PROGRAM_ADMIN with grants passes, and every
+  // relation below is ANDed with them (programRelationWhere) — an always-on
+  // programme filter. Other tiers get `grants` undefined: unchanged.
+  const gate = await requirePermission('analytics.read', { request, listing: true });
+  if ('error' in gate) return gate.error;
+  const { session, grants } = gate;
 
   return await withTenantScope(session, async () => {
   // Optional date-range window (?from=YYYY-MM-DD&to=YYYY-MM-DD): only stage
@@ -63,8 +67,16 @@ export async function GET(request: Request) {
   // COUNT) are pipeline-generic and stay for every vertical — the #2423 gate
   // keeps the ageing and drop-off cards on a sales funnel on purpose.
   const candidateLists = (await shellCapabilities(orgId)).includes('mentorship');
+  // The analytics screen's programme filter (#1652): 'all' adds nothing.
+  const program = await resolveProgramFilter(searchParams.get('program'), tenant);
+  if ('error' in program) return program.error;
   const relations = await prisma.mentorshipRelation.findMany({
-    where: withinTenant({}, tenant),
+    where: withinTenant<Prisma.MentorshipRelationWhereInput>(
+      grants
+        ? { AND: [relationProgramWhere(program.filter), programRelationWhere(grants) as Prisma.MentorshipRelationWhereInput] }
+        : { ...relationProgramWhere(program.filter) },
+      tenant,
+    ),
     select: {
       id: true,
       status: true,

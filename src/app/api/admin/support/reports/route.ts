@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
+import { requirePermission } from '@/lib/authz';
 import type { Prisma } from '@prisma/client';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { reportAdminOrg, SUPPORT_REPORT_STATUSES } from '@/lib/supportReportAccess';
@@ -12,15 +11,10 @@ import { reportAdminOrg, SUPPORT_REPORT_STATUSES } from '@/lib/supportReportAcce
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
-async function requireAdmin() {
-  const session = await getServerSession(authOptions);
-  if (!session || session.user.role !== 'ADMIN') return null;
-  return { session, orgId: await reportAdminOrg(session) };
-}
-
 export async function GET(request: Request) {
-  const admin = await requireAdmin();
-  if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const gate = await requirePermission('support.read', { request });
+  if ('error' in gate) return gate.error;
+  const admin = { session: gate.session, orgId: await reportAdminOrg(gate.session) };
 
   const p = new URL(request.url).searchParams;
   const type = p.get('type');

@@ -1,9 +1,10 @@
 // The journey builder's server half (#1853): who may author a programme's
 // steps, what a step input must look like, and how a step leaves the API.
 // Every route under /api/admin/programs/[id]/journey goes through
-// the same two halves — the route's own ADMIN check, then `journeyProgramFor()`:
-// the programme's own tenant, in a vertical with mentor ↔ mentee pairs. Another tenant's programme answers 404,
-// exactly like a missing one.
+// `journeyProgramFor()`: the programme's own tenant and the caller's scope
+// (program.read / program.write with the programme as subject, #3582), in a
+// vertical with mentor ↔ mentee pairs. Another tenant's programme, or one a
+// PROGRAM_ADMIN holds no grant for, answers 404, exactly like a missing one.
 
 import { NextResponse } from 'next/server';
 import type { Session } from 'next-auth';
@@ -11,7 +12,7 @@ import { z } from 'zod';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { requireCapability } from '@/lib/capabilityGate';
-import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { programGate, type ProgramPermission } from '@/lib/programWriteGate';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import {
   JOURNEY_ACTIONS,
@@ -50,20 +51,26 @@ export interface JourneyProgram {
 }
 
 /**
- * The programme for an ADMIN session, or the response that refuses it. Each
- * route authenticates the caller itself (getServerSession + role, in the route
- * file, where check:route-auth and the OpenAPI analyser can see it) and hands
- * the session here for the capability and tenant half.
+ * The programme for an admin session, or the response that refuses it. Each
+ * route reads the session itself (getServerSession, in the route file, where
+ * check:route-auth and the OpenAPI analyser can see it) and hands it here.
+ * The permission is asked with the programme as its subject (#3582,
+ * src/lib/programWriteGate.ts): an org admin, or a PROGRAM_ADMIN holding a
+ * grant for this programme. Another tenant's programme — and, for a
+ * PROGRAM_ADMIN, one outside its grants — answers 404, exactly like a missing one.
  */
-export async function journeyProgramFor(session: Session, programId: string): Promise<{ program: JourneyProgram } | { refusal: NextResponse }> {
-  const capabilityRefusal = await requireCapability(session.user.orgId, 'mentorship');
+export async function journeyProgramFor(
+  request: Request,
+  session: Session | null,
+  programId: string,
+  permission: ProgramPermission,
+): Promise<{ session: Session; program: JourneyProgram } | { refusal: NextResponse }> {
+  const gate = await programGate(request, session, programId, permission);
+  if ('error' in gate) return { refusal: gate.error };
+  const capabilityRefusal = await requireCapability(gate.program.orgId ?? gate.actor.orgId, 'mentorship');
   if (capabilityRefusal) return { refusal: capabilityRefusal };
-  const program = await prisma.cohort.findFirst({
-    where: withinTenant({ id: programId }, await tenantWhere(session)),
-    select: { id: true, orgId: true, name: true, term: true },
-  });
-  if (!program) return { refusal: NextResponse.json({ error: 'Not found' }, { status: 404 }) };
-  return { program };
+  const { id, orgId, name, term } = gate.program;
+  return { session: gate.session, program: { id, orgId, name, term } };
 }
 
 /**

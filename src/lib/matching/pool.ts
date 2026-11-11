@@ -7,9 +7,24 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
+import { orgWhere, withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import type { MatchMentee, MatchMentor } from './dimensions';
 import { selfSelectedCounts } from '@/lib/selfMatchSeats';
+import { normalizeThemes } from './semantic';
+import { notBenched } from '@/lib/participantState';
+import { eligibleUserIds } from '@/lib/eligibility';
+import { withCustomAnswers, type CustomAnswerDb } from './customAnswers';
+import { withAttributeValues, type AttributeValueDb } from './attributeValues';
+
+// The custom-field answers (#1803) and the org attributes (#3424) ride along
+// in bulk — one query per side each, never per pair.
+const answerDb = prisma as unknown as CustomAnswerDb;
+const attributeDb = prisma as unknown as AttributeValueDb;
+
+/** Both bulk attachments, in the order every loader applies them. */
+async function withMatchExtras<P extends { id: string }>(tenant: TenantWhere, people: P[]) {
+  return withAttributeValues(attributeDb, tenant, await withCustomAnswers(answerDb, tenant, people));
+}
 
 export type PoolMentor = MatchMentor & { fullName: string };
 export type PoolMentee = MatchMentee & { fullName: string };
@@ -26,12 +41,31 @@ const personSelect = {
   interests: true,
   targetPosition: true,
   managerId: true,
+  // The cached profile themes (#2038), in the same query — never one per person.
+  profileDigest: { select: { themes: true } },
 } as const;
 
-/** Every active mentor (and admin who mentors) of the tenant, with their load. */
-export async function loadMentorPool(tenant: TenantWhere): Promise<PoolMentor[]> {
+/** Swap the digest relation for the scorer's `themes` field. */
+function withThemes<T extends { profileDigest: { themes: unknown } | null }>(row: T): Omit<T, 'profileDigest'> & { themes: string[] } {
+  const { profileDigest, ...rest } = row;
+  return { ...rest, themes: normalizeThemes(profileDigest?.themes) };
+}
+
+/** Who is in the mentor pool — one definition, shared by the loader and the cohort pass's cap check. */
+export function mentorPoolWhere(tenant: TenantWhere) {
+  // Not on the bench (#1778): a benched mentor is not offered.
+  return withinTenant({ role: { in: ['MENTOR' as const, 'ADMIN' as const] }, isActive: true, ...notBenched() }, tenant);
+}
+
+/**
+ * Every active mentor (and admin who mentors) of the tenant, with their load.
+ * With `eligibility`, only those the scope's mentor rules admit (#3423) — the
+ * same evaluator POST /api/mentorship asks; no mentor rule = every mentor.
+ */
+export async function loadMentorPool(tenant: TenantWhere, eligibility?: { orgId: string | null; programId?: string | null }): Promise<PoolMentor[]> {
+  const admitted = eligibility ? await eligibleMentorIds(tenant, eligibility.orgId, eligibility.programId ?? null) : null;
   const rows = await prisma.user.findMany({
-    where: withinTenant({ role: { in: ['MENTOR' as const, 'ADMIN' as const] }, isActive: true }, tenant),
+    where: admitted ? { AND: [mentorPoolWhere(tenant), { id: { in: admitted } }] } : mentorPoolWhere(tenant),
     select: {
       ...personSelect,
       mentorCapacity: true,
@@ -42,7 +76,18 @@ export async function loadMentorPool(tenant: TenantWhere): Promise<PoolMentor[]>
   });
   // Seats only matter for a mentor who set a limit (#1808).
   const seats = await selfSelectedCounts(rows.filter((r) => r.selfMatchLimit != null).map((r) => r.id));
-  return rows.map(({ _count, ...m }) => ({ ...m, activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(m.id) ?? 0 }));
+  return withMatchExtras(
+    tenant,
+    rows.map(({ _count, ...m }) => ({ ...withThemes(m), activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(m.id) ?? 0 })),
+  );
+}
+
+/** The pool's ids the mentor rules admit; null when every mentor stands (no query for the rest). */
+async function eligibleMentorIds(tenant: TenantWhere, orgId: string | null, programId: string | null): Promise<string[] | null> {
+  if (!orgId) return null;
+  const ids = (await prisma.user.findMany({ where: mentorPoolWhere(tenant), select: { id: true } })).map((u) => u.id);
+  const admitted = await eligibleUserIds(orgId, programId, ids, 'MENTOR');
+  return admitted.length === ids.length ? null : admitted;
 }
 
 /**
@@ -56,5 +101,41 @@ export async function loadMentees(tenant: TenantWhere, ids: readonly string[]): 
     where: withinTenant({ id: { in: [...ids] }, role: 'MENTEE' as const }, tenant),
     select: { ...personSelect, menteeRelations: { select: { mentorId: true } } },
   });
-  return rows.map(({ menteeRelations, ...m }) => ({ ...m, pastMentorIds: menteeRelations.map((r) => r.mentorId) }));
+  return withMatchExtras(tenant, rows.map(({ menteeRelations, ...m }) => ({ ...withThemes(m), pastMentorIds: menteeRelations.map((r) => r.mentorId) })));
+}
+
+/**
+ * One pair in the scorer's shape, whatever their roles (#1789): a direct
+ * assignment may pair an ADMIN or even a MENTEE as the mentor (#1141), so the
+ * role filters of the two loaders above do not apply. The caller has already
+ * decided the pair is legitimate and in its tenant. Null when either is gone.
+ */
+export async function loadPairForScoring(
+  menteeId: string,
+  mentorId: string,
+): Promise<{ mentee: PoolMentee; mentor: PoolMentor } | null> {
+  const [mentee, mentor] = await Promise.all([
+    prisma.user.findUnique({ where: { id: menteeId }, select: { ...personSelect, orgId: true, menteeRelations: { select: { mentorId: true } } } }),
+    prisma.user.findUnique({
+      where: { id: mentorId },
+      select: {
+        ...personSelect,
+        mentorCapacity: true,
+        acceptingMentees: true,
+        selfMatchLimit: true,
+        _count: { select: { mentorRelations: { where: { status: 'ACTIVE' } } } },
+      },
+    }),
+  ]);
+  if (!mentee || !mentor) return null;
+  const { menteeRelations, ...me } = mentee;
+  const { _count, ...mo } = mentor;
+  const seats = mo.selfMatchLimit != null ? await selfSelectedCounts([mo.id]) : new Map<string, number>();
+  // The caller already vetted the pair; the questions are the mentee's org's.
+  const tenant: TenantWhere = mentee.orgId ? await orgWhere(mentee.orgId) : {};
+  const [withAnswersMentee, withAnswersMentor] = await withMatchExtras(tenant, [
+    { ...withThemes(me), pastMentorIds: menteeRelations.map((r) => r.mentorId) } as PoolMentee,
+    { ...withThemes(mo), activeMenteeCount: _count.mentorRelations, selfSelectedCount: seats.get(mo.id) ?? 0 } as PoolMentee & PoolMentor,
+  ]);
+  return { mentee: withAnswersMentee, mentor: withAnswersMentor as PoolMentor };
 }

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { actorFromSession, can } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
@@ -24,6 +25,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Admin reach from the permission rule, not the role string (#1571).
+    const actor = await actorFromSession(session);
+    const isAdmin = !!actor && (await can(actor, 'program.read', undefined, session));
 
     return await withTenantScope(session, async () => {
       const relation = await prisma.mentorshipRelation.findUnique({
@@ -40,7 +44,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       // sees everything, a mentor or mentee only their own pairing. Admin wins
       // first so a dual-role admin never gets the narrower list.
       let role: TimelineViewerRole | null = null;
-      if (session.user.role === 'ADMIN') role = 'ADMIN';
+      if (isAdmin) role = 'ADMIN';
       else if (relation.mentorId === session.user.id) role = 'MENTOR';
       else if (relation.menteeId === session.user.id) role = 'MENTEE';
       if (!role) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

@@ -155,12 +155,28 @@ export interface StageWrite {
   color?: string | null;
   /** Board phase (#1637); anything outside PIPELINE_PHASES is stored as null ("derive it"). */
   phase?: string | null;
+  /**
+   * Entry gates (#1589). Left out = keep what the stage with this key already
+   * has, so an editor that does not know about gates never wipes them.
+   */
+  gateCapability?: string | null;
+  gateDocuments?: boolean;
+  gateEvaluation?: boolean;
+  gateOffer?: boolean;
 }
 
 // `client` runs both writes inside a caller's interactive transaction (tenant
 // provisioning, #2065, creates the organization and its stages as one unit);
 // without it the pair is its own batch transaction, as it always was.
 export async function replaceStages(orgId: string, stages: StageWrite[], client?: Prisma.TransactionClient): Promise<void> {
+  // The rows are deleted and recreated, so a gate the caller did not mention
+  // is carried over by key from the row it replaces (#1589).
+  const previous = new Map(
+    (await (client ?? prisma).pipelineStage.findMany({
+      where: { orgId },
+      select: { key: true, gateCapability: true, gateDocuments: true, gateEvaluation: true, gateOffer: true },
+    })).map((row) => [row.key, row]),
+  );
   const data = stages.map((s) => ({
     orgId,
     key: s.key,
@@ -170,6 +186,10 @@ export async function replaceStages(orgId: string, stages: StageWrite[], client?
     isOffPath: s.isOffPath ?? false,
     color: s.color && s.color.trim() ? s.color.trim() : null,
     phase: isPipelinePhase(s.phase) ? s.phase : null,
+    gateCapability: s.gateCapability !== undefined ? (s.gateCapability?.trim() || null) : (previous.get(s.key)?.gateCapability ?? null),
+    gateDocuments: s.gateDocuments ?? previous.get(s.key)?.gateDocuments ?? false,
+    gateEvaluation: s.gateEvaluation ?? previous.get(s.key)?.gateEvaluation ?? false,
+    gateOffer: s.gateOffer ?? previous.get(s.key)?.gateOffer ?? false,
   }));
   if (client) {
     await client.pipelineStage.deleteMany({ where: { orgId } });

@@ -12,6 +12,7 @@ import { leaseSnapshot, replicaName } from '@/lib/jobs/lease';
 import { rateLimitStoreHealth } from '@/lib/rateLimit';
 import { APP_VERSION, GIT_SHA } from '@/lib/version';
 import { verifySmtpConnection } from '@/services/emailService';
+import { actorFromSession, can } from '@/lib/authz';
 
 // Public, unauthenticated liveness/readiness probe used by uptime monitors and
 // the nightly stress test. Always cheap by default; pass ?db=1 to additionally
@@ -85,7 +86,10 @@ async function resolveAccess(request: Request, needsProof: boolean, needsOperato
 
   if (expected || needsProof) {
     const session = await getServerSession(authOptions);
-    if (session?.user.role === 'ADMIN') {
+    // The detail is a reading of the deployment's health: an admin who may read
+    // analytics sees it (#1571). Asked only when a session exists.
+    const actor = session ? await actorFromSession(session) : null;
+    if (session && actor && (await can(actor, 'analytics.read', undefined, session))) {
       return { detail: true, verified: true, operator: needsOperator && (await isSuperAdmin(session)) };
     }
   }

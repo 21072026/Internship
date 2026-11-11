@@ -7,15 +7,17 @@
 // by hand for each relation. This module is the missing half: an org states the
 // rule once, and every stage move applies it.
 //
-// CALENDAR DAYS, not business days — see the note on the StageSla model. The
-// decision is recorded in the schema, in the admin hint and in the PR rather
-// than left implicit.
+// CALENDAR DAYS by default — see the note on the StageSla model. An org or a
+// programme may opt into BUSINESS DAYS with a holiday calendar (#1638,
+// `slaDayMode`, docs/business-day-slas.md); with nothing configured every
+// deadline is exactly the calendar date it always was.
 
 import { cache } from 'react';
 import { prisma } from './prisma';
 import { resolveSlaEscalations, slaDaysByStage, type SlaScope, type StageSlaRow } from './stageSlaRule';
-
-const DAY = 24 * 60 * 60 * 1000;
+import { resolveSetting } from './settingsResolver';
+import { appTimeZone, isValidTimeZone } from './timezone';
+import { parseWorkingDays, slaDeadline, type SlaDayRule } from './businessDays';
 
 export interface StageSlaEntry {
   stageKey: string;
@@ -125,8 +127,41 @@ export async function stageDeadlineUpdate(
   const slas = await resolveStageSlas(scope);
   if (slas.size === 0) return null;
   const days = slas.get(stageKey);
+  const rule = days != null ? await resolveSlaDayRule(scope) : null;
   return {
-    stageDeadline: days != null ? new Date(now.getTime() + days * DAY) : null,
+    stageDeadline: days != null ? slaDeadline(now, days, rule) : null,
     deadlineReminderSentAt: null,
   };
 }
+
+/**
+ * How N days of service level become a date for this scope (#1638): the
+ * `slaDayMode` / `slaWorkingDays` / `slaTimeZone` / `slaHolidayCalendarId`
+ * settings, resolved programme → org → global (the relation's cohort is its
+ * programme). `calendar` — the default — never reads a holiday. A calendar id
+ * that is not this org's reads as no calendar: a setting can never pull in
+ * another tenant's dates.
+ */
+export async function resolveSlaDayRule(scope: string | null | undefined | StageSlaScope): Promise<SlaDayRule> {
+  const { orgId, cohortId } = typeof scope === 'object' && scope !== null ? scope : { orgId: scope, cohortId: null };
+  const settingsScope = { orgId: orgId ?? null, programId: cohortId ?? null };
+  const [mode, workingDays, zone, calendarId] = await Promise.all([
+    resolveSetting('slaDayMode', settingsScope),
+    resolveSetting('slaWorkingDays', settingsScope),
+    resolveSetting('slaTimeZone', settingsScope),
+    resolveSetting('slaHolidayCalendarId', settingsScope),
+  ]);
+  const timeZone = isValidTimeZone(zone) ? zone : appTimeZone();
+  if (mode !== 'business') return { mode: 'calendar', workingDays: parseWorkingDays(workingDays), holidays: [], timeZone };
+  const holidays = calendarId && orgId ? await loadHolidayDates(orgId, calendarId) : [];
+  return { mode: 'business', workingDays: parseWorkingDays(workingDays), holidays, timeZone };
+}
+
+/** The `YYYY-MM-DD` dates of one of this org's calendars (none for another org's id). */
+export const loadHolidayDates = cache(async (orgId: string, calendarId: string): Promise<string[]> => {
+  const rows = await prisma.holiday.findMany({
+    where: { calendarId, calendar: { orgId } },
+    select: { date: true },
+  });
+  return rows.map((r) => r.date.toISOString().slice(0, 10));
+});

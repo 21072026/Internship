@@ -61,7 +61,7 @@ test('every skill route refuses MENTOR, MENTEE, COMPANY and SOURCE', async ({ pl
     expect((await signInViaApi(ctx, emails[who], PASSWORD)).ok, who).toBe(true);
     for (const [method, url, data] of routes) {
       const res = await ctx.fetch(url, { method, data });
-      expect(res.status(), `${who} ${method} ${url}`).toBe(401);
+      expect(res.status(), `${who} ${method} ${url}`).toBe(403);
     }
     await ctx.dispose();
   }

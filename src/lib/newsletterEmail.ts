@@ -58,6 +58,8 @@ export interface NewsletterEmailOptions {
    * preview of nothing.
    */
   imageSrc?: string | null;
+  /** The hero image's description (#3388); empty = decorative. */
+  imageAlt?: string | null;
   archiveUrl: string;
   preferencesUrl: string;
   /** Omitted only for the admin preview, which has no recipient to unsubscribe. */
@@ -131,7 +133,7 @@ function tipRow(emoji: string, title: string, body: string): string {
 }
 
 export function renderNewsletterHtml(options: NewsletterEmailOptions): string {
-  const { content, brand, labels, withMentorNote, imageSrc, archiveUrl, preferencesUrl, unsubscribeUrl } = options;
+  const { content, brand, labels, withMentorNote, imageSrc, imageAlt, archiveUrl, preferencesUrl, unsubscribeUrl } = options;
   const accent = accentOf(brand);
   const soft = tint(accent);
 
@@ -142,7 +144,7 @@ export function renderNewsletterHtml(options: NewsletterEmailOptions): string {
   // A blocked hero image must not leave a hole where the intro should be, so it
   // carries no fixed height and an empty alt (decorative — never the message).
   const hero = imageSrc
-    ? `<tr><td style="padding:0 0 24px 0;"><img src="${esc(imageSrc)}" alt="" width="552" style="width:100%;max-width:552px;height:auto;border:0;border-radius:12px;display:block;"></td></tr>`
+    ? `<tr><td style="padding:0 0 24px 0;"><img src="${esc(imageSrc)}" alt="${esc(imageAlt ?? '')}" width="552" style="width:100%;max-width:552px;height:auto;border:0;border-radius:12px;display:block;"></td></tr>`
     : '';
 
   const action = content.action

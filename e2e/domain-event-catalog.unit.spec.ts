@@ -40,6 +40,18 @@ const PUBLISHED = [
   'offer.sent',
   'offer.withdrawn',
   'offer.expired',
+  'interview_request.created',
+  'interview_request.approved',
+  'interview_request.declined',
+  'company_interest.changed',
+  'weekly_report.submitted',
+  'document.uploaded',
+  'goal.completed',
+  'meeting.attendance_recorded',
+  'user.created',
+  'mentorship.ending_soon',
+  'mentorship.extended',
+  'requisition.status_changed',
 ];
 
 const at = '2026-10-20T09:30:00.000Z';
@@ -75,6 +87,23 @@ const PRODUCERS: [site: string, event: string, payload: Record<string, unknown>]
   ['offerEvents (route)', 'offer.declined', { offerId: 'o1', applicationId: 'a1', requisitionId: 'rq1' }],
   ['offerEvents (expiry sweep)', 'offer.expired', { offerId: 'o1', applicationId: null, requisitionId: null }],
   ['api/offers/[id]', 'requisition.filled', { requisitionId: 'rq1', offerId: 'o1' }],
+  ['requisitionEvents', 'requisition.status_changed', { requisitionId: 'rq1', from: null, to: 'OPEN' }],
+  ['api/interview-requests', 'interview_request.created', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2', companyId: 'c1' }],
+  ['api/interview-requests/[id]', 'interview_request.approved', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2' }],
+  ['api/interview-requests/[id]', 'interview_request.declined', { requestId: 'q1', requisitionId: 'rq1', menteeId: 'u2', reasonCode: 'not_ready' }],
+  ['api/company/interests', 'company_interest.changed', { interestId: 'i1', companyId: 'c1', menteeId: 'u2', requisitionId: null, from: null, to: 'INTERESTED' }],
+  ['api/weekly-reports', 'weekly_report.submitted', { reportId: 'w1', relationId: 'r1', weekStart: at, resubmission: false }],
+  ['api/weekly-reports/[id]', 'weekly_report.submitted', { reportId: 'w1', relationId: 'r1', weekStart: at, resubmission: true }],
+  ['api/documents', 'document.uploaded', { documentId: 'd1', ownerId: 'u2', type: 'CV', requirementId: null, version: 1, generated: false }],
+  ['api/mentorship/[id]/certificate', 'document.uploaded', { documentId: 'd2', ownerId: 'u2', type: 'CERTIFICATE', requirementId: null, version: 2, generated: true }],
+  ['api/goals/[id]', 'goal.completed', { goalId: 'g1', relationId: 'r1' }],
+  ['meetingAttendance', 'meeting.attendance_recorded', { attendanceId: 'a1', meetingId: 'm1', seriesId: null, relationId: 'r1', userId: 'u2', state: 'NO_SHOW' }],
+  ['userCreate', 'user.created', { userId: 'u9', role: 'MENTEE', source: 'register' }],
+  ['api/mentorship/[id]/lifecycle', 'mentorship.lifecycle_changed', { relationId: 'r1', from: 'ACTIVE', to: 'PAUSED', reasonCode: null }],
+  ['lifecycleEvents (transfer)', 'mentorship.lifecycle_changed', { relationId: 'r1', from: 'ACTIVE', to: 'ENDED_REASSIGNED', reasonCode: 'mentor_unavailable' }],
+  ['lifecycleEvents (win-back)', 'mentorship.lifecycle_changed', { relationId: 'r1', from: 'ACTIVE', to: 'ENDED_CHURNED', reasonCode: null }],
+  ['relationEndingSweep', 'mentorship.ending_soon', { relationId: 'r1', expectedEndDate: '2026-11-13' }],
+  ['relationExtend', 'mentorship.extended', { relationId: 'r1', expectedEndDate: '2027-05-13', extendedCount: 1 }],
 ];
 
 test.describe('domain-event catalogue', { tag: '@smoke' }, () => {

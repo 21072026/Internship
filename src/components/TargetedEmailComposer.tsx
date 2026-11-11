@@ -13,6 +13,7 @@ import { Sparkles, UserRound } from 'lucide-react';
 import { locales, type Locale } from '@/i18n/config';
 import { getDictionary } from '@/i18n/dictionaries';
 import { BULK_DRAFT_MAX_RECIPIENTS } from '@/lib/outreachRules';
+import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
 
 interface EmailDraft {
   subject: string;
@@ -31,9 +32,11 @@ const blankDrafts = () =>
   Object.fromEntries(locales.map((l) => [l, emptyDraft()])) as Record<Locale, EmailDraft>;
 const isWritten = (draft: EmailDraft) => !!draft.subject.trim() && !!draft.body.trim();
 
+// The composer's own narrow read (#1438): GET /api/mentorship?view=recipients
+// answers a relation id and its mentee's name and language — nothing else.
 interface Relation {
   id: string;
-  mentee: { id: string; fullName: string; email: string; preferredLanguage?: string | null };
+  mentee: { id: string; fullName: string; preferredLanguage?: string | null };
 }
 
 // Targeted email composer shared by the mentor (/mentor/email) and admin
@@ -43,8 +46,21 @@ interface Relation {
 export function TargetedEmailComposer() {
   const t = useT();
   const locale = useLocale();
+  // One page of the recipient list at a time, searched on the server (#1438):
+  // a programme of a thousand mentees used to download and render all of them.
   const [relations, setRelations] = useState<Relation[]>([]);
-  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
+  const [serverSearch, setServerSearch] = useState('');
+  const [listLoading, setListLoading] = useState(false);
+  // The pick, keyed by relation id, kept with what the screen shows for it — so
+  // a recipient stays picked (and counted, and in the language mix) after the
+  // search moves on to other people.
+  const [selected, setSelected] = useState<Record<string, Relation>>({});
+  // "Select all" means every match of the search it was ticked under, not the
+  // rows that happen to be loaded; the ids are kept so unticking undoes it.
+  const [allFor, setAllFor] = useState<{ search: string; ids: string[] } | null>(null);
   // One message, up to three languages (#1165). The ready-made templates already
   // exist in EN/TR/DE, but only the sender's locale was ever used — so a group of
   // mentees who do not all read the same language got whichever one the sender's
@@ -71,19 +87,70 @@ export function TargetedEmailComposer() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiFilled, setAiFilled] = useState<{ locale: Locale; draft: EmailDraft } | null>(null);
 
-  const load = useCallback(async () => {
-    const res = await fetch('/api/mentorship');
-    const data = await res.json();
-    setRelations(data.relations ?? []);
-  }, []);
+  const recipientsUrl = useCallback(
+    (extra: Record<string, string>) => {
+      const params = new URLSearchParams({ view: 'recipients', ...extra });
+      if (serverSearch) params.set('search', serverSearch);
+      return `/api/mentorship?${params}`;
+    },
+    [serverSearch]
+  );
 
   useEffect(() => {
-    load();
+    const id = setTimeout(() => setServerSearch(search.trim()), 250);
+    return () => clearTimeout(id);
+  }, [search]);
+
+  const load = useCallback(
+    async (nextPage: number) => {
+      setListLoading(true);
+      try {
+        const res = await fetch(recipientsUrl({ page: String(nextPage) }));
+        const data = await res.json();
+        const rows = (data.recipients ?? []) as Relation[];
+        setRelations((prev) => (nextPage === 1 ? rows : [...prev, ...rows.filter((r) => !prev.some((p) => p.id === r.id))]));
+        setTotal(typeof data.total === 'number' ? data.total : rows.length);
+        setPage(nextPage);
+      } finally {
+        setListLoading(false);
+      }
+    },
+    [recipientsUrl]
+  );
+
+  useEffect(() => {
+    load(1);
   }, [load]);
 
-  const chosenRelations = relations.filter((r) => selected[r.id]);
+  // The search box re-filters the list in place and moves no focus, so a
+  // screen reader hears how many recipients it left (WCAG 4.1.3).
+  useFilterAnnouncement(serverSearch && !listLoading ? resultCountMessage(t.a11y, total) : null);
+
+  const chosenRelations = Object.values(selected);
   const chosen = chosenRelations.map((r) => r.id);
-  const allChecked = relations.length > 0 && chosen.length === relations.length;
+  const allChecked = total > 0 && allFor?.search === serverSearch;
+
+  const toggleAll = async (on: boolean) => {
+    if (!on) {
+      const ids = new Set(allFor?.ids ?? relations.map((r) => r.id));
+      setSelected((prev) => Object.fromEntries(Object.entries(prev).filter(([id]) => !ids.has(id))));
+      setAllFor(null);
+      return;
+    }
+    // Ticked at once; the ids follow, and a failed read unticks it again.
+    const forSearch = serverSearch;
+    setAllFor({ search: forSearch, ids: [] });
+    try {
+      const res = await fetch(recipientsUrl({ all: '1' }));
+      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
+      const rows = (data.recipients ?? []) as Relation[];
+      setSelected((prev) => ({ ...prev, ...Object.fromEntries(rows.map((r) => [r.id, r])) }));
+      setAllFor({ search: forSearch, ids: rows.map((r) => r.id) });
+    } catch {
+      setAllFor(null);
+    }
+  };
   // One body goes to everyone selected, so the sender should see the languages
   // they are about to write across before they start typing (#1164).
   const breakdown = languageBreakdown(chosenRelations.map((r) => r.mentee.preferredLanguage));
@@ -106,17 +173,29 @@ export function TargetedEmailComposer() {
     });
   };
 
-  // Applied once the relations are in, and only for a relation the caller
-  // actually has — a stale or foreign id simply prefills nothing.
+  // Asked for by id, and only for a relation the caller actually has — the
+  // server's scope answers, so a stale or foreign id simply prefills nothing.
+  // Not read off the loaded page: the relation may sit on any page (#1438).
   useEffect(() => {
-    if (!prefillRelation || !relations.some((r) => r.id === prefillRelation)) return;
-    setSelected({ [prefillRelation]: true });
-    if (prefillTemplate && (TEMPLATE_KEYS as readonly string[]).includes(prefillTemplate)) {
-      applyTemplate(prefillTemplate);
-    }
-    // Runs when the relation list arrives; applyTemplate is a stable local.
+    if (!prefillRelation) return;
+    let cancelled = false;
+    fetch(`/api/mentorship?${new URLSearchParams({ view: 'recipients', relation: prefillRelation })}`)
+      .then((r) => (r.ok ? r.json() : { recipients: [] }))
+      .then((data) => {
+        const row = ((data.recipients ?? []) as Relation[]).find((r) => r.id === prefillRelation);
+        if (cancelled || !row) return;
+        setSelected({ [row.id]: row });
+        if (prefillTemplate && (TEMPLATE_KEYS as readonly string[]).includes(prefillTemplate)) {
+          applyTemplate(prefillTemplate);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // applyTemplate is a stable local.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [relations, prefillRelation, prefillTemplate]);
+  }, [prefillRelation, prefillTemplate]);
 
   const patchDraft = (patch: Partial<EmailDraft>) =>
     setDrafts((prev) => ({ ...prev, [tab]: { ...prev[tab], ...patch } }));
@@ -198,6 +277,7 @@ export function TargetedEmailComposer() {
         setResult(t.mentorEmail.sentCount.replace('{n}', String(data.sent)));
         setDrafts(blankDrafts());
         setSelected({});
+        setAllFor(null);
       } else {
         setResult(data.error || 'Failed');
       }
@@ -220,28 +300,46 @@ export function TargetedEmailComposer() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>{t.mentorEmail.recipients} ({chosen.length}/{relations.length})</CardTitle>
+            <CardTitle>{t.mentorEmail.recipients} ({chosen.length}/{total})</CardTitle>
           </CardHeader>
-          {relations.length === 0 ? (
+          {total === 0 && !serverSearch && !listLoading ? (
             <p className="text-sm text-gray-400">{t.mentor.noMenteesAssigned}</p>
           ) : (
             <div className="space-y-1">
+              <input
+                type="search"
+                data-testid="email-recipient-search"
+                aria-label={t.mentorEmail.searchRecipients}
+                placeholder={t.mentorEmail.searchRecipients}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="mb-2 w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm"
+              />
               <label className="flex items-center gap-2 text-sm font-medium pb-2 border-b border-gray-100">
                 <input
                   type="checkbox"
+                  data-testid="email-recipient-select-all"
                   checked={allChecked}
-                  onChange={(e) =>
-                    setSelected(e.target.checked ? Object.fromEntries(relations.map((r) => [r.id, true])) : {})
-                  }
+                  disabled={total === 0}
+                  onChange={(e) => toggleAll(e.target.checked)}
                 />
-                {t.mentorEmail.selectAll}
+                {t.mentorEmail.selectAll} ({total})
               </label>
               {relations.map((r) => (
                 <label key={r.id} className="flex items-center gap-2 text-sm py-1">
                   <input
                     type="checkbox"
                     checked={!!selected[r.id]}
-                    onChange={(e) => setSelected((p) => ({ ...p, [r.id]: e.target.checked }))}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      setSelected((p) => {
+                        const next = { ...p };
+                        if (on) next[r.id] = r;
+                        else delete next[r.id];
+                        return next;
+                      });
+                      if (!on) setAllFor(null);
+                    }}
                   />
                   <span className="truncate">{r.mentee.fullName}</span>
                   {/* Clicking the NAME here ticks the box, so the card hangs off
@@ -257,6 +355,17 @@ export function TargetedEmailComposer() {
                   <LanguageBadge language={r.mentee.preferredLanguage} className="ml-auto" />
                 </label>
               ))}
+              {relations.length < total && (
+                <button
+                  type="button"
+                  data-testid="email-recipient-more"
+                  disabled={listLoading}
+                  onClick={() => load(page + 1)}
+                  className="mt-2 w-full rounded-lg border border-dashed border-gray-300 px-3 py-1.5 text-xs font-medium text-gray-600 hover:border-blue-300 hover:text-blue-700 disabled:opacity-60"
+                >
+                  {t.board.loadMore.replace('{shown}', String(relations.length)).replace('{total}', String(total))}
+                </button>
+              )}
             </div>
           )}
           {breakdown.length > 0 && (

@@ -95,6 +95,7 @@ export default function AdminAgreementsPage() {
               <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-200">{A.textFor.replace('{locale}', l.toUpperCase())}</span>
               <textarea
                 data-testid={`agreement-body-${l}`}
+                lang={l}
                 value={bodies[l]}
                 onChange={(e) => setBodies((b) => ({ ...b, [l]: e.target.value }))}
                 rows={8}

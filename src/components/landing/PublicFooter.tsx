@@ -88,6 +88,8 @@ export async function PublicFooter() {
         // from `trust.title` for the same reason as the three above: a footer
         // link must not be able to disagree with the heading it leads to.
         { href: '/trust', label: t.trust.title },
+        // Measured availability and the incident feed (#1604).
+        { href: '/status', label: t.statusPage.title },
         // The conformance statement (#2035). EN 301 549 procurement expects to
         // find it from any page, so it sits with the other legal links rather
         // than only in the feature catalogue.

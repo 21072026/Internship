@@ -113,3 +113,14 @@ export type OfferCompensationField = (typeof OFFER_COMPENSATION_FIELDS)[number];
 export function compensationSelect(): Record<OfferCompensationField, true> {
   return Object.fromEntries(OFFER_COMPENSATION_FIELDS.map((f) => [f, true])) as Record<OfferCompensationField, true>;
 }
+
+// The offer letter's frozen text (#1857) states the pay, so it follows the same
+// rule: SELECTed only where canSeeCompensation() holds, from this list. The
+// acceptance record (acceptedIp / acceptedUserAgent) is ADMIN-only and is
+// deliberately not here — a mentee does not need their own IP read back.
+export const OFFER_LETTER_FIELDS = ['letterSnapshot', 'letterLocale'] as const;
+export type OfferLetterField = (typeof OFFER_LETTER_FIELDS)[number];
+
+export function letterSelect(): Record<OfferLetterField, true> {
+  return Object.fromEntries(OFFER_LETTER_FIELDS.map((f) => [f, true])) as Record<OfferLetterField, true>;
+}
