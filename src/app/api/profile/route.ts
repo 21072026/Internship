@@ -339,7 +339,7 @@ export async function PUT(request: Request) {
 
       if (!parsed.success) {
         return NextResponse.json(
-          { error: 'Validation failed', details: parsed.error.flatten() },
+          { error: 'Validation failed', details: z.flattenError(parsed.error) },
           { status: 400 }
         );
       }

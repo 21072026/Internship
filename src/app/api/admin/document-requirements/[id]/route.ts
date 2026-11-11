@@ -33,7 +33,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const { session } = authz;
   const { id } = await params;
   const parsed = patchSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
   const current = await prisma.documentRequirement.findUnique({ where: { id }, select: { id: true, orgId: true, key: true } });
   if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   if (!(await mayManageOrgRequirements(session, current.orgId, 'PATCH /api/admin/document-requirements/[id]'))) {

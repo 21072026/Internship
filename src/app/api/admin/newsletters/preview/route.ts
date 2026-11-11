@@ -41,7 +41,7 @@ export async function POST(request: Request) {
   if (capabilityRefusal) return capabilityRefusal;
 
   const parsed = schema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
 
   const variants = normalizeNewsletterContent(parsed.data.content);
   const canonical = canonicalNewsletterContent(variants);

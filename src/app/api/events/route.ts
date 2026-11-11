@@ -13,6 +13,7 @@ import { resolveMeetingLink, meetingLinkRefusal } from '@/lib/meetingRoom';
 import { canCreateEvent, canManageEvent } from '@/lib/groupEventRule';
 import { createEventSchema } from '@/lib/groupEventInput';
 import { audienceUserIds, eventSelect, eventView, noticeEvent, programIdsOf, visibleEventsWhere } from '@/lib/groupEvents';
+import { z } from 'zod';
 
 // Group sessions and office hours (#1856).
 // GET  — the events this person may see; `?when=past` for the ones that ended.
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
     const capGate = await requireCapability(orgId, 'mentorship');
     if (capGate) return capGate;
     const parsed = createEventSchema.safeParse(await request.json().catch(() => null));
-    if (!parsed.success) return NextResponse.json({ error: 'Invalid request', code: 'validation_failed', details: parsed.error.flatten() }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Invalid request', code: 'validation_failed', details: z.flattenError(parsed.error) }, { status: 400 });
     const input = parsed.data;
     if (!isValidTimeZone(input.timeZone)) return NextResponse.json({ error: 'Unknown time zone', code: 'invalid_time_zone' }, { status: 400 });
     const startsAt = new Date(input.startsAt);

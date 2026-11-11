@@ -78,7 +78,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const body: unknown = await request.json().catch(() => ({}));
       const parsed = lifecycleSchema.safeParse(body);
       if (!parsed.success) {
-        return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
+        return NextResponse.json({ error: 'Validation failed', details: z.flattenError(parsed.error) }, { status: 400 });
       }
       const reasonNote = parsed.data.reasonNote?.trim() || null;
       const check = checkLifecycleMove({

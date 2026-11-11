@@ -57,7 +57,7 @@ export async function POST(request: Request) {
   const limited = enforceRateLimit(request, 'company-team-invite', { limit: 20, windowMs: 60 * 60 * 1000, subject: scope.session.user.id });
   if (limited) return limited;
   const parsed = inviteSchema.safeParse(await request.json().catch(() => null));
-  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', code: 'validation_failed', details: parsed.error.flatten() }, { status: 400 });
+  if (!parsed.success) return NextResponse.json({ error: 'Validation failed', code: 'validation_failed', details: z.flattenError(parsed.error) }, { status: 400 });
   return withTenantScope(scope.session, async () => {
     const result = await inviteTeammate({
       orgId: scope.orgId,

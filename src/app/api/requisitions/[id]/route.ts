@@ -12,6 +12,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { closedAtForStatus, normalizeSkills, protectedFields, requisitionPatchSchema } from '@/lib/requisitions';
 import { syncRequisitionSkills } from '@/lib/skillsResolve';
 import { requireRoleOrPermission, type Permission } from '@/lib/authz';
+import { z } from 'zod';
 
 type Context = { params: Promise<{ id: string }> };
 
@@ -62,7 +63,7 @@ export async function PATCH(request: Request, { params }: Context) {
       return NextResponse.json({ error: 'Company cannot be changed', fields: ['companyId'], code: 'protected_fields' }, { status: 403 });
     }
     const parsed = requisitionPatchSchema.safeParse(body);
-    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', code: 'validation_failed', details: parsed.error.flatten() }, { status: 400 });
+    if (!parsed.success) return NextResponse.json({ error: 'Validation failed', code: 'validation_failed', details: z.flattenError(parsed.error) }, { status: 400 });
     if (!Object.keys(parsed.data).length) return NextResponse.json({ error: 'No changes supplied', code: 'validation_failed' }, { status: 400 });
 
     // Set inside the transaction, mirrored AFTER it commits (#1818): the mirror
