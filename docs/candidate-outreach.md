@@ -38,6 +38,40 @@ Who sees which request is one rule, `outreachActorWhere()` in `src/lib/outreach.
 and limit, the company's view — are in `src/lib/outreachRule.ts`, unit-tested in
 `scripts/test/candidate-outreach.test.mjs`.
 
+## The talent-pool door (#1394)
+
+A company may also ask for an **introduction** to a candidate it found in the
+talent pool — no shortlist needed. Same endpoint, `POST /api/company/outreach`
+`{ menteeId, message, via: 'TALENT_POOL' }`, same row (`CandidateOutreach.source
+= 'TALENT_POOL'`; older rows read `SHORTLIST`), same decision, quota, cooldown
+and revoke. What the door adds, all checked on the server:
+
+- the seat that may search the pool (`talentPool.search`) on top of
+  `outreach.request`, and the company's `TALENT_POOL_SEARCH` entitlement
+  (`403 feature_locked`);
+- the candidate must be in the pool **this** company may search —
+  `talentPoolVisibleWhere()` (`src/lib/talentPool.ts`), the rule the search
+  itself reads: the caller's own org, a public-profile opt-in, an active
+  `TALENT_POOL_VISIBILITY` consent and the early-access window. Anyone else
+  (another org, no opt-in, a withdrawn consent) answers **`404 not_in_pool`**;
+- a per-company limit of **20 introductions a day** (bucket
+  `candidate-outreach-pool`, every seat of the company together), on top of
+  the per-user hourly limit;
+- an `AuditLog` row per request (`OUTREACH_REQUESTED`, `detail: source=…`, never
+  the message) and per decision (`OUTREACH_APPROVED` / `_DECLINED` / `_REVOKED`).
+
+A candidate without a mentor is decided by the org's admins, exactly as a
+shortlist request is. **No contact detail reaches the company before an
+approval**: the search returns `TALENT_POOL_SELECT` only (the public-profile
+fields), and a request answers `{ id, status }`; `companyView()` is pinned by
+its unit test and the `@smoke` spec `e2e/talent-pool-intro.spec.ts` asserts the
+response shapes. No mail is sent on this door either.
+
+The pool is scoped to the caller's org **explicitly** (`orgId` in
+`talentPoolVisibleWhere()`): the tenant middleware scopes `User` reads only
+under `MT_ENFORCE_ISOLATION`, and before #1394 the search showed every org's
+opted-in candidates wherever that flag was off.
+
 ## The quota
 
 `src/lib/outreachQuota.ts`: requests **approved** per company per calendar month

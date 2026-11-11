@@ -19,6 +19,19 @@
 export const OUTREACH_STATUSES = ['PENDING', 'APPROVED', 'DECLINED', 'REVOKED'] as const;
 export type OutreachStatus = (typeof OUTREACH_STATUSES)[number];
 
+/**
+ * Where a request came from (#1394): SHORTLIST — the company shortlisted the
+ * candidate (#1840); TALENT_POOL — it asked for an introduction from the
+ * talent-pool search, the candidate having opted into the pool. Every other
+ * rule (who decides, what is stored, what the company sees) is the same.
+ */
+export const OUTREACH_SOURCES = ['SHORTLIST', 'TALENT_POOL'] as const;
+export type OutreachSource = (typeof OUTREACH_SOURCES)[number];
+
+export function isOutreachSource(v: unknown): v is OutreachSource {
+  return typeof v === 'string' && (OUTREACH_SOURCES as readonly string[]).includes(v);
+}
+
 export const REVOKE_COOLDOWN_DAYS = 90;
 export const MAX_FIRST_MESSAGE = 2000;
 
@@ -77,10 +90,11 @@ export function quotaLimit(companyQuota: number | null | undefined, setting: str
  * What a company may see of its own request: the status, and for a declined
  * one only that it was not approved. Who decided and why never leave the org.
  */
-export function companyView(row: { id: string; menteeId: string; status: string; createdAt: Date; decidedAt: Date | null }) {
+export function companyView(row: { id: string; menteeId: string; status: string; createdAt: Date; decidedAt: Date | null; source?: string | null }) {
   return {
     id: row.id,
     menteeId: row.menteeId,
+    source: isOutreachSource(row.source) ? row.source : 'SHORTLIST',
     status: row.status === 'REVOKED' ? 'CLOSED' : row.status,
     createdAt: row.createdAt,
     decidedAt: row.status === 'PENDING' ? null : row.decidedAt,

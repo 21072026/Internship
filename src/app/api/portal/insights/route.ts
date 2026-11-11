@@ -5,10 +5,10 @@ import { withTenantScope } from '@/lib/orgContext';
 import { getOwnMenteeActivity } from '@/lib/activityReport';
 import { hasConsent } from '@/lib/consent';
 import { canUsePortal } from '@/lib/dualRole';
+import { insightsWindowFrom } from '@/lib/portalInsightsQuery';
 
-const ALLOWED_DAYS = [1, 7, 30];
-
-// GET — the caller's own activity summary (#1915).
+// GET — the caller's own activity summary (#1915), over `?days=1|7|30` or a
+// `?from=&to=` date range (#1909; src/lib/portalInsightsWindow.ts decides).
 //
 // The mentee-facing half of the report `/mentor/mentee-activity` and
 // `/admin/mentee-activity` already show about them. Two deliberate properties:
@@ -29,15 +29,15 @@ export async function GET(request: Request) {
   }
 
   return withTenantScope(session, async () => {
-    const requested = Number(new URL(request.url).searchParams.get('days'));
-    const days = ALLOWED_DAYS.includes(requested) ? requested : 7;
-    const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const period = insightsWindowFrom(new URL(request.url).searchParams);
 
-    const activity = await getOwnMenteeActivity(session.user.id, since);
+    const activity = await getOwnMenteeActivity(session.user.id, period.from, period.to);
     if (!activity) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
     return NextResponse.json({
-      days,
+      days: period.days,
+      from: period.from.toISOString(),
+      to: period.to.toISOString(),
       trackingConsent: await hasConsent(session.user.id, 'ACTIVITY_TRACKING'),
       activity,
     });

@@ -88,6 +88,10 @@ const IMPORT_RE = [
 ];
 const TOKEN_RE = [/(?:\?\.|\.)\s*([A-Za-z_$][\w$]*)/g, /['"`]([A-Za-z_$][\w$]*)(?=[.'"`])/g];
 
+// A file opts out of the token scan with this line in a comment; see scanFile.
+const NO_DICTIONARY = /^\s*\/\/\s*i18n-scopes: no-dictionary\b/m;
+const READS_DICTIONARY = /\buseT\s*\(|\bgetServerDictionary\b|\bClientDictionary\b|\bDictionary\b|from\s+['"]@\/i18n\//;
+
 const fileCache = new Map();
 function scanFile(file) {
   let hit = fileCache.get(file);
@@ -99,7 +103,19 @@ function scanFile(file) {
     if (r && !OPAQUE.has(r)) imports.add(r);
   }
   const tokens = new Set();
-  for (const re of TOKEN_RE) for (const m of text.matchAll(re)) tokens.add(m[1]);
+  if (NO_DICTIONARY.test(text)) {
+    // The file says it never reads the dictionary (#3599): its identifiers that
+    // look like namespaces are something else — nav keys (`key: 'settings'`,
+    // read as `t.nav[key]` by the component), permission names
+    // (`'org.settings.write'`), tour step keys. Its imports are still followed.
+    // The claim is checked, not trusted: a file that can reach the dictionary
+    // fails the run instead of silently shipping too little.
+    if (READS_DICTIONARY.test(text)) {
+      throw new Error(`i18n-scopes: ${path.relative(ROOT, file)} is marked "i18n-scopes: no-dictionary" but reads the dictionary`);
+    }
+  } else {
+    for (const re of TOKEN_RE) for (const m of text.matchAll(re)) tokens.add(m[1]);
+  }
   hit = { imports, tokens, client: USE_CLIENT.test(text) };
   fileCache.set(file, hit);
   return hit;
@@ -151,13 +167,45 @@ const SHELL_FILES = ['layout.tsx', 'providers.tsx', 'not-found.tsx', 'error.tsx'
 // One scope per top-level directory of src/app that renders a page (route
 // groups included — `(unstreamed)/admin` is not under `admin/layout.tsx`), plus
 // `home` for the root page, which has no directory of its own.
+//
+// A directory in NESTED is split one level further (#3599): `admin` alone held
+// ~70 sections, and its one scope was the union of all of them — 220
+// namespaces, ~600 KB of HTML on every admin page whichever screen it was. For
+// such a directory the top-level scope is only its CHROME (the files directly in
+// it: layout, error, loading — its own page excluded), every sub-directory that
+// renders a page gets `<dir>/<sub>`, mounted by that sub-directory's layout, and
+// the directory's own page gets `<dir>/index`, mounted by the page itself. A
+// sub-scope leaves out what the shell and the chrome already ship, because it
+// is only ever rendered inside both. Same rule as one level up: segment layouts
+// re-render with the navigation, so each part follows it — never a path test.
+const NESTED = new Set(['admin']);
+
+const hasPage = (files) => files.some((f) => /\/page\.(tsx|ts|jsx|js)$/.test(f));
+const isPage = (f) => /\/page\.(tsx|ts|jsx|js)$/.test(f);
+
 function scopeRoots() {
   const roots = [];
   for (const e of fs.readdirSync(APP, { withFileTypes: true })) {
     if (!e.isDirectory() || e.name === 'api' || e.name.startsWith('_')) continue;
-    const files = walk(path.join(APP, e.name));
-    if (!files.some((f) => /\/page\.(tsx|ts|jsx|js)$/.test(f))) continue;
-    roots.push({ id: e.name, dir: path.join(APP, e.name), entries: files.filter(isRendered) });
+    const dir = path.join(APP, e.name);
+    const files = walk(dir);
+    if (!hasPage(files)) continue;
+    if (!NESTED.has(e.name)) {
+      roots.push({ id: e.name, dir, layout: path.join(dir, 'layout.tsx'), entries: files.filter(isRendered) });
+      continue;
+    }
+    const own = fs.readdirSync(dir, { withFileTypes: true }).filter((x) => x.isFile()).map((x) => path.join(dir, x.name));
+    const chrome = { id: e.name, dir, layout: path.join(dir, 'layout.tsx'), entries: own.filter((f) => isRendered(f) && !isPage(f)) };
+    roots.push(chrome);
+    const page = own.find(isPage);
+    if (page) roots.push({ id: `${e.name}/index`, dir, layout: page, parent: chrome, entries: [page] });
+    for (const sub of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!sub.isDirectory()) continue;
+      const subDir = path.join(dir, sub.name);
+      const subFiles = walk(subDir);
+      if (!hasPage(subFiles)) continue;
+      roots.push({ id: `${e.name}/${sub.name}`, dir: subDir, layout: path.join(subDir, 'layout.tsx'), parent: chrome, entries: subFiles.filter(isRendered) });
+    }
   }
   roots.sort((a, b) => (a.id < b.id ? -1 : 1));
   return roots;
@@ -172,7 +220,15 @@ function build() {
   const home = path.join(APP, 'page.tsx');
   if (fs.existsSync(home)) scopes.home = pick(reachableTokens([home])).filter((n) => !shellSet.has(n));
   const roots = scopeRoots();
-  for (const r of roots) scopes[r.id] = pick(reachableTokens(r.entries)).filter((n) => !shellSet.has(n));
+  const chromeOf = new Map();
+  for (const r of roots.filter((x) => !x.parent)) {
+    scopes[r.id] = pick(reachableTokens(r.entries)).filter((n) => !shellSet.has(n));
+    chromeOf.set(r, new Set(scopes[r.id]));
+  }
+  for (const r of roots.filter((x) => x.parent)) {
+    const above = chromeOf.get(r.parent);
+    scopes[r.id] = pick(reachableTokens(r.entries)).filter((n) => !shellSet.has(n) && !above.has(n));
+  }
   return { shell, scopes, roots, total: client.size };
 }
 
@@ -201,11 +257,10 @@ export type I18nScopeId = keyof typeof SCOPE_NAMESPACES;
 function coverageProblems(roots) {
   const problems = [];
   const mounted = (file, id) =>
-    fs.existsSync(file) && new RegExp(`<I18nScope\\s+scope=["']${id.replace(/[()]/g, '\\$&')}["']`).test(fs.readFileSync(file, 'utf8'));
+    fs.existsSync(file) && new RegExp(`<I18nScope\\s+scope=["']${id.replace(/[()/]/g, '\\$&')}["']`).test(fs.readFileSync(file, 'utf8'));
   if (!mounted(path.join(APP, 'page.tsx'), 'home')) problems.push('src/app/page.tsx does not render <I18nScope scope="home">');
   for (const r of roots) {
-    const layout = path.join(r.dir, 'layout.tsx');
-    if (!mounted(layout, r.id)) problems.push(`src/app/${r.id}/layout.tsx does not render <I18nScope scope="${r.id}">`);
+    if (!mounted(r.layout, r.id)) problems.push(`${path.relative(ROOT, r.layout)} does not render <I18nScope scope="${r.id}">`);
   }
   return problems;
 }

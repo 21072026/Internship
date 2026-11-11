@@ -28,7 +28,13 @@ export async function POST(request: Request) {
 
   const body: unknown = await request.json().catch(() => null);
   const parsed = parseAffiliateApplication(body);
-  if (!parsed.ok) return NextResponse.json({ code: 'invalid_application', fields: parsed.fields }, { status: 400 });
+  // The partner terms (#3363): when the programme has a contract, the tick must name
+  // its CURRENT version — a form rendered before a new version was published asks again.
+  const contractOk = !programme.contract || (body as { contractVersion?: unknown } | null)?.contractVersion === programme.contract.version;
+  if (!parsed.ok || !contractOk) {
+    const fields = [...(parsed.ok ? [] : parsed.fields), ...(contractOk ? [] : (['contract'] as const))];
+    return NextResponse.json({ code: 'invalid_application', fields }, { status: 400 });
+  }
   const limited = enforceRateLimit(request, 'affiliate-application', { limit: 3, windowMs: 60 * 60 * 1000 });
   if (limited) return limited;
 
@@ -38,7 +44,12 @@ export async function POST(request: Request) {
   if ((typeof extra.website === 'string' && extra.website !== '') || tooFast) return NextResponse.json({ ok: true });
 
   const locale = typeof extra.locale === 'string' && isLocale(extra.locale) ? extra.locale : null;
-  const { followUp } = await submitAffiliateApplication({ orgId: programme.orgId, application: parsed.application, locale });
+  const { followUp } = await submitAffiliateApplication({
+    orgId: programme.orgId,
+    application: parsed.application,
+    locale,
+    contractVersion: programme.contract?.version ?? null,
+  });
   if (followUp) after(followUp);
   return NextResponse.json({ ok: true });
 }

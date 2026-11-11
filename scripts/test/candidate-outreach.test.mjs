@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { register } from 'node:module';
 register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
 
-const { decisionTarget, canRevoke, requestRefusal, quotaPeriod, quotaLimit, companyView, isOutreachStatus, REVOKE_COOLDOWN_DAYS } = await import('../../src/lib/outreachRule.ts');
+const { decisionTarget, canRevoke, requestRefusal, quotaPeriod, quotaLimit, companyView, isOutreachStatus, isOutreachSource, OUTREACH_SOURCES, REVOKE_COOLDOWN_DAYS } = await import('../../src/lib/outreachRule.ts');
 
 const now = new Date('2026-10-21T10:00:00Z');
 const daysAgo = (n) => new Date(now.getTime() - n * 86_400_000);
@@ -50,8 +50,20 @@ test('the limit: the company quota when set, else the setting, else 20', () => {
 
 test('a company sees status only — a revoked channel reads CLOSED, a pending one has no decision time', () => {
   const base = { id: 'o1', menteeId: 'm1', createdAt: now, decidedAt: now };
-  assert.deepEqual(Object.keys(companyView({ ...base, status: 'DECLINED' })).sort(), ['createdAt', 'decidedAt', 'id', 'menteeId', 'status']);
+  // The whole of what a company reads — no name of a decider, no reason, no
+  // contact detail of the candidate (#1394 adds only the request's door).
+  assert.deepEqual(Object.keys(companyView({ ...base, status: 'DECLINED' })).sort(), ['createdAt', 'decidedAt', 'id', 'menteeId', 'source', 'status']);
   assert.equal(companyView({ ...base, status: 'REVOKED' }).status, 'CLOSED');
   assert.equal(companyView({ ...base, status: 'PENDING' }).decidedAt, null);
   assert.ok(isOutreachStatus('PENDING') && !isOutreachStatus('CLOSED'));
+});
+
+test('a request comes through one of two doors, an older row reading as a shortlist (#1394)', () => {
+  assert.deepEqual([...OUTREACH_SOURCES], ['SHORTLIST', 'TALENT_POOL']);
+  assert.equal(isOutreachSource('TALENT_POOL'), true);
+  assert.equal(isOutreachSource('talent_pool'), false);
+  const base = { id: 'o1', menteeId: 'm1', status: 'PENDING', createdAt: new Date(), decidedAt: null };
+  assert.equal(companyView(base).source, 'SHORTLIST');
+  assert.equal(companyView({ ...base, source: 'TALENT_POOL' }).source, 'TALENT_POOL');
+  assert.equal(companyView({ ...base, source: 'ANYTHING' }).source, 'SHORTLIST');
 });

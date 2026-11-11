@@ -20,6 +20,12 @@
 //
 // Anything outside the set answers like a missing user (404): a refusal that
 // differs from "no such person" would confirm the id belongs to someone.
+//
+// A mentee's circle is read from SEATS (#3584): the primary pair of every
+// relation and the extra seats of a group relation (#1804, RelationParticipant).
+// Which seat counts is `menteeConnectionsFromSeats()` below — only an active
+// seat, in an ACTIVE relation, of an active, un-benched person, with both the
+// relation and the person in the caller's own org.
 
 export type TeamSeat = 'OWNER' | 'MENTOR' | 'MENTEE';
 
@@ -51,6 +57,71 @@ export interface TeamConnections {
 }
 
 export const NO_CONNECTIONS: TeamConnections = { mentors: new Set(), mentees: new Set() };
+
+/**
+ * One person's place in one relation, as the loader read it: the primary pair
+ * (from the relation's `mentorId`/`menteeId`, never left) or a group seat
+ * beyond it. `side` is MENTOR for a mentor or facilitator seat.
+ */
+export interface RelationSeat {
+  relationId: string;
+  relationStatus: string;
+  relationOrgId: string | null;
+  userId: string;
+  userOrgId: string | null;
+  userActive: boolean;
+  userState: string | null;
+  side: 'MENTOR' | 'MENTEE';
+  leftAt: Date | null;
+}
+
+/** The caller's org. NULL on any side is the default org's, never a wildcard. */
+export interface TeamOrg {
+  orgId: string | null;
+  defaultOrgId: string;
+}
+
+function sameOrg(rowOrgId: string | null, org: TeamOrg): boolean {
+  return (rowOrgId || org.defaultOrgId) === (org.orgId || org.defaultOrgId);
+}
+
+/**
+ * Does this seat count at all? Only active participation (#3584): the seat was
+ * not left, the relation is ACTIVE (not completed or ended), the person is an
+ * active account that is not on the bench, and both the relation and the
+ * person belong to the caller's org — checked here, not left to the query.
+ */
+export function seatCounts(seat: RelationSeat, org: TeamOrg): boolean {
+  return (
+    seat.relationStatus === 'ACTIVE' &&
+    seat.leftAt === null &&
+    seat.userActive &&
+    seat.userState !== 'BENCHED' &&
+    sameOrg(seat.relationOrgId, org) &&
+    sameOrg(seat.userOrgId, org)
+  );
+}
+
+/**
+ * A MENTEE's circle from seats. Their own relations are those where they hold
+ * a counting MENTEE seat; the mentors are the counting mentor seats there; the
+ * peers are the counting mentee seats of every relation one of those mentors
+ * leads (their own included) — "my mentor's other mentees", now group-aware.
+ */
+export function menteeConnectionsFromSeats(actorId: string, seats: readonly RelationSeat[], org: TeamOrg): TeamConnections {
+  const counting = seats.filter((s) => seatCounts(s, org));
+  const own = new Set(counting.filter((s) => s.userId === actorId && s.side === 'MENTEE').map((s) => s.relationId));
+  if (own.size === 0) return { mentors: new Set(), mentees: new Set() };
+  const mentors = new Set(
+    counting.filter((s) => own.has(s.relationId) && s.side === 'MENTOR' && s.userId !== actorId).map((s) => s.userId)
+  );
+  const led = new Set(counting.filter((s) => s.side === 'MENTOR' && mentors.has(s.userId)).map((s) => s.relationId));
+  for (const id of own) led.add(id);
+  const mentees = new Set(
+    counting.filter((s) => led.has(s.relationId) && s.side === 'MENTEE' && s.userId !== actorId).map((s) => s.userId)
+  );
+  return { mentors, mentees };
+}
 
 /**
  * Who may read the roster and change it: an admin, an OWNER member, or the
