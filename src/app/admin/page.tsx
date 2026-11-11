@@ -22,6 +22,7 @@ import { getPlan } from '@/lib/plans';
 import { FirstRunPanel } from '@/components/FirstRunPanel';
 import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
 import { UNASSIGNED_FILTER, unassignedMenteeWhere } from '@/lib/unassignedCandidates';
+import { I18nScope } from '@/i18n/scope';
 
 // Bound to the caller's org (#2356): this is a server component, so its Prisma
 // reads do not pass through an API route's `withTenantScope` — without binding
@@ -117,7 +118,7 @@ async function getStats(session: Session | null) {
   });
 }
 
-export default async function AdminDashboard() {
+async function AdminDashboard() {
   const session = await getServerSession(authOptions);
   const stats = await getStats(session);
   const { locale, t } = await getServerDictionary();
@@ -394,5 +395,15 @@ export default async function AdminDashboard() {
         </Link>
       </div>
     </div>
+  );
+}
+
+// The dashboard's own dictionary namespaces (#3599): the admin layout ships only
+// its chrome, and this page has no directory of its own to put a layout in.
+export default function ScopedAdminDashboard() {
+  return (
+    <I18nScope scope="admin/index">
+      <AdminDashboard />
+    </I18nScope>
   );
 }
