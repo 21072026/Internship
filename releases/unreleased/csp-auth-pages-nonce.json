@@ -1,4 +1,4 @@
 {
   "bump": "patch",
-  "changelog": "**Security:** the strict report-only CSP and its per-request nonce now cover the `/auth/*` pages too (sign-in, register, reset, magic link, SSO, 2FA). `src/middleware.ts` matches them; none of its redirects applies there — `wantsResume()` returns false for `/auth/*`, the `/en` 308 and the language rewrite cover public pages only, and the write gates only see `/api/*` writes (no server actions) (#1552, step 2)."
+  "changelog": "**Security:** the strict report-only CSP and its per-request nonce now cover the `/auth/*` pages too (sign-in, register, reset, magic link, SSO, 2FA). `src/middleware.ts` matches them; none of its redirects applies there — `wantsResume()` returns false for `/auth/*`, the `/en` 308 and the language rewrite cover public pages only, and the write gates refuse only writes, which nothing sends to a page (no server actions) (#1552, step 2)."
 }
