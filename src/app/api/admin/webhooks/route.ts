@@ -37,7 +37,7 @@ export async function GET(request: Request) {
 }
 
 const schema = z.object({
-  url: z.string().url(),
+  url: z.url(),
   events: z.array(z.enum(WEBHOOK_EVENTS)).min(1),
 });
 
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
 // has already deployed verification code against it, and rotation is its own
 // explicit endpoint (webhooks/rotate-secret).
 const patchSchema = z.object({
-  url: z.string().url().optional(),
+  url: z.url().optional(),
   events: z.array(z.enum(WEBHOOK_EVENTS)).min(1).optional(),
   active: z.boolean().optional(),
 });

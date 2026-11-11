@@ -77,7 +77,7 @@ const schema = z.object({
   // src/lib/taskDue.ts § rule 2. null clears the date. (The same five lines sit
   // in /api/todos' create schema: a route file may not export them.)
   dueDate: z
-    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.string().datetime()])
+    .union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/), z.iso.datetime()])
     .nullable()
     .optional(),
 });

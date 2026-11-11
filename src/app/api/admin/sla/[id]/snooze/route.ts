@@ -10,7 +10,7 @@ import { validSnooze } from '@/lib/slaLadderRule';
 // the ladder resumes where it stood. Takes a reason, which goes to the audit
 // log only. ADMIN only, org from the session — see ../acknowledge/route.ts.
 const schema = z.object({
-  until: z.string().datetime({ offset: true }),
+  until: z.iso.datetime({ offset: true }),
   reason: z.string().trim().min(1).max(500),
 });
 

@@ -32,7 +32,7 @@ const utmValue = z.string().max(300).optional();
 const schema = z.object({
   companyName: z.string().min(1).max(160),
   contactName: z.string().min(1).max(120),
-  email: z.string().email().max(TEXT_LIMITS.companyContactEmail),
+  email: z.email().max(TEXT_LIMITS.companyContactEmail),
   phone: z.string().max(40).optional(),
   openRoles: z.string().max(300).optional(),
   // MARKETING form (#2569): the marketplaces they sell on, free text. Ignored

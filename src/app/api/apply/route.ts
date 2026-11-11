@@ -68,7 +68,7 @@ export async function GET(request: Request) {
 const schema = z.object({
   mentorId: z.string().min(1),
   fullName: z.string().min(1),
-  email: z.string().email(),
+  email: z.email(),
   phone: z.string().optional(),
   city: z.string().optional(),
   university: z.string().optional(),

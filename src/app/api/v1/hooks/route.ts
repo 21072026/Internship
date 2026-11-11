@@ -15,7 +15,7 @@ import { MAX_HOOKS_PER_KEY, WEBHOOK_EVENTS } from '@/lib/webhooks';
 // path (src/lib/webhooks.ts): signed, SSRF-checked again at delivery, and cut
 // off once the owner key is revoked or expired.
 const subscribeSchema = z.strictObject({
-  targetUrl: z.string().url().max(2048),
+  targetUrl: z.url().max(2048),
   event: z.enum(WEBHOOK_EVENTS),
 });
 

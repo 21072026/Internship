@@ -36,7 +36,7 @@ const patchSchema = z.object({
   audience: z.enum(['MENTEE', 'MENTOR', 'BOTH']).optional(),
   content: z.record(z.string(), z.unknown()).optional(),
   // Null clears the schedule and returns the issue to DRAFT.
-  scheduledAt: z.string().datetime().nullable().optional(),
+  scheduledAt: z.iso.datetime().nullable().optional(),
   // 'schedule' arms it, 'draft' disarms it, 'cancel' pulls it for good.
   action: z.enum(['schedule', 'draft', 'cancel']).optional(),
   removeImage: z.boolean().optional(),

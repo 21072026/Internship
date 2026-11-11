@@ -70,8 +70,8 @@ export const createSurveySchema = z.strictObject({
   intro: localized.nullable().optional(),
   audience: oneOf(AUDIENCES),
   anonymity: oneOf(ANONYMITIES),
-  opensAt: z.string().datetime().nullable().optional(),
-  closesAt: z.string().datetime().nullable().optional(),
+  opensAt: z.iso.datetime().nullable().optional(),
+  closesAt: z.iso.datetime().nullable().optional(),
   // Raised per survey, never below the default floor.
   minResponses: z.number().int().min(SURVEY_MIN_RESPONSES).max(1000).optional(),
   questions: questionsSchema,
@@ -81,8 +81,8 @@ export const updateSurveySchema = z.strictObject({
   title: localized.optional(),
   intro: localized.nullable().optional(),
   status: oneOf(STATUSES).optional(),
-  opensAt: z.string().datetime().nullable().optional(),
-  closesAt: z.string().datetime().nullable().optional(),
+  opensAt: z.iso.datetime().nullable().optional(),
+  closesAt: z.iso.datetime().nullable().optional(),
   minResponses: z.number().int().min(SURVEY_MIN_RESPONSES).max(1000).optional(),
   questions: questionsSchema.optional(),
 });

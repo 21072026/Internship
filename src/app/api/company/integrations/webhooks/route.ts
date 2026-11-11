@@ -43,7 +43,7 @@ export async function GET() {
 }
 
 const schema = z.object({
-  url: z.string().url().max(500),
+  url: z.url().max(500),
   events: z.array(z.string()).min(1).max(COMPANY_WEBHOOK_EVENTS.length),
 });
 

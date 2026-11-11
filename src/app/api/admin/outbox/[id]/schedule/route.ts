@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 const schema = z.object({
   // An absolute instant (ISO 8601 with an offset). The page converts the
   // operator's local date and time in their own time zone; the server stores UTC.
-  at: z.string().datetime({ offset: true }),
+  at: z.iso.datetime({ offset: true }),
 });
 
 // POST — Schedule a held mail: the draft becomes SCHEDULED and the mail goes onto the mail queue for that time (#2960).

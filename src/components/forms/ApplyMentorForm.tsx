@@ -16,12 +16,12 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 
 const applyMentorSchema = z.object({
   fullName: z.string().min(1),
-  email: z.string().email(),
+  email: z.email(),
   phone: z.string().optional(),
   experience: z.string().max(TEXT_LIMITS.mentorApplicationExperience).optional(),
   motivation: z.string().max(TEXT_LIMITS.mentorApplicationMotivation).optional(),
   capacity: z.string().optional(),
-  linkedinUrl: z.string().url().optional().or(z.literal('')),
+  linkedinUrl: z.url().optional().or(z.literal('')),
   consent: z.literal(true, { error: 'Consent is required' }),
   // Honeypot (mirrors PublicContactForm) — real users never fill this in.
   website: z.string().optional(),

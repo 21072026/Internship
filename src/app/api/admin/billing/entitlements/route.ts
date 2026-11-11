@@ -26,7 +26,7 @@ const schema = z.object({
   action: z.enum(['grant', 'revoke']),
   note: z.string().trim().max(NOTE_MAX).optional().nullable(),
   // ISO date-time; must be in the future. Omitted/null = open-ended.
-  expiresAt: z.string().datetime().optional().nullable(),
+  expiresAt: z.iso.datetime().optional().nullable(),
 });
 
 export async function POST(request: Request) {

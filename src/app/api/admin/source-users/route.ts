@@ -13,7 +13,7 @@ import { requirePermission } from '@/lib/authz';
 
 const schema = z.object({
   sourceId: z.string().min(1),
-  email: z.string().email(),
+  email: z.email(),
   fullName: z.string().min(1),
 });
 
