@@ -51,6 +51,7 @@ import { ContractEndPanel } from '@/components/ContractEndPanel';
 import { DealValuePanel } from '@/components/DealValuePanel';
 import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
 import { stageGateFrom, useStageGateDialog } from '@/components/StageGateDialog';
+import { contentLang } from '@/lib/contentLanguage';
 
 interface Interaction { id: string; date: string; notes: string; type: string; autoLogged?: boolean }
 interface StatusChange { id: string; fromStatus: string; toStatus: string; createdAt: string; changedBy: { fullName: string } | null }
@@ -692,7 +693,7 @@ export default function AdminMenteeDetailPage() {
                       <div key={i.id} className="flex items-start gap-2 text-sm">
                         <InteractionTypeBadge type={i.type} className="text-xs flex-shrink-0" />
                         <div>
-                          <p className="text-gray-700">{i.notes}</p>
+                          <p lang={contentLang(i.notes)} className="text-gray-700">{i.notes}</p>
                           <AutoLoggedBadge autoLogged={i.autoLogged} className="text-xs mt-1" />
                           {/* Usually a day picked in a date input (AddInteractionForm), not an instant — it stays a date. */}
                           <p className="text-xs text-gray-400">{formatDate(i.date, locale)}</p>
