@@ -39,13 +39,11 @@ export async function GET() {
   });
 }
 
-const inviteSchema = z
-  .object({
-    email: z.string().trim().email().max(TEXT_LIMITS.companyContactEmail),
-    seatRole: z.string().refine(isSeatRole, 'unknown seatRole'),
-    locale: z.string().max(5).optional(),
-  })
-  .strict();
+const inviteSchema = z.strictObject({
+  email: z.string().trim().email().max(TEXT_LIMITS.companyContactEmail),
+  seatRole: z.string().refine(isSeatRole, 'unknown seatRole'),
+  locale: z.string().max(5).optional(),
+});
 
 const REFUSAL_STATUS = { seat_limit_reached: 403, email_taken: 409, invitation_pending: 409, not_found: 404, last_owner: 409, not_yourself: 400 } as const;
 

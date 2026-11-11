@@ -10,7 +10,7 @@ import { answerMentorOffer } from '@/lib/mentorOffers';
 // POST /api/mentee/offers/[id] { action: 'accept' | 'decline' } — the mentee
 // answers a Mentor Offer (#1809). Accept creates the pairing through the shared
 // decision service; decline asks for no reason. Not theirs → 404.
-const schema = z.object({ action: z.enum(['accept', 'decline']) }).strict();
+const schema = z.strictObject({ action: z.enum(['accept', 'decline']) });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);

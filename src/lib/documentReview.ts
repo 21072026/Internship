@@ -148,7 +148,7 @@ export function canInviteExternal(params: { actorRole: string; isOwnersActiveMen
 export const reviewChainSchema = {
   approvalMode: z.enum(APPROVAL_MODES).optional(),
   validityDays: z.number().int().min(1).max(MAX_VALIDITY_DAYS).nullable().optional(),
-  reviewerRoles: z.array(z.object({ role: z.enum(REVIEWER_ROLES), label: z.string().trim().max(LABEL_MAX).optional() }).strict()).max(MAX_REVIEW_STEPS).optional(),
+  reviewerRoles: z.array(z.strictObject({ role: z.enum(REVIEWER_ROLES), label: z.string().trim().max(LABEL_MAX).optional() })).max(MAX_REVIEW_STEPS).optional(),
 };
 
 /** The stored shape of reviewerRoles: numbered in the order given, empty labels dropped. */

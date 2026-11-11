@@ -79,11 +79,11 @@ const stageKey = z.string().trim().min(1).max(191);
 const stageList = z.array(stageKey).min(1).max(50);
 
 export const conditionSchema = z.discriminatedUnion('field', [
-  z.object({ field: z.literal('kind'), op: z.enum(['eq', 'neq']), value: z.enum(['PLACEMENT', 'COACHING']) }).strict(),
-  z.object({ field: z.literal('hasCompany'), op: z.literal('eq'), value: z.boolean() }).strict(),
-  z.object({ field: z.literal('fromStage'), op: z.enum(['in', 'notIn']), value: stageList }).strict(),
-  z.object({ field: z.literal('toStage'), op: z.enum(['in', 'notIn']), value: stageList }).strict(),
-  z.object({ field: z.literal('daysInFromStage'), op: z.enum(['gte', 'lte']), value: z.number().int().min(0).max(3650) }).strict(),
+  z.strictObject({ field: z.literal('kind'), op: z.enum(['eq', 'neq']), value: z.enum(['PLACEMENT', 'COACHING']) }),
+  z.strictObject({ field: z.literal('hasCompany'), op: z.literal('eq'), value: z.boolean() }),
+  z.strictObject({ field: z.literal('fromStage'), op: z.enum(['in', 'notIn']), value: stageList }),
+  z.strictObject({ field: z.literal('toStage'), op: z.enum(['in', 'notIn']), value: stageList }),
+  z.strictObject({ field: z.literal('daysInFromStage'), op: z.enum(['gte', 'lte']), value: z.number().int().min(0).max(3650) }),
 ]);
 export type AutomationCondition = z.infer<typeof conditionSchema>;
 
@@ -149,12 +149,12 @@ const TEMPLATE_NAMES = Object.keys(AUTOMATION_EMAIL_TEMPLATES) as [AutomationEma
 const rowId = z.string().trim().min(1).max(191);
 
 export const actionSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('notifyRole'), role: z.enum(NOTIFY_ROLES) }).strict(),
-  z.object({ type: z.literal('sendTemplateEmail'), template: z.enum(TEMPLATE_NAMES) }).strict(),
-  z.object({ type: z.literal('setStageDeadline'), days: z.number().int().min(1).max(365) }).strict(),
-  z.object({ type: z.literal('assignGoalFromTemplate'), templateId: rowId }).strict(),
-  z.object({ type: z.literal('requireDocument'), requirementId: rowId }).strict(),
-  z.object({ type: z.literal('addTag'), tagId: rowId }).strict(),
+  z.strictObject({ type: z.literal('notifyRole'), role: z.enum(NOTIFY_ROLES) }),
+  z.strictObject({ type: z.literal('sendTemplateEmail'), template: z.enum(TEMPLATE_NAMES) }),
+  z.strictObject({ type: z.literal('setStageDeadline'), days: z.number().int().min(1).max(365) }),
+  z.strictObject({ type: z.literal('assignGoalFromTemplate'), templateId: rowId }),
+  z.strictObject({ type: z.literal('requireDocument'), requirementId: rowId }),
+  z.strictObject({ type: z.literal('addTag'), tagId: rowId }),
 ]);
 export type AutomationAction = z.infer<typeof actionSchema>;
 export type AutomationActionType = AutomationAction['type'];
@@ -196,17 +196,15 @@ export function referencedRow(action: AutomationAction): { kind: 'tag' | 'docume
 
 // ── The rule as written ─────────────────────────────────────────────────────
 
-export const ruleInputSchema = z
-  .object({
-    name: z.string().trim().min(1).max(MAX_RULE_NAME),
-    trigger: z.enum(AUTOMATION_TRIGGERS),
-    stageKey,
-    conditions: z.array(conditionSchema).max(MAX_CONDITIONS).default([]),
-    actions: z.array(actionSchema).min(1).max(MAX_ACTIONS),
-    delayMinutes: z.number().int().min(0).max(MAX_DELAY_MINUTES).default(0),
-    enabled: z.boolean().default(false),
-  })
-  .strict();
+export const ruleInputSchema = z.strictObject({
+  name: z.string().trim().min(1).max(MAX_RULE_NAME),
+  trigger: z.enum(AUTOMATION_TRIGGERS),
+  stageKey,
+  conditions: z.array(conditionSchema).max(MAX_CONDITIONS).default([]),
+  actions: z.array(actionSchema).min(1).max(MAX_ACTIONS),
+  delayMinutes: z.number().int().min(0).max(MAX_DELAY_MINUTES).default(0),
+  enabled: z.boolean().default(false),
+});
 export type AutomationRuleInput = z.infer<typeof ruleInputSchema>;
 
 export type RuleInputResult =

@@ -26,7 +26,7 @@ import { threadAiRefusal } from '@/lib/threadAiResponses';
 // here; the composer shows the draft and the mentor presses Send. Free, never
 // plan-gated. The same relation state is answered from the stored draft.
 
-const schema = z.object({ moment: z.enum([...OUTREACH_MOMENTS, 'auto']).optional(), regenerate: z.boolean().optional() }).strict();
+const schema = z.strictObject({ moment: z.enum([...OUTREACH_MOMENTS, 'auto']).optional(), regenerate: z.boolean().optional() });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withRequestScope(request, () => handlePost(request, params));

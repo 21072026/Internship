@@ -48,12 +48,10 @@ export const IMPORT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 /** Imports a key may have queued or running at once (409 `limit_reached`). */
 export const MAX_OPEN_IMPORTS_PER_KEY = 2;
 
-export const importRequestSchema = z
-  .object({
-    candidates: z.array(z.unknown()).min(1).max(IMPORT_ROW_CAP),
-    dryRun: z.boolean().optional(),
-  })
-  .strict();
+export const importRequestSchema = z.strictObject({
+  candidates: z.array(z.unknown()).min(1).max(IMPORT_ROW_CAP),
+  dryRun: z.boolean().optional(),
+});
 
 type Candidate = Omit<z.infer<typeof createCandidateSchema>, 'skills'> & { skills?: string[] };
 type Match = { id: string; signals: string[]; score?: number };

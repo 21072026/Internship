@@ -16,13 +16,11 @@ import { requirePermission } from '@/lib/authz';
 // from a full question list. Both land on the same write boundary, the rules
 // in src/lib/surveys.ts.
 
-const fromTemplateSchema = z
-  .object({
-    templateKey: z.string().min(1).max(80),
-    audience: z.enum(['MENTEE', 'MENTOR', 'BOTH']).optional(),
-    anonymity: z.enum(['IDENTIFIED', 'CONFIDENTIAL', 'ANONYMOUS']).optional(),
-  })
-  .strict();
+const fromTemplateSchema = z.strictObject({
+  templateKey: z.string().min(1).max(80),
+  audience: z.enum(['MENTEE', 'MENTOR', 'BOTH']).optional(),
+  anonymity: z.enum(['IDENTIFIED', 'CONFIDENTIAL', 'ANONYMOUS']).optional(),
+});
 
 export async function GET(request: Request) {
   const gate = await requirePermission('content.read', { request });

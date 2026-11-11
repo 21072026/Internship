@@ -23,15 +23,11 @@ import { scoreSwap } from '@/lib/matching/roundSwap';
 //     score is recomputed HERE (`scoreSwap`); the body carries no score and a
 //     stray one is refused by the strict schema. A pair a hard rule blocks —
 //     the round's own reservations counted — is 409 with the rule.
-const bulkSchema = z
-  .object({
-    action: z.enum(Object.keys(PROPOSAL_ACTIONS) as [ProposalAction, ...ProposalAction[]]),
-    ids: z.array(z.string().min(1).max(64)).min(1).max(COHORT_PASS_MAX_MENTEES),
-  })
-  .strict();
-const swapSchema = z
-  .object({ action: z.literal('swap'), id: z.string().min(1).max(64), mentorId: z.string().min(1).max(64) })
-  .strict();
+const bulkSchema = z.strictObject({
+  action: z.enum(Object.keys(PROPOSAL_ACTIONS) as [ProposalAction, ...ProposalAction[]]),
+  ids: z.array(z.string().min(1).max(64)).min(1).max(COHORT_PASS_MAX_MENTEES),
+});
+const swapSchema = z.strictObject({ action: z.literal('swap'), id: z.string().min(1).max(64), mentorId: z.string().min(1).max(64) });
 
 type Ctx = { params: Promise<{ id: string }> };
 

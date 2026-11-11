@@ -13,13 +13,11 @@ import { requirePermission } from '@/lib/authz';
 // answers like a missing one (404); a colleague's view you may not change is
 // 403.
 
-const patchSchema = z
-  .object({
-    name: z.string().trim().min(1).max(MAX_VIEW_NAME).optional(),
-    filters: z.record(z.string(), z.unknown()).optional(),
-    visibility: z.enum(SAVED_VIEW_VISIBILITIES).optional(),
-  })
-  .strict();
+const patchSchema = z.strictObject({
+  name: z.string().trim().min(1).max(MAX_VIEW_NAME).optional(),
+  filters: z.record(z.string(), z.unknown()).optional(),
+  visibility: z.enum(SAVED_VIEW_VISIBILITIES).optional(),
+});
 
 async function loadOwned(id: string, session: Parameters<typeof tenantWhere>[0] & { user: { id: string } }) {
   const view = await prisma.savedView.findFirst({ where: withinTenant({ id }, await tenantWhere(session)), select: { id: true, createdById: true } });

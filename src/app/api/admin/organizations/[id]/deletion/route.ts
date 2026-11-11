@@ -12,7 +12,7 @@ import { DELETION_ERRORS } from '@/lib/orgDeletionErrors';
 // unless the deployment sets TENANT_HARD_DELETE_ENABLED. Stage 2 is
 // DELETE /api/admin/organizations/[id].
 
-const bodySchema = z.object({ confirmSlug: z.string().max(200) }).strict();
+const bodySchema = z.strictObject({ confirmSlug: z.string().max(200) });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

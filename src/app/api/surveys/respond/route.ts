@@ -75,7 +75,7 @@ export async function GET(request: Request) {
   });
 }
 
-const postSchema = z.object({ token: z.string().min(1).max(200), answers: z.record(z.string(), z.unknown()) }).strict();
+const postSchema = z.strictObject({ token: z.string().min(1).max(200), answers: z.record(z.string(), z.unknown()) });
 
 export async function POST(request: Request) {
   const limited = enforceRateLimit(request, 'survey-answer', { limit: 20, windowMs: 10 * 60 * 1000 });

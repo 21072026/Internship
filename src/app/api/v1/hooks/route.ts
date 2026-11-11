@@ -14,12 +14,10 @@ import { MAX_HOOKS_PER_KEY, WEBHOOK_EVENTS } from '@/lib/webhooks';
 // nor an admin-created one (apiKeyId null). Delivery is the ordinary webhook
 // path (src/lib/webhooks.ts): signed, SSRF-checked again at delivery, and cut
 // off once the owner key is revoked or expired.
-const subscribeSchema = z
-  .object({
-    targetUrl: z.string().url().max(2048),
-    event: z.enum(WEBHOOK_EVENTS),
-  })
-  .strict();
+const subscribeSchema = z.strictObject({
+  targetUrl: z.string().url().max(2048),
+  event: z.enum(WEBHOOK_EVENTS),
+});
 
 const hookSelect = { id: true, url: true, events: true, active: true, createdAt: true } as const;
 

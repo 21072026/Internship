@@ -16,7 +16,7 @@ import { confirmSkillLevel } from '@/lib/skillLevels';
 // mentor of an ended pair — gets 403; hiding the button is not the check.
 // The level is the confirmer's statement, so it is required: a confirmation
 // always names the value it vouches for. Free core: never entitlement-gated.
-const schema = z.object({ level: z.number().int().min(SKILL_LEVEL_MIN).max(SKILL_LEVEL_MAX) }).strict();
+const schema = z.strictObject({ level: z.number().int().min(SKILL_LEVEL_MIN).max(SKILL_LEVEL_MAX) });
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string; skillId: string }> }) {
   return withRequestScope(request, async () => {

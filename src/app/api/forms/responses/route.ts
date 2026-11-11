@@ -32,12 +32,10 @@ export async function GET(request: Request) {
   });
 }
 
-const putSchema = z
-  .object({
-    definitionId: z.string().min(1).max(40),
-    answers: z.record(z.string().max(80), z.unknown()),
-  })
-  .strict();
+const putSchema = z.strictObject({
+  definitionId: z.string().min(1).max(40),
+  answers: z.record(z.string().max(80), z.unknown()),
+});
 
 export async function PUT(request: Request) {
   const session = await getServerSession(authOptions);

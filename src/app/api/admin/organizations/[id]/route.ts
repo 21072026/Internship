@@ -14,7 +14,7 @@ import { DELETION_ERRORS } from '@/lib/orgDeletionErrors';
 
 export const maxDuration = 600;
 
-const bodySchema = z.object({ confirmSlug: z.string().max(200), password: z.string().min(1).max(500) }).strict();
+const bodySchema = z.strictObject({ confirmSlug: z.string().max(200), password: z.string().min(1).max(500) });
 
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

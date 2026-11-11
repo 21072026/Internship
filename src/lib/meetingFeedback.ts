@@ -25,13 +25,11 @@ import { notifyEvent } from '@/lib/notifications/router';
 
 const DAY = 24 * 60 * 60 * 1000;
 
-export const feedbackSchema = z
-  .object({
-    happened: z.boolean(),
-    helpfulness: z.number().int().min(1).max(5).nullable().optional(),
-    note: z.string().trim().max(2000).nullable().optional(),
-  })
-  .strict();
+export const feedbackSchema = z.strictObject({
+  happened: z.boolean(),
+  helpfulness: z.number().int().min(1).max(5).nullable().optional(),
+  note: z.string().trim().max(2000).nullable().optional(),
+});
 
 export type FeedbackInput = z.infer<typeof feedbackSchema>;
 

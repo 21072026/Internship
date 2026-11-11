@@ -18,7 +18,7 @@ import { requirePermission } from '@/lib/authz';
 // policy is a setup choice an org admin makes about their own tenant, while
 // that handler's fields (plan, branding, SSO) are plan- and super-admin-gated.
 
-const bodySchema = z.object({ policy: z.enum(CONFERENCING_POLICIES) }).strict();
+const bodySchema = z.strictObject({ policy: z.enum(CONFERENCING_POLICIES) });
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

@@ -44,14 +44,12 @@ const MAX_WINDOW_DAYS = 366;
 
 const isoDate = z.string().max(40).refine((v) => !Number.isNaN(new Date(v).getTime()), 'invalid date');
 
-export const insightFiltersSchema = z
-  .object({
-    from: isoDate.optional(),
-    to: isoDate.optional(),
-    cohortId: z.string().min(1).max(64).optional(),
-    regenerate: z.boolean().optional(),
-  })
-  .strict();
+export const insightFiltersSchema = z.strictObject({
+  from: isoDate.optional(),
+  to: isoDate.optional(),
+  cohortId: z.string().min(1).max(64).optional(),
+  regenerate: z.boolean().optional(),
+});
 
 export type InsightRequest = z.infer<typeof insightFiltersSchema>;
 

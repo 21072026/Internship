@@ -36,13 +36,13 @@ import { MAX_FIRST_MESSAGE, OUTREACH_SOURCES, companyView, requestRefusal } from
 // the candidates they actively mentor, an admin the org's, a candidate their
 // approved channels (to close them). FREE CORE: nothing here asks for a plan.
 
-const bodySchema = z.object({
+const bodySchema = z.strictObject({
   menteeId: z.string().min(1).max(64),
   message: z.string().trim().min(1).max(MAX_FIRST_MESSAGE),
   // The door (#1394): a shortlisted candidate (the default, #1840) or an
   // introduction asked from the talent-pool search.
   via: z.enum(OUTREACH_SOURCES).optional(),
-}).strict();
+});
 
 const RATE_LIMIT = { limit: 30, windowMs: 60 * 60 * 1000 };
 // Introductions from the pool, per COMPANY (every seat of it together): the

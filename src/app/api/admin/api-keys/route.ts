@@ -212,7 +212,7 @@ export async function DELETE(request: Request) {
   return NextResponse.json({ ok: true });
 }
 
-const quotaSchema = z.object({ quotaPeriod: z.string().nullish(), quotaLimit: z.number().int().nullish() }).strict();
+const quotaSchema = z.strictObject({ quotaPeriod: z.string().nullish(), quotaLimit: z.number().int().nullish() });
 
 // PATCH ?id= — set or clear a key's period allowance (#2010). Only the quota:
 // scopes and expiry are fixed at minting, by design (#1545). Tenant-scoped

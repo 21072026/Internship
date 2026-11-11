@@ -22,7 +22,7 @@ export const REQUISITION_LIMITS = {
 const nullableText = (max: number) => z.string().trim().max(max).nullable().optional();
 const isoDate = z.string().datetime({ offset: true }).nullable().optional();
 
-export const requisitionInputSchema = z.object({
+export const requisitionInputSchema = z.strictObject({
   companyId: z.string().min(1).optional(),
   title: z.string().trim().min(1).max(REQUISITION_LIMITS.title),
   description: nullableText(REQUISITION_LIMITS.description),
@@ -36,7 +36,7 @@ export const requisitionInputSchema = z.object({
   ownerId: z.string().min(1).nullable().optional(),
   // The questions a candidate answers when applying (#1832).
   screeningQuestions: screeningQuestionsSchema.optional(),
-}).strict();
+});
 
 // A PATCH sets only the keys it sends. zod 4 applies a `.default()` even inside
 // `.partial()` (zod 3 did not), so the two defaulted fields are re-declared

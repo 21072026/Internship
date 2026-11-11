@@ -22,24 +22,20 @@ export async function GET(request: Request) {
   return await withTenantScope(session, async () => NextResponse.json(await loadAiPolicy(await settingsOrgOf(session)), { headers: { 'Cache-Control': 'no-store' } }));
 }
 
-const schema = z
-  .object({
-    enabled: z.boolean().optional(),
-    tasks: z
-      .array(
-        z
-          .object({
-            id: z.string().min(1).max(64),
-            enabled: z.boolean().optional(),
-            // null clears the override (inherit the org quota); a whole number sets it.
-            monthlyQuota: z.union([z.number(), z.string(), z.null()]).optional(),
-          })
-          .strict(),
-      )
-      .max(100)
-      .optional(),
-  })
-  .strict();
+const schema = z.strictObject({
+  enabled: z.boolean().optional(),
+  tasks: z
+    .array(
+      z.strictObject({
+        id: z.string().min(1).max(64),
+        enabled: z.boolean().optional(),
+        // null clears the override (inherit the org quota); a whole number sets it.
+        monthlyQuota: z.union([z.number(), z.string(), z.null()]).optional(),
+      }),
+    )
+    .max(100)
+    .optional(),
+});
 
 export async function PUT(request: Request) {
   const gate = await requirePermission('org.settings.write', { request });

@@ -18,14 +18,12 @@ import { cohortPassLoaders } from '@/lib/matching/cohortPassStore';
 // round replaces its proposals; any other status is 409. Over the size cap is
 // 413 before anything is scored. Creates no relation — publishing (#1796) is
 // the only path that pairs. Strategy and reasons: src/lib/matching/assign.ts.
-const bodySchema = z
-  .object({
-    // Narrow the pass to these mentees (still only the tenant's waiting ones).
-    menteeIds: z.array(z.string().min(1).max(64)).min(1).max(COHORT_PASS_MAX_MENTEES).optional(),
-    // The round's minimum score: a best pair under it is `below_threshold`.
-    minScore: z.number().min(0).max(100).optional(),
-  })
-  .strict();
+const bodySchema = z.strictObject({
+  // Narrow the pass to these mentees (still only the tenant's waiting ones).
+  menteeIds: z.array(z.string().min(1).max(64)).min(1).max(COHORT_PASS_MAX_MENTEES).optional(),
+  // The round's minimum score: a best pair under it is `below_threshold`.
+  minScore: z.number().min(0).max(100).optional(),
+});
 
 type Ctx = { params: Promise<{ id: string }> };
 

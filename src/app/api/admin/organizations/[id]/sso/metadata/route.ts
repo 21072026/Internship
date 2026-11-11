@@ -35,8 +35,8 @@ import { requirePermission } from '@/lib/authz';
 // (redirects included), a 5s timeout and the same byte cap as pasted XML.
 
 const bodySchema = z.union([
-  z.object({ xml: z.string().min(1).max(MAX_METADATA_BYTES) }).strict(),
-  z.object({ url: z.string().trim().min(1).max(2000) }).strict(),
+  z.strictObject({ xml: z.string().min(1).max(MAX_METADATA_BYTES) }),
+  z.strictObject({ url: z.string().trim().min(1).max(2000) }),
 ]);
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
