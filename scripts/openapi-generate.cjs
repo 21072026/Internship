@@ -645,7 +645,10 @@ function classifyAuth(text, ctx = {}) {
   // was not resolvable (an imported guard, a re-export). So is
   // requirePermission(): every permission it grants needs an admin tier, which
   // only an ADMIN holds (src/lib/authzRule.ts, adminTierFor).
-  if (/\b(?:requireAdmin[A-Za-z]*|adminSession|requirePermission)\s*\(/.test(text)) allow.add('ADMIN');
+  // The programme gates (src/lib/programWriteGate.ts, #3576/#3582) and the
+  // journey builder's journeyProgramFor() call requirePermission() with the
+  // programme as its subject, so they are decisive for the same reason.
+  if (/\b(?:requireAdmin[A-Za-z]*|adminSession|requirePermission|programGate|programWriteGate|journeyProgramFor)\s*\(/.test(text)) allow.add('ADMIN');
   // requireRoleOrPermission(['MENTOR', …], …) (#1571): ADMIN through the
   // permission rule, plus exactly the roles its first argument lists.
   for (const m of text.matchAll(/\brequireRoleOrPermission\s*\(\s*\[([^\]]*)\]/g)) {

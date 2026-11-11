@@ -161,6 +161,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       data: {
         menteeId: session.user.id,
         replacesRelationId: relation.id,
+        // The replacement pairing stays in the same programme (#1626): the
+        // decision copies this onto the relation it creates.
+        programId: relation.cohortId ?? null,
         rematchReason: parsed.data.reason,
         rematchNote: note,
         preferredMentorId,

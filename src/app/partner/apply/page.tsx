@@ -7,7 +7,9 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { hostBrand } from '@/lib/hostBrand';
 import { requestHostHeader } from '@/lib/publicHostOrg';
 import { affiliateProgrammeForHost } from '@/lib/affiliatePublicPage';
+import { legalLinks, readStoredLanding } from '@/lib/affiliateLandingRule';
 import { ApplicationForm } from './ApplicationForm';
+import { PartnerFooter } from '../PartnerFooter';
 
 // The public partner application (docs/affiliate-module.md, #3361): what the
 // "become a partner" buttons of /partner open. Exists wherever the host serves a
@@ -26,6 +28,7 @@ export default async function PartnerApplyPage() {
   if (!programme) notFound();
   const { t, locale } = await getServerDictionary();
   const brand = await hostBrand();
+  const landing = readStoredLanding(programme.landing);
   return (
     <div className="min-h-screen bg-gray-50 px-4 py-10 text-gray-900 dark:bg-gray-950 dark:text-gray-100">
       <main id="main-content" className="mx-auto max-w-xl space-y-6">
@@ -39,8 +42,11 @@ export default async function PartnerApplyPage() {
           <h1 className="text-3xl font-bold">{t.affiliateApply.title}</h1>
           <p className="text-gray-600 dark:text-gray-400">{t.affiliateApply.intro}</p>
         </div>
-        <ApplicationForm accent={brand.themeColor} />
+        <ApplicationForm accent={brand.themeColor} privacy={legalLinks(landing).privacyUrl} contractVersion={programme.contract?.version ?? null} />
       </main>
+      <div className="mt-10">
+        <PartnerFooter landing={landing} hasContract={programme.contract !== null} labels={t.affiliateLanding} />
+      </div>
     </div>
   );
 }

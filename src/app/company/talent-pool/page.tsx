@@ -10,6 +10,8 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { useT } from '@/i18n/client';
 import { UpgradePrompt } from '@/components/UpgradePrompt';
 
+type IntroStatus = 'PENDING' | 'APPROVED' | 'DECLINED' | 'CLOSED';
+
 interface Candidate {
   id: string;
   fullName: string;
@@ -39,6 +41,18 @@ export default function TalentPoolPage() {
   // many results there are rather than implying the screen is all of them.
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  // Introduction requests already made (#1394): menteeId → status, from the
+  // company's own request list — the server's answer, never a guess.
+  const [intros, setIntros] = useState<Record<string, IntroStatus>>({});
+  const loadIntros = useCallback(async () => {
+    const res = await fetch('/api/company/outreach').catch(() => null);
+    if (!res?.ok) return;
+    const d = await res.json().catch(() => null);
+    const map: Record<string, IntroStatus> = {};
+    for (const r of (d?.requests ?? []) as { menteeId: string; status: IntroStatus }[]) map[r.menteeId] = r.status;
+    setIntros(map);
+  }, []);
+  useEffect(() => { void loadIntros(); }, [loadIntros]);
   const hasFilters = Boolean(q.trim() || skill.trim());
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -166,6 +180,7 @@ export default function TalentPoolPage() {
               >
                 <ExternalLink className="h-3.5 w-3.5" /> {tp.viewProfile}
               </Link>
+              <IntroRequest menteeId={c.id} status={intros[c.id]} onSent={loadIntros} />
             </Card>
           ))}
         </div>
@@ -196,6 +211,97 @@ export default function TalentPoolPage() {
         )}
         </>
       )}
+    </div>
+  );
+}
+
+// Ask to be introduced to a pool candidate (#1394). The request is stored and
+// goes to the candidate's mentor (or the programme's admins) to approve; nothing
+// reaches the candidate — and no contact detail reaches the company — before that.
+function IntroRequest({ menteeId, status, onSent }: { menteeId: string; status?: IntroStatus; onSent: () => void }) {
+  const t = useT();
+  const ti = t.talentPool.intro;
+  const [open, setOpen] = useState(false);
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // A declined request may be asked again; any other standing state is shown.
+  if (status && status !== 'DECLINED') {
+    return (
+      <p className="mt-3 text-sm text-gray-600 dark:text-gray-300" data-testid={`talent-pool-intro-status-${menteeId}`}>
+        {ti.status[status]}
+      </p>
+    );
+  }
+
+  const send = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/company/outreach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ menteeId, message, via: 'TALENT_POOL' }),
+      });
+      if (res.ok) {
+        setOpen(false);
+        setMessage('');
+        onSent();
+        return;
+      }
+      const d = await res.json().catch(() => null);
+      const code = typeof d?.code === 'string' ? d.code : '';
+      setError((ti.errors as Record<string, string>)[code] ?? ti.errors.generic);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <div className="mt-3">
+        {status === 'DECLINED' && <p className="text-xs text-gray-500 mb-1">{ti.status.DECLINED}</p>}
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+          data-testid={`talent-pool-intro-open-${menteeId}`}
+        >
+          {ti.request}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-2">
+      <label htmlFor={`intro-${menteeId}`} className="block text-sm font-medium text-gray-700 dark:text-gray-200">{ti.messageLabel}</label>
+      <textarea
+        id={`intro-${menteeId}`}
+        rows={3}
+        maxLength={2000}
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
+        data-testid={`talent-pool-intro-message-${menteeId}`}
+      />
+      <p className="text-xs text-gray-500">{ti.hint}</p>
+      {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={busy || !message.trim()}
+          onClick={send}
+          className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          data-testid={`talent-pool-intro-send-${menteeId}`}
+        >
+          {ti.send}
+        </button>
+        <button type="button" onClick={() => setOpen(false)} className="rounded-lg px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300">
+          {t.common.cancel}
+        </button>
+      </div>
     </div>
   );
 }

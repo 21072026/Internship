@@ -1,3 +1,4 @@
+// i18n-scopes: no-dictionary — step keys index t.guidance.tours in TourProvider, not namespaces (#3599).
 // In-app tours (#2067) — the registry. Client-safe and dependency-free; unit-
 // tested in scripts/test/tours.test.mjs.
 //

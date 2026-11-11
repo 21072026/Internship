@@ -53,9 +53,23 @@ const CSP_REPORT_PATH = '/api/csp-report';
  * @param {Record<string, string | undefined>} env  the NEXT_PUBLIC_* analytics
  *   variables (next.config.js passes process.env; the edge middleware passes
  *   them by name, because only named NEXT_PUBLIC_* reads are inlined there).
- * @param {{ nonce?: string, dev?: boolean }} [opts]  a nonce turns on the strict
- *   script-src and the report endpoint.
+ * @param {{ nonce?: string, dev?: boolean, frameAncestors?: string[] }} [opts]  a nonce turns on the strict
+ *   script-src and the report endpoint; frameAncestors replaces 'none' (the /embed tab only).
  */
+/**
+ * Who may frame the Teams tab (#1954, docs/teams-tab-sso.md) — ONLY for
+ * /embed/*, and only while Teams SSO is configured (src/lib/embedSession.ts);
+ * every other path keeps `frame-ancestors 'none'` + `X-Frame-Options: DENY`.
+ * The hosts the Teams web, desktop and Microsoft 365 clients frame a tab from.
+ * Slack has no tab surface, so no Slack host is here.
+ */
+const TEAMS_FRAME_ANCESTORS = [
+  'https://teams.microsoft.com',
+  'https://*.teams.microsoft.com',
+  'https://*.cloud.microsoft',
+  'https://*.office.com',
+];
+
 function buildCsp(env, opts = {}) {
   const analytics = analyticsCspHosts(env);
   const analyticsScript = analytics.script.join(' ');
@@ -84,7 +98,7 @@ function buildCsp(env, opts = {}) {
     // the free-room fallback when a JaaS call fails. The chat widget renders
     // itself in an iframe, hence tawk.to here as well.
     `frame-src 'self' https://meet.jit.si ${JAAS} ${TAWK}`,
-    "frame-ancestors 'none'",
+    `frame-ancestors ${opts.frameAncestors && opts.frameAncestors.length ? opts.frameAncestors.join(' ') : "'none'"}`,
     "base-uri 'self'",
     "form-action 'self'",
     "object-src 'none'",
@@ -93,4 +107,4 @@ function buildCsp(env, opts = {}) {
   return directives.join('; ');
 }
 
-module.exports = { buildCsp, CSP_REPORT_PATH, JAAS };
+module.exports = { buildCsp, CSP_REPORT_PATH, JAAS, TEAMS_FRAME_ANCESTORS };

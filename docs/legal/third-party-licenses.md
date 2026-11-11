@@ -2,7 +2,7 @@
 
 <!-- GENERATED FILE — do not edit by hand.
      Regenerate with: npm run check:licenses -- --write
-     license-inventory-signature: 97923b1a39da7c4d -->
+     license-inventory-signature: 6959cb0cdf1ded9e -->
 
 > Not legal advice. This is the machine-checked inventory a procurement
 > questionnaire asks for, and the input to a lawyer’s review — not a
@@ -18,7 +18,7 @@ commercial grant impossible. Both questions are checked separately, per
 package, by `npm run check:licenses` on every pull request.
 
 **Scope**: the production dependency tree read from `package-lock.json`
-— 291 packages over 308 installation paths, the same set
+— 292 packages over 309 installation paths, the same set
 described by that build’s CycloneDX SBOM at `/sbom.cdx.json` (both read this
 one source, so the two documents cannot disagree).
 
@@ -35,7 +35,7 @@ generation — so the exclusion changes no answer today.
 
 | Verdict | Packages | What it means |
 |---|---:|---|
-| ok | 274 | Permissive. No obligation beyond keeping the copyright notice. |
+| ok | 275 | Permissive. No obligation beyond keeping the copyright notice. |
 | ok · attribution | 1 | Permissive with an explicit attribution requirement (usually a data set rather than code). Satisfied by this inventory plus the notice shipped inside the package. |
 | ok · weak copyleft | 15 | File- or library-level copyleft (LGPL, MPL, EPL). Compatible with both the AGPL distribution and the commercial grant as long as the package is shipped unmodified and its own source stays available. Modifying one of these in place is what would change the answer. |
 | ok · allowlisted | 1 | The declared string is not a resolvable SPDX expression, and the real licence was established by hand. Every entry carries its reason in scripts/license-policy.mjs. |
@@ -48,7 +48,7 @@ licence being granted on top of it.
 
 | Declared licence | Packages | Verdict |
 |---|---:|---|
-| `MIT` | 191 | ok |
+| `MIT` | 192 | ok |
 | `Apache-2.0` | 31 | ok |
 | `ISC` | 30 | ok |
 | `LGPL-3.0-or-later` | 10 | ok · weak copyleft |
@@ -116,6 +116,7 @@ Declares the bare, non-SPDX string "BSD", which by itself is unresolvable — "B
 | `@img/sharp-win32-arm64` | 0.35.5 | `Apache-2.0 AND LGPL-3.0-or-later` | ok · weak copyleft |
 | `@img/sharp-win32-ia32` | 0.35.5 | `Apache-2.0 AND LGPL-3.0-or-later` | ok · weak copyleft |
 | `@img/sharp-win32-x64` | 0.35.5 | `Apache-2.0 AND LGPL-3.0-or-later` | ok · weak copyleft |
+| `@microsoft/teams-js` | 2.58.0 | `MIT` | ok |
 | `@napi-rs/canvas` | 0.1.80 | `MIT` | ok |
 | `@napi-rs/canvas-android-arm64` | 0.1.80 | `MIT` | ok |
 | `@napi-rs/canvas-darwin-arm64` | 0.1.80 | `MIT` | ok |

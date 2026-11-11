@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**A mentee owner's team circle includes their active group relations (#3584):** the people a mentee project owner may add (#2272) are now read from seats — the 1:1 pair and a group relation's extra `RelationParticipant` seats (#1804). `menteeConnectionsFromSeats()` / `seatCounts()` in `src/lib/projectTeamRule.ts` count only active participation: a left seat, a relation that is not ACTIVE, a benched or inactive person, and a relation or person of another org (checked explicitly, not only by the query) drop out and answer `404 not_addable`.",
+  "notes": {
+    "en": ["Mentees who own a project can now also add the mentors and fellow mentees of their mentoring group."],
+    "tr": ["Proje sahibi mentiler artık grup mentorluğundaki mentorları ve diğer mentileri de ekibe ekleyebilir."],
+    "de": ["Mentees, denen ein Projekt gehört, können jetzt auch die Mentoren und anderen Mentees ihrer Mentoring-Gruppe ins Team holen."]
+  }
+}

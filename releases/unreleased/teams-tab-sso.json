@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Teams tab sign-in, server side (#1954, docs/teams-tab-sso.md):** `POST /api/integrations/chat/teams/sso` checks the tab's Entra token (jose with remote JWKS; RS256, `aud`, `iss` naming the token's own `tid`, a registered enabled TEAMS workspace, `exp`; never logged). A confirmed `ChatIdentity` gets a hashed, 60-second, host-bound `ChatLoginGrant`. `POST …/teams/session` redeems the grant through `redeemChatLoginGrant()` with the magic link's checks: inactive, unverified or pending; enforced SSO; archived tenant; world/host; an enrolled 2FA code before the spend; the spend is one conditional UPDATE. The session's claims come from the jwt callback, and it lives in a separate `embed-session` cookie (`SameSite=None; Partitioned`, eight hours absolute). NextAuth's cookie stays `Lax`. `sessionsValidFrom` revokes the embed session, and it can never be a remembered device. `/embed` is framable by the Teams hosts only (`TEAMS_FRAME_ANCESTORS`); every other path keeps `frame-ancestors 'none'` + DENY. Everything is off unless `CHAT_APPS_ENABLED=1` and `TEAMS_SSO_CLIENT_ID` are set. New additive model `ChatLoginGrant`.",
+  "notes": {
+    "en": ["Groundwork for using the app inside a Microsoft Teams tab, signed in with your linked Microsoft account."],
+    "tr": ["Uygulamayı, bağlı Microsoft hesabınla oturum açarak bir Microsoft Teams sekmesinde kullanmanın altyapısı hazırlandı."],
+    "de": ["Grundlage dafür, die App in einem Microsoft-Teams-Tab zu nutzen – angemeldet mit deinem verknüpften Microsoft-Konto."]
+  }
+}
