@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server';
 import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
+import { inCallerTenant } from '@/lib/tenantFilter';
+import { settingsOrgOf } from '@/lib/settingsOrg';
 import { withTenantScope } from '@/lib/orgContext';
-import { resolveOrgId } from '@/lib/orgScope';
 import { z } from 'zod';
 import { MAX_TAGS_PER_USER } from '@/lib/tags';
 
@@ -30,16 +31,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Validation failed', details: parsed.error.flatten() }, { status: 400 });
     }
     const { userId, tagId, action } = parsed.data;
-    const orgId = resolveOrgId(session);
+    // Never `undefined` (#3603): an org-less session (a token minted before the
+    // backfill) is the default org's — `orgId ?? undefined` dropped the filter
+    // and let it act on every org's tags. Tag.orgId is required, so strict.
+    const orgId = await settingsOrgOf(session);
 
     // The tag must belong to the caller's own org — a tag id from elsewhere is
     // "not found", never silently applied.
-    const tag = await prisma.tag.findFirst({ where: { id: tagId, orgId: orgId ?? undefined }, select: { id: true } });
+    const tag = await prisma.tag.findFirst({ where: { id: tagId, orgId }, select: { id: true } });
     if (!tag) return NextResponse.json({ error: 'Tag not found' }, { status: 404 });
 
     const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, orgId: true } });
     if (!target) return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    if (orgId && target.orgId && target.orgId !== orgId) {
+    if (!(await inCallerTenant(target.orgId, orgId))) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 

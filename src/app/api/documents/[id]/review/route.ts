@@ -5,6 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { resolveOrgId } from '@/lib/orgScope';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { logActivity } from '@/lib/activity';
 import { REVIEW_DECISIONS } from '@/lib/documentReview';
 import { decideStep, loadReviewDocument } from '@/lib/documentReviewStore';
@@ -33,7 +34,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     return withTenantScope(session, async () => {
       const doc = await loadReviewDocument(id);
-      if (!doc || !doc.requirement || doc.reviews.length === 0 || (orgId && doc.requirement.orgId !== orgId)) {
+      if (!doc || !doc.requirement || doc.reviews.length === 0 || !(await inCallerTenant(doc.requirement.orgId, orgId))) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
       const result = await decideStep({
