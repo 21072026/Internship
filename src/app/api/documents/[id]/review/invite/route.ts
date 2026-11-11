@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { inCallerTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -31,7 +32,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
     return withTenantScope(session, async () => {
       const doc = await loadReviewDocument(id);
-      if (!doc || !doc.requirement || doc.reviews.length === 0 || (orgId && doc.requirement.orgId !== orgId)) {
+      if (!doc || !doc.requirement || doc.reviews.length === 0 || !(await inCallerTenant(doc.requirement.orgId, orgId))) {
         return NextResponse.json({ error: 'Not found' }, { status: 404 });
       }
       const current = doc.reviewStatus === 'PENDING' ? nextStep(doc.reviews) : null;
