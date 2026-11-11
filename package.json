@@ -111,6 +111,7 @@
     "test:e2e:smoke": "playwright test --grep @smoke",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:isolation": "playwright test --project=isolation",
+    "test:e2e:leak-matrix:flag-off": "E2E_ISOLATION_FLAG=off playwright test --project=isolation e2e/isolation/leak-matrix.spec.ts",
     "test:e2e:media": "CAPTURE_RELEASE_MEDIA=1 playwright test --project=release-media",
     "test:stress": "node scripts/stress-test.mjs",
     "test:load": "k6 run k6/nightly-load.js",

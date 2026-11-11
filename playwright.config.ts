@@ -507,7 +507,14 @@ export default defineConfig({
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,
         env: {
-          MT_ENFORCE_ISOLATION: 'true',
+          // E2E_ISOLATION_FLAG=off runs the same project against a server with
+          // the flag OFF — the way every deployment runs today (#3588). The
+          // leak matrix then tests the hand-written tenant filters production
+          // actually depends on, instead of the middleware that is dormant
+          // there. Only the leak matrix is meant to run in that mode
+          // (`npm run test:e2e:leak-matrix:flag-off`); the other isolation
+          // specs assert the flag-on behaviour itself.
+          MT_ENFORCE_ISOLATION: process.env.E2E_ISOLATION_FLAG === 'off' ? 'false' : 'true',
           PORT: String(ISOLATION_PORT),
           // NextAuth builds its callback URLs from this; left at the default
           // server's origin, the post-sign-in redirect walks off this server

@@ -446,6 +446,105 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
+  # The leak matrix again, against a server with MT_ENFORCE_ISOLATION=false —
+  # the way every deployment runs today (#3588). The gate above proves the
+  # middleware scopes; this job proves the HAND-WRITTEN tenant filters the
+  # routes depend on in production do, which the flag-on run cannot see (a
+  # route with no filter of its own is green there). Same shared build (#3509),
+  # same docs-only skip. Deliberately NOT in the `smoke` aggregator's `needs`
+  # and not a required check: branch protection is the maintainer's switch.
+  leak-matrix-flag-off:
+    name: Leak matrix (flag off)
+    needs: [changes, build]
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' && needs.build.result == 'success' }}
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: internship_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=15
+
+    env:
+      DATABASE_URL: "mysql://root:root@127.0.0.1:3306/internship_test"
+      NODE_OPTIONS: --max-old-space-size=8192
+      NEXTAUTH_SECRET: "ci-test-secret-not-for-production"
+      # The isolation webServer overrides this to its own origin (port 3010);
+      # left at the default, NextAuth's post-sign-in redirect walks off it.
+      NEXTAUTH_URL: "http://localhost:3010"
+      SEED_ADMIN_EMAIL: "admin@example.com"
+      SEED_ADMIN_PASSWORD: "ChangeMe123!"
+      ADMIN_EMAIL: "admin@example.com"
+      ADMIN_PASSWORD: "ChangeMe123!"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply DB schema
+        run: npx prisma db push
+
+      - name: Seed admin user
+        run: npx prisma db seed
+
+      # The build from the `build` job (#3509) — never a build of our own.
+      - name: Download the build
+        uses: actions/download-artifact@v8
+        with:
+          name: next-build-${{ github.sha }}
+
+      - name: Unpack the build
+        run: |
+          set -euo pipefail
+          tar -xzf next-build.tgz
+          built="$(cat .next/E2E_BUILD_SHA)"
+          if [ "$built" != "$GITHUB_SHA" ]; then
+            echo "::error::.next was built from $built, this job tests $GITHUB_SHA"; exit 1
+          fi
+          echo "Using the build of $built"
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: playwright-${{ runner.os }}-
+
+      # Browser only, no `--with-deps` — same reasoning as the smoke shards.
+      - name: Install Playwright browser
+        run: npx playwright install chromium
+
+      # The server boots with MT_ENFORCE_ISOLATION=false (E2E_ISOLATION_FLAG=off,
+      # playwright.config.ts) — the leak matrix only, since the other isolation
+      # specs assert the flag-on behaviour itself.
+      - name: Run the leak matrix with the flag off
+        run: npm run test:e2e:leak-matrix:flag-off
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-leak-matrix-flag-off
+          path: playwright-report/
+          retention-days: 7
+
   # The REQUIRED check. Green when every shard above is green, and when the PR
   # is docs-only and the shards were skipped on purpose (`changes` said
   # code=false) — the same outcome the single skipped job used to report.
