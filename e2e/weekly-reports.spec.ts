@@ -43,12 +43,14 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     orgId = org.id;
     const mentor = await seedUser(mentorEmail, password, 'MENTOR', 'Weekly Mentor');
     const mentee = await seedUser(menteeEmail, password, 'MENTEE', 'Weekly Mentee');
-    await seedUser(outsiderEmail, password, 'MENTEE', 'Other Mentee');
-    await seedUser(unrelatedMentorEmail, password, 'MENTOR', 'Unrelated Mentor');
+    // Same org as the pair: these two must reach the role check (403), not the
+    // tenant scope (#3588, where another org's relation reads as 404).
+    const outsider = await seedUser(outsiderEmail, password, 'MENTEE', 'Other Mentee');
+    const unrelatedMentor = await seedUser(unrelatedMentorEmail, password, 'MENTOR', 'Unrelated Mentor');
     const admin = await seedUser(adminEmail, password, 'ADMIN', 'Weekly Admin');
     await prisma.user.update({ where: { id: mentor.id }, data: { orgId: org.id } });
     await prisma.user.update({ where: { id: mentee.id }, data: { orgId: org.id, preferredLanguage: 'tr', emailNotifications: true, notificationPrefs: { weeklyReports: true } } });
-    await prisma.user.update({ where: { id: admin.id }, data: { orgId: org.id } });
+    await prisma.user.updateMany({ where: { id: { in: [admin.id, outsider.id, unrelatedMentor.id] } }, data: { orgId: org.id } });
     const relation = await prisma.mentorshipRelation.create({ data: { orgId: org.id, mentorId: mentor.id, menteeId: mentee.id, status: 'ACTIVE', pipelineStatus: 'INTERNSHIP_IN_PROGRESS_450', startDate: addUtcWeeks(utcWeekStart(new Date()), -4) } });
     relationId = relation.id;
     const attention = await getAttentionItems(mentor.id);

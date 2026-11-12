@@ -6,7 +6,7 @@ import { ProgramTerminologyScope } from '@/i18n/programScope';
 export default async function Layout({ children, params }: { children: React.ReactNode; params: Promise<{ id: string }> }) {
   const { id } = await params;
   return (
-    <ProgramTerminologyScope programId={id} scope="admin">
+    <ProgramTerminologyScope programId={id} scope="admin/programs">
       {children}
     </ProgramTerminologyScope>
   );
