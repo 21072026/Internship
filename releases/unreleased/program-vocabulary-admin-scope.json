@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Fixed:** a programme's own vocabulary (#3400) reaches its admin pages again (`/admin/programs/[id]/…`). Since the admin dictionary was split per section (#3599) the programme overlay re-provided the `admin` chrome namespaces instead of `admin/programs`, so the journey page showed the org's word."
+}
