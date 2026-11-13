@@ -126,11 +126,13 @@ test('cross-file duplicates and unknown partners are caught, case-insensitively'
 
 test('missing columns and bad partner rows stop the file', () => {
   assert.deepEqual(missingColumns('partners', ['code', 'name']), ['paid_total', 'unpaid_total']);
-  const { p } = read('code;name;paid_total;unpaid_total;status\nok-1;Name;0;0;TERMINATED\n;No Code;0;0;\nx y;Bad;0;0;\n');
+  const { p } = read('code;name;paid_total;unpaid_total;status\nok-1;Name;0;0;TERMINATED\n;No Code;0;0;\nx y;Bad;0;0;\nx/y;Bad;0;0;\n');
   assert.deepEqual(p.issues.map((i) => [i.row, i.subject, i.code]), [
     [1, 'ended_on', 'ended_on_required'],
     [2, 'code', 'required'],
-    [3, 'code', 'invalid_code'],
+    // A space is the old-system shape that needs a new code (#3550); a slash is no code at all.
+    [3, 'code', 'code_needs_new'],
+    [4, 'code', 'invalid_code'],
   ]);
 });
 

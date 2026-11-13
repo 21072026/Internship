@@ -2,6 +2,7 @@ import { after } from 'next/server';
 import { clientIp } from '@/lib/clientIp';
 import { requestHostHeader } from '@/lib/publicHostOrg';
 import { clickRedirectTarget, isCountableRequest, CLICK_CODE_RE } from '@/lib/affiliateClickRule';
+import { codeFromPath } from '@/lib/affiliateCodeRule';
 import { clickProgrammeForHost, recordAffiliateClickQuietly } from '@/lib/affiliateClicks';
 
 // GET /r/<code> — a partner's tracked link (docs/affiliate-module.md § Link
@@ -23,7 +24,8 @@ function redirect(location: string): Response {
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ code: string }> }) {
-  const { code } = await params;
+  // `/r/ada%40example` and `/r/ada@example` are one code (#3550).
+  const code = codeFromPath((await params).code);
   const programme = await clickProgrammeForHost(requestHostHeader(request.headers)).catch(() => null);
   const target = programme ? clickRedirectTarget(programme.referralUrl, code) : null;
   if (!programme || !target) return redirect('/');

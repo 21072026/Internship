@@ -31,8 +31,8 @@ const PW = 'AffClick123!';
 const BROWSER = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15';
 const REFERRAL_URL = 'https://app.acme.example/auth/registration';
 const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-const codes = { active: `acme-${stamp}`, suspended: `paused-${stamp}`, other: `other-${stamp}`, limited: `busy-${stamp}` };
-const ids = { active: '', suspended: '', other: '', limited: '' };
+const codes = { active: `acme-${stamp}`, suspended: `paused-${stamp}`, other: `other-${stamp}`, limited: `busy-${stamp}`, legacy: `ada.l@${stamp}` };
+const ids = { active: '', suspended: '', other: '', limited: '', legacy: '' };
 let orgId = '';
 let otherOrgId = '';
 let previousHolderId: string | null = null;
@@ -82,6 +82,7 @@ test.beforeAll(async ({ playwright, baseURL }) => {
   ids.suspended = (await prisma.affiliatePartner.create({ data: { orgId, code: codes.suspended, displayName: 'Paused', status: 'SUSPENDED' } })).id;
   ids.limited = (await prisma.affiliatePartner.create({ data: { orgId, code: codes.limited, displayName: 'Busy' } })).id;
   ids.other = (await prisma.affiliatePartner.create({ data: { orgId: otherOrgId, code: codes.other, displayName: 'Other org' } })).id;
+  ids.legacy = (await prisma.affiliatePartner.create({ data: { orgId, code: codes.legacy, displayName: 'Legacy' } })).id;
 });
 
 test.afterAll(async () => {
@@ -187,3 +188,18 @@ test('without a referral URL the visitor lands on the home page and nothing is c
   await new Promise((r) => setTimeout(r, 750));
   expect(await counts(ids.active)).toEqual(before);
 });
+
+test('a code with . and @ is one code with or without the escape, and its link carries @ encoded (#3550)', async () => {
+  // The test before this one took the referral URL away; this one needs it.
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { referralUrl: REFERRAL_URL } });
+  const raw = (path: string) =>
+    api.get(path, { maxRedirects: 0, headers: { ...asHost(MARKETING_HOST), ...freshIp(), 'user-agent': BROWSER } });
+  const plain = await raw(`/r/${codes.legacy}`);
+  const escaped = await raw(`/r/${codes.legacy.replace('@', '%40')}`);
+  for (const res of [plain, escaped]) {
+    expect(res.status()).toBe(302);
+    expect(res.headers().location).toBe(`${REFERRAL_URL}?ref=${encodeURIComponent(codes.legacy)}`);
+  }
+  await expectCounts(ids.legacy, { clicks: 2, uniqueClicks: 2 });
+});
+

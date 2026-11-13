@@ -20,7 +20,7 @@ per organisation, and every number in tests and examples here is synthetic.
 | 3 | Payment source | **Manual entry by an ADMIN** is the only source in the first milestone. It goes through the one payment writer that a later API import will also use (`source` = `MANUAL` / `API`). No commission is written anywhere else — except the one-off migration (`IMPORT`, below), which takes a previous system's history as recorded. |
 | 4 | Attribution | A customer (the customer's id on the product side, opaque here) is linked to a partner **automatically** when an account event carries a matching `referral_code` ([Automatic attribution](#automatic-attribution-3354)), or by an ADMIN on the first manual payment entry. One partner per customer, first link wins. |
 | 5 | Identity | Existing CRM sign-in, new `AFFILIATE` role. Partners moved from a previous system are **invited** (invitation / sign-in link); no password hash from another system is ever imported. |
-| 6 | Referral codes | Permanent once issued, unique per organisation. A migrated partner keeps the exact code the previous system used (a number or a custom slug). |
+| 6 | Referral codes | Permanent once issued, unique per organisation. A migrated partner keeps the exact code the previous system used (a number, a custom slug, or a user name with `.` and `@`, #3550). One rule: `src/lib/affiliateCodeRule.ts` — a letter or digit, then letters, digits, `.`, `@`, `-`, `_`, at most 100. A code with a space is reported by the migration as needing a new code. `/r/ada%40example` and `/r/ada@example` are one code; links carry `@` as `%40`. |
 | 7 | Payouts | Recorded and approved in the CRM; the bank transfer itself stays manual. |
 | 8 | Contract | Each organisation writes its programme copy and partner contract (per locale). A changed contract bumps its version, and every partner must accept the current version before the portal or its API answers. |
 | 9 | Clicks | Not migrated. New clicks are counted through the tracked link `/r/<code>` as **per-partner, per-day counters only** — no IP, user-agent or cookie is stored ([Link clicks](#link-clicks-3541)). |
@@ -216,7 +216,7 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   (`affiliate.customer_status.update`) with the old and new values.
 - **Partners** (`src/lib/affiliatePartners.ts`, `/api/admin/affiliate/partners`) —
   the list with customer counts and PENDING / APPROVED / PAID totals summed in SQL,
-  a new partner (referral code: letters, digits, `-`, `_`, unique per organisation
+  a new partner (referral code: letters, digits, `.`, `@`, `-`, `_` — `src/lib/affiliateCodeRule.ts`, #3550 — unique per organisation
   case-insensitively, permanent), and the state changes. Suspend / reactivate /
   terminate go through `changePartnerState()` in the payment writer: under the
   partner lock, re-evaluating the partner's commissions, audited

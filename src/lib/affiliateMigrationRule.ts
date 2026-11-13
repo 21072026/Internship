@@ -27,6 +27,7 @@
 
 import { headerIndex, type ParsedRow, type ParsedTable, type ValidatedRow } from './importPreview';
 import { parseCalendarDay } from './calendarDay';
+import { PARTNER_CODE_RE } from './affiliateCodeRule';
 
 export const MIGRATION_MAX_ROWS = { partners: 5_000, commissions: 50_000, payouts: 20_000 } as const;
 /** The largest amount a column holds (a signed 32-bit INT). */
@@ -54,6 +55,8 @@ export type MigrationIssueCode =
   | 'required'
   | 'too_long'
   | 'invalid_code'
+  // A code with a space (#3550): valid in the old system, never here — the partner needs a new code.
+  | 'code_needs_new'
   | 'invalid_email'
   | 'invalid_amount'
   | 'invalid_date'
@@ -129,7 +132,6 @@ export interface ReconciliationRow {
 
 const PARTNER_STATUSES: readonly PartnerStatus[] = ['ACTIVE', 'SUSPENDED', 'TERMINATED'];
 const COMMISSION_STATUSES: readonly CommissionStatus[] = ['PENDING', 'APPROVED', 'PAID', 'REJECTED'];
-const CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
 /**
  * The key two values are the same under. The database compares references with
@@ -213,7 +215,10 @@ function text(raw: string, max: number): Field<string> {
 function code(raw: string): Field<string> {
   const t = text(raw, MAX_CODE);
   if (!t.ok) return t;
-  return CODE_RE.test(t.value) ? t : { ok: false, code: 'invalid_code' };
+  if (PARTNER_CODE_RE.test(t.value)) return t;
+  // A space is the one old-system shape we cannot keep (#3550): say so, so the
+  // operator gives that partner a new code rather than hunting for a typo.
+  return { ok: false, code: /\s/.test(t.value) ? 'code_needs_new' : 'invalid_code' };
 }
 
 /** The partners file: every row, or the issues that stop it. */

@@ -10,7 +10,9 @@ import { prisma } from '@/lib/prisma';
 import { maskedIbanFromCipher } from '@/lib/affiliatePayoutDetails';
 
 /** A referral code: what follows `?ref=`. Numbers and slugs both (a migrated code is kept verbatim). */
-export const PARTNER_CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
+// The code's shape is one rule for every path (#3550).
+export { PARTNER_CODE_RE } from '@/lib/affiliateCodeRule';
+import { PARTNER_CODE_RE } from '@/lib/affiliateCodeRule';
 
 export type PartnerInputIssue = 'code' | 'displayName' | 'contactEmail';
 
