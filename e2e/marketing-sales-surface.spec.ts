@@ -99,6 +99,7 @@ test.beforeAll(async () => {
   const lf = await user(foreignLeadEmail, 'MENTEE', NAMES.foreign, orgB);
   ids.ownLeadId = l1;
   ids.repId = rep;
+  ids.colleagueRepId = colleague;
   leadIds.followUp = l3;
 
   ids.ownCompanyId = await company(orgA, `Own Account ${STAMP}`);
@@ -193,7 +194,7 @@ async function signInRep(page: Page) {
   await signInAndSettle(page, repEmail, PASSWORD, '/sales');
 }
 
-test('a MARKETING sales rep lands on the sales surface and sees only their own records', async ({ page }) => {
+test('a MARKETING sales rep lands on the sales surface and sees only their own records', { tag: '@smoke' }, async ({ page }) => {
   test.slow();
   await signInRep(page);
 
@@ -254,7 +255,7 @@ test('a MARKETING sales rep lands on the sales surface and sees only their own r
   );
 });
 
-test('the rep works their own record: the follow-up moves it out of the queue', async ({ page }) => {
+test('the rep works their own record: the follow-up moves it out of the queue', { tag: '@smoke' }, async ({ page }) => {
   test.slow();
   await signInRep(page);
   await gotoSettled(page, `/sales/leads/${ids.followUpRelationId}`);
@@ -290,7 +291,7 @@ test('the rep works their own record: the follow-up moves it out of the queue', 
   await expect(page.getByTestId('attention-queue')).not.toContainText(NAMES.undated);
 });
 
-test('the rep logs the call they just made from the lead page', async ({ page }) => {
+test('the rep logs the call they just made from the lead page', { tag: '@smoke' }, async ({ page }) => {
   test.slow();
   await signInRep(page);
   await gotoSettled(page, `/sales/leads/${ids.followUpRelationId}`);
@@ -314,7 +315,7 @@ test('the rep logs the call they just made from the lead page', async ({ page })
   expect(await prisma.notification.count({ where: { userId: leadIds.followUp, type: 'interaction.logged' } })).toBe(0);
 });
 
-test("a rep's stage-deadline reminder deep-links to their lead page", async ({ page }) => {
+test("a rep's stage-deadline reminder deep-links to their lead page", { tag: '@smoke' }, async ({ page }) => {
   test.slow();
   await signInAndSettle(page, ADMIN_EMAIL, ADMIN_PASSWORD, '/admin');
   const res = await page.request.get('/api/cron?job=stage-deadlines');
@@ -323,7 +324,7 @@ test("a rep's stage-deadline reminder deep-links to their lead page", async ({ p
   expect(bell?.link).toBe(`/sales/leads/${ids.ownRelationId}`);
 });
 
-test('the rep cannot re-point their record at another account', async ({ page }) => {
+test('the rep cannot re-point their record at another account', { tag: '@smoke' }, async ({ page }) => {
   test.slow();
   await signInRep(page);
   // Same tenant, somebody else's account: re-pointing is an ADMIN decision in
@@ -338,7 +339,7 @@ test('the rep cannot re-point their record at another account', async ({ page })
   await expect(page.getByTestId('sales-accounts-table')).not.toContainText(`Colleague Account ${STAMP}`);
 });
 
-test('admin-only endpoints refuse the rep', async ({ page }) => {
+test('admin-only endpoints refuse the rep', { tag: '@smoke' }, async ({ page }) => {
   test.slow();
   await signInRep(page);
   for (const probe of MARKETING_MENTOR_ADMIN_ONLY) {
@@ -353,7 +354,7 @@ test('admin-only endpoints refuse the rep', async ({ page }) => {
   expect(await prisma.user.count({ where: { id: ids.ownLeadId } })).toBe(1);
 });
 
-test("another rep's and another org's records are out of reach, by id and by page", async ({ page }) => {
+test("another rep's and another org's records are out of reach, by id and by page", { tag: '@smoke' }, async ({ page }) => {
   test.slow();
   await signInRep(page);
   for (const probe of MARKETING_MENTOR_ROWS) {
