@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/authz';
 import { nudgeScope } from '@/lib/nudges/adminGuard';
 import { listRules, nudgeEditorOptions, parseForOrg, ruleData } from '@/lib/nudges/admin';
 import { MAX_RULES_PER_ORG } from '@/lib/nudges/rule';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // /api/admin/nudges (#1686): the org's nudge rules with their sends in the
 // last 30 days and the editor's pick lists; POST creates one. Stage-triggered
@@ -13,6 +14,9 @@ import { MAX_RULES_PER_ORG } from '@/lib/nudges/rule';
 export async function GET(request: Request) {
   const auth = await requirePermission('org.settings.write', { request });
   if ('error' in auth) return auth.error;
+  // Nudges reach mentees and mentors (MKT-6a).
+  const capGate = await requireCapability(auth.session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const g = await nudgeScope(auth.session);
   if ('error' in g) return g.error;
   const [rules, options] = await Promise.all([listRules(g.orgId), nudgeEditorOptions(g.orgId, await getLocale())]);
@@ -22,6 +26,9 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const auth = await requirePermission('org.settings.write', { request });
   if ('error' in auth) return auth.error;
+  // Nudges reach mentees and mentors (MKT-6a).
+  const capGate = await requireCapability(auth.session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const g = await nudgeScope(auth.session);
   if ('error' in g) return g.error;
   const parsed = await parseForOrg(await request.json().catch(() => null), g.orgId);

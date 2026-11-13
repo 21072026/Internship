@@ -274,3 +274,58 @@ test('INTERNSHIP: the same APIs are not refused by the module gate', async ({ pa
     await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
   }
 });
+
+// MKT-6a, part 3: the admin APIs behind destinations the nav already hides
+// (and whose pages already 404) for a MARKETING org. /api/admin/sources is NOT
+// here on purpose: `Source` carries marketing lead attribution and a MARKETING
+// admin reads it (e2e/source-attribution-marketing.spec.ts); only the SOURCE
+// login accounts (/api/admin/source-users) are the sourcing module.
+const MARKETING_ADMIN_REFUSED: Array<{ method: 'get' | 'post' | 'put' | 'patch' | 'delete'; path: string; capability: string }> = [
+  { method: 'post', path: '/api/admin/billing/entitlements', capability: 'mentorship' },
+  { method: 'get', path: '/api/admin/forms', capability: 'mentorship' },
+  { method: 'post', path: '/api/admin/forms', capability: 'mentorship' },
+  { method: 'get', path: '/api/admin/forms/x', capability: 'mentorship' },
+  { method: 'put', path: '/api/admin/forms/x', capability: 'mentorship' },
+  { method: 'delete', path: '/api/admin/forms/x', capability: 'mentorship' },
+  { method: 'post', path: '/api/admin/forms/x/publish', capability: 'mentorship' },
+  { method: 'get', path: '/api/admin/matching/custom-fields', capability: 'mentorship' },
+  { method: 'get', path: '/api/admin/nudges', capability: 'mentorship' },
+  { method: 'post', path: '/api/admin/nudges', capability: 'mentorship' },
+  { method: 'get', path: '/api/admin/nudges/x', capability: 'mentorship' },
+  { method: 'patch', path: '/api/admin/nudges/x', capability: 'mentorship' },
+  { method: 'delete', path: '/api/admin/nudges/x', capability: 'mentorship' },
+  { method: 'get', path: '/api/admin/nudges/x/sends', capability: 'mentorship' },
+  { method: 'post', path: '/api/admin/nudges/x/preview', capability: 'mentorship' },
+  { method: 'get', path: '/api/admin/offers/benchmark', capability: 'placements' },
+  { method: 'post', path: '/api/admin/source-users', capability: 'sourcing' },
+];
+
+test('a MARKETING admin: the admin APIs behind hidden destinations answer 403 with the module', async ({ page }) => {
+  const { org, email } = await makeAdmin('MARKETING');
+  try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
+    await signInAndSettle(page, email, 'NavPass123', '/admin');
+    for (const { method, path, capability } of MARKETING_ADMIN_REFUSED) {
+      const res = await page.request[method](path, method === 'get' || method === 'delete' ? {} : { data: {} });
+      expect(res.status(), `${method.toUpperCase()} ${path}`).toBe(403);
+      expect((await res.json()).capability, `${method.toUpperCase()} ${path}`).toBe(capability);
+    }
+  } finally {
+    await cleanupByEmail(email);
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});
+
+test('INTERNSHIP: those admin APIs are not refused by the module gate', async ({ page }) => {
+  const { org, email } = await makeAdmin('INTERNSHIP');
+  try {
+    await signInAndSettle(page, email, 'NavPass123', '/admin');
+    for (const path of ['/api/admin/forms', '/api/admin/matching/custom-fields', '/api/admin/nudges', '/api/admin/offers/benchmark']) {
+      const body = await (await page.request.get(path)).json().catch(() => ({}));
+      expect(body.code, `GET ${path}`).not.toBe('capability_unavailable');
+    }
+  } finally {
+    await cleanupByEmail(email);
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});
