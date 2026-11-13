@@ -4,6 +4,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { archiveFormDefinition, FormWriteError, saveFormDefinition, updateFormSchema } from '@/lib/forms/definitions';
 import { requirePermission } from '@/lib/authz';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // One version of an admin-defined form (#1800).
 //   GET    — the version with its fields
@@ -23,6 +24,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const gate = await requirePermission('content.read', { request: _request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // Intake forms for mentees and mentors (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return withTenantScope(session, async () => {
     const form = await findForm(session, (await params).id);
     if (!form) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -34,6 +38,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   const gate = await requirePermission('content.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // Intake forms for mentees and mentors (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const parsed = updateFormSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input', code: 'invalid', issues: parsed.error.issues }, { status: 400 });
   return withTenantScope(session, async () => {
@@ -53,6 +60,9 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const gate = await requirePermission('content.write', { request: _request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // Intake forms for mentees and mentors (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return withTenantScope(session, async () => {
     const existing = await findForm(session, (await params).id);
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 });

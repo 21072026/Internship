@@ -29,6 +29,7 @@ import { TrialEndChip } from '@/components/TrialEndPanel';
 import { SavedViews } from '@/components/SavedViews';
 import { isWipSaturated, type WipColumn } from '@/lib/boardWip';
 import { HelpTip } from '@/components/guidance/HelpTip';
+import { HandoffCardButton, useLeadHandoff } from '@/components/board/LeadHandoff';
 
 interface Relation {
   id: string;
@@ -201,6 +202,15 @@ export default function AdminBoardPage() {
   // Gate for drag-and-drop and the per-card stage select: a move into a
   // negative/off-path stage collects a reason first (#810); everything else
   // goes straight to moveTo as before.
+  // The colleague strip (LeadHandoff.tsx): a MARKETING board only — the team
+  // endpoint answers 403 in every other vertical, which leaves it disabled. An
+  // admin may also take a record onto their own book, so they are on it too.
+  const leadHandoff = useLeadHandoff({
+    includeSelf: true,
+    nameOf: useCallback((id: string) => relationsRef.current.find((r) => r.id === id)?.mentee.fullName, []),
+    onHandedOff: fetchRelations,
+  });
+
   const [pendingMove, setPendingMove] = useState<{ relationId: string; toStatus: string } | null>(null);
   const requestMove = (relationId: string, toStatus: string) => {
     if (stages.find((s) => s.key === toStatus)?.isOffPath) {
@@ -308,6 +318,7 @@ export default function AdminBoardPage() {
           value={r.pipelineStatus}
           onChange={(next) => requestMove(r.id, next)}
         />
+        {leadHandoff.enabled && <HandoffCardButton onClick={() => leadHandoff.openFor(r.id)} />}
       </div>
     );
   };
@@ -368,6 +379,7 @@ export default function AdminBoardPage() {
   return (
     <div>
       {gateDialog}
+      {leadHandoff.dialog}
       <div className="mb-6">
         <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
           {t.nav.board}
@@ -375,6 +387,7 @@ export default function AdminBoardPage() {
         </h1>
         <p className="text-gray-500 mt-1">{t.adminBoard.subtitle}</p>
       </div>
+      {leadHandoff.strip}
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <input
