@@ -127,6 +127,7 @@ test.beforeAll(async () => {
   await lead('happy', ids.rep1, orgA);
   await lead('refusals', ids.rep1, orgA);
   await lead('ui', ids.rep1, orgA);
+  await lead('page', ids.rep1, orgA);
   await lead('colleague', ids.rep2, orgA);
   await lead('adminMoves', ids.rep2, orgA);
   await lead('foreign', ids.foreignRep, orgB);
@@ -304,3 +305,27 @@ test('the board dialog: a recipient deactivated while it is open is refused in p
   await expect.poll(() => owner(ids['rel-ui'])).toBe(ids.rep2);
   await expect(page.getByTestId('board-card').filter({ hasText: `Handoff lead-ui ${STAMP}` })).toHaveCount(0);
 });
+
+test('the lead page hands the record over too (#3657): same dialog, then back to /sales', async ({ page }) => {
+  test.slow();
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mail.rep1, PW, '/sales');
+  await gotoSettled(page, `/sales/leads/${ids['rel-page']}`);
+
+  await page.getByTestId('sales-lead-handoff').click();
+  const dialog = page.getByTestId('lead-handoff-dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByTestId('lead-handoff-recipient').selectOption(ids.rep2);
+  await dialog.getByTestId('lead-handoff-confirm').click();
+
+  // The record left the rep's book: the page would 404, so the rep is back on /sales.
+  await page.waitForURL((u) => u.pathname === '/sales', { timeout: 20_000 });
+  await expect.poll(() => owner(ids['rel-page'])).toBe(ids.rep2);
+  const moved = await prisma.mentorshipRelation.findFirst({
+    where: { menteeId: ids['lead-page'], status: 'ACTIVE' },
+    select: { mentorId: true, nextActionAt: true },
+  });
+  expect(moved?.mentorId).toBe(ids.rep2);
+  expect(moved?.nextActionAt).not.toBeNull();
+});
+
