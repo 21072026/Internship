@@ -14,6 +14,11 @@
 // the Klaviyo matcher reads the lead's phone. They follow the contact in the
 // same transaction, so the two can never disagree after a correction.
 //
+// ONE WRITER. The account's columns are written through
+// `writePrimaryContactTx()` (src/lib/companyContacts.ts) inside this
+// transaction: the same row lock as a concurrent "make primary", and the same
+// duplicate test against the account's address book (409 `duplicate_email`).
+//
 // NOT AFFECTED. Contact permission is bound to an ADDRESS
 // (docs/contact-permission.md): a new address starts with no basis, the old
 // address keeps its own row. Nothing is sent to anybody by a correction —
@@ -26,6 +31,9 @@ import { prisma } from '@/lib/prisma';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { normalizeContact, type ContactFields } from '@/lib/companyContactsRule';
 import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
+import { asContactEmailTaken, ContactEmailTaken, writePrimaryContactTx } from '@/lib/companyContacts';
+
+export { ContactEmailTaken };
 
 export const leadContactSchema = z.object({
   name: z.string().trim().min(1).max(TEXT_LIMITS.companyContactName),
@@ -47,7 +55,7 @@ const FIELDS = [
 ] as const;
 
 export type LeadContactResult =
-  | { ok: true; changed: string[]; contact: ContactFields }
+  | { ok: true; changed: string[]; leadRow: string[]; contact: ContactFields }
   | { ok: false; code: 'not_found' | 'no_account' };
 
 /**
@@ -55,7 +63,12 @@ export type LeadContactResult =
  * may: `ownerId` narrows to the rep's own record, null means any record of the
  * tenant (an admin holding `company.write`). `tenant` is the same filter the
  * page reads with, so another tenant's record is the same `not_found` as one
- * that does not exist.
+ * that does not exist. Throws `ContactEmailTaken` for an address another
+ * contact of the account holds.
+ *
+ * `changed` names the account fields that moved; `leadRow` the lead-row fields
+ * that were synced. The lead row is compared on its own, so a contact that was
+ * already right still brings a stale heading back in step.
  */
 export async function updateLeadContact(input: {
   relationId: string;
@@ -66,45 +79,43 @@ export async function updateLeadContact(input: {
   fields: ContactFields;
 }): Promise<LeadContactResult> {
   const { fields } = input;
-  return prisma.$transaction(async (tx) => {
-    const relation = await tx.mentorshipRelation.findFirst({
-      where: withinTenant({ id: input.relationId, ...(input.ownerId ? { mentorId: input.ownerId } : {}) }, input.tenant),
-      select: { id: true, companyId: true, menteeId: true, mentee: { select: { fullName: true, phone: true } } },
-    });
-    if (!relation) return { ok: false as const, code: 'not_found' as const };
-    // A record with no account has no contact to correct (the stand-in row is
-    // not a contact). Reached only for a hand-made record; the page shows no editor then.
-    const company = relation.companyId
-      ? await tx.company.findFirst({
-          where: withinTenant({ id: relation.companyId }, input.tenant),
-          select: { id: true, orgId: true, contactName: true, contactEmail: true, contactPhone: true, contactPosition: true },
-        })
-      : null;
-    if (!company) return { ok: false as const, code: 'no_account' as const };
+  return prisma
+    .$transaction(async (tx) => {
+      const relation = await tx.mentorshipRelation.findFirst({
+        where: withinTenant({ id: input.relationId, ...(input.ownerId ? { mentorId: input.ownerId } : {}) }, input.tenant),
+        select: { id: true, companyId: true, menteeId: true, mentee: { select: { fullName: true, phone: true } } },
+      });
+      if (!relation) return { ok: false as const, code: 'not_found' as const };
+      // A record with no account has no contact to correct (the stand-in row is
+      // not a contact). Reached only for a hand-made record; the page shows no editor then.
+      const company = relation.companyId
+        ? await tx.company.findFirst({ where: withinTenant({ id: relation.companyId }, input.tenant), select: { id: true, orgId: true } })
+        : null;
+      if (!company) return { ok: false as const, code: 'no_account' as const };
 
-    const changed = FIELDS.filter(([field, column]) => (company[column] ?? null) !== fields[field]).map(([field]) => field);
-    if (changed.length === 0) return { ok: true as const, changed, contact: fields };
+      const { before } = await writePrimaryContactTx(tx, company.id, fields);
+      const changed = FIELDS.filter(([field, column]) => (before[column] ?? null) !== fields[field]).map(([field]) => field);
 
-    await tx.company.update({
-      where: { id: company.id },
-      data: { contactName: fields.name, contactEmail: fields.email, contactPhone: fields.phone, contactPosition: fields.position },
-    });
-    // The same person on the record's lead row: heading, board card, phone matcher.
-    const leadData: { fullName?: string; phone?: string | null } = {};
-    if (relation.mentee.fullName !== fields.name) leadData.fullName = fields.name;
-    if ((relation.mentee.phone ?? null) !== fields.phone) leadData.phone = fields.phone;
-    if (Object.keys(leadData).length > 0) await tx.user.update({ where: { id: relation.menteeId }, data: leadData });
+      // The same person on the record's lead row: heading, board card, phone matcher.
+      const leadData: { fullName?: string; phone?: string | null } = {};
+      if (relation.mentee.fullName !== fields.name) leadData.fullName = fields.name;
+      if ((relation.mentee.phone ?? null) !== fields.phone) leadData.phone = fields.phone;
+      const leadRow = [...(leadData.fullName !== undefined ? ['name'] : []), ...('phone' in leadData ? ['phone'] : [])];
+      if (leadRow.length > 0) await tx.user.update({ where: { id: relation.menteeId }, data: leadData });
 
-    await tx.auditLog.create({
-      data: {
-        orgId: company.orgId ?? input.orgId,
-        actorId: input.actorId,
-        action: 'sales.lead.contact.update',
-        targetId: relation.id,
-        // Which fields changed, never their values (a named person's direct line).
-        detail: JSON.stringify({ companyId: company.id, changed }),
-      },
-    });
-    return { ok: true as const, changed, contact: fields };
-  });
+      if (changed.length > 0 || leadRow.length > 0) {
+        await tx.auditLog.create({
+          data: {
+            orgId: company.orgId ?? input.orgId,
+            actorId: input.actorId,
+            action: 'sales.lead.contact.update',
+            targetId: relation.id,
+            // Which fields changed, never their values (a named person's direct line).
+            detail: JSON.stringify({ companyId: company.id, changed, leadRow }),
+          },
+        });
+      }
+      return { ok: true as const, changed, leadRow, contact: fields };
+    })
+    .catch(asContactEmailTaken);
 }

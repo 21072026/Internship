@@ -178,8 +178,17 @@ writer: `src/lib/salesLeadContact.ts`):
   the lead row's `fullName` and `phone` (the page heading, the board card and the
   Klaviyo phone matcher read them). **Never `User.email`** — a login address is not
   a rep's to change.
-- **Audit:** `sales.lead.contact.update` with the account id and the names of the
-  changed fields, never their values. An unchanged save writes nothing.
+- **One writer for the account's columns:** `writePrimaryContactTx()` in
+  `src/lib/companyContacts.ts`, inside the request's transaction — the same row
+  lock as a concurrent "make primary" (#2442) and the same duplicate test against
+  the account's address book: an address another contact holds is
+  `409 duplicate_email`. The admin address-book route's primary edit goes
+  through the same function.
+- **Audit:** `sales.lead.contact.update` with the account id, the names of the
+  changed account fields (`changed`) and of the synced lead-row fields
+  (`leadRow`), never their values. The lead row is compared on its own: a
+  contact that was already right still brings a stale heading back in step. A
+  save that changes neither writes nothing.
 - **Nothing is sent.** Phase 1 of the sales CRM manages lead data only; a
   correction mails nobody. Contact permission stays bound to its address
   (`docs/contact-permission.md`): a new address starts with no basis.

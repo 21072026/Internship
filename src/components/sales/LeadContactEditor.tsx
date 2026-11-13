@@ -63,7 +63,7 @@ export function LeadContactEditor({ relationId, initial, canEdit }: { relationId
         router.refresh();
         return;
       }
-      setError(res.status === 400 ? s.contactInvalid : s.contactSaveFailed);
+      setError(res.status === 400 ? s.contactInvalid : body.code === 'duplicate_email' ? s.contactDuplicate : s.contactSaveFailed);
     } finally {
       setBusy(false);
     }
