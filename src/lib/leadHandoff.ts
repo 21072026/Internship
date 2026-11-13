@@ -4,7 +4,7 @@
 import type { Session } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { runUnscoped } from '@/lib/tenantAmbient';
-import { actorFromSession, can } from '@/lib/authz';
+import { actorFromSession, can, dispatcherMay } from '@/lib/authz';
 import { relationSubject } from '@/lib/authzRule';
 import { findLeadOwner, LEAD_OWNER_ROLES } from '@/lib/leadOwner';
 import { transferMentorship } from '@/lib/mentorTransfer';
@@ -63,7 +63,8 @@ export async function handOffLead(opts: {
   // it. Not yours = 404, never a 403 that confirms the id.
   if (relation.mentorId !== actorId) {
     const actor = await actorFromSession(session);
-    if (!actor || !(await can(actor, 'relation.write', relationSubject(relation), session))) {
+    // …or the org's sales dispatcher, who hands any of the org's leads (#3656).
+    if (!actor || (!dispatcherMay(actor, 'relation.write', relation.orgId) && !(await can(actor, 'relation.write', relationSubject(relation), session)))) {
       return { ok: false, status: 404, code: 'missing' };
     }
   }

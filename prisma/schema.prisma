@@ -918,6 +918,13 @@ model User {
   // lapses leaves nobody who can sign in and switch enforcement off. The
   // narrowing is "who", not "how long".
   ssoExempt               Boolean       @default(false)
+  // The sales dispatcher (#3656, docs/marketing-vertical/pipeline-record.md
+  // § The sales dispatcher): a sales rep (MENTOR) an org admin trusted to work
+  // the WHOLE tenant's sales book — see every record, hand any lead to any rep,
+  // and manage another rep's records as their owner would. Effective only for a
+  // MENTOR on a vertical with the sales surface (src/lib/salesDispatcher.ts);
+  // the flag on anybody else grants nothing. Read live on every request.
+  salesDispatcher         Boolean       @default(false)
   // Set only when the `selfRegistration` setting is 'manual': the account was
   // created by open sign-up and is waiting for an admin to let it in. Lets the
   // sign-in page tell "we haven't reviewed you yet" apart from "an admin

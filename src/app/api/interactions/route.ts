@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { actorFromSession, can } from '@/lib/authz';
+import { actorFromSession, can, dispatcherMay } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { orgScoped, resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
@@ -107,7 +107,8 @@ export async function POST(request: Request) {
     }
 
     const isAuthorized =
-      isAdmin || relation.mentorId === session.user.id;
+      // …or the org's sales dispatcher on this record (#3656).
+      isAdmin || relation.mentorId === session.user.id || dispatcherMay(actor, 'relation.write', relation.orgId);
 
     if (!isAuthorized) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
