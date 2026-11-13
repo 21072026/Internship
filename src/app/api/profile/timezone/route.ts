@@ -7,7 +7,7 @@ import { isValidTimeZone } from '@/lib/timezone';
 import { withTenantScope } from '@/lib/orgContext';
 
 const bodySchema = z.object({
-  timezone: z.string().max(80).refine(isValidTimeZone, { message: 'Invalid IANA timezone' }),
+  timezone: z.string().max(80).refine(isValidTimeZone, { error: 'Invalid IANA timezone' }),
 });
 
 // POST — record the zone the browser reports, but ONLY for a profile that has

@@ -295,12 +295,18 @@ test('the rep logs the call they just made from the lead page', async ({ page })
   await signInRep(page);
   await gotoSettled(page, `/sales/leads/${ids.followUpRelationId}`);
   const note = `Discussed pricing ${STAMP}`;
+  // #3652/#3654: what each part is for is said on the page; the date is "assigned to you", not the trial.
+  await expect(page.getByTestId('follow-up-purpose')).toBeVisible();
+  await expect(page.getByTestId('sales-lead-since')).toContainText('Assigned to you on');
+  // #3653: the last interaction sits under the follow-up — empty until the first one is logged.
+  await expect(page.getByTestId('sales-lead-last-interaction-empty')).toBeVisible();
   const form = page.getByTestId('sales-lead-log-interaction');
   await form.getByRole('button', { name: /Log interaction|Add/i }).first().click();
   await form.getByRole('combobox').selectOption('Call');
   await form.locator('textarea').fill(note);
   await form.locator('button[type="submit"]').click();
   await expect(page.getByTestId('sales-lead-interactions')).toContainText(note);
+  await expect(page.getByTestId('sales-lead-last-interaction')).toContainText(note);
   const logged = await prisma.interactionLog.findMany({ where: { relationId: ids.followUpRelationId } });
   expect(logged.map((l) => [l.type, l.notes])).toEqual([['Call', note]]);
   // A MARKETING lead is a record, not a portal user: no "your mentor logged

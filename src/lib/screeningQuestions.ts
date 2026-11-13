@@ -22,12 +22,12 @@ export const screeningQuestionSchema = z.strictObject({
   label: z.strictObject({ en: label, tr: label, de: label }),
   options: z.array(z.string().trim().min(1).max(SCREENING_LIMITS.option)).max(SCREENING_LIMITS.options).optional(),
   required: z.boolean(),
-}).refine((q) => q.type !== 'SELECT' || (q.options?.length ?? 0) >= 2, { message: 'A choice question needs at least two options' });
+}).refine((q) => q.type !== 'SELECT' || (q.options?.length ?? 0) >= 2, { error: 'A choice question needs at least two options' });
 
 export const screeningQuestionsSchema = z
   .array(screeningQuestionSchema)
   .max(SCREENING_LIMITS.questions)
-  .refine((qs) => new Set(qs.map((q) => q.id)).size === qs.length, { message: 'Question ids must be unique' });
+  .refine((qs) => new Set(qs.map((q) => q.id)).size === qs.length, { error: 'Question ids must be unique' });
 
 export type ScreeningQuestion = z.infer<typeof screeningQuestionSchema>;
 

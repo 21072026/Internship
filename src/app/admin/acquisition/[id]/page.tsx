@@ -168,7 +168,7 @@ export default function PostCampaignPage({ params }: { params: Promise<{ id: str
     if (!window.confirm(c.markSentConfirm)) return;
     const { ok, data } = await call(`/api/admin/post-campaigns/${id}/send`, { method: 'POST' });
     if (!ok) {
-      setNotice(c.failed);
+      setNotice(data?.code === 'operator_missing' ? t.postCampaignOperator.sendRefused : c.failed);
       return;
     }
     setNotice(c.sentResult.replace('{sent}', String(data.sent)).replace('{skipped}', String(data.skipped)));

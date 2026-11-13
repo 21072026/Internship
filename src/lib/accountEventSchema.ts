@@ -41,7 +41,7 @@ export const accountEventSchema = z
         const id = normalizeExternalId(v);
         if (id === null) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: 'custom',
             message: `external_id: 1–${EXTERNAL_ID_MAX} characters of printable ASCII after trimming`,
           });
           return z.NEVER;
@@ -65,7 +65,7 @@ export const accountEventSchema = z
         if (v === null || v === undefined || v.trim() === '') return null;
         const key = normalizePlanKey(v);
         if (key === null) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'plan: 1–40 characters of A–Z a–z 0–9 . _ -' });
+          ctx.addIssue({ code: 'custom', message: 'plan: 1–40 characters of A–Z a–z 0–9 . _ -' });
           return z.NEVER;
         }
         return key;
@@ -93,10 +93,10 @@ export const accountEventSchema = z
       .nullable()
       .optional(),
   })
-  .superRefine((event, ctx) => {
+  .check(z.superRefine((event, ctx) => {
     if (event.event_type === 'payment_received' && !event.payment) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['payment'], message: 'payment: required on payment_received' });
+      ctx.addIssue({ code: 'custom', path: ['payment'], message: 'payment: required on payment_received' });
     }
-  });
+  }));
 
 export type AccountEvent = z.output<typeof accountEventSchema>;

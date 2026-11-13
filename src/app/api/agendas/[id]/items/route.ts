@@ -15,7 +15,7 @@ const line = z.string().trim().min(1).max(TEXT_LIMITS.agendaItemText);
 // one write, one realtime signal, instead of a request per line.
 const schema = z
   .object({ text: line.optional(), texts: z.array(line).min(1).max(AGENDA_PROPOSAL_MAX).optional() })
-  .refine((d) => Boolean(d.text) !== Boolean(d.texts), { message: 'text or texts' });
+  .refine((d) => Boolean(d.text) !== Boolean(d.texts), { error: 'text or texts' });
 
 // POST — add an ad-hoc line to the agenda (#1843), or several at once (an
 // accepted proposal, #1845). Either seat may; they land at the end, in order.

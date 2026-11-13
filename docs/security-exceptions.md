@@ -230,8 +230,8 @@ nonce + `'strict-dynamic'` taşıyor, `'unsafe-inline'` yok. İki taviz kaldı:
   almıyor**; `scripts/test/csp-policy.test.mjs` ikisini de sabitliyor.
   Üretimde eval isteyen tek kod zod 4'ün JIT yoklamasıydı (`allowsEval`:
   `try { Function("") } catch {}`, `zod/v4/core/util.js`) — rapor akışındaki
-  tek ihlaldi. Kaldırılmadı, **kapatıldı**: `src/instrumentation-client.ts`
-  tarayıcıda `config({ jitless: true })` diyor, zod yoklamayı ve `new Function`
+  tek ihlaldi. Kaldırılmadı, **kapatıldı** (#3642): `src/lib/zodBrowserConfig.ts`
+  (`src/instrumentation-client.ts`'ten) tarayıcıda `jitless` açıyor, zod yoklamayı ve `new Function`
   derlemesini atlıyor. Sunucu tarafı JIT'i koruyor (orada CSP yok).
 - **`style-src 'unsafe-inline'`.** React `style` özniteliği yazıyor, Next.js ve
   Tailwind stil enjekte ediyor; bir nonce öznitelikleri kapsayamaz. #1552'nin

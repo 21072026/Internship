@@ -25,3 +25,7 @@
   (`headersArray()` length 1).
 - **The unit suite's `schema-push-safety` test fails on a deepened shallow clone.** It passes
   after `git fetch --unshallow`.
+- **Fetch `origin/main` again before you open the PR, even after only a few hours.** While this
+  session was gathering evidence, #3643 shipped the same zod `jitless` fix in parallel, and the
+  merge conflicted on `src/instrumentation-client.ts` (add/add). Keep main's version and point
+  your docs at it.

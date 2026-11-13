@@ -17,6 +17,7 @@ import { BoardStageFilter } from '@/components/board/BoardStageFilter';
 import { CardStageSelect } from '@/components/board/CardStageSelect';
 import { BoardPhaseGroups } from '@/components/board/BoardPhaseGroups';
 import { BoardColumnHeader } from '@/components/board/BoardColumnHeader';
+import { boardColumnTone } from '@/lib/boardColumnTone';
 import { OverdueBadge } from '@/components/board/OverdueBadge';
 import { useBoardFilters } from '@/components/board/useBoardFilters';
 import { useBoardWipLimits } from '@/components/board/useBoardWipLimits';
@@ -51,6 +52,7 @@ interface Relation {
 export default function AdminBoardPage() {
   const t = useT();
   const stages = useResolvedStages();
+  const stageKeys = useMemo(() => [...stages].sort((a, b) => a.order - b.order).map((s) => s.key), [stages]);
   const label = useStageLabel();
   const { show: showGate, dialog: gateDialog } = useStageGateDialog();
   const router = useRouter();
@@ -345,8 +347,10 @@ export default function AdminBoardPage() {
           const id = e.dataTransfer.getData('relationId');
           if (id) requestMove(id, status);
         }}
-        className={`flex-shrink-0 w-64 rounded-xl border p-3 transition-colors ${
-          dragOver === status ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50'
+        // Each stage its own color (src/lib/boardColumnTone.ts); the drop
+        // target keeps it and gains a ring instead of turning blue.
+        className={`flex-shrink-0 w-64 rounded-xl border p-3 transition-colors ${boardColumnTone(status, stageKeys)}${
+          dragOver === status ? ' ring-2 ring-blue-500 ring-offset-1' : ''
         }`}
       >
         <BoardColumnHeader status={status} label={label(status)} count={countFor(status)} limit={wipLimitFor(status)} />
