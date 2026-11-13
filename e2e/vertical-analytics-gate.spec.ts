@@ -150,7 +150,7 @@ test('an INTERNSHIP admin keeps every analytics card — the gate is a no-op', a
     await expect(page.getByTestId('outcomes-link')).toBeVisible();
     await expect(page.getByTestId('closure-link')).toBeVisible();
     for (const path of INTERNSHIP_REPORTS) {
-      expect((await page.request.get(`/admin/analytics/${path}`)).status(), `/admin/analytics/${path}`).toBe(200);
+      expect((await page.goto(`/admin/analytics/${path}`))?.status(), `/admin/analytics/${path}`).toBe(200);
       // ROI is also a premium report, so a 403 `feature_locked` is fine here —
       // what must not come back is the vertical's refusal.
       const api = await page.request.get(`/api/admin/analytics/${path}`);
@@ -234,8 +234,13 @@ test('a MARKETING admin sees the funnel cards and none of the mentorship ones', 
     for (const id of ['outcomes-link', 'closure-link', 'roi-link']) {
       await expect(page.getByTestId(id), `MARKETING must not link ${id}`).toHaveCount(0);
     }
+    // The page renders the not-found screen. Its HTTP status stays 200: the
+    // parent admin/analytics layout wraps its children in the async
+    // <I18nScope>, so the response is already streaming when the nested
+    // layout's notFound() runs — the 404 is what the person sees, not the status.
     for (const path of INTERNSHIP_REPORTS) {
-      expect((await page.request.get(`/admin/analytics/${path}`)).status(), `/admin/analytics/${path}`).toBe(404);
+      await page.goto(`/admin/analytics/${path}`);
+      await expect(page.getByRole('heading', { level: 1, name: 'Page not found' }), `/admin/analytics/${path}`).toBeVisible();
     }
     const refusals: Array<[string, Promise<import('@playwright/test').APIResponse>]> = [
       ['GET outcomes', page.request.get('/api/admin/analytics/outcomes')],
