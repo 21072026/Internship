@@ -285,6 +285,9 @@ test('pages that belong to the internship product 404 on the marketing host and 
   expect((await page.request.get('/release-notes/feed.xml', { headers })).status()).toBe(404);
   // Mentees' and mentors' stories are the internship product's too, published or not.
   expect((await page.request.get('/stories', { headers })).status()).toBe(404);
+  // A mentee approving a quote about their mentoring (#2348): its API already
+  // refused the vertical, now the page is not served either.
+  expect((await page.request.get('/testimonials/approve?token=bogus', { headers })).status()).toBe(404);
   // Next emits a page's metadata on its 404 as well, so the head of each must
   // not point a scraper at the internship share card.
   for (const path of ['/for-companies', '/apply-as-mentor', '/stories']) {
@@ -308,6 +311,7 @@ test('the internship host still serves every one of them, and still links to the
     expect((await page.request.get(path)).status(), `${path} must still be served on the internship host`).toBe(200);
   }
   expect((await page.request.get('/release-notes/feed.xml')).status()).toBe(200);
+  expect((await page.request.get('/testimonials/approve?token=bogus')).status()).toBe(200);
   await page.goto('/auth/signin');
   await expect(page.getByTestId('apply-as-mentor-link')).toBeVisible();
   await page.goto('/');
