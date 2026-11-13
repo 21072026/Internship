@@ -13,7 +13,7 @@ Issue #2576 · üst story #2575 · kardeş görev #2577 (izin kaydı) · epic #2
 >
 > | Alan | Değer |
 > | --- | --- |
-> | Doküman sürümü | `2026-09-29` |
+> | Doküman sürümü | `2026-11-13` |
 > | İnceleyen (Fachanwalt) | _— henüz incelenmedi —_ |
 > | İnceleme tarihi | _— boş —_ |
 > | İnceleme sonucu / notlar | _— boş —_ |
@@ -170,10 +170,10 @@ sınır onlar için de geçerlidir.
 | Talep zamanı | Ne zaman istendi | `CompanyInquiry.consentAt` (gizlilik onayı zamanı; talep ile aynı an) |
 | **Form metninin sürümü** (tam metin geri üretilebilir olmalı) | "Neye rıza verdi?" sorusu | `marketingOptInTextVersion` = `MARKETING_OPT_IN_TEXT_VERSION` (`src/lib/privacy.ts:25`), dil = `locale` |
 | Gizlilik metni sürümü | Art. 13 bilgilendirmesinin hangi hâli | `consentTextVersion` = `PRIVACY_POLICY_VERSION` (`src/lib/privacy.ts:19`) |
-| **Onay mailinin** o tarihteki metni/sürümü | Onay neye yapıldı | **Yok** (onay maili yok) |
-| **Onay tıklamasının zamanı** | DOI'nin kendisi | `marketingOptInConfirmedAt` — her satırda `NULL` (`prisma/schema.prisma:1624`) |
-| Talep ve onay IP'si | İspat kalitesi; `go-to-market.md` §7.2 bunu listeler | **Bilinçli olarak yok** — `demo-form.md` § What is stored: "No IP address" (açık soru 6) |
-| Opt-out zamanı ve kanalı | Rızanın bittiği an | #2577 modeli (`ContactPermission` opt-out zamanı) |
+| **Onay mailinin** o tarihteki metni/sürümü | Onay neye yapıldı | Onay maili `sendContactPermissionConfirmationEmail` (`src/services/emailService.ts`, kategori `consent`), `src/lib/contactPermissionDoi.ts` gönderir; gönderim anı `CompanyInquiry.marketingOptInMailSentAt`. Metin `contactPermissionEmail` sözlük bloğundadır (`src/i18n/dictionaries.ts`) — ayrı bir sürüm sütunu **yok**, o tarihteki metin git geçmişinden geri üretilir |
+| **Onay tıklamasının zamanı** | DOI'nin kendisi | `CompanyInquiry.marketingOptInConfirmedAt` ve `ContactPermission.confirmedAt` — yalnız onay sayfasındaki düğmenin POST'u yazar (`src/lib/contactPermissionDoi.ts`, `src/app/api/contact-permission/confirm/route.ts`) |
+| Talep ve onay IP'si | İspat kalitesi; `go-to-market.md` §7.2 bunu listeler | **Bilinçli olarak yok** — `docs/contact-permission.md` ("No IP address anywhere on these paths") ve `demo-form.md` § What is stored; ispat imzalı bağlantı + iki zaman damgası + metin sürümüdür (açık soru 6) |
+| Opt-out zamanı ve kanalı | Rızanın bittiği an | `ContactPermission.revokedAt` + `revokedVia` (`LINK` = kişinin kendi tıklaması) ve `CompanyInquiry.marketingOptOutAt` (`src/app/api/contact-permission/opt-out/route.ts`) |
 
 `go-to-market.md` §7.2, VG Düsseldorf'un (27.07.2026) yalnız adres + IP + zaman damgasını
 **yetersiz** bulduğunu, form ve onay mailinin o tarihteki tam metninin de gerektiğini aktarır —
@@ -191,12 +191,19 @@ ifadeler "für den bestimmten Fall" şartını boşa çıkarır → yasak.
 
 ### 3.4 Demo formundaki kutu bugün ne?
 
-`CompanyInquiry.marketingOptInRequested` (`prisma/schema.prisma:1616`) bir **talep**tir, izin
-değildir: herkes herkesin adresi için tikleyebilir. `marketingOptInConfirmedAt` dolmadıkça hiçbir
-kod, dışa aktarım veya kişi bu değere dayanarak mail gönderemez (`demo-form.md`; şema yorumu
-`prisma/schema.prisma:1611-1624`; sunucu yazımı `src/app/api/company-inquiry/route.ts:110-136`).
-#2577 geldiğinde bu satır `ContactPermission(channel=EMAIL, basis=NONE)` + bekleyen DOI talebi
-olarak taşınır; `DOI_CONFIRMED` yalnız onay tıklamasıyla oluşur.
+`CompanyInquiry.marketingOptInRequested` bir **talep**tir, izin değildir: herkes herkesin adresi
+için tikleyebilir. Tiklenmiş bir talep şunları yapar (`docs/contact-permission.md` § Double opt-in):
+
+1. Adrese **tek** bir tarafsız onay maili gider (`src/lib/contactPermissionDoi.ts`); alıcı başına
+   günde en fazla bir tane (`ContactConfirmationMailCap`, `prisma/schema.prisma`).
+2. Onay sayfasındaki düğme (`/contact-permission/confirm`) `marketingOptInConfirmedAt`'i yazar;
+   talep zaten bir hesaba dönüştüyse o hesabın `EMAIL` satırı hemen `DOI_CONFIRMED` olur,
+   değilse dönüşüm onu taşır (`applyInquiryPermission`, `src/lib/inquiryLead.ts`).
+3. "Bana e-posta gönderme" sayfası (`/contact-permission/opt-out`) `marketingOptOutAt`'i yazar
+   ve hesabın `EMAIL` satırını `revokedVia = 'LINK'` ile geri alır.
+
+Onaylanmamış bir talep `DOI_CONFIRMED` üretmez; `DOI_CONFIRMED` yalnız onay tıklamasıyla oluşur
+ve hiçbir admin yolu onu yazamaz (`src/lib/contactPermissionRule.ts`).
 
 ## 4. Upstream bir ürünün newsletter bayrağı neden rıza değildir
 
@@ -252,13 +259,15 @@ Her giden **reklam** iletisinde (e-posta, DM, mektup):
 | Posta: Art. 14 bilgi notu | Art. 14 DSGVO | Mektup arkası, `copy-bank.md` §9.2 şablonu marketing operatörüne uyarlanır |
 
 **Impressum'da kim yazar?** InternCRM'in `/imprint` sayfası (`src/app/imprint/page.tsx`) kimliği
-**deployment ortamından** okur (`operatorIdentity()`, `src/lib/imprint.ts`) — host'a göre değişmez.
-Aynı container marketing host'larını (`MARKETING_HOSTS`) da sunduğu için (CLAUDE.md § Deployment,
-#2540) o host üzerindeki Impressum, `MARKETING_OPERATOR_*` set edilmedikçe **InternCRM
-operatörünü** gösterir. Marketing reklamının Impressum'u ise **marketing ürününü sunan şirketi**
-göstermelidir. Bu, ilk reklam mailinden önce çözülmesi gereken bir **sert blokajdır** (açık
-soru 9). IP sahipliği kuralı (CLAUDE.md § Licensing) burada ilgisizdir: Impressum **hizmet
-sağlayıcıyı** gösterir, yazılımın hak sahibini değil.
+**deployment ortamından ve isteğin dünyasından** okur: `operatorIdentity(env, world)`
+(`src/lib/imprint.ts:70`, #2697). Marketing host'larında (`MARKETING_HOSTS`, dünya `MARKETING`)
+önce kendi tam seti `MARKETING_OPERATOR_*` okunur. **Bu set eksikse (en az `NAME` ve `EMAIL`
+yoksa), sayfa çekirdek `OPERATOR_*` setine düşer** — yani marketing host'u InternCRM
+operatörünü gösterir; hiç Impressum göstermemek daha kötü bir durum olurdu. Marketing
+reklamının Impressum'u ise **marketing ürününü sunan şirketi** göstermelidir; bu yüzden
+prod/preview'da `MARKETING_OPERATOR_*` set edilmeden ilk reklam maili çıkmaz (açık soru 9,
+go-live §0). IP sahipliği kuralı (CLAUDE.md § Licensing) burada ilgisizdir: Impressum
+**hizmet sağlayıcıyı** gösterir, yazılımın hak sahibini değil.
 
 Altbilgi şablonu (DE, doldurulacak):
 
@@ -288,27 +297,34 @@ yeniden verilmez, yalnız adres sahibinin yeni bir DOI tıklaması kaydı açar.
 
 ## 8. CRM'in uyguladığı ve uygulamadığı
 
-> **Durum:** #2577 henüz birleşmedi; `origin/main`'de `ContactPermission` modeli, DOI maili ve
-> uyarı yok. Aşağıdaki "Hedef" hücreleri #2577 sonrası içindir — **bugün her satırın değeri
-> "Hayır"dır** ve satış ekibinin tek kontrolü bu dokümandır.
+Durum sözlüğü: **applied** = kod kuralı uygular ve bir e2e testi bunu sürer; **applied (no
+e2e)** = kod uygular, yalnız birim testi veya hiç test yok; **partly** = kuralın bir kısmı
+kodda, kalanı insanda; **not built** = CRM uygulamıyor (satırda nedeni yazılı). Her
+"applied" satırı kuralı uygulayan dosyayı adlandırır.
 
-| Kural | CRM uygular mı? (#2577 sonrası hedef) | Nasıl / neden değil |
+| Kural | Durum | Uygulayan dosya / neden değil |
 | --- | --- | --- |
-| Makine yolları yalnız `NONE` yazar | **Hedef** (#2577, henüz yok) | Birim testi |
-| DOI tıklaması → `DOI_CONFIRMED`; opt-out geri alır | **Hedef** (#2577, henüz yok) | e2e |
-| Alıcı başına günde 1 onay maili | **Hedef** (#2577, henüz yok) | e2e |
-| `EXISTING_CUSTOMER_7_3` yalnız ücretli müşteride, elle, gerekçeyle | **Hedef: kısmen** (#2577, henüz yok) — elle ve gerekçe zorunlu; "ücretli mi" kontrolü aşamaya (`DEAL_WON`) bakabilir ama koşul 1'i (adres satış sırasında mı alındı) **doğrulayamaz** | İnsan kararı |
-| İzni olmayan hesapta e-posta aksiyonu uyarı gösterir | **Hedef: uyarı, engel değil** (#2577 § 4, henüz yok) | CRM, bir insanın elle attığı maili durduramaz (dış posta istemcisi) |
-| LinkedIn/XING DM yasağı | **Hayır** | CRM DM göndermez; kural satış ekibinin disiplinidir |
-| Telefon araması için somut bağ | **Hayır** — yalnız `PHONE` izin satırını ve gerekçesini gösterir | Aramanın kendisi CRM dışında |
-| Posta: Art. 14 notu, "Keine Werbung" levhası | **Kısmen** (#2697) — Art. 14 + Art. 21 notu her mektubun arkasına otomatik basılır; itiraz edenler ve 90 gün içinde yazılanlar kampanyaya eklenemez; levha süreçtir | `src/lib/postCampaignRule.ts` |
-| Rıza metninin doğru, dar ve işaretsiz olması | **Kısmen** — metin sürümü damgalanır; metnin hukuki yeterliliği Fachanwalt'ın işi | — |
-| İşlemsel maile reklam eklenmemesi | **Hayır** | Metin yazarı + gözden geçirme |
-| Upstream bir kaynak sistemin kendi rıza akışları | **Hayır** — bu repo dışında | Kaynak sistemin işi (§4) |
-| Impressum doğru kimliği gösterir | **Evet, `MARKETING_OPERATOR_*` set edildiğinde** (#2697) — set edilmeden InternCRM operatörü görünür | Açık soru 9; operatör adımı [`postal-campaigns.md`](postal-campaigns.md) |
+| Makine yolları (import, besleme) yalnız `NONE` yazar ve var olan satırı asla değiştirmez | **applied** | `src/lib/contactPermissionRule.ts` (kural), `src/lib/contactPermission.ts` (tek yazıcı; birim testi başka bir dosyanın tabloyu yazmasını da reddeder: `scripts/test/contact-permission.test.mjs`); e2e `e2e/account-event-ingest.spec.ts` |
+| Tiklenmiş kutu → tek, tarafsız onay maili | **applied** | `src/lib/contactPermissionDoi.ts` → `sendContactPermissionConfirmationEmail` (`src/services/emailService.ts`, kategori `consent`); e2e `e2e/marketing-demo-form.spec.ts` |
+| Alıcı başına günde 1 onay maili | **applied** | `ContactConfirmationMailCap` modeli (`prisma/schema.prisma`; birincil anahtar `HMAC-SHA256(adres):gün`) ve onu talep eden `src/lib/contactPermissionDoi.ts`; e2e `e2e/marketing-demo-form.spec.ts` ("a ticked box mails ONE confirmation a day"), birim testi `scripts/test/contact-permission.test.mjs` |
+| DOI tıklaması → `DOI_CONFIRMED`; opt-out geri alır; açılan bağlantı tek başına onaylamaz | **applied** | Sayfalar `src/app/contact-permission/confirm/page.tsx`, `src/app/contact-permission/opt-out/page.tsx`; POST rotaları `src/app/api/contact-permission/{confirm,opt-out}/route.ts`; token `src/lib/contactPermissionTokens.ts`; e2e `e2e/marketing-demo-form.spec.ts` |
+| Admin `DOI_CONFIRMED` yazamaz | **applied** | `src/lib/contactPermissionRule.ts`; e2e `e2e/marketing-demo-form.spec.ts` |
+| `EXISTING_CUSTOMER_7_3` yalnız elle ve gerekçeyle (≥ 10 karakter) | **applied** | `src/app/api/admin/companies/[id]/contact-permission/route.ts` → `src/lib/contactPermissionRule.ts` (`reason_required`); e2e `e2e/marketing-demo-form.spec.ts` |
+| `EXISTING_CUSTOMER_7_3` yalnız **ücretli** müşteride ve adres satış sırasında alındıysa | **partly** | Elle + gerekçe zorunlu (üst satır); "ücretli mi" ve "adres satış sırasında mı alındı" (§ 2.5 koşul 1) **kodla doğrulanmaz** — gerekçeyi yazan adminin kararıdır |
+| Kişinin kendi geri alması (`revokedVia = 'LINK'`) satırı her admin yazımına karşı kilitler | **applied** | `src/lib/contactPermissionRule.ts` (`owner_objected`); e2e `e2e/marketing-demo-form.spec.ts` |
+| İzni olmayan hesapta e-posta aksiyonu uyarı gösterir (engel değil) | **applied** | Amber uyarı `src/components/CompanyDetailView.tsx` (`data-permitted`); admin listesinde izin rozeti ve filtresi `src/app/admin/companies/page.tsx`; e2e `e2e/marketing-demo-form.spec.ts`. CRM, bir insanın dış posta istemcisinden attığı maili durduramaz |
+| Satış temsilcisinin hesap listesinde izin sütunu ve "kanıtlı e-posta izni" filtresi | **applied** | `src/app/sales/accounts/page.tsx` (`marketingEmailPermissionFilter`, `src/lib/contactPermission.ts`); e2e `e2e/marketing-demo-form.spec.ts` |
+| Reklam maili göndermeden önce alıcı başına izin kapısı | **exists, no caller yet: no advertising mail exists** | `canSendMarketingEmail()` (`src/lib/contactPermission.ts`); ilk reklam maili her alıcı için bunu çağırmak zorundadır |
+| LinkedIn/XING DM yasağı | **not built** | CRM DM göndermez; kural satış ekibinin disiplinidir |
+| Telefon araması için somut bağ | **partly** | CRM yalnız `PHONE` izin satırını ve gerekçesini gösterir; aramanın kendisi CRM dışında |
+| Posta: Art. 14 notu, "Keine Werbung" levhası | **partly** (#2697) | Art. 14 + Art. 21 notu her mektubun arkasına otomatik basılır; itiraz edenler ve 90 gün içinde yazılanlar kampanyaya eklenemez (`src/lib/postCampaignRule.ts`); levha süreçtir |
+| Rıza metninin doğru, dar ve işaretsiz olması | **partly** | Metin sürümü damgalanır (`marketingOptInTextVersion`, `ContactPermission.textVersion`); metnin hukuki yeterliliği Fachanwalt'ın işi |
+| İşlemsel maile reklam eklenmemesi | **not built** | Metin yazarı + gözden geçirme |
+| Upstream bir kaynak sistemin kendi rıza akışları | **not built** | Bu repo dışında; kaynak sistemin işi (§4) |
+| Impressum doğru kimliği gösterir | **applied (no e2e)** | `operatorIdentity(env, world)` (`src/lib/imprint.ts`), birim testi `scripts/test/imprint-world.test.mjs`; prod/preview'da `MARKETING_OPERATOR_*` henüz set edilmedi, set edilene kadar çekirdek `OPERATOR_*` görünür (§6, açık soru 9) |
 
-"Hayır" satırları için satış ekibinin tek kontrolü bu dokümandır; bir CRM uyarısının yokluğu
-**izin anlamına gelmez**.
+"not built" ve "partly" satırlarının insana kalan kısmı için satış ekibinin tek kontrolü bu
+dokümandır; bir CRM uyarısının yokluğu **izin anlamına gelmez**.
 
 ## 9. Kaynaklar
 
@@ -353,14 +369,17 @@ Bu repoda:
 5. *(Kiracıya özgü bir soruydu; bu repo'nun dışında takip ediliyor.)*
 6. **DOI kanıtında IP.** `go-to-market.md` §7.2 IP'yi listeliyor; `demo-form.md` bilinçli olarak IP
    saklamıyor (veri minimizasyonu). Onay tıklamasında IP (veya hash'i) saklanmalı mı?
+   Durum: decided in code: no IP stored (docs/contact-permission.md); lawyer to confirm
 7. **VG Düsseldorf 27.07.2026 kararı** yalnız ikincil kaynaktan (blog) alındı; dosya numarası ve
    tam metin teyit edilmeli.
 8. **Duplicate merge'de iki farklı izin** — "daha dar olan kazanır" kuralı uygun mu?
 9. **Impressum kimliği (sert blokaj):** marketing host'unda marketing ürününü sunan şirketi
    gösteren bir Impressum nasıl yayınlanacak — host başına operatör kimliği (`src/lib/imprint.ts`
    değişikliği, ayrı issue) mi, yoksa ürünün kendi Impressum URL'sine bağlantı mı?
+   Durum: mechanism shipped (#2697, operatorIdentity(env, world)); prod/preview configuration pending (go-live §0)
 10. **Saklama süreleri:** izin kanıtı ve kampanya kayıtları için süre (öneri: izin bitiminden
     sonra 3 yıl, § 195 BGB Regelverjährung paraleli) avukatla belirlenmeli.
+    Durum: partly: contactPermissionProof entry in src/lib/retentionEntries.ts; campaign records and prospect retention open
 11. *(Kiracıya özgü bir soruydu; bu repo'nun dışında takip ediliyor.)*
 12. **Başkasının web iletişim formu üzerinden reklam** (§2): doküman bunu elektronische Post
     sayıyor ve yalnız açık, herkese açık bir teklif davetini (belgelenmiş bağlantıyla) istisna
