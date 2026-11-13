@@ -160,3 +160,39 @@ The alternative — a `Contact` table plus a nullable `contactId` on the relatio
 carrier for the person half of the funnel and was rejected for the same reason as a second
 pipeline carrier. `Company.contactName/contactEmail/contactPhone` (#2407) still land, so an
 account **without** a funnel record keeps its "who do we call" without any `User` at all.
+
+## The lead's contact (#3655)
+
+The lead page's contact card shows the **account's primary contact** — the four
+`Company.contact*` columns (name, position, e-mail, phone) — never the lead row's
+`@import.local` stand-in address (`shownEmail()`, `src/lib/leadEmail.ts`). With no
+account contact it falls back to the lead row's name and phone, and shows no address.
+
+The record's rep corrects it in place (`PATCH /api/sales/leads/[id]/contact`, one
+writer: `src/lib/salesLeadContact.ts`):
+
+- **Who:** the record's own rep (MENTOR, or an ADMIN in sales mode); an admin
+  holding `company.write` for any record of the tenant. Another rep's record,
+  another tenant's and an unknown id are the same 404; an OBSERVER is 403.
+- **What moves:** the account's four contact columns, and in the same transaction
+  the lead row's `fullName` and `phone` (the page heading, the board card and the
+  Klaviyo phone matcher read them). **Never `User.email`** — a login address is not
+  a rep's to change.
+- **One writer for the account's columns:** `writePrimaryContactTx()` in
+  `src/lib/companyContacts.ts`, inside the request's transaction — the same row
+  lock as a concurrent "make primary" (#2442) and the same duplicate test against
+  the account's address book: an address another contact holds is
+  `409 duplicate_email`. The admin address-book route's primary edit goes
+  through the same function.
+- **Audit:** `sales.lead.contact.update` with the account id, the names of the
+  changed account fields (`changed`) and of the synced lead-row fields
+  (`leadRow`), never their values. The lead row is compared on its own: a
+  contact that was already right still brings a stale heading back in step. A
+  save that changes neither writes nothing.
+- **Nothing is sent.** Phase 1 of the sales CRM manages lead data only; a
+  correction mails nobody. Contact permission stays bound to its address
+  (`docs/contact-permission.md`): a new address starts with no basis.
+- **Feeds:** the Klaviyo sync and the account import fill an empty contact column
+  but do not overwrite a typed-in one (`src/lib/externalSyncPolicy.ts`), so a
+  correction survives the next sync.
+- A record without an account has no contact to correct: no editor, `409 no_account`.

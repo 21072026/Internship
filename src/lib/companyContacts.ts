@@ -12,7 +12,9 @@
  * Callers are the routes under src/app/api/companies/[id]/contacts, which
  * check the session, the ADMIN role, the `companies` capability and the tenant
  * before calling in; the company handed over is one they already found inside
- * the caller's tenant.
+ * the caller's tenant. The sales lead page (#3655, src/lib/salesLeadContact.ts)
+ * writes the primary through `writePrimaryContactTx()` inside its own
+ * transaction, after its own ownership and tenant checks.
  */
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
@@ -117,6 +119,40 @@ export async function createCompanyContact(company: CompanyRef, contact: Contact
     .catch(rethrowDuplicate);
 }
 
+/**
+ * Write the account's primary contact INSIDE a caller's transaction (#3655): the
+ * same lock and the same duplicate test as every other write here, so a caller
+ * that must change something else atomically (the sales lead page also syncs the
+ * lead row) still goes through this one writer. Sets the primary whether or not
+ * the account had one. Throws `ContactEmailTaken` when another contact of the
+ * account already holds the address. Returns the columns as they were, and
+ * whether anything was written (an identical primary writes nothing).
+ */
+export async function writePrimaryContactTx(
+  tx: Tx,
+  companyId: string,
+  contact: ContactFields,
+): Promise<{ before: PrimaryColumns; written: boolean }> {
+  await lock(tx, [companyId]);
+  const book = await bookOf(tx, companyId);
+  const before: PrimaryColumns = {
+    contactName: book.company.contactName,
+    contactEmail: book.company.contactEmail,
+    contactPhone: book.company.contactPhone,
+    contactPosition: book.company.contactPosition,
+  };
+  // The primary's own current address is not a collision with itself.
+  if (emailTaken(contact.email, { ...before, contactEmail: null }, book.rows)) throw new ContactEmailTaken();
+  const next = contactAsPrimary(contact);
+  const same = (Object.keys(next) as (keyof PrimaryColumns)[]).every((k) => (before[k] ?? null) === (next[k] ?? null));
+  if (same) return { before, written: false };
+  await tx.company.update({ where: { id: companyId }, data: next });
+  return { before, written: true };
+}
+
+/** `ContactEmailTaken` for a unique-index race too — for callers that run their own transaction. */
+export const asContactEmailTaken = rethrowDuplicate;
+
 /** Edit a contact — a row, or the primary (`PRIMARY_CONTACT_ID`). */
 export async function updateCompanyContact(companyId: string, contactId: string, contact: ContactFields): Promise<boolean> {
   return prisma
@@ -125,9 +161,7 @@ export async function updateCompanyContact(companyId: string, contactId: string,
       const book = await bookOf(tx, companyId);
       if (contactId === PRIMARY_CONTACT_ID) {
         if (!hasPrimary(book.company)) return false;
-        // The primary's own current address is not a collision with itself.
-        if (emailTaken(contact.email, { ...book.company, contactEmail: null }, book.rows)) throw new ContactEmailTaken();
-        await tx.company.update({ where: { id: companyId }, data: contactAsPrimary(contact) });
+        await writePrimaryContactTx(tx, companyId, contact);
         return true;
       }
       if (!book.rows.some((r) => r.id === contactId)) return false;
