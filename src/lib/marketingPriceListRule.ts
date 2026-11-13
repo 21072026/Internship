@@ -87,18 +87,18 @@ export const priceListSchema = z.strictObject({
   currency: z.enum(PRICE_LIST_CURRENCIES),
   plans: z.array(planSchema).min(1).max(MARKETING_PLAN_KEYS.length),
 })
-  .superRefine((list, ctx) => {
+  .check(z.superRefine((list, ctx) => {
     const order = list.plans.map((p) => MARKETING_PLAN_KEYS.indexOf(p.key));
     for (let i = 1; i < order.length; i++) {
       if (order[i] <= order[i - 1]) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           path: ['plans', i, 'key'],
           message: `plans are listed once each, in the order ${MARKETING_PLAN_KEYS.join(', ')}`,
         });
       }
     }
-  });
+  }));
 
 export type PriceListParse = { ok: true; value: PriceList } | { ok: false; errors: string[] };
 

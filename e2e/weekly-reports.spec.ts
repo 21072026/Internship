@@ -43,8 +43,12 @@ test('mentee submission, mentor review, authorization, print and reminder dedupe
     orgId = org.id;
     const mentor = await seedUser(mentorEmail, password, 'MENTOR', 'Weekly Mentor');
     const mentee = await seedUser(menteeEmail, password, 'MENTEE', 'Weekly Mentee');
-    await seedUser(outsiderEmail, password, 'MENTEE', 'Other Mentee');
-    await seedUser(unrelatedMentorEmail, password, 'MENTOR', 'Unrelated Mentor');
+    // The outsider and the unrelated mentor share the org on purpose: this
+    // walks the role rule (403). Another org's relation reads as 404 since
+    // #3604 — that side is weekly-reports-tenant-scope.spec.ts.
+    const outsider = await seedUser(outsiderEmail, password, 'MENTEE', 'Other Mentee');
+    const unrelatedMentor = await seedUser(unrelatedMentorEmail, password, 'MENTOR', 'Unrelated Mentor');
+    await prisma.user.updateMany({ where: { id: { in: [outsider.id, unrelatedMentor.id] } }, data: { orgId: org.id } });
     const admin = await seedUser(adminEmail, password, 'ADMIN', 'Weekly Admin');
     await prisma.user.update({ where: { id: mentor.id }, data: { orgId: org.id } });
     await prisma.user.update({ where: { id: mentee.id }, data: { orgId: org.id, preferredLanguage: 'tr', emailNotifications: true, notificationPrefs: { weeklyReports: true } } });

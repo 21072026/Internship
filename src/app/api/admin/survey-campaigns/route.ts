@@ -28,14 +28,14 @@ const createSchema = z.strictObject({
   audience: oneOf(AUDIENCES).nullable().optional(),
   active: z.boolean().optional(),
 })
-  .superRefine((v, ctx) => {
+  .check(z.superRefine((v, ctx) => {
     const need = (field: 'stageKey' | 'dayOffset' | 'everyDays') => {
       if (v[field] == null) ctx.addIssue({ code: 'custom', path: [field], message: `${field} is required for ${v.trigger}` });
     };
     if (v.trigger === 'STAGE_ENTERED') need('stageKey');
     if (v.trigger === 'DAYS_AFTER_START' || v.trigger === 'DAYS_BEFORE_END' || v.trigger === 'DAYS_AFTER_END') need('dayOffset');
     if (v.trigger === 'RECURRING') need('everyDays');
-  });
+  }));
 
 export async function GET(request: Request) {
   const gate = await requirePermission('content.read', { request });

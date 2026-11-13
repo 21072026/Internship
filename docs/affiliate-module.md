@@ -871,6 +871,29 @@ end, so it knows when that customer's commissions stop.
   the notice (a plan change lengthens `windowMonths`, or a back-dated first payment is
   corrected), the new date is not announced again; the portal column shows it.
 
+
+### In the portal (#3557)
+
+The partner's customer list has a **Commission until** column whenever the plan
+has a percent phase, and the portal's home page warns "N customers: commission
+ends within D days" with a link to the list. Both are computed by
+`customerWindows()` / `windowsEndingSoon()` in `src/lib/affiliateWindowNoticeRule.ts`
+over the engine's evaluation of the partner's whole payment history
+(`partnerWindows()` in `src/lib/affiliatePartnerView.ts`) — the same
+`windowEndsAt` the mail names, never a second calculation.
+
+- **—** for a customer with no window: no valid payment yet, or first paid after
+  the termination took effect.
+- **No end** when the plan's percent phase has no limit.
+- A date (UTC, like the mail), with an **Ended** badge once it has passed. Under
+  STOP_ALL a termination that comes before the window's end is the date shown.
+- The warning counts what the mail would announce — after the switch, an end
+  still ahead and within `windowNoticeDays`, not cut earlier by a STOP_ALL
+  termination — without the "already told" stamp, so it stays until the end
+  passes. Notice off (`windowNoticeDays` 0): no warning; the column stays.
+- Read-only and scoped like every other portal read: the partner from the
+  session, its own customers only.
+
 ## Moving the settings (#3622)
 
 A programme's settings live in the environment they were typed into. A topic

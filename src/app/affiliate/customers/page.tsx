@@ -24,7 +24,8 @@ const STATUS_VARIANT: Record<CustomerStatus, 'default' | 'success' | 'warning' |
 
 // The partner's own customers (#3117): the customer's opaque reference, its
 // status (#3542, filterable, #3543), since when it is credited to the partner,
-// its payments and what it earned so far.
+// its payments, what it earned so far and — when the plan has a percent phase —
+// until when its percent commission runs (#3557, the date the notice mail names).
 export default async function AffiliateCustomersPage({ searchParams }: { searchParams: Promise<{ page?: string; status?: string }> }) {
   const { locale, t } = await getServerDictionary();
   const L = t.affiliatePortal;
@@ -70,6 +71,11 @@ export default async function AffiliateCustomersPage({ searchParams }: { searchP
                   <th className="px-4 py-2">{L.colSince}</th>
                   <th className="px-4 py-2 text-right">{L.colPayments}</th>
                   <th className="px-4 py-2 text-right">{L.colEarned}</th>
+                  {data.showWindow && (
+                    <th className="px-4 py-2" title={L.colWindowEndHint}>
+                      {L.colWindowEnd}
+                    </th>
+                  )}
                   <th className="px-4 py-2"><span className="sr-only">{L.ask}</span></th>
                 </tr>
               </thead>
@@ -85,6 +91,25 @@ export default async function AffiliateCustomersPage({ searchParams }: { searchP
                     <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.since, locale, { timeZone: 'UTC' })}</td>
                     <td className="px-4 py-2 text-right">{r.payments}</td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">{formatMinorAmount(r.earnedMinor, AFFILIATE_CURRENCIES[0], locale)}</td>
+                    {data.showWindow && (
+                      <td className="px-4 py-2 whitespace-nowrap" data-testid="affiliate-customer-window" data-window={r.window.kind} data-ends-at={r.window.kind === 'ends' ? r.window.endsAt : undefined}>
+                        {r.window.kind === 'none' ? (
+                          <span className="text-gray-400" aria-label={L.windowNone}>{L.windowNone}</span>
+                        ) : r.window.kind === 'unlimited' ? (
+                          L.windowUnlimited
+                        ) : (
+                          <span className="inline-flex items-center gap-2">
+                            {/* UTC, like the engine's window end and the notice mail. */}
+                            {formatDate(r.window.endsAt, locale, { timeZone: 'UTC' })}
+                            {r.window.ended && (
+                              <Badge variant="default" data-testid="affiliate-customer-window-ended">
+                                {L.windowEnded}
+                              </Badge>
+                            )}
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-4 py-2 text-right">
                       <Link
                         href={`/affiliate/support?record=${encodeURIComponent(recordRef('customer', r.id))}`}

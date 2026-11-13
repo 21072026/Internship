@@ -19,7 +19,7 @@ const patchSchema = z.strictObject({
   name: z.string().trim().min(1).max(ROUND_NAME_MAX).optional(),
   status: z.enum(['DRAFT', 'REVIEW']).optional(),
 })
-  .refine((v) => v.name !== undefined || v.status !== undefined, { message: 'nothing to change' });
+  .refine((v) => v.name !== undefined || v.status !== undefined, { error: 'nothing to change' });
 
 type Ctx = { params: Promise<{ id: string }> };
 

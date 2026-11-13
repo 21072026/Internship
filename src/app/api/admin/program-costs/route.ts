@@ -68,7 +68,7 @@ const costShape = z.strictObject({
 
 const createSchema = costShape
   .refine((value) => toUtcDate(value.periodStart) <= toUtcDate(value.periodEnd), {
-    message: 'periodStart must not be after periodEnd',
+    error: 'periodStart must not be after periodEnd',
     path: ['periodEnd'],
   });
 

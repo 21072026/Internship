@@ -68,7 +68,7 @@ const updateProfileSchema = z.object({
       try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; }
       catch { return false; }
     },
-    { message: 'Invalid IANA timezone' }
+    { error: 'Invalid IANA timezone' }
   ),
   linkedinUrl: z.url().max(TEXT_LIMITS.profileUrl).or(z.literal('')).optional(),
   githubUrl: z.url().max(TEXT_LIMITS.profileUrl).or(z.literal('')).optional(),
