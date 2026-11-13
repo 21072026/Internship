@@ -41,11 +41,31 @@ export async function storeLandingAsset(
   const kind = themeMediaKind(file.type);
   if (!kind) return { ok: false, reason: 'unsupported' };
   if (file.size > THEME_MEDIA_MAX_BYTES[kind]) return { ok: false, reason: 'too_large' };
-  const bytes = Buffer.from(await file.arrayBuffer());
-  if (!contentMatchesType(bytes.subarray(0, 12), file.type)) return { ok: false, reason: 'mismatch' };
+  return storeLandingAssetBytes(orgId, Buffer.from(await file.arrayBuffer()), file.type);
+}
+
+/** The checks a stored asset must pass, on bytes already in hand (the upload and the settings import, #3622). */
+export function landingAssetRefusal(bytes: Buffer, contentType: string): AssetRefusal | null {
+  if (bytes.length === 0) return 'missing';
+  const kind = themeMediaKind(contentType);
+  if (!kind) return 'unsupported';
+  if (bytes.length > THEME_MEDIA_MAX_BYTES[kind]) return 'too_large';
+  if (!contentMatchesType(bytes.subarray(0, 12), contentType)) return 'mismatch';
+  return null;
+}
+
+/** Stores bytes as one of the org's theme uploads — the one place a row is created. */
+export async function storeLandingAssetBytes(
+  orgId: string,
+  bytes: Buffer,
+  contentType: string,
+): Promise<{ ok: true; id: string; kind: 'image' | 'video'; url: string } | { ok: false; reason: AssetRefusal }> {
+  const refusal = landingAssetRefusal(bytes, contentType);
+  if (refusal) return { ok: false, reason: refusal };
+  const kind = themeMediaKind(contentType)!;
   if ((await prisma.affiliateLandingAsset.count({ where: { orgId } })) >= THEME_MEDIA_MAX_PER_ORG) return { ok: false, reason: 'too_many' };
   const row = await prisma.affiliateLandingAsset.create({
-    data: { orgId, kind, contentType: file.type.toLowerCase(), size: bytes.length, data: bytes },
+    data: { orgId, kind, contentType: contentType.toLowerCase(), size: bytes.length, data: bytes },
     select: { id: true },
   });
   return { ok: true, id: row.id, kind, url: themeMediaUrl(row.id) };
