@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Affiliate portal: the customer list shows until when each customer's percent commission runs (the engine's window end — the date the notice mail names; \"No end\" for an unlimited plan, an \"Ended\" badge once passed), and the home page warns how many customers' commission ends within the programme's notice lead time (#3557).",
+  "notes": {
+    "en": ["Partner portal: see until when your commission runs for each customer, and get a heads-up on the home page when some are about to end."],
+    "tr": ["Partner portalı: her müşteri için komisyonunuzun ne zamana kadar sürdüğünü görün; bitmek üzere olanlar için ana sayfada uyarı alın."],
+    "de": ["Partnerportal: Sehen Sie, bis wann Ihre Provision für jeden Kunden läuft, und erhalten Sie auf der Startseite einen Hinweis, wenn welche bald enden."]
+  }
+}
