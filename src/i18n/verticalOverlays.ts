@@ -59,6 +59,14 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      // The executive dashboard (#3706): the third score counts records that first
+      // reached the tenant's own finished stage — a won deal here, not a placement.
+      executive: {
+        // Three, not four: the Capability block is not shown without `mentorship`.
+        subtitle: 'Three scores from 0 to 100, each one plain arithmetic over your own records.',
+        scores: { placement: { name: 'Won deals' } },
+        forecast: { title: 'Wins by the horizon' },
+      },
       // The mentor shell's first-run tour (#2067). A MARKETING MENTOR is a sales
       // rep and is sent to /sales, so this is a safety net, not a screen.
       guidance: { tours: { 'mentor-first-run': { steps: {
@@ -1234,6 +1242,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      executive: {
+        subtitle: '0–100 arası üç skor; her biri kendi kayıtlarınız üzerinde basit bir hesap.',
+        scores: { placement: { name: 'Kazanılan anlaşmalar' } },
+        forecast: { title: 'Ufka kadar kazanımlar' },
+      },
       guidance: { tours: { 'mentor-first-run': { steps: {
         mentees: { title: 'Potansiyel müşterilerin', body: 'İlgilendiğin potansiyel müşteriler; hangi aşamada olduklarını ve en son ne zaman konuştuğunuzu burada görürsün.' },
         board: { body: 'Potansiyel müşterilerin aşamalarına göre dizili. Bir şey değiştiğinde kartı ilerlet.' },
@@ -2264,6 +2277,11 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      executive: {
+        subtitle: 'Drei Scores von 0 bis 100, jeder eine einfache Rechnung über Ihre eigenen Daten.',
+        scores: { placement: { name: 'Gewonnene Deals' } },
+        forecast: { title: 'Abschlüsse bis zum Horizont' },
+      },
       guidance: { tours: { 'mentor-first-run': { steps: {
         mentees: { title: 'Deine Leads', body: 'Die Leads, die du betreust, mit ihrer Phase und dem letzten Kontakt.' },
         board: { body: 'Deine Leads nach Phase. Schieb eine Karte weiter, wenn sich etwas ändert.' },

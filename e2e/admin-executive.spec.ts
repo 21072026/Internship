@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
-import { signInAndSettle, signInAsFreshUser } from './helpers/auth';
+import { signInAndSettle, signInAsFreshUser, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 
 // /admin/analytics/executive (#1895). Its own org; the window is the last 30
 // days and the previous period the 30 before it:
@@ -90,6 +90,17 @@ test.describe('executive dashboard', () => {
     await expect(page.getByTestId('executive-deterministic')).toContainText('No score here is predicted');
   });
 
+  // #3706: the internship product is unchanged — the Capability block, the
+  // cohort selector and the placement wording all stay.
+  test('INTERNSHIP keeps the Capability block, the cohort selector and the placement wording', async ({ page }) => {
+    await signInAndSettle(page, admin, PW, '/admin');
+    await gotoSettled(page, '/admin/analytics/executive');
+    await expect(page.getByTestId('executive-capability')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('executive-cohort')).toBeVisible();
+    await expect(page.getByTestId('executive-placement-name')).toHaveText('Placement');
+    await expect(page.getByTestId('executive-forecast-title')).toHaveText('Placements by the horizon');
+  });
+
   test('prints to one A4 page in EN, TR and DE', async ({ page, browserName, baseURL }) => {
     test.skip(browserName !== 'chromium', 'page.pdf() is Chromium-only');
     await signInAndSettle(page, admin, PW, '/admin');
@@ -116,5 +127,41 @@ test.describe('executive dashboard', () => {
 
     await signInAsFreshUser(page, mentor, PW, '/mentor');
     expect((await page.request.get('/api/admin/analytics/executive')).status()).toBe(403);
+  });
+});
+
+// #3706: a MARKETING admin sees the same three pipeline scores in sales words —
+// no skills-growth Capability block and no programme-cohort selector. The
+// metrics themselves are the same arithmetic (only copy and visibility differ).
+test.describe('executive dashboard in MARKETING', () => {
+  const stamp = `${Date.now()}`;
+  const admin = uniqueEmail('exec-mkt-admin');
+  let orgId = '';
+
+  test.beforeAll(async () => {
+    orgId = (await prisma.organization.create({ data: { name: `Exec MKT ${stamp}`, slug: `exec-mkt-${stamp}`, vertical: 'MARKETING' } })).id;
+    await setOrgFeature(orgId, 'ADVANCED_ANALYTICS', true);
+    await seedUser(admin, PW, 'ADMIN', `Exec MKT Admin ${stamp}`, orgId);
+  });
+
+  test.afterAll(async () => {
+    await cleanupByEmail(admin);
+    await prisma.orgEntitlement.deleteMany({ where: { orgId } });
+    await prisma.organization.deleteMany({ where: { id: orgId } });
+    await prisma.$disconnect();
+  });
+
+  test('no Capability block, no cohort selector, and the won-deal wording', async ({ page }) => {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+    await signInAndSettle(page, admin, PW, '/admin');
+    await gotoSettled(page, '/admin/analytics/executive');
+    await expect(page.getByTestId('executive-placement-name')).toHaveText('Won deals', { timeout: 20_000 });
+    await expect(page.getByTestId('executive-forecast-title')).toHaveText('Wins by the horizon');
+    await expect(page.getByText('Three scores from 0 to 100', { exact: false })).toBeVisible();
+    await expect(page.getByTestId('executive-capability')).toHaveCount(0);
+    await expect(page.getByTestId('executive-cohort')).toHaveCount(0);
+    // The other scores are there, unchanged.
+    await expect(page.getByTestId('executive-engagement')).toBeVisible();
+    await expect(page.getByTestId('executive-progression')).toBeVisible();
   });
 });
