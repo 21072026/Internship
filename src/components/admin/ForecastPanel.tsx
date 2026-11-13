@@ -64,7 +64,7 @@ export function ForecastPanel() {
   return (
     <section className="mt-6 rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 break-inside-avoid" data-testid="executive-forecast">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <h2 className="font-semibold text-gray-900 dark:text-gray-100">{f.title}</h2>
+        <h2 className="font-semibold text-gray-900 dark:text-gray-100" data-testid="executive-forecast-title">{f.title}</h2>
         <label className="no-print text-sm">
           <span className="block font-medium text-gray-700 dark:text-gray-300 mb-1">{f.horizon}</span>
           <input
