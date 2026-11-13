@@ -105,7 +105,6 @@ import {
   planAccountEvent,
   shouldUndoHistoricExpiry,
   batchOrder,
-  WON_STAGE_KEY,
   type EventPlan,
   type IngestIntent,
 } from '@/lib/accountEventRule';
@@ -117,6 +116,7 @@ import {
 import type { AccountEvent } from '@/lib/accountEventSchema';
 import { AffiliateWriteError, recordAffiliatePayment } from '@/lib/affiliatePaymentWriter';
 import { shellCapabilities } from '@/lib/shellCapabilities';
+import { relationsEverWon } from '@/lib/wonHistory';
 
 /** A `processing` claim older than this belongs to a run that died. */
 export const CLAIM_STALE_MS = 10 * 60 * 1000;
@@ -699,12 +699,7 @@ async function keptFirstNote(ctx: Ctx, externalRef: string, keptPartnerId: strin
 
 /** Did this record ever sign? It is at DEAL_WON, or its history shows the move. */
 async function recordWasWon(ctx: Ctx, relation: RelationRow): Promise<boolean> {
-  if (relation.pipelineStatus === WON_STAGE_KEY) return true;
-  const row = await ctx.db.statusChange.findFirst({
-    where: { relationId: relation.id, toStatus: WON_STAGE_KEY },
-    select: { id: true },
-  });
-  return !!row;
+  return (await relationsEverWon([relation], ctx.db)).has(relation.id);
 }
 
 async function moveAccount(

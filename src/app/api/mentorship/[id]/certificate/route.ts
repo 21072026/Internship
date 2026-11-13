@@ -16,6 +16,7 @@ import { generateCertificatePdf } from '@/lib/certificatePdf';
 import { logActivity } from '@/lib/activity';
 import { notifyIfAllowed } from '@/lib/notify';
 import type { DocumentType } from '@prisma/client';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // Kept in sync with the single-page layout budget in certificatePdf.ts — long
 // enough for a certificate paragraph or a short reference letter, short
@@ -54,6 +55,9 @@ const META_SELECT = {
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // An internship certificate is the mentorship module (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const { id } = await params;
   // Admin reach from the permission rule, not the role string (#1571).
   const actor = await actorFromSession(session);
