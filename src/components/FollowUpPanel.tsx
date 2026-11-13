@@ -176,6 +176,8 @@ export function FollowUpPanel({
         <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{t.followUp.title}</p>
         <FollowUpStatus at={nextActionAt} className="text-xs" />
       </div>
+      {/* The follow-up is what comes NEXT; what already happened is an interaction (#3652). */}
+      <p className="mb-2 text-xs text-gray-600 dark:text-gray-400" data-testid="follow-up-purpose">{t.followUp.purpose}</p>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
         <Input
           id={`follow-up-date-${relationId}`}
