@@ -30,6 +30,7 @@ import { SavedViews } from '@/components/SavedViews';
 import { isWipSaturated, type WipColumn } from '@/lib/boardWip';
 import { HelpTip } from '@/components/guidance/HelpTip';
 import { HandoffCardButton, useLeadHandoff } from '@/components/board/LeadHandoff';
+import { BoardOwnerFilter, useOwnerOptions } from '@/components/board/BoardOwnerFilter';
 
 interface Relation {
   id: string;
@@ -78,6 +79,22 @@ export default function AdminBoardPage() {
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const { search, setSearch, hideEmpty, setHideEmpty } = useBoardFilters();
+  // The owner filter (#3658): which owners' records the board shows. Kept in
+  // the URL (`?owners=`) so a filtered board can be bookmarked and shared, and
+  // sent to the server so counts and paging match what is on screen.
+  const ownerOptions = useOwnerOptions();
+  const [owners, setOwnersState] = useState<string[]>([]);
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get('owners');
+    if (fromUrl) setOwnersState(fromUrl.split(',').filter(Boolean));
+  }, []);
+  const setOwners = useCallback((ids: string[]) => {
+    setOwnersState(ids);
+    const url = new URL(window.location.href);
+    if (ids.length) url.searchParams.set('owners', ids.join(','));
+    else url.searchParams.delete('owners');
+    window.history.replaceState(window.history.state, '', url);
+  }, []);
   const [mobileStage, setMobileStage] = useState('');
   // The groups the VIEWER actually has (#828) — built from the resolved stages,
   // so a customized pipeline is not silently dropped on the desktop board.
@@ -96,9 +113,10 @@ export default function AdminBoardPage() {
     (extra: Record<string, string> = {}) => {
       const params = new URLSearchParams({ view: 'board', ...extra });
       if (serverSearch) params.set('search', serverSearch);
+      if (owners.length) params.set('owners', owners.join(','));
       return `/api/mentorship?${params}`;
     },
-    [serverSearch]
+    [serverSearch, owners]
   );
 
   const fetchRelations = useCallback(async () => {
@@ -242,6 +260,7 @@ export default function AdminBoardPage() {
   const itemsFor = (status: string) =>
     relations.filter(
       (r) => r.pipelineStatus === status &&
+        (owners.length === 0 || owners.includes(r.mentor.id)) &&
         (!q || r.mentee.fullName.toLowerCase().includes(q) || r.mentor.fullName.toLowerCase().includes(q))
     );
 
@@ -299,8 +318,14 @@ export default function AdminBoardPage() {
           <p className="text-xs text-gray-500 truncate mt-0.5">{r.mentee.university}</p>
         )}
         <div className="flex items-center gap-3 text-xs text-gray-400 mt-2">
-          <span className="flex items-center gap-1 truncate">
-            <User className="h-3 w-3 flex-shrink-0" />
+          <span className="flex items-center gap-1 truncate" data-testid="board-card-owner">
+            {/* Whose record it is, at a glance (#3658): the owner's initials. */}
+            <span
+              aria-hidden="true"
+              className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-[9px] font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-200"
+            >
+              {r.mentor.fullName.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join('') || <User className="h-3 w-3" />}
+            </span>
             {/* stopPropagation lives in the card itself, so opening it does not
                 also open the mentee behind the card's click-through. */}
             <PersonHoverCard personId={r.mentor.id} name={r.mentor.fullName} role="MENTOR" className="truncate" />
@@ -398,6 +423,7 @@ export default function AdminBoardPage() {
           placeholder={t.adminBoard.searchPlaceholder}
           className="flex-1 min-w-[180px] max-w-sm rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
         />
+        <BoardOwnerFilter options={ownerOptions} selected={owners} onChange={setOwners} />
         <label className="flex items-center gap-2 text-sm text-gray-600">
           <input type="checkbox" checked={hideEmpty} onChange={(e) => setHideEmpty(e.target.checked)} />
           {t.adminBoard.hideEmpty}
@@ -407,10 +433,11 @@ export default function AdminBoardPage() {
         <SavedViews
           storageKey="board-views"
           surface="board"
-          current={{ search, hideEmpty: hideEmpty ? 'true' : 'false' }}
+          current={{ search, hideEmpty: hideEmpty ? 'true' : 'false', owners: owners.join(',') }}
           onApply={(f) => {
             setSearch(f.search || '');
             setHideEmpty(f.hideEmpty === 'true');
+            setOwners((f.owners || '').split(',').filter(Boolean));
           }}
         />
       </div>

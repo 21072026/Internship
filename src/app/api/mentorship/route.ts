@@ -119,6 +119,12 @@ export async function GET(request: Request) {
     // to switch on `page` alone, which made `?pageSize=20` silently return the
     // whole list (#1438); either parameter pages now (src/lib/boardPage.ts).
     const paged = listIsPaged(searchParams);
+    // `?owners=id,id` — the board's rep filter (#3658). Ids only, bounded.
+    const ownerIds = (searchParams.get('owners') ?? '')
+      .split(',')
+      .map((v) => v.trim())
+      .filter((v) => /^[A-Za-z0-9_-]{1,64}$/.test(v))
+      .slice(0, 50);
     const pageParam = searchParams.get('page');
     const page = Math.max(1, parseInt(pageParam || '1', 10) || 1);
     const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10) || 20));
@@ -170,7 +176,11 @@ export async function GET(request: Request) {
             ],
           }
         : undefined,
-      activeAgreement && isAgreementStatus(agreementParam) ? agreementStatusWhere(agreementParam, activeAgreement.version, activeAgreement.key) : undefined
+      activeAgreement && isAgreementStatus(agreementParam) ? agreementStatusWhere(agreementParam, activeAgreement.version, activeAgreement.key) : undefined,
+      // The board's rep filter (#3658): only these owners' records. ANDed with
+      // the scope like every other filter here, so it can narrow a caller's view
+      // but never widen it — a rep naming a colleague still sees only their own.
+      ownerIds.length > 0 ? { mentorId: { in: ownerIds } } : undefined
     );
 
     const include = {
