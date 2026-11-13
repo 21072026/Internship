@@ -6,6 +6,7 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { createFormDefinition, createFormSchema, FormWriteError } from '@/lib/forms/definitions';
 import { requirePermission } from '@/lib/authz';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // Admin-defined forms (#1800): list every version and create version 1. The
 // rules live in src/lib/forms/definitions.ts; the builder screen is #1802.
@@ -14,6 +15,9 @@ export async function GET(request: Request) {
   const gate = await requirePermission('content.read', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // Intake forms for mentees and mentors (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return withTenantScope(session, async () => {
     const forms = await prisma.formDefinition.findMany({
       where: withinTenant({}, await tenantWhere(session)),
@@ -28,6 +32,9 @@ export async function POST(request: Request) {
   const gate = await requirePermission('content.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // Intake forms for mentees and mentors (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const parsed = createFormSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input', code: 'invalid', issues: parsed.error.issues }, { status: 400 });
   return withTenantScope(session, async () => {
