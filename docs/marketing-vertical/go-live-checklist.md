@@ -35,7 +35,11 @@ bu dosyanın durumu #2578'e yorum olarak geçer.
 - [ ] Her yeni demo talebi **≤ 1 iş günü** içinde sahiplendi (sahipsiz sayaç: `/admin/company-inquiries`)
 - [ ] Her `TRIAL_ACTIVE` kaydında `trialEndsAt` dolu
 - [ ] Her temas `InteractionLog` olarak girildi (görüşme, e-posta, telefon) — "son temas" ve ilk temas
-      süresi buna dayanır ([`../last-contact.md`](../last-contact.md)). Giden e-postalar için
+      süresi buna dayanır. İlk temasın tanımı, kodla birebir aynı (`FIRST_CONTACT_DEFINITION`,
+      `src/lib/firstContactRule.ts`; birim testi bu satırı okur):
+      First contact: from the demo request's createdAt (the record's startDate when there was no request) to the record's first InteractionLog; DIRECT and group messages do not count.
+      Yani "son temas"tan ([`../last-contact.md`](../last-contact.md)) bilerek farklıdır: orada
+      DIRECT mesaj ve lead'in kendi grup mesajı da temas sayılır, ilk temas süresinde sayılmaz. Giden e-postalar için
       `/admin/settings` → "Gönderilen e-postaları BCC ile kaydet" adresini BCC'ye eklemek yeter
       ([`sales-email-capture.md`](sales-email-capture.md)); telefon ve görüşme hâlâ elle
 - [ ] Gelen her itiraz (mektup/telefon/e-posta) **aynı gün** hesap sayfasında "Werbewiderspruch
@@ -44,11 +48,17 @@ bu dosyanın durumu #2578'e yorum olarak geçer.
 
 ## 3. Hafta sonu ölçümü (PII'siz, mevcut ekranlardan)
 
+İlk iki metrik `/admin/analytics` → funnel kartının altındaki **"Canlıya alma haftası"** kutularıdır
+(#2578; yalnızca MARKETING org'unda görünür). Kutular ekranın tarih aralığını kullanır — hafta sonu
+ölçümü için aralığı canlıya alma haftasına ayarla. İkisi de yalnızca sayı verir, kişi ya da kayıt adı
+göstermez; API karşılığı `GET /api/admin/analytics/funnel` yanıtındaki `medianFirstContactHours` ve
+`trialEndCoverage`.
+
 | Metrik | Nereden | Hedef (ilk hafta) |
 | --- | --- | --- |
-| Trial tarih kapsamı — `trialEndsAt` dolu `TRIAL_ACTIVE` oranı | `/admin/analytics` funnel | %100 |
-| İlk temas süresi medyanı (talep → ilk InteractionLog) | `/admin/analytics` aşama yaşlanması | ≤ 1 iş günü |
-| Kaynak atfı oranı — Source'u dolu yeni lead'ler | `/admin/analytics` kaynak kırılımı | ≥ %80 |
+| Trial tarih kapsamı — `trialEndsAt` dolu `TRIAL_ACTIVE` oranı (aralıkta denemesi başlayanlar) | `/admin/analytics` → "Deneme bitiş tarihi dolu" kutusu | %100 |
+| İlk temas süresi medyanı (§2'deki tanım; henüz temas edilmeyenler "bekliyor" olarak ayrıca sayılır) | `/admin/analytics` → "İlk temasa medyan süre" kutusu | ≤ 1 iş günü |
+| Kaynak atfı oranı — Source'u dolu yeni lead'ler (utm_source'suz bir talep artık referrer host'u ile `ref:<host>` kaynağı alır, #2578) | `/admin/analytics` kaynak kırılımı | ≥ %80 |
 | Posta kampanyası: gönderilen / demo talebi / hesaba dönüşen | `/admin/acquisition` | ilk parti için yanıt oranı kaydı |
 
 Sonuç #2578'e yorum olarak yazılır; çıkan işler issue olarak açılır.
