@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Vertical gates, part 1 (MKT-6a, epic #2348):** `/interviews` (interview panels, the `placements` module) now carries the same one-line `gatePage('/interviews')` as a gated admin segment — the nav-route ratchet claimed a shell-level gate that its layout did not have — and the mentor sidebar tags its `/interviews` link `placements` too. `/onboarding` (mentor/mentee profile step) and `/onboarding/contributor-terms` (projects) answer 404 for a vertical without `mentorship` / `projects` through the new `gateCapability()` (`src/lib/pageCapabilityGate.ts`); `PATCH /api/interview-requests/[id]` and `/api/mentee-onboarding` ask `requireCapability()` like their siblings. INTERNSHIP is unchanged.",
+  "notes": {
+    "en": ["Marketing CRM: interview panels and the mentor/mentee onboarding step are no longer reachable from a marketing workspace."],
+    "tr": ["Pazarlama CRM'i: mülakat panelleri ve mentor/mentee karşılama adımı artık bir pazarlama çalışma alanından açılamıyor."],
+    "de": ["Marketing-CRM: Interview-Panels und der Onboarding-Schritt für Mentoren und Mentees sind aus einem Marketing-Arbeitsbereich nicht mehr erreichbar."]
+  }
+}
