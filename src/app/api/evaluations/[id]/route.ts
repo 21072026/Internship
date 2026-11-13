@@ -79,7 +79,7 @@ const patchSchema = z
   // PATCH would otherwise take a live public quote down while changing no
   // wording at all.
   .refine((d) => d.scores !== undefined || d.comment !== undefined, {
-    message: 'Nothing to correct: send scores, comment, or both',
+    error: 'Nothing to correct: send scores, comment, or both',
   });
 
 // PATCH — correct a score or a comment inside the edit window (#1893). A typo

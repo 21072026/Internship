@@ -85,8 +85,8 @@ const schema = z.strictObject({
   // `null` clears an override back to the catalogue default.
   channels: z.partialRecord(z.enum(NOTIFICATION_CATEGORIES), channelRow).optional(),
   quietHours: z.strictObject({ start: HHMM, end: HHMM, tz: z.string().max(64).optional() })
-    .refine((q) => q.start !== q.end, { message: 'start and end must differ' })
-    .refine((q) => q.tz === undefined || isValidTimeZone(q.tz), { message: 'unknown time zone' })
+    .refine((q) => q.start !== q.end, { error: 'start and end must differ' })
+    .refine((q) => q.tz === undefined || isValidTimeZone(q.tz), { error: 'unknown time zone' })
     .nullable()
     .optional(),
 });

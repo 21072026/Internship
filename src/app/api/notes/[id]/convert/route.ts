@@ -23,7 +23,7 @@ const schema = z
     assigneeId: z.string().min(1).optional(),
   })
   .refine((d) => (d.target === 'GOAL' ? !!d.relationId : !!d.projectId), {
-    message: 'A GOAL needs relationId; a PROJECT_TASK needs projectId',
+    error: 'A GOAL needs relationId; a PROJECT_TASK needs projectId',
   });
 
 // A converted line is marked in the note body so the same sentence can't be

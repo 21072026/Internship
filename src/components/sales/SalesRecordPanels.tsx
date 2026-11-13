@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
@@ -12,6 +13,12 @@ import { DealValuePanel, type DealValueState } from '@/components/DealValuePanel
 // PATCH /api/mentorship/[id]/trial — owner or ADMIN, `pipeline` capability).
 // The page around them is a server component, so a save refreshes it — the
 // badges and the attention queue are server-rendered.
+//
+// Layout (#3653): the follow-up stays full width with the last interaction right
+// under it — what comes next, then what happened last. The date and value panels
+// (trial end, win-back, contract end, estimated value) share a grid instead of
+// each taking a full-width row for a narrow input; a panel that does not render
+// for the record's stage is `empty:hidden`, so it leaves no hole in the grid.
 export function SalesRecordPanels({
   relationId,
   status,
@@ -22,6 +29,7 @@ export function SalesRecordPanels({
   trialEndsAt,
   contractEndsAt,
   dealValue,
+  lastInteraction,
 }: {
   relationId: string;
   status: string;
@@ -32,6 +40,8 @@ export function SalesRecordPanels({
   trialEndsAt: string | null;
   contractEndsAt: string | null;
   dealValue: DealValueState;
+  /** Rendered between the follow-up and the date/value panels (server-built by the page). */
+  lastInteraction?: ReactNode;
 }) {
   const router = useRouter();
   const refresh = () => router.refresh();
@@ -46,40 +56,43 @@ export function SalesRecordPanels({
           onSaved={refresh}
         />
       </div>
-      {/* Nothing renders outside a trial. */}
-      <div className="mb-6 empty:hidden">
-        <TrialEndPanel
-          relationId={relationId}
-          pipelineStatus={pipelineStatus}
-          trialStartedAt={trialStartedAt}
-          trialEndsAt={trialEndsAt}
-          canEdit={status === 'ACTIVE'}
-          onSaved={refresh}
-        />
-      </div>
-      {/* A lost customer came back (#2842); renders on an open DEAL_LOST record only. */}
-      <div className="mb-6 empty:hidden">
-        <WinBackPanel
-          relationId={relationId}
-          pipelineStatus={pipelineStatus}
-          status={status}
-          hrefFor={(id) => `/sales/leads/${id}`}
-        />
-      </div>
-      {/* A won customer's notice period (#2841); renders on DEAL_WON only. */}
-      <div className="mb-6 empty:hidden">
-        <ContractEndPanel
-          relationId={relationId}
-          pipelineStatus={pipelineStatus}
-          contractEndsAt={contractEndsAt}
-          canEdit={status === 'ACTIVE'}
-          onSaved={refresh}
-        />
-      </div>
-      {/* The estimated monthly value (#2422, PUT /api/mentorship/[id]/value —
-          owner or ADMIN). */}
-      <div className="mb-6">
-        <DealValuePanel relationId={relationId} initial={dealValue} onSaved={refresh} />
+      {lastInteraction && <div className="mb-6">{lastInteraction}</div>}
+      <div className="mb-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-2 2xl:grid-cols-3" data-testid="sales-record-panels-grid">
+        {/* Nothing renders outside a trial. */}
+        <div className="empty:hidden">
+          <TrialEndPanel
+            relationId={relationId}
+            pipelineStatus={pipelineStatus}
+            trialStartedAt={trialStartedAt}
+            trialEndsAt={trialEndsAt}
+            canEdit={status === 'ACTIVE'}
+            onSaved={refresh}
+          />
+        </div>
+        {/* A lost customer came back (#2842); renders on an open DEAL_LOST record only. */}
+        <div className="empty:hidden">
+          <WinBackPanel
+            relationId={relationId}
+            pipelineStatus={pipelineStatus}
+            status={status}
+            hrefFor={(id) => `/sales/leads/${id}`}
+          />
+        </div>
+        {/* A won customer's notice period (#2841); renders on DEAL_WON only. */}
+        <div className="empty:hidden">
+          <ContractEndPanel
+            relationId={relationId}
+            pipelineStatus={pipelineStatus}
+            contractEndsAt={contractEndsAt}
+            canEdit={status === 'ACTIVE'}
+            onSaved={refresh}
+          />
+        </div>
+        {/* The estimated monthly value (#2422, PUT /api/mentorship/[id]/value —
+            owner or ADMIN). */}
+        <div>
+          <DealValuePanel relationId={relationId} initial={dealValue} onSaved={refresh} />
+        </div>
       </div>
     </>
   );

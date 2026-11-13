@@ -178,7 +178,7 @@ const schema = z.object({
   notificationBlackoutDates: z
     .string()
     .max(1100)
-    .refine((v) => v.trim() === '' || v.split(/[\s,;]+/).filter(Boolean).every(isCalendarDate), { message: 'YYYY-MM-DD, comma separated' })
+    .refine((v) => v.trim() === '' || v.split(/[\s,;]+/).filter(Boolean).every(isCalendarDate), { error: 'YYYY-MM-DD, comma separated' })
     .optional(),
   notificationBlackoutWeekends: z.enum(['true', 'false']).optional(),
 });

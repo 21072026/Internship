@@ -14,7 +14,7 @@ const schema = z
     ids: z.array(z.string().min(1).max(64)).min(1).max(OUTBOUND_BULK_MAX),
     at: z.iso.datetime({ offset: true }).optional(),
   })
-  .refine((b) => b.action !== 'schedule' || !!b.at, { message: 'at is required to schedule' });
+  .refine((b) => b.action !== 'schedule' || !!b.at, { error: 'at is required to schedule' });
 
 // POST — Send, schedule or discard several held mails at once (at most 50) (#2960).
 // Each draft goes through the same guarded claim and audit row as the

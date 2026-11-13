@@ -44,7 +44,7 @@ const schema = z
     conversationId: z.string().min(1).optional(),
   })
   .refine((d) => Boolean(d.relationId) || Boolean(d.conversationId), {
-    message: 'relationId or conversationId required',
+    error: 'relationId or conversationId required',
   });
 
 // POST — announce that the caller is composing in a thread they participate in.

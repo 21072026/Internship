@@ -50,7 +50,9 @@ test('admin can log in and lands off the signin page', { tag: '@smoke' }, async 
   expect(page.url()).not.toContain('/auth/signin');
 });
 
-test('admin pages load without server errors', { tag: '@smoke' }, async ({ page }) => {
+// quarantine: #3642 until 2026-11-27 — the report-only CSP floods /api/csp-report with Zod's eval probe;
+// past the per-IP limit the 429 surfaces here as a console error. Fix is PR #3643 (Zod jitless in the browser).
+test('admin pages load without server errors', { tag: ['@smoke', '@quarantine'] }, async ({ page }) => {
   await login(page);
   const paths = ['/admin', '/admin/candidates', '/admin/mentorship', '/admin/companies', '/admin/invite'];
   for (const path of paths) {
