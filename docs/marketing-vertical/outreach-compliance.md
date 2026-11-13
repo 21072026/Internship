@@ -379,7 +379,7 @@ Bu repoda:
    Durum: mechanism shipped (#2697, operatorIdentity(env, world)); prod/preview configuration pending (go-live §0)
 10. **Saklama süreleri:** izin kanıtı ve kampanya kayıtları için süre (öneri: izin bitiminden
     sonra 3 yıl, § 195 BGB Regelverjährung paraleli) avukatla belirlenmeli.
-    Durum: partly: contactPermissionProof entry in src/lib/retentionEntries.ts; campaign records and prospect retention open
+    Durum: partly: contactPermissionProof entry in src/lib/retentionEntries.ts; prospect retention shipped (#3680: the 24-month review list and manual contact-data erasure, report-only prospectContact entry); open: campaign records — the "campaign + 3 years" period
 11. *(Kiracıya özgü bir soruydu; bu repo'nun dışında takip ediliyor.)*
 12. **Başkasının web iletişim formu üzerinden reklam** (§2): doküman bunu elektronische Post
     sayıyor ve yalnız açık, herkese açık bir teklif davetini (belgelenmiş bağlantıyla) istisna
