@@ -19,6 +19,7 @@ import { ProgramBenchmark } from '@/components/admin/ProgramBenchmark';
 import { SourceConversion } from '@/components/admin/SourceConversion';
 import { MatchQuality } from '@/components/admin/MatchQuality';
 import { TrialConversionCard, type TrialConversionData } from '@/components/admin/TrialConversionCard';
+import { GoLiveMetricsCard, type GoLiveMetricsData } from '@/components/admin/GoLiveMetricsCard';
 import { DealValueCard } from '@/components/admin/DealValueCard';
 import { BarChart, LineChart } from '@/components/charts';
 import { useT } from '@/i18n/client';
@@ -165,6 +166,11 @@ interface FunnelKpi {
   // `bySource` is null while the premium tier is off.
   trialConversion?: TrialConversionData | null;
   journeys: number;
+  // The go-live week numbers (#2578) — present for a MARKETING org only; an
+  // INTERNSHIP payload does not carry the keys and the card is not drawn.
+  medianFirstContactHours?: GoLiveMetricsData['medianFirstContactHours'];
+  firstContact?: GoLiveMetricsData['firstContact'];
+  trialEndCoverage?: GoLiveMetricsData['trialEndCoverage'];
 }
 
 export default function AdminAnalyticsPage() {
@@ -703,6 +709,14 @@ export default function AdminAnalyticsPage() {
       {/* Trial → paid (#2556) — only for a tenant whose stage set has a trial
           stage; the route returns null for everyone else. */}
       {kpi?.trialConversion && <TrialConversionCard data={kpi.trialConversion} />}
+
+      {/* Go-live week (#2578) — MARKETING only: the route sends these keys for
+          no other vertical. */}
+      {kpi && kpi.medianFirstContactHours !== undefined && kpi.firstContact && kpi.trialEndCoverage && (
+        <GoLiveMetricsCard
+          data={{ medianFirstContactHours: kpi.medianFirstContactHours, firstContact: kpi.firstContact, trialEndCoverage: kpi.trialEndCoverage }}
+        />
+      )}
 
       {/* The estimated value of won deals (#2422) — MARKETING only: the route
           answers `enabled: false` for any other vertical and the card then
