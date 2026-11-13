@@ -299,15 +299,15 @@ export default function AdminBoardPage() {
             <GraduationCap className="h-3 w-3" />
             {r._count.interactions}
           </span>
+          {/* Keyboard/touch-accessible alternative to drag-and-drop. */}
+          <CardStageSelect
+            stages={stages}
+            value={r.pipelineStatus}
+            onChange={(next) => requestMove(r.id, next)}
+          />
         </div>
         {r.nextActionAt && <div className="mt-1"><FollowUpChip at={r.nextActionAt} /></div>}
         <div className="mt-1 empty:hidden"><TrialEndChip pipelineStatus={r.pipelineStatus} trialEndsAt={r.trialEndsAt} /></div>
-        {/* Keyboard/touch-accessible alternative to drag-and-drop. */}
-        <CardStageSelect
-          stages={stages}
-          value={r.pipelineStatus}
-          onChange={(next) => requestMove(r.id, next)}
-        />
       </div>
     );
   };

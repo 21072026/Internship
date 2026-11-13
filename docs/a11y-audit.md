@@ -240,7 +240,9 @@ and breaking one is a regression.
 
 - **Drag-and-drop has a real keyboard alternative.** Every board card carries a
   native `<select>` with an `aria-label` (`CardStageSelect`), which is also the
-  touch path on a phone. Asserted end-to-end in `e2e/board-a11y.spec.ts`.
+  touch path on a phone. It is drawn as an icon — the select is transparent and
+  stretched over it — so it is still the native control, not a custom widget.
+  Asserted end-to-end in `e2e/board-a11y.spec.ts`.
 - **The board renders either the mobile list or the desktop columns, never
   both** (`useIsNarrow`). Nothing is duplicated in the accessibility tree — the
   usual `lg:hidden` trick would have every card announced twice.

@@ -285,14 +285,14 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
       <div className="flex items-center gap-1 text-xs text-gray-400 mt-2">
         <GraduationCap className="h-3 w-3" />
         {r._count.interactions} {t.mentor.interactions}
+        <CardStageSelect
+          stages={stages}
+          value={r.pipelineStatus}
+          onChange={(next) => requestMove(r.id, next)}
+        />
       </div>
       {r.nextActionAt && <div className="mt-1"><FollowUpChip at={r.nextActionAt} /></div>}
       <div className="mt-1 empty:hidden"><TrialEndChip pipelineStatus={r.pipelineStatus} trialEndsAt={r.trialEndsAt} /></div>
-      <CardStageSelect
-        stages={stages}
-        value={r.pipelineStatus}
-        onChange={(next) => requestMove(r.id, next)}
-      />
     </div>
   );
 
