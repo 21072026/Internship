@@ -245,7 +245,7 @@ const schema = z
     body: z.string().min(1).max(5000),
   })
   .refine((d) => Boolean(d.relationId) || Boolean(d.conversationId), {
-    message: 'relationId or conversationId required',
+    error: 'relationId or conversationId required',
   });
 
 // POST — post a message to a thread (participants/admin). Notifies the other
