@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Board:** the vertical label of a collapsed empty stage is `text-gray-600` instead of `text-gray-500`. On the stage tints added in #3675, gray-500 measured 3.9–4.5:1 (under WCAG AA for 10px text) and turned the a11y baseline gate red on `/mentor/board`; gray-600 holds ≥ 6.1:1 on every tint. Dark mode maps both grays to the same colour, so it is unchanged.",
-  "notes": {
-    "en": ["Board: the names of collapsed empty stages are easier to read again."],
-    "tr": ["Pano: daraltılmış boş aşamaların adları yeniden daha kolay okunuyor."],
-    "de": ["Board: Die Namen eingeklappter leerer Phasen sind wieder besser lesbar."]
-  }
-}
