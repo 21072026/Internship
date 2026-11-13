@@ -94,6 +94,11 @@ const EXEMPT = {
     'Erasure (#2434/#2559, DSGVO Art. 17) deletes the address-book rows that carry an erased address. It runs from ' +
     'the account-erasure paths and the retention sweep, which have no vertical to gate on: a right to erasure is ' +
     'not a product module, and it must reach the rows whatever the org sells.',
+  'src/lib/prospectRetention.ts':
+    'eraseProspectContact() (MKT-4) deletes the address-book rows of ONE overdue prospect account, as part of ' +
+    'erasing its contact data after the 24 months every postal letter promises. Its one caller is POST ' +
+    "/api/admin/retention/prospects/[id]/erase, which calls requireCapability(..., 'companies') first; the " +
+    'helper itself also refuses any org outside the sales-surface vertical before it writes anything.',
   'src/lib/hiringOutcome.ts':
     'applyAcceptedOffer() (#1411/#1854) is a helper with one caller: the accept branch of PATCH ' +
     '/api/offers/[id], which calls requireCapability(..., \'placements\') before anything else and ' +

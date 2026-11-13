@@ -458,8 +458,11 @@ export function MentorBoard({ detailBase = '/mentor/mentees', handoff = false }:
                       title={t.mentor.boardEmptyStage.replace('{stage}', label(status))}
                       aria-label={t.mentor.boardEmptyStage.replace('{stage}', label(status))}
                       {...dropHandlersFor(status)}
-                      className={`h-28 overflow-hidden rounded-lg border border-dashed py-2 flex flex-col items-center gap-1 transition-colors ${
-                        dragOver === status ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50'
+                      // The same stage tone as an open column (src/lib/boardColumnTone.ts,
+                      // #3675), dashed to say "empty"; a drop target gains the
+                      // accent ring, exactly like an open column.
+                      className={`h-28 overflow-hidden rounded-lg border border-dashed py-2 flex flex-col items-center gap-1 transition-colors ${boardColumnTone(status, stageKeys)}${
+                        dragOver === status ? ' ring-2 ring-blue-500 ring-offset-1' : ''
                       }`}
                     >
                       <span data-testid={`board-column-count-${status}`} className="text-[10px] text-gray-400 opacity-60">
@@ -480,8 +483,8 @@ export function MentorBoard({ detailBase = '/mentor/mentees', handoff = false }:
                 key={status}
                 ref={(el) => { columnRefs.current[status] = el; }}
                 data-testid={`board-column-${status}`}
-                // See the admin board: forced-colors drops the bg-blue-50 drop
-                // target highlight, so mark the state for globals.css (#2045).
+                // See the admin board: forced-colors drops the drop-target ring,
+                // so mark the state for globals.css to outline instead (#2045).
                 data-drop-active={dragOver === status ? 'true' : undefined}
                 {...dropHandlersFor(status)}
                 // Each stage its own color (src/lib/boardColumnTone.ts); the drop

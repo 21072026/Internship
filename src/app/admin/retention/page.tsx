@@ -7,6 +7,7 @@ import { getServerDictionary } from '@/i18n/server';
 import { formatDate } from '@/lib/relativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { OrphanApplicantsPanel } from '@/components/admin/OrphanApplicantsPanel';
+import { ProspectRetentionPanel } from '@/components/admin/ProspectRetentionPanel';
 
 // Admin retention review (GDPR Art. 5(1)(e)): candidates whose consent has
 // passed the retention limit. "overdue" ones (past the grace period without
@@ -80,6 +81,10 @@ export default async function AdminRetentionPage() {
       {/* The accounts the consent rule above can never see (#1780): a /apply
           account has no consentAt to age, so it would sit here forever. */}
       <OrphanApplicantsPanel />
+
+      {/* The sales vertical's prospects past the 24 months every letter
+          promises (MKT-4). Renders nothing in a vertical without them. */}
+      <ProspectRetentionPanel />
     </div>
   );
 }
