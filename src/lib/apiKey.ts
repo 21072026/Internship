@@ -1,7 +1,8 @@
 import { createHash, randomBytes } from 'crypto';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { SCOPE_ENTITLEMENT, apiKeyStatus, parseScopes, type ApiScope } from '@/lib/apiScopes';
+import { SCOPE_ENTITLEMENT, apiKeyStatus, effectiveScopes, parseScopes, scopeAvailable, type ApiScope } from '@/lib/apiScopes';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import { companyKeyAdmitted } from '@/lib/companyApiKeyRule';
 import { sourceKeyAdmitted } from '@/lib/sourceApiKeyRule';
 import { entitled } from '@/lib/entitlements';
@@ -235,6 +236,19 @@ async function door(
     }
 
     return runWithApiKeyOrg(orgId, async () => {
+      // The product (MKT-6b): a route of a module the org's vertical lacks
+      // (internship hiring in a MARKETING org) does not exist for it — refused
+      // before the plan or the quota is consulted, whatever the key holds. The
+      // key's stored scopes of such modules are then IGNORED for the rest of
+      // the request (exports, /me), never deleted (src/lib/apiScopes.ts).
+      const capabilities = await shellCapabilities(orgId);
+      if (scope !== ANY_LIVE_KEY && !scopeAvailable(scope, capabilities)) {
+        return apiError(403, 'capability_unavailable', 'This endpoint is not part of your organization’s product', undefined, {
+          code: 'capability_unavailable',
+          scope,
+        });
+      }
+      const held = effectiveScopes(key.scopes, capabilities);
       // The plan (#1744), checked once the org is bound — there is nothing to
       // check an entitlement against before it, and OrgEntitlement is a tenant
       // model the unbound guard above would refuse. Keyed to the SCOPE the
@@ -259,7 +273,7 @@ async function door(
           headers: { 'Retry-After': String(Math.max(1, Math.ceil((quota.resetAt.getTime() - Date.now()) / 1000))) },
         });
       }
-      return handler({ ...key, orgId });
+      return handler({ ...key, scopes: held, orgId });
     });
   });
 }

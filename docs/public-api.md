@@ -8,8 +8,8 @@ contract behind it and the rules for adding to it.
 
 Every `/api/v1` route goes through `withApiKey(request, scope, handler)`
 (`src/lib/apiKey.ts`, #1546): rate limit → key → scope → organisation binding →
-plan (`INTEGRATIONS_API`) → period quota, then the handler runs inside the
-key's tenant context. `npm run check:api-key-routes` fails a route that skips it,
+product module (MKT-6b) → plan (`INTEGRATIONS_API`) → period quota, then the
+handler runs inside the key's tenant context. `npm run check:api-key-routes` fails a route that skips it,
 asks for an unknown scope, or is missing from the OpenAPI document. A handler
 still scopes its own query by `key.orgId` — a cross-tenant read must not wait
 for `MT_ENFORCE_ISOLATION`.
@@ -41,8 +41,35 @@ One module, so the eighth endpoint does not invent its own shape.
 
 Error types: `invalid_api_key` (401 — unknown, expired and revoked look the
 same on purpose), `insufficient_scope`, `org_unbound`, `feature_locked` (403),
-`rate_limited`, `quota_exceeded` (429, with `Retry-After`), `validation_failed`
-(400, with `fields[]`), `not_found` (404).
+`capability_unavailable` (403, MKT-6b — see below), `rate_limited`,
+`quota_exceeded` (429, with `Retry-After`), `validation_failed` (400, with
+`fields[]`), `not_found` (404).
+
+## Scopes follow the product (MKT-6b, `src/lib/apiScopes.ts`)
+
+Every scope belongs to one vertical capability (`SCOPE_CAPABILITY`), and so does
+every top-level `/api/v1` segment (`V1_PREFIX_CAPABILITY`; `null` for `me`,
+`openapi.json`, `exports`, `imports`, whose scope is decided per request). A
+MARKETING org has no internship hiring module, so `hiring:read`
+(`/requisitions`, `/offers`, `/interview-requests`) is:
+
+- **not offered** — `GET /api/admin/api-keys` lists `availableScopes` for the
+  org's product, and the admin screen renders the same list;
+- **not granted** — creating a key with it answers `400 scope_unavailable`
+  naming the scopes (admin and SOURCE self-service paths). The request is refused
+  whole, never silently narrowed;
+- **not honoured** — a key that already stores it (minted before this rule, or
+  in an org whose vertical changed) keeps the row untouched, but the door answers
+  the hiring routes `403 capability_unavailable`, and the scope is dropped from
+  what the handler sees (`/me`, exports). The admin key list shows it as
+  `ignoredScopes`, struck through. Deleting it was rejected on purpose: a write
+  to someone's credential by a read path, irreversible if the vertical is ever
+  corrected, for no security gain — the door already refuses.
+
+INTERNSHIP carries every capability, so nothing changes there.
+`npm run check:api-scope-capabilities` (CI) fails a scope or a `/api/v1` prefix
+with no capability, a stale entry, and a route whose `withApiKey` scope disagrees
+with its prefix.
 
 Three rules are load-bearing:
 
@@ -330,7 +357,8 @@ When one of them goes red, the fix is never to edit the test until it agrees wit
 
 ## Adding an endpoint
 
-1. A scope in `API_SCOPES` with its `SCOPE_ENTITLEMENT` entry (`src/lib/apiScopes.ts`).
+1. A scope in `API_SCOPES` with its `SCOPE_ENTITLEMENT` and `SCOPE_CAPABILITY` entries, and
+   a new top-level segment in `V1_PREFIX_CAPABILITY` (`src/lib/apiScopes.ts`).
 2. The route: `withApiKey` → `parseListQuery` → a query filtered by `key.orgId`
    and `keysetWhere` → `paginate` → `apiOk`. No raw `NextResponse.json` for an
    error.
