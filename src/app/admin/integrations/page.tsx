@@ -11,7 +11,8 @@ import { useT, useLocale } from '@/i18n/client';
 import { groupWebhookEvents, type WebhookEventFamily } from '@/lib/webhookEventFamilies';
 import { formatDate } from '@/lib/relativeTime';
 import { RelativeTime } from '@/components/ui/RelativeTime';
-import { API_SCOPES, DEFAULT_API_SCOPES, maxApiKeyExpiry, type ApiKeyStatus } from '@/lib/apiScopes';
+import { DEFAULT_API_SCOPES, maxApiKeyExpiry, scopesForCapabilities, type ApiKeyStatus } from '@/lib/apiScopes';
+import { verticalCapabilities } from '@/lib/verticals';
 import { AuditDrainsCard } from '@/components/admin/AuditDrainsCard';
 import { KlaviyoCard } from '@/components/admin/KlaviyoCard';
 import { ChatAppsCard } from '@/components/admin/ChatAppsCard';
@@ -34,6 +35,9 @@ interface Key {
   id: string;
   name: string;
   scopes: string[];
+  // Stored scopes of a module this org's product lacks (MKT-6b): kept on the
+  // row, never honoured — shown struck through.
+  ignoredScopes?: string[];
   expiresAt: string | null;
   revokedAt: string | null;
   lastUsedAt: string | null;
@@ -99,7 +103,11 @@ export default function IntegrationsPage() {
   const t = useT();
   const locale = useLocale();
   // The Klaviyo connector feeds the marketing funnel (docs/integrations/klaviyo.md).
-  const isMarketing = useVertical() === 'MARKETING';
+  const vertical = useVertical();
+  const isMarketing = vertical === 'MARKETING';
+  // The scope catalogue of this org's product (MKT-6b) — the same rule the API
+  // applies when the key is created and when it is presented.
+  const availableScopes = scopesForCapabilities(verticalCapabilities(vertical));
   const [hooks, setHooks] = useState<Hook[]>([]);
   const [eventTypes, setEventTypes] = useState<string[]>([]);
   const [keys, setKeys] = useState<Key[]>([]);
@@ -378,7 +386,7 @@ export default function IntegrationsPage() {
             <div>
               <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">{t.integrations.keyScopes}</p>
               <div className="flex flex-wrap gap-3">
-                {API_SCOPES.map((sc) => (
+                {availableScopes.map((sc) => (
                   <label key={sc} className="flex items-center gap-1.5 text-xs text-gray-700 dark:text-gray-300">
                     <input
                       type="checkbox"
@@ -474,7 +482,12 @@ export default function IntegrationsPage() {
                         {t.integrations.keyNoExpiryWarning}
                       </p>
                     )}
-                    <p className="text-xs text-gray-400"><code>{k.scopes.join(', ')}</code></p>
+                    <p className="text-xs text-gray-400">
+                      <code>{k.scopes.join(', ')}</code>
+                      {k.ignoredScopes && k.ignoredScopes.length > 0 && (
+                        <> <s data-testid={`api-key-ignored-scopes-${k.id}`}><code>{k.ignoredScopes.join(', ')}</code></s></>
+                      )}
+                    </p>
                     <p className="text-xs text-gray-400">{k.lastUsedAt ? <>{t.integrations.lastUsed}: <RelativeTime date={k.lastUsedAt} /></> : t.integrations.neverUsed}</p>
                     {k.usage && <p className="text-xs text-gray-500 dark:text-gray-400" data-testid={`api-key-usage-${k.id}`}>{usageLine(k)}</p>}
                     {!k.revokedAt && (quotaEdit.id === k.id ? (

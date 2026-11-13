@@ -12,8 +12,14 @@
 // an upstream source system uses. A key carrying an unknown scope string is
 // treated as holding nothing.
 //
+// Which product a scope belongs to (MKT-6b): SCOPE_CAPABILITY below. A scope
+// whose capability the org's vertical lacks is neither offered, nor granted,
+// nor honoured at the door.
+//
 // NOTE: nothing here enforces anything. Checking a scope at the door of an
 // /api/v1 route is #1546; this module defines and parses the vocabulary.
+
+import type { VerticalCapability } from '@/lib/verticals';
 
 export const API_SCOPES = [
   'candidates:read',
@@ -70,6 +76,79 @@ export const SCOPE_ENTITLEMENT: Record<ApiScope, 'INTEGRATIONS_API' | null> = {
   'hooks:write': 'INTEGRATIONS_API',
   'companies:write': null,
 };
+
+// ── Vertical (MKT-6b) ─────────────────────────────────────────────────────────
+// The vertical capability (src/lib/verticals.ts) each scope reads or writes. A
+// Record over every scope, so a new scope cannot be added without deciding, and
+// `npm run check:api-scope-capabilities` (CI) pins the same for every /api/v1
+// prefix below. INTERNSHIP carries every capability, so for it nothing changes.
+//   pipeline   — people, their pipeline records, interactions, meetings and a
+//                connector's own hooks: what every vertical has.
+//   companies  — the company directory (and the account-event ingest).
+//   placements — requisitions, offers, interview requests: internship hiring.
+export const SCOPE_CAPABILITY: Record<ApiScope, VerticalCapability> = {
+  'candidates:read': 'pipeline',
+  'relationships:read': 'pipeline',
+  'interactions:read': 'pipeline',
+  'interactions:read_notes': 'pipeline',
+  'meetings:read': 'pipeline',
+  'companies:read': 'companies',
+  'hiring:read': 'placements',
+  'candidates:write': 'pipeline',
+  'relationships:write': 'pipeline',
+  'interactions:write': 'pipeline',
+  'hooks:write': 'pipeline',
+  'companies:write': 'companies',
+};
+
+// The capability behind every top-level /api/v1 path segment. `null` means the
+// route picks its scope per request (or needs none) and the scope decides:
+//   me           — the key's own handshake, any live key (#2002)
+//   openapi.json — the public description, anonymous
+//   exports      — the export of a resource needs that resource's read scope
+//   imports      — candidates:write, decided per import kind
+// A prefix missing from this map fails `npm run check:api-scope-capabilities`.
+export const V1_PREFIX_CAPABILITY: Record<string, VerticalCapability | null> = {
+  candidates: 'pipeline',
+  relationships: 'pipeline',
+  interactions: 'pipeline',
+  meetings: 'pipeline',
+  hooks: 'pipeline',
+  companies: 'companies',
+  requisitions: 'placements',
+  offers: 'placements',
+  'interview-requests': 'placements',
+  me: null,
+  'openapi.json': null,
+  exports: null,
+  imports: null,
+};
+
+/** Whether a scope's product module is part of an org with these capabilities. */
+export function scopeAvailable(scope: string, capabilities: readonly VerticalCapability[]): boolean {
+  return isApiScope(scope) && capabilities.includes(SCOPE_CAPABILITY[scope]);
+}
+
+/** The scope catalogue an org with these capabilities is offered, in catalogue order. */
+export function scopesForCapabilities(capabilities: readonly VerticalCapability[]): ApiScope[] {
+  return API_SCOPES.filter((s) => capabilities.includes(SCOPE_CAPABILITY[s]));
+}
+
+/**
+ * The scopes a stored key actually holds in an org with these capabilities.
+ * A known scope of a module the org lacks is IGNORED, not deleted: the row
+ * keeps it (a key minted before MKT-6b, or an org whose vertical changed), the
+ * door never honours it. Unknown strings pass through untouched — they already
+ * grant nothing (requireApiScope only matches real scopes).
+ */
+export function effectiveScopes(scopes: readonly string[], capabilities: readonly VerticalCapability[]): string[] {
+  return scopes.filter((s) => !isApiScope(s) || capabilities.includes(SCOPE_CAPABILITY[s]));
+}
+
+/** The stored scopes `effectiveScopes` ignores, for the key list. */
+export function ignoredScopes(scopes: readonly string[], capabilities: readonly VerticalCapability[]): ApiScope[] {
+  return scopes.filter((s): s is ApiScope => isApiScope(s) && !capabilities.includes(SCOPE_CAPABILITY[s]));
+}
 
 /** The scopes among `scopes` that need INTEGRATIONS_API. */
 export function publicApiScopes(scopes: readonly string[]): ApiScope[] {
