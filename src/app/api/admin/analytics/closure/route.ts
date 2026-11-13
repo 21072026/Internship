@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireCapability } from '@/lib/capabilityGate';
 import { requirePermission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
@@ -17,6 +18,9 @@ export async function GET(request: Request) {
   const gate = await requirePermission('analytics.read', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // The internship product's report (#2348): refused in a vertical without `mentorship`.
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const params = new URL(request.url).searchParams;
   const period = defaultClosurePeriod();
   const from = params.get('from');
@@ -38,6 +42,9 @@ export async function POST(request: Request) {
   const gate = await requirePermission('content.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // The internship product's report (#2348): refused in a vertical without `mentorship`.
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return withTenantScope(session, async () => {
     const tenant = await tenantWhere(session);
     const { created } = await setupClosureSurvey(tenant, resolveOrgId(session));
