@@ -382,6 +382,14 @@ export default defineConfig({
           // because CI serves a production build. Unset everywhere else, so the
           // routes are a 404 on preview and production.
           E2E_ERROR_ROUTES: '1',
+          // The marketing world's own sender identity (#2578). Postal campaigns
+          // refuse to print and post without it (409 `operator_missing`), so the
+          // postal and sales-channel specs need a complete set. Synthetic on
+          // purpose — never a real operator's name or address; the refusal
+          // itself is unit-tested (scripts/test/marketing-operator-guard.test.mjs).
+          MARKETING_OPERATOR_NAME: 'Example Operator GmbH',
+          MARKETING_OPERATOR_EMAIL: 'operator@example.test',
+          MARKETING_OPERATOR_ADDRESS: 'Musterstraße 1, 10115 Berlin',
           // Self-serve tenant signup (#1749) is OFF by default everywhere; the
           // e2e server turns it on so e2e/signup-org.spec.ts can drive it. The
           // off state is pinned by scripts/test/self-serve-signup.test.mjs.

@@ -10269,6 +10269,11 @@ const en = {
     resultsTitle: 'Results',
     resultsHint: 'Demo requests that arrived through this campaign’s link.',
   },
+  postCampaignOperator: {
+    printBlockedTitle: 'The letters cannot be printed yet',
+    printBlockedBody: 'This deployment has not named its marketing sender: MARKETING_OPERATOR_NAME, MARKETING_OPERATOR_EMAIL and MARKETING_OPERATOR_ADDRESS must all be set. A letter has to name the company that sends it, so printing and posting stay blocked until the operator sets them.',
+    sendRefused: 'The campaign cannot be marked as posted: the marketing sender (MARKETING_OPERATOR_NAME, _EMAIL, _ADDRESS) is not configured. Ask the operator of this deployment to set it.',
+  },
   contactPermissionEmail: {
     subject: 'Please confirm: product news from {brand}',
     heading: 'Please confirm your e-mail address',
@@ -22357,6 +22362,11 @@ const tr: Dict = {
     resultsTitle: 'Sonuçlar',
     resultsHint: 'Bu kampanyanın linkinden gelen demo talepleri.',
   },
+  postCampaignOperator: {
+    printBlockedTitle: 'Mektuplar henüz basılamıyor',
+    printBlockedBody: 'Bu kurulum pazarlama göndericisini tanımlamamış: MARKETING_OPERATOR_NAME, MARKETING_OPERATOR_EMAIL ve MARKETING_OPERATOR_ADDRESS değişkenlerinin hepsi ayarlı olmalı. Bir mektup gönderen şirketi adıyla belirtmek zorundadır; operatör bunları ayarlayana kadar basma ve gönderme kapalı kalır.',
+    sendRefused: 'Kampanya postalandı olarak işaretlenemiyor: pazarlama göndericisi (MARKETING_OPERATOR_NAME, _EMAIL, _ADDRESS) yapılandırılmamış. Bu kurulumun operatöründen ayarlamasını isteyin.',
+  },
   contactPermissionEmail: {
     subject: 'Lütfen onaylayın: {brand} ürün haberleri',
     heading: 'Lütfen e-posta adresinizi onaylayın',
@@ -34417,6 +34427,11 @@ const de: Dict = {
     sentResult: '{sent} Briefe als versendet erfasst; {skipped} übersprungen, weil der Account inzwischen widersprochen hat.',
     resultsTitle: 'Ergebnis',
     resultsHint: 'Demo-Anfragen, die über den Link dieser Kampagne kamen.',
+  },
+  postCampaignOperator: {
+    printBlockedTitle: 'Die Briefe können noch nicht gedruckt werden',
+    printBlockedBody: 'Diese Installation hat ihren Marketing-Absender nicht hinterlegt: MARKETING_OPERATOR_NAME, MARKETING_OPERATOR_EMAIL und MARKETING_OPERATOR_ADDRESS müssen gesetzt sein. Ein Brief muss das absendende Unternehmen nennen, deshalb bleiben Druck und Versand gesperrt, bis der Betreiber sie setzt.',
+    sendRefused: 'Die Kampagne kann nicht als versendet markiert werden: Der Marketing-Absender (MARKETING_OPERATOR_NAME, _EMAIL, _ADDRESS) ist nicht konfiguriert. Bitten Sie den Betreiber dieser Installation, ihn zu setzen.',
   },
   contactPermissionEmail: {
     subject: 'Bitte bestätigen: Produktneuigkeiten von {brand}',

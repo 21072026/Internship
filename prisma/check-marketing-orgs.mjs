@@ -15,6 +15,8 @@
 //   • no public host — the landing's demo form is closed (#2569);
 //   • no active ADMIN, or no active rep (MENTOR) — nobody can work the funnel;
 //   • no default lead owner — form leads wait in the unowned list (#2580).
+// Before them, one deployment-wide WARNING when the marketing product is served
+// (MARKETING_HOSTS) but its sender identity is incomplete (#2578).
 import { PrismaClient } from '@prisma/client';
 
 const TRIAL_KEYS = ['TRIAL_ACTIVE', 'TRIAL_EXPIRED'];
@@ -43,6 +45,30 @@ export function marketingOrgReport(org) {
   return { summary, gaps };
 }
 
+/**
+ * The deployment-wide readiness line for the marketing sender (#2578), or null
+ * when there is nothing to say. Postal campaigns refuse to print or post while
+ * the marketing world has no complete sender of its own; this surfaces that in
+ * the deploy log BEFORE an admin hits the refusal. Only when the deployment
+ * serves the marketing product at all (MARKETING_HOSTS set).
+ *
+ * Plain-ESM mirror of `marketingOperatorConfigured()` in src/lib/imprint.ts (the
+ * deploy runs this under Node 20, which cannot import TS);
+ * scripts/test/marketing-operator-guard.test.mjs keeps the two in step.
+ */
+export function marketingOperatorWarning(env = process.env) {
+  if (!(env.MARKETING_HOSTS ?? '').trim()) return null;
+  const set = (k) => (env[k] ?? '').trim() !== '';
+  const address = (env.MARKETING_OPERATOR_ADDRESS ?? '').split(/[|\n]/).some((l) => l.trim() !== '');
+  const missing = [
+    !set('MARKETING_OPERATOR_NAME') && 'MARKETING_OPERATOR_NAME',
+    !set('MARKETING_OPERATOR_EMAIL') && 'MARKETING_OPERATOR_EMAIL',
+    !address && 'MARKETING_OPERATOR_ADDRESS',
+  ].filter(Boolean);
+  if (missing.length === 0) return null;
+  return `WARNING marketing operator: ${missing.join(', ')} not set — postal campaigns refuse to print and post (409 operator_missing) until the env file names the marketing sender (docs/marketing-vertical/postal-campaigns.md § Operatör adımı)`;
+}
+
 /** '' = MARKETING default (on); otherwise the stored choice. Mirrors crmBccEnabledFor(). */
 export function crmBccLabel(stored) {
   if (stored === 'false') return 'off';
@@ -50,6 +76,9 @@ export function crmBccLabel(stored) {
 }
 
 async function main() {
+  // Env only, so it is printed even when the database is unreachable.
+  const operatorWarning = marketingOperatorWarning();
+  if (operatorWarning) console.log(operatorWarning);
   const prisma = new PrismaClient();
   try {
     const orgs = await prisma.organization.findMany({
