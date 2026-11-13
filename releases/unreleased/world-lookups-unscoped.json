@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "Account lookups by e-mail address now span the whole product (world) even inside a tenant-scoped request or job, so with `MT_ENFORCE_ISOLATION` on an import or invite can no longer create a second account for an address another organization of the same product already holds (#3588)."
+}

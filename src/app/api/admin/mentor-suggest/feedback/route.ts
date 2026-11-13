@@ -10,6 +10,7 @@ import {
   isMatchDismissReason,
   isMatchFeedbackOutcome,
 } from '@/lib/matchFeedback';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // Whitelist validation rather than z.enum, the way the rest of this repo
 // validates codes (CLAUDE.md) — the list lives in one client-safe module that
@@ -40,6 +41,9 @@ export async function POST(request: Request) {
   const gate = await requirePermission('program.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // Mentor suggestions are the mentorship module (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
 
   return await withTenantScope(session, async () => {
     const parsed = schema.safeParse(await request.json().catch(() => null));

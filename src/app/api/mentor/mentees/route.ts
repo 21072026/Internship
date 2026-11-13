@@ -25,6 +25,7 @@ import {
   ALREADY_MENTORED_ERROR,
   AlreadyMentoredError,
 } from '@/lib/activeMentorship';
+import { requireCapability } from '@/lib/capabilityGate';
 
 const schema = z.object({
   fullName: z.string().min(1),
@@ -53,6 +54,9 @@ export async function POST(request: Request) {
     const gate = await requireRoleOrPermission(['MENTOR'], 'relation.write', { request });
     if ('error' in gate) return gate.error;
     const { session } = gate;
+    // A mentor inviting a mentee is the mentorship module (P3, MKT-6).
+    const capGate = await requireCapability(session.user.orgId, 'mentorship');
+    if (capGate) return capGate;
     return await withTenantScope(session, async () => {
       const parsed = schema.safeParse(await request.json());
       if (!parsed.success) {
