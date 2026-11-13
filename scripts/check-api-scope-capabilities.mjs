@@ -20,11 +20,16 @@
 //   4. under a prefix with a capability, every withApiKey() scope maps to that
 //      SAME capability, and none opens the door for ANY_LIVE_KEY: a route whose
 //      scope is decided per request belongs under a `null` prefix
+//   5. every public webhook event (WEBHOOK_EVENTS, src/lib/events/catalog.ts)
+//      has a WEBHOOK_EVENT_CAPABILITY entry (src/lib/webhookEventCapability.ts)
+//      naming a real capability, and no entry names an event that is not public
+//      — subscription, delivery and the admin list read that map
 //
 // Run: node scripts/check-api-scope-capabilities.mjs   (npm run check:api-scope-capabilities)
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { register } from 'node:module';
 
 const SCOPES_FILE = 'src/lib/apiScopes.ts';
 const VERTICALS_FILE = 'src/lib/verticals.ts';
@@ -110,10 +115,24 @@ for (const p of prefixes) {
   }
 }
 
+// 5: webhook events — read from the modules themselves (Node strips the types;
+// the resolve hook is the unit tests' one), so the published list is the real one.
+register(new URL('./test/ts-extensionless-resolve.mjs', import.meta.url));
+const { WEBHOOK_EVENTS } = await import('../src/lib/events/catalog.ts');
+const { WEBHOOK_EVENT_CAPABILITY } = await import('../src/lib/webhookEventCapability.ts');
+for (const e of WEBHOOK_EVENTS) {
+  const cap = WEBHOOK_EVENT_CAPABILITY[e];
+  if (cap === undefined) fail(`webhook event '${e}' has no WEBHOOK_EVENT_CAPABILITY entry — say which product module it belongs to`);
+  else if (!capabilities.has(cap)) fail(`WEBHOOK_EVENT_CAPABILITY['${e}'] = '${cap}' is not a VerticalCapability`);
+}
+for (const e of Object.keys(WEBHOOK_EVENT_CAPABILITY)) {
+  if (!WEBHOOK_EVENTS.includes(e)) fail(`WEBHOOK_EVENT_CAPABILITY names '${e}', which is not a public webhook event`);
+}
+
 if (problems.length) {
-  console.error(`check-api-scope-capabilities FAILED (MKT-6b, src/lib/apiScopes.ts):\n  - ${problems.join('\n  - ')}`);
+  console.error(`check-api-scope-capabilities FAILED (MKT-6b, src/lib/apiScopes.ts + src/lib/webhookEventCapability.ts):\n  - ${problems.join('\n  - ')}`);
   process.exit(1);
 }
 console.log(
-  `api scope capabilities OK — ${scopes.length} scopes and ${prefixes.length} /api/v1 prefixes mapped, ${checkedRoutes} withApiKey() call(s) agree with their prefix.`,
+  `api scope capabilities OK — ${scopes.length} scopes, ${prefixes.length} /api/v1 prefixes and ${WEBHOOK_EVENTS.length} webhook events mapped, ${checkedRoutes} withApiKey() call(s) agree with their prefix.`,
 );

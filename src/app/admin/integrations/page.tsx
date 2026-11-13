@@ -23,6 +23,9 @@ interface Hook {
   id: string;
   url: string;
   events: string[];
+  // Stored events of a module this org's product lacks (MKT-6b): kept on the
+  // row, never delivered — shown struck through.
+  ignoredEvents?: string[];
   active: boolean;
   // Auto-disabled by the delivery job after a failure streak (#1695).
   disabledAt?: string | null;
@@ -326,7 +329,12 @@ export default function IntegrationsPage() {
                           </span>
                         )}
                       </p>
-                      <p className="text-xs text-gray-400">{h.events.join(', ')}</p>
+                      <p className="text-xs text-gray-400">
+                        {h.events.join(', ')}
+                        {h.ignoredEvents && h.ignoredEvents.length > 0 && (
+                          <> <s data-testid={`webhook-ignored-events-${h.id}`}>{h.ignoredEvents.join(', ')}</s></>
+                        )}
+                      </p>
                       {(h.company || h.ownerSource) && (
                         <p className="text-xs text-gray-500 dark:text-gray-400" data-testid={`webhook-scope-owner-${h.id}`}>
                           {h.company ? `${t.integrations.ownedByCompany}: ${h.company.name}` : `${t.integrations.ownedBySource}: ${h.ownerSource?.name}`}

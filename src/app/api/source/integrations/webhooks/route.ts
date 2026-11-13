@@ -12,6 +12,8 @@ import { assertPublicHttpsUrl, SsrfBlockedError } from '@/lib/ssrfGuard';
 import { integrationsLocked } from '@/lib/integrationsGate';
 import { ownSource } from '@/lib/sourceIntegrations';
 import { SOURCE_WEBHOOK_EVENTS, checkSourceEventCeiling } from '@/lib/sourceWebhookRule';
+import { webhookEventAvailable } from '@/lib/webhookEventCapability';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 
 // Self-served webhooks for a SOURCE owner (#2006) — the twin of
 // /api/company/integrations/webhooks, same shape and same rules.
@@ -58,6 +60,12 @@ export async function POST(request: Request) {
   const ceiling = checkSourceEventCeiling(parsed.data.events);
   if (!ceiling.ok) {
     return NextResponse.json({ error: 'Event not available to a source webhook', code: 'event_above_ceiling', events: ceiling.above }, { status: 403 });
+  }
+  // The product's events only (MKT-6b), the same refusal as the admin path.
+  const capabilities = await shellCapabilities(resolveOrgId(session));
+  const unavailable = parsed.data.events.filter((e) => !webhookEventAvailable(e, capabilities));
+  if (unavailable.length) {
+    return NextResponse.json({ error: 'Event not available in this product', code: 'event_unavailable', events: unavailable }, { status: 400 });
   }
   const locked = await integrationsLocked(session);
   if (locked) return locked;

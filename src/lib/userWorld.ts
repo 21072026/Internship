@@ -23,12 +23,23 @@
 // `orgId` is still NULL belongs to the default org (the deploy backfill's own
 // rule), i.e. the default world.
 //
+// A WORLD SPANS ORGANIZATIONS, SO NO LOOKUP HERE IS TENANT-SCOPED. Every query
+// below runs through runUnscoped(): its `where` already names the world, and
+// the Prisma tenant middleware — once MT_ENFORCE_ISOLATION is on and a request
+// or job has bound an org — would otherwise add `orgId = <caller's org>` and
+// shrink "this world" to "this organization". The create paths would then miss
+// the address another organization of the same product already holds and
+// insert a second account for it (#3588: the /api/v1 candidate import did,
+// in a flag-on run). The answer is a boolean or rows the caller re-checks
+// against its own org; nothing here returns another tenant's data unasked.
+//
 // SERVER-ONLY (Prisma). The pure host → world rule is hostWorld.ts.
 
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { DEFAULT_VERTICAL, VERTICAL_KEYS, toVerticalKey, type VerticalKey } from '@/lib/verticals';
 import { verticalFor } from '@/lib/verticalContext';
+import { runUnscoped } from '@/lib/tenantAmbient';
 
 /** Addresses are stored trimmed and lower-cased (registration, sign-in and every lookup agree). */
 export function normalizeEmail(email: string): string {
@@ -80,11 +91,13 @@ export async function findUserInWorld<S extends Prisma.UserSelect>(
   world: VerticalKey,
   select: S,
 ): Promise<Prisma.UserGetPayload<{ select: S }> | null> {
-  return prisma.user.findFirst({
-    where: { email: normalizeEmail(email), ...worldUserWhere(world) },
-    select,
-    orderBy: { createdAt: 'asc' },
-  }) as Promise<Prisma.UserGetPayload<{ select: S }> | null>;
+  return runUnscoped(() =>
+    prisma.user.findFirst({
+      where: { email: normalizeEmail(email), ...worldUserWhere(world) },
+      select,
+      orderBy: { createdAt: 'asc' },
+    }),
+  ) as Promise<Prisma.UserGetPayload<{ select: S }> | null>;
 }
 
 /**
@@ -98,11 +111,13 @@ export async function findUsersInWorld<S extends Prisma.UserSelect>(
   world: VerticalKey,
   select: S,
 ): Promise<Prisma.UserGetPayload<{ select: S }>[]> {
-  return prisma.user.findMany({
-    where: { email: normalizeEmail(email), ...worldUserWhere(world) },
-    select,
-    orderBy: { createdAt: 'asc' },
-  }) as Promise<Prisma.UserGetPayload<{ select: S }>[]>;
+  return runUnscoped(() =>
+    prisma.user.findMany({
+      where: { email: normalizeEmail(email), ...worldUserWhere(world) },
+      select,
+      orderBy: { createdAt: 'asc' },
+    }),
+  ) as Promise<Prisma.UserGetPayload<{ select: S }>[]>;
 }
 
 /**
@@ -115,11 +130,13 @@ export async function findUsersInWorldByEmails<S extends Prisma.UserSelect>(
   select: S,
 ): Promise<Prisma.UserGetPayload<{ select: S }>[]> {
   if (emails.length === 0) return [];
-  return prisma.user.findMany({
-    where: { email: { in: Array.from(new Set(emails.map(normalizeEmail))) }, ...worldUserWhere(world) },
-    select,
-    orderBy: { createdAt: 'asc' },
-  }) as Promise<Prisma.UserGetPayload<{ select: S }>[]>;
+  return runUnscoped(() =>
+    prisma.user.findMany({
+      where: { email: { in: Array.from(new Set(emails.map(normalizeEmail))) }, ...worldUserWhere(world) },
+      select,
+      orderBy: { createdAt: 'asc' },
+    }),
+  ) as Promise<Prisma.UserGetPayload<{ select: S }>[]>;
 }
 
 /**
@@ -133,11 +150,13 @@ export async function findUsersByEmail<S extends Prisma.UserSelect>(
   email: string,
   select: S,
 ): Promise<Prisma.UserGetPayload<{ select: S }>[]> {
-  return prisma.user.findMany({
-    where: { email: normalizeEmail(email) },
-    select,
-    orderBy: { createdAt: 'asc' },
-  }) as Promise<Prisma.UserGetPayload<{ select: S }>[]>;
+  return runUnscoped(() =>
+    prisma.user.findMany({
+      where: { email: normalizeEmail(email) },
+      select,
+      orderBy: { createdAt: 'asc' },
+    }),
+  ) as Promise<Prisma.UserGetPayload<{ select: S }>[]>;
 }
 
 /**
