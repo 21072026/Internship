@@ -62,24 +62,31 @@ export function AddInteractionForm({ relationId, onAdded }: { relationId: string
 
   return (
     <form onSubmit={submit} className="mt-2 space-y-2 rounded-lg border border-gray-200 bg-gray-50 p-3">
-      <div className="flex gap-2">
-        <select
-          aria-label={t.logInteraction.type}
-          value={type}
-          onChange={(e) => setType(e.target.value as InteractionType)}
-          className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
-        >
-          {INTERACTION_TYPES.map((ty) => (
-            <option key={ty} value={ty}>{t.interactionTypes[ty]}</option>
-          ))}
-        </select>
-        <input
-          type="date"
-          aria-label={t.logInteraction.date}
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
-        />
+      {/* What this form is for, next to the follow-up's own line (#3652): what
+          already happened goes here; what comes next goes into the follow-up. */}
+      <p className="text-xs text-gray-600 dark:text-gray-400" data-testid="interaction-form-hint">{t.logInteraction.hint}</p>
+      <div className="flex flex-wrap gap-2">
+        <label className="flex flex-col gap-0.5 text-xs text-gray-600 dark:text-gray-400">
+          {t.logInteraction.type}
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value as InteractionType)}
+            className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+          >
+            {INTERACTION_TYPES.map((ty) => (
+              <option key={ty} value={ty}>{t.interactionTypes[ty]}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-0.5 text-xs text-gray-600 dark:text-gray-400">
+          {t.logInteraction.date}
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+          />
+        </label>
       </div>
       <input
         type="text"
