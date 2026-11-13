@@ -95,8 +95,22 @@ MARKETING_OPERATOR_VAT_ID="DE…"
 MARKETING_OPERATOR_RESPONSIBLE="<Geschäftsführer>"
 ```
 
-Bu yapılmadan marketing host'unun Impressum'u ve mektuplar InternCRM operatörünü gösterir —
-outreach-compliance § 6'daki sert blokaj.
+Bu yapılmadan marketing host'unun Impressum'u InternCRM operatörünü gösterir — outreach-compliance
+§ 6'daki sert blokaj. Mektup tarafında bu blokaj kodda uygulanır (#2578):
+
+- **Ret.** Bir MARKETING org'unun kampanyası, `MARKETING_OPERATOR_NAME`, `_EMAIL` ve `_ADDRESS`'in
+  üçü de dolu olmadıkça basılmaz ve postalanmaz (`marketingOperatorConfigured()`,
+  `src/lib/imprint.ts`). `/print/post-campaign/<id>` mektup yerine engelleyici bir uyarı gösterir;
+  "Postalandı olarak işaretle" (`POST /api/admin/post-campaigns/<id>/send`) 409
+  `{ code: 'operator_missing' }` döner ve kampanya taslak kalır. Impressum'un aksine burada
+  `OPERATOR_*`'a **düşülmez**: mektup ilk reklam temasıdır ve göndereni yanlış şirketi gösteremez;
+  dönüş adresi bastığı için posta adresi de tabanın parçasıdır. Değerleri çekirdek `OPERATOR_*`
+  ile aynı olan bir `MARKETING_OPERATOR_*` seti de geçerlidir — aynı şirket iki ürünü de sunabilir,
+  önemli olan bunun açıkça yazılmasıdır. INTERNSHIP org'ları hiç sorulmaz.
+- **Hazırlık satırı.** Deploy log'unda `prisma/check-marketing-orgs.mjs`, `MARKETING_HOSTS` ayarlı ama
+  bu üç değişkenden biri eksikse org satırlarından önce bir
+  `WARNING marketing operator: … not set` satırı basar — admin rete çarpmadan önce. Rapor eder,
+  hiçbir şeyi engellemez; satır yoksa set tamamdır (ya da bu kurulum marketing ürününü sunmuyordur).
 
 ## Ne YAPMAZ
 

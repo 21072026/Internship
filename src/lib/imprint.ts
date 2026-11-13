@@ -100,3 +100,29 @@ function identityFrom(env: Env, prefix: string): OperatorIdentity | null {
   };
 }
 
+
+/**
+ * Whether the marketing world publishes its OWN complete sender identity
+ * (#2578): `MARKETING_OPERATOR_NAME`, `_EMAIL` and `_ADDRESS` all set and not
+ * blank.
+ *
+ * `operatorIdentity(env, 'MARKETING')` deliberately falls back to the core
+ * `OPERATOR_*` set for the imprint page — a page with the wrong provider beats
+ * no page. A letter is different: it is the first advertising contact, and a
+ * letter naming the internship product's provider as sender fails § 5 DDG and
+ * § 7 Abs. 2 Nr. 3 UWG (outreach-compliance.md § 6). So printing and posting a
+ * campaign ask THIS, never the fallback, and the postal address is part of the
+ * floor here (a letter carries a return address) where the imprint's floor is
+ * only name + e-mail.
+ *
+ * A MARKETING set whose values equal the core set is still configured: the
+ * operator may simply be the same company for both products, and saying so
+ * explicitly under the MARKETING_ prefix is exactly the decision this asks for.
+ */
+export function marketingOperatorConfigured(env: Env = process.env): boolean {
+  return Boolean(
+    value(env.MARKETING_OPERATOR_NAME) &&
+      value(env.MARKETING_OPERATOR_EMAIL) &&
+      addressLines(env.MARKETING_OPERATOR_ADDRESS).length > 0,
+  );
+}
