@@ -24,6 +24,8 @@ import { SsrfBlockedError, SsrfUnresolvedError } from '@/lib/ssrfGuard';
 import { deliverToWebhook, liveSubscriptionsWhere, type WebhookEvent } from '@/lib/webhooks';
 import { companyReceiverCheck } from '@/lib/companyWebhookScope';
 import { sourceReceiverCheck } from '@/lib/sourceWebhookScope';
+import { webhookEventAvailable } from '@/lib/webhookEventCapability';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import {
   runDeliveryAttempt,
   webhookJobKey,
@@ -70,6 +72,9 @@ function ownerReceiverCheck(event: { name: string; orgId: string | null; payload
  * receiver is its own job, so the slowest one delays nobody else.
  */
 export async function fanOutWebhookEvent(event: DeliveredEvent): Promise<number> {
+  // An event of a module the tenant's product lacks (MKT-6b) reaches no hook:
+  // a subscription that still names it keeps its row, the event is ignored.
+  if (!webhookEventAvailable(event.name, await shellCapabilities(event.orgId))) return 0;
   const hooks = await prisma.webhook.findMany({
     where: liveSubscriptionsWhere(event.orgId),
     select: { id: true, events: true, companyId: true, sourceId: true },

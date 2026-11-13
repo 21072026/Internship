@@ -6,6 +6,7 @@ import { getOwnMenteeActivity } from '@/lib/activityReport';
 import { hasConsent } from '@/lib/consent';
 import { canUsePortal } from '@/lib/dualRole';
 import { insightsWindowFrom } from '@/lib/portalInsightsQuery';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // GET — the caller's own activity summary (#1915), over `?days=1|7|30` or a
 // `?from=&to=` date range (#1909; src/lib/portalInsightsWindow.ts decides).
@@ -21,6 +22,9 @@ import { insightsWindowFrom } from '@/lib/portalInsightsQuery';
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // A mentee's portal insights (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   // Gated exactly like the portal shell rather than on `role === 'MENTEE'`: an
   // admin or mentor who is themselves being mentored legitimately lives in the
   // portal (#1141), and their own summary is theirs to read.

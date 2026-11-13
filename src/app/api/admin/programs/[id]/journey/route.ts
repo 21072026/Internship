@@ -6,6 +6,7 @@ import { journeyTemplate } from '@/lib/programJourneyRule';
 import { STEP_SELECT, journeyProgramFor, serializeStep, stepColumns, stepInputSchema } from '@/lib/programJourneyAdmin';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { requireCapability } from '@/lib/capabilityGate';
 
 
 // The journey builder's collection (#1853): the programme's steps, its pairs
@@ -18,7 +19,14 @@ import { authOptions } from '@/lib/auth';
 const MAX_STEPS = 200;
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await journeyProgramFor(_request, await getServerSession(authOptions), (await params).id, 'program.read');
+  const viewer = await getServerSession(authOptions);
+  // A programme journey walks pairs through the mentorship (P3, MKT-6). Before
+  // the programme lookup, so a MARKETING caller hears the module, never a 404.
+  if (viewer) {
+    const capGate = await requireCapability(viewer.user.orgId, 'mentorship');
+    if (capGate) return capGate;
+  }
+  const auth = await journeyProgramFor(_request, viewer, (await params).id, 'program.read');
   if ('refusal' in auth) return auth.refusal;
   const { session, program } = auth;
   return await withTenantScope(session, async () => {
@@ -41,7 +49,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await journeyProgramFor(request, await getServerSession(authOptions), (await params).id, 'program.write');
+  const viewer = await getServerSession(authOptions);
+  // A programme journey walks pairs through the mentorship (P3, MKT-6). Before
+  // the programme lookup, so a MARKETING caller hears the module, never a 404.
+  if (viewer) {
+    const capGate = await requireCapability(viewer.user.orgId, 'mentorship');
+    if (capGate) return capGate;
+  }
+  const auth = await journeyProgramFor(request, viewer, (await params).id, 'program.write');
   if ('refusal' in auth) return auth.refusal;
   const { session, program } = auth;
   return await withTenantScope(session, async () => {
@@ -66,7 +81,14 @@ const patchSchema = z.union([
 ]);
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const auth = await journeyProgramFor(request, await getServerSession(authOptions), (await params).id, 'program.write');
+  const viewer = await getServerSession(authOptions);
+  // A programme journey walks pairs through the mentorship (P3, MKT-6). Before
+  // the programme lookup, so a MARKETING caller hears the module, never a 404.
+  if (viewer) {
+    const capGate = await requireCapability(viewer.user.orgId, 'mentorship');
+    if (capGate) return capGate;
+  }
+  const auth = await journeyProgramFor(request, viewer, (await params).id, 'program.write');
   if ('refusal' in auth) return auth.refusal;
   const { session, program } = auth;
   return await withTenantScope(session, async () => {

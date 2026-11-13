@@ -45,6 +45,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
+  await prisma.webhook.deleteMany({ where: { orgId: { in: orgIds } } });
   await prisma.apiKey.deleteMany({ where: { orgId: { in: orgIds } } });
   for (const e of emails) await cleanupByEmail(e);
   await prisma.organization.deleteMany({ where: { id: { in: orgIds } } });
@@ -104,4 +105,42 @@ test('the same key in an INTERNSHIP org reads the hiring routes exactly as befor
   }
   const me = await (await request.get('/api/v1/me', { headers: key.headers })).json();
   expect(me.data.scopes).toEqual(['candidates:read', 'hiring:read']);
+});
+
+// Webhook events follow the product too (MKT-6b): a MARKETING org cannot
+// subscribe to offer.* / requisition.* / interview events — not from the admin
+// form, not over /api/v1/hooks — and a stored subscription naming one keeps its
+// row with the event listed apart as ignored.
+test('a MARKETING org cannot subscribe to internship hiring events; a stored one is ignored, not deleted', { tag: '@smoke' }, async ({ request }) => {
+  const login = await signInViaApi(request, adminEmail, PW, { host: MARKETING_HOST });
+  expect(login.ok, `sign-in on the marketing host: ${login.error}`).toBe(true);
+  const headers = { 'x-forwarded-host': MARKETING_HOST };
+
+  const list = await request.get('/api/admin/webhooks', { headers });
+  expect(list.status()).toBe(200);
+  const offered: string[] = (await list.json()).eventTypes;
+  expect(offered).toContain('pipeline.stage_change');
+  expect(offered.filter((e) => /^(offer|requisition|interview_request|interview_panel)\./.test(e))).toEqual([]);
+
+  const refused = await request.post('/api/admin/webhooks', {
+    headers,
+    data: { url: 'https://hooks.example.com/in', events: ['pipeline.stage_change', 'offer.sent'] },
+  });
+  expect(refused.status()).toBe(400);
+  expect(await refused.json()).toMatchObject({ code: 'event_unavailable', events: ['offer.sent'] });
+
+  const stored = await prisma.webhook.create({
+    data: { url: 'https://hooks.example.com/legacy', events: ['offer.sent', 'pipeline.stage_change'], secret: 'e2e', orgId: marketingOrgId },
+  });
+  const after = (await (await request.get('/api/admin/webhooks', { headers })).json()).webhooks.find((w: { id: string }) => w.id === stored.id);
+  expect(after.events).toEqual(['pipeline.stage_change']);
+  expect(after.ignoredEvents).toEqual(['offer.sent']);
+  const row = await prisma.webhook.findUniqueOrThrow({ where: { id: stored.id }, select: { events: true } });
+  expect(row.events).toEqual(['offer.sent', 'pipeline.stage_change']);
+
+  // The connector's own subscribe endpoint refuses it as an invalid event.
+  const key = await storedKey(marketingOrgId, 'hooks:write');
+  const sub = await request.post('/api/v1/hooks', { headers: key.headers, data: { targetUrl: 'https://hooks.example.com/zap', event: 'offer.sent' } });
+  expect(sub.status()).toBe(422);
+  expect(JSON.stringify(await sub.json())).toContain('event_unavailable');
 });

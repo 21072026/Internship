@@ -66,8 +66,21 @@ MARKETING org has no internship hiring module, so `hiring:read`
   to someone's credential by a read path, irreversible if the vertical is ever
   corrected, for no security gain — the door already refuses.
 
+**Webhook events** follow the same rule (`WEBHOOK_EVENT_CAPABILITY`,
+`src/lib/webhookEventCapability.ts`): offer, requisition, application, interview
+and company-interest events are `placements`; evaluations and weekly reports
+`evaluations`; the mentor application, goals and a pairing's end date
+`mentorship`. A MARKETING org is not offered them (`eventTypes` of
+`GET /api/admin/webhooks`), cannot subscribe to them (`400 event_unavailable` on
+the admin and SOURCE forms, `422 validation_failed` / `event_unavailable` on
+`POST /api/v1/hooks`), and the fan-out never delivers one. A stored subscription
+that names one keeps its row; the admin list shows the event as `ignoredEvents`.
+Relationship, stage, hand-off, interaction, meeting and `user.created` events stay
+`pipeline`: the MARKETING sales flow runs on the same rows.
+
 INTERNSHIP carries every capability, so nothing changes there.
-`npm run check:api-scope-capabilities` (CI) fails a scope or a `/api/v1` prefix
+`npm run check:api-scope-capabilities` (CI) also fails a public webhook event with
+no capability or a stale entry, and fails a scope or a `/api/v1` prefix
 with no capability, a stale entry, and a route whose `withApiKey` scope disagrees
 with its prefix.
 
