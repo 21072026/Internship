@@ -10,6 +10,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { requirePermission } from '@/lib/authz';
+import { requireCapability } from '@/lib/capabilityGate';
 
 const schema = z.object({
   sourceId: z.string().min(1),
@@ -24,6 +25,9 @@ export async function POST(request: Request) {
   const gate = await requirePermission('user.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // SOURCE accounts are the sourcing module (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'sourcing');
+  if (capGate) return capGate;
 
   return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());

@@ -4,6 +4,7 @@ import { runWithOrg } from '@/lib/orgContext';
 import { requirePermission } from '@/lib/authz';
 import { nudgeScope } from '@/lib/nudges/adminGuard';
 import { DRY_RUN_WRITER, evaluateNudgeRule, nudgeRuleSelect } from '@/lib/nudges/evaluate';
+import { requireCapability } from '@/lib/capabilityGate';
 
 /** The sample of names the dry run returns. */
 const SAMPLE = 25;
@@ -16,6 +17,9 @@ const SAMPLE = 25;
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requirePermission('org.settings.write', { request });
   if ('error' in auth) return auth.error;
+  // Nudges reach mentees and mentors (MKT-6a).
+  const capGate = await requireCapability(auth.session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const g = await nudgeScope(auth.session);
   if ('error' in g) return g.error;
   const rule = await prisma.nudgeRule.findFirst({ where: { id: (await params).id, orgId: g.orgId }, select: nudgeRuleSelect });
