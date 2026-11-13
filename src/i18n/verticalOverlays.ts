@@ -371,13 +371,15 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         newCandidates: 'New Leads',
         recentlyRegistered: 'Recently added leads',
         noCandidates: 'No leads yet',
-        quickActions: { browseCandidates: 'Browse Leads' },
+        companies: 'Accounts',
+        quickActions: { browseCandidates: 'Browse Leads', manageCompanies: 'Manage Accounts' },
       },
       checklist: {
         steps: {
           inviteMentors: 'Invite your first reps',
           inviteMentees: 'Add your first leads',
           assignMentorship: 'Create the first deal',
+          addCompany: 'Add your first account',
           mentorCapacity: 'Set your lead capacity',
         },
         guides: {
@@ -1511,13 +1513,15 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         newCandidates: 'Yeni Müşteri Adayları',
         recentlyRegistered: 'Son eklenen müşteri adayları',
         noCandidates: 'Henüz müşteri adayı yok',
-        quickActions: { browseCandidates: 'Müşteri adaylarını görüntüle' },
+        companies: 'Hesaplar',
+        quickActions: { browseCandidates: 'Müşteri adaylarını görüntüle', manageCompanies: 'Hesapları yönet' },
       },
       checklist: {
         steps: {
           inviteMentors: 'İlk temsilcilerini davet et',
           inviteMentees: 'İlk müşteri adaylarını ekle',
           assignMentorship: 'İlk fırsatı oluştur',
+          addCompany: 'İlk hesabını ekle',
           mentorCapacity: 'Müşteri adayı kapasiteni belirle',
         },
         guides: {
@@ -2537,13 +2541,15 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         newCandidates: 'Neue Leads',
         recentlyRegistered: 'Kürzlich hinzugefügte Leads',
         noCandidates: 'Noch keine Leads',
-        quickActions: { browseCandidates: 'Leads durchsuchen' },
+        companies: 'Accounts',
+        quickActions: { browseCandidates: 'Leads durchsuchen', manageCompanies: 'Accounts verwalten' },
       },
       checklist: {
         steps: {
           inviteMentors: 'Laden Sie Ihre ersten Mitarbeiter ein',
           inviteMentees: 'Fügen Sie Ihre ersten Leads hinzu',
           assignMentorship: 'Ersten Deal anlegen',
+          addCompany: 'Ersten Account anlegen',
           mentorCapacity: 'Legen Sie Ihre Lead-Kapazität fest',
         },
         guides: {
