@@ -250,3 +250,20 @@ test('a terminated partner still links while its notice period runs; a 100-chara
   expect((await linksOf(extLong))[0]?.partnerId).toBe(longId);
   expect((await post(request, envelope({ referral_code: `${longCode}y` }))).status()).toBe(400);
 });
+
+test('an old-system code with . and @ is created by the admin and links a customer, in any letter case (#3550)', async ({ playwright, baseURL, request }) => {
+  const admin = await context(playwright, baseURL);
+  expect((await signInViaApi(admin, adminEmail, PW, { host: MARKETING_HOST })).ok).toBe(true);
+  const create = (code: string) =>
+    admin.fetch('/api/admin/affiliate/partners', { method: 'POST', headers: host, data: { code, displayName: `Legacy ${code}` } });
+  const code = `max.muster@${STAMP}`;
+  const created = await create(code);
+  expect(created.status()).toBe(201);
+  const legacyId = (await created.json()).id;
+  // A code still starts with a letter or digit, and never carries a space or a slash.
+  for (const bad of [`.lead-${STAMP}`, `has space-${STAMP}`, `a/b-${STAMP}`]) expect((await create(bad)).status(), bad).toBe(400);
+
+  const ext = extId();
+  expect((await post(request, envelope({ external_id: ext, referral_code: code.toUpperCase() }))).status()).toBe(200);
+  expect((await linksOf(ext))[0]?.partnerId).toBe(legacyId);
+});

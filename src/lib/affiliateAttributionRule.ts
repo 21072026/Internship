@@ -22,8 +22,8 @@
 //      refused here: the link is permanent, so the conservative answer wins.
 import { MAX_REF_LENGTH } from './affiliateCommissionSync';
 
-/** The longest partner code: AffiliatePartner.code is VarChar(100), PARTNER_CODE_RE allows 1 + 99. */
-export const PARTNER_CODE_MAX = 100;
+/** The longest partner code (src/lib/affiliateCodeRule.ts, #3550). */
+export { PARTNER_CODE_MAX } from './affiliateCodeRule';
 
 export type AffiliatePartnerState = 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';
 

@@ -17,9 +17,10 @@
 
 import { createHmac } from 'node:crypto';
 import { parseReferralUrl, referralLink } from './affiliateReferralRule';
+import { PARTNER_CODE_RE } from './affiliateCodeRule';
 
-/** A partner code's shape — the same as PARTNER_CODE_RE (src/lib/affiliatePartners.ts). */
-export const CLICK_CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
+/** A partner code's shape — the one rule (#3550, src/lib/affiliateCodeRule.ts). */
+export const CLICK_CODE_RE = PARTNER_CODE_RE;
 
 /** Counted clicks per visitor (hashed IP) per hour; above it the visitor is still redirected. */
 export const CLICK_RATE_LIMIT = { limit: 30, windowMs: 60 * 60 * 1000 } as const;
