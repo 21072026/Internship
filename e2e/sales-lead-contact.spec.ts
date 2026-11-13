@@ -145,6 +145,15 @@ test('an unchanged save writes nothing', async () => {
 });
 
 test('who may: another rep, another tenant and an unknown id are the same 404, an observer is refused, an admin may', { tag: '@smoke' }, async () => {
+  // The @smoke gate runs this test alone (`--grep @smoke`), so it cannot lean on the
+  // untagged first test having renamed the contact: set that state here. In the full
+  // serial run this writes exactly what the first test already left behind.
+  await prisma.company.update({
+    where: { id: ids.company },
+    data: { contactName: 'Tobias Beispiel', contactEmail: 't.beispiel@shop.example', contactPhone: '+49 30 7654321', contactPosition: 'Managing director' },
+  });
+  await prisma.user.update({ where: { id: ids.lead }, data: { fullName: 'Tobias Beispiel', phone: '+49 30 7654321' } });
+
   const body = { name: 'Changed By Someone', email: '', phone: '', position: '' };
   expect((await patch('rep2', ids.relation, body)).status()).toBe(404);
   expect((await patch('rep', 'does-not-exist', body)).status()).toBe(404);
