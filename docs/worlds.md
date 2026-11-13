@@ -461,10 +461,15 @@ sanır ve tip denetimi yanlış yerde susar. Yeni bir yapılandırma değişkeni
 - **Ürün başına tek hesap:** (e-posta, ürün) başına bir. Aynı posta kutusu için
   ikinci bir `MARKETING` org'unda hesap açmak reddedilir (`emailTakenInWorld`);
   iki org'a aynı ürün içinde üye olmak bu modelde yok.
-- **Topic ortamları tek host sunar** (`pr<N>.interncrm.com`): `MARKETING_HOSTS`
-  verilmedikçe yalnızca internship dünyasını gösterirler. Marketing hesabıyla
-  girmeye çalışan biri yalnızca "bu bilgilerle bir Internship CRM hesabı yok"
-  mesajını alır.
+- **Topic ortamları iki host sunar** (#2612, `.github/workflows/topic-preview.yml`):
+  aynı konteyner `pr<N>.<domain>` üzerinde internship dünyasını, `pr<N>-m.<domain>`
+  üzerinde marketing dünyasını gösterir. Konteynerin `MARKETING_HOSTS` değeri o
+  PR'ın `-m` host'udur — paylaşılan preview ortamının marketing alan adı miras
+  alınmaz. Topic veritabanı her iki dünya için de sentetik demo verisiyle seed
+  edilir (internship `admin.demo@demo.example.com`, marketing
+  `admin.marketing@demo.example.com`, aynı parola). Bir marketing hesabı yalnızca
+  `-m` host'unda oturum açar; `pr<N>.<domain>`'de denerse, her yanlış kapıda olduğu
+  gibi, o host'un ürününde hesabı olmadığı söylenir.
 - **Org'un ürününü değiştirmek oturumdan yapılamaz** (süper-admin dünya başına);
   gerekirse bu bir operatör işidir ve taşıma kontrolü (aynı adresli hesap) yine geçerlidir.
 - **Yanlış kapı hesabın varlığını açık eder** (yalnızca parolanın sahibine: cevap
