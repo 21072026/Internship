@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { programWriteGate } from '@/lib/programWriteGate';
 import { z } from 'zod';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // Both verbs go through programWriteGate (#3576): the programme must be in the
 // caller's tenant and, for a PROGRAM_ADMIN, inside a grant — anything else is a
@@ -18,7 +19,14 @@ const schema = z.object({
 // PATCH — rename / re-term a cohort (admin).
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const g = await programWriteGate(request, await getServerSession(authOptions), id);
+  const viewer = await getServerSession(authOptions);
+  // Cohorts are the mentorship module (as /clone already says). Before the
+  // programme lookup, so a MARKETING caller hears the module, not a 404 (P3, MKT-6).
+  if (viewer) {
+    const capGate = await requireCapability(viewer.user.orgId, 'mentorship');
+    if (capGate) return capGate;
+  }
+  const g = await programWriteGate(request, viewer, id);
   if ('error' in g) return g.error;
   return await withTenantScope(g.session, async () => {
     const parsed = schema.safeParse(await request.json().catch(() => null));
@@ -39,7 +47,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 // is cleared so no mentee is orphaned.
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const g = await programWriteGate(request, await getServerSession(authOptions), id);
+  const viewer = await getServerSession(authOptions);
+  // Cohorts are the mentorship module (as /clone already says). Before the
+  // programme lookup, so a MARKETING caller hears the module, not a 404 (P3, MKT-6).
+  if (viewer) {
+    const capGate = await requireCapability(viewer.user.orgId, 'mentorship');
+    if (capGate) return capGate;
+  }
+  const g = await programWriteGate(request, viewer, id);
   if ('error' in g) return g.error;
   return await withTenantScope(g.session, async () => {
     // The programme is verified to be this tenant's, so every relation that
