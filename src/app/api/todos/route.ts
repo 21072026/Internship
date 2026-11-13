@@ -298,7 +298,7 @@ const createSchema = z
     dueDate: dueDateSchema,
   })
   .refine((d) => Boolean(d.title) || (d.templateIds?.length ?? 0) > 0, {
-    message: 'title or templateIds is required',
+    error: 'title or templateIds is required',
   });
 
 // POST — put a to-do on a list: mine (a line for myself) or my mentee's (what I

@@ -31,15 +31,15 @@ function registerSchemaFor(policy: PasswordPolicy, dict: PasswordPolicyDict) {
       token: z.string().optional(),
       email: z.string().email('Invalid email address'),
       fullName: z.string().min(1, 'Full name is required'),
-      password: z.string().superRefine((pw, ctx) => {
+      password: z.string().check(z.superRefine((pw, ctx) => {
         const message = passwordPolicyError(pw, policy, dict);
-        if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, message });
-      }),
+        if (message) ctx.addIssue({ code: 'custom', message });
+      })),
       confirmPassword: z.string(),
       consent: z.literal(true, { error: 'Consent is required' }),
     })
     .refine((data) => data.password === data.confirmPassword, {
-      message: 'Passwords do not match',
+      error: 'Passwords do not match',
       path: ['confirmPassword'],
     });
 }

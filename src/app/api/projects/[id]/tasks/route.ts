@@ -31,7 +31,7 @@ const schema = z
     assigneeId: z.string().min(1).nullable().optional(),
   })
   .refine((d) => Boolean(d.title) || (d.templateIds?.length ?? 0) > 0, {
-    message: 'title or templateIds is required',
+    error: 'title or templateIds is required',
   });
 
 // POST — add task(s) to a project (project managers and members).

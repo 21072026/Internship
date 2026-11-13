@@ -25,7 +25,7 @@ const schema = z.strictObject({
   pinned: z.boolean().optional(),
   mute: z.enum(MUTE_CHOICES).nullable().optional(),
 })
-  .refine((d) => d.archived !== undefined || d.pinned !== undefined || d.mute !== undefined, { message: 'nothing to change' });
+  .refine((d) => d.archived !== undefined || d.pinned !== undefined || d.mute !== undefined, { error: 'nothing to change' });
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withRequestScope(request, () => handlePatch(request, params));
