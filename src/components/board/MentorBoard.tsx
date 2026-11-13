@@ -468,7 +468,10 @@ export function MentorBoard({ detailBase = '/mentor/mentees', handoff = false }:
                       <span data-testid={`board-column-count-${status}`} className="text-[10px] text-gray-400 opacity-60">
                         0
                       </span>
-                      <span className="min-h-0 overflow-hidden text-ellipsis text-[10px] font-medium text-gray-500 [writing-mode:vertical-rl] rotate-180 whitespace-nowrap">
+                      {/* gray-600, not 500: on the stage tints (#3675) gray-500 measures 3.9–4.5:1,
+                          under AA for 10px text; gray-600 holds ≥ 6.1:1 on every one.
+                          Dark mode maps both to the same gray (globals.css). */}
+                      <span className="min-h-0 overflow-hidden text-ellipsis text-[10px] font-medium text-gray-600 [writing-mode:vertical-rl] rotate-180 whitespace-nowrap">
                         {label(status)}
                       </span>
                     </div>
