@@ -32,6 +32,7 @@ const ERROR_STATUS: Record<ApiErrorType, string> = {
   insufficient_scope: '403',
   org_unbound: '403',
   feature_locked: '403',
+  capability_unavailable: '403',
   invalid_link: '403',
   company_key_not_allowed: '403',
   source_key_not_allowed: '403',

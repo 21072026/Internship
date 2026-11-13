@@ -48,6 +48,9 @@ export const API_ERROR_TYPES = [
   'stage_gate_blocked',
   // A signed export link that is tampered, expired or no longer backed by its key (#3002).
   'invalid_link',
+  // The endpoint's module is not part of the key's organization's product
+  // (MKT-6b): internship hiring in a MARKETING org. src/lib/apiScopes.ts.
+  'capability_unavailable',
 ] as const;
 export type ApiErrorType = (typeof API_ERROR_TYPES)[number];
 
