@@ -177,6 +177,9 @@ const microsoftMock = `http://127.0.0.1:${E2E_MICROSOFT_MOCK_PORT}`;
 // spec that forges `x-forwarded-host` with it, and the workers, which inherit
 // process.env — `*.unit.spec.ts` files resolve the marketing world in-process.
 process.env.MARKETING_HOSTS = E2E_MARKETING_HOST;
+
+// Whether the app servers enforce the strict CSP (#1552) — see the env blocks below.
+const CSP_ENFORCE_E2E = process.env.E2E_CSP_MODE === 'report' ? '0' : '1';
 // The customer-mail lock (src/lib/customerMailLockRule.ts) is ON by default for
 // every MARKETING org; the mail specs assert deliveries to (and drafts for)
 // marketing leads, so the suite opens it. On process.env for the same reason as
@@ -358,6 +361,11 @@ export default defineConfig({
         // — the hole #2470 closed; at `0` every request is now one shared
         // bucket and the helpers' isolation would silently do nothing.
         env: {
+          // The strict nonce CSP ENFORCED (#1552, docs/csp.md): every spec runs
+          // under the policy production gets once CSP_ENFORCE=1 is flipped there,
+          // so a page that needs an inline script or eval goes red here first.
+          // E2E_CSP_MODE=report runs the deployments' current report-only mode.
+          CSP_ENFORCE: CSP_ENFORCE_E2E,
           TRUSTED_PROXY_COUNT: '1',
           // E2E must never deliver real mail from a developer's loaded .env;
           // synchronous route mail would otherwise wait on that external SMTP.
@@ -515,6 +523,7 @@ export default defineConfig({
           // (`npm run test:e2e:leak-matrix:flag-off`); the other isolation
           // specs assert the flag-on behaviour itself.
           MT_ENFORCE_ISOLATION: process.env.E2E_ISOLATION_FLAG === 'off' ? 'false' : 'true',
+          CSP_ENFORCE: CSP_ENFORCE_E2E,
           PORT: String(ISOLATION_PORT),
           // NextAuth builds its callback URLs from this; left at the default
           // server's origin, the post-sign-in redirect walks off this server
