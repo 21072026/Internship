@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "**Security:** a vertical without the company portal (`placements` — the MARKETING product) has no company logins. `POST /api/admin/company-users` answers 403 `capability_missing` and the admin companies page no longer offers the card; an existing COMPANY login is sent from `/company` to `/account` (an ADMIN to `/admin`); `GET /api/mentorship` answers such a login an empty list and `GET /api/companies/<own>` carries no relations, so the funnel (lead, owner, stage) never reaches a customer; and the company-portal API routes that had no capability gate (analytics, benchmark, candidate detail, talent pool, integrations, onboarding, outreach decisions) now require `placements` (#2348).",
+  "notes": {
+    "en": [
+      "Marketing workspaces no longer create company portal logins — customers never see your sales funnel."
+    ],
+    "tr": [
+      "Pazarlama çalışma alanlarında artık şirket portalı girişi oluşturulmuyor — müşteriler satış hunini hiçbir zaman görmez."
+    ],
+    "de": [
+      "Marketing-Arbeitsbereiche legen keine Firmenportal-Zugänge mehr an — Kunden sehen Ihren Vertriebstrichter nie."
+    ]
+  }
+}

@@ -14,6 +14,7 @@ import { practiceContext, toSessionView } from '@/lib/practiceInterview';
 import { tailorableRoles } from '@/lib/cvReview';
 import { PRACTICE_MAX_TURNS } from '@/lib/practiceInterviewRules';
 import { toArtifactDto } from '@/lib/ai/artifacts';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // A text-only practice interview (#2051) — the mentee's own, MENTEE only, and
 // FREE: every denial (provider off, quota, failure) is the same neutral "not
@@ -25,6 +26,9 @@ import { toArtifactDto } from '@/lib/ai/artifacts';
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Interview practice for a mentee's placement (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
   if (session.user.role !== 'MENTEE') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   return await withTenantScope(session, async () => {
     const [me, roles, sessions] = await Promise.all([
@@ -54,6 +58,9 @@ const schema = z.strictObject({ requisitionId: z.string().min(1).optional() });
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Interview practice for a mentee's placement (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
   if (session.user.role !== 'MENTEE') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   const limited = enforceRateLimit(request, 'ai:practice_interview', { ...AI_RATE_LIMITS.practice_interview, subject: session.user.id });
   if (limited) return limited;
