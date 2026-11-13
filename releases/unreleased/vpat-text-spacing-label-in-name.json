@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**VPAT (#2864):** rows 1.4.12 Text Spacing and 2.5.3 Label in Name move to *Supports*. A new `e2e/a11y-text-spacing.spec.ts` applies the criterion's own spacing override to the public pages and the admin, mentor and mentee shells (German) and reports any text box that starts clipping, or a page that starts scrolling sideways, because of it — with a fixture proving the check can fail. 2.5.3's remark no longer says the `label-content-name-mismatch` rule is outside the gate: since axe-core 4.x it is tagged `wcag21a`, enabled, and has run clean on every scanned page state."
+}
