@@ -195,7 +195,7 @@ test('a code with . and @ is one code with or without the escape, and its link c
   const raw = (path: string) =>
     api.get(path, { maxRedirects: 0, headers: { ...asHost(MARKETING_HOST), ...freshIp(), 'user-agent': BROWSER } });
   const plain = await raw(`/r/${codes.legacy}`);
-  const escaped = await raw(`/r/${codes.legacy.replace('@', '%40')}`);
+  const escaped = await raw(`/r/${codes.legacy.replaceAll('@', '%40')}`);
   for (const res of [plain, escaped]) {
     expect(res.status()).toBe(302);
     expect(res.headers().location).toBe(`${REFERRAL_URL}?ref=${encodeURIComponent(codes.legacy)}`);
