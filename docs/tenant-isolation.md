@@ -679,6 +679,78 @@ is done and verified in a preview/staging environment first:
 
 Until then the flag stays off and the single-tenant production app is unchanged.
 
+### Flip readiness (#3588, evidence of 2026-11-13)
+
+What was checked before anyone flips the flag in production or preview, and
+what it found. **The decision to flip is the maintainer's;** this section is the
+evidence and the procedure, not the go-ahead.
+
+#### Evidence
+
+| Check | How | Result |
+|---|---|---|
+| Full e2e suite, flag **on** | Local MariaDB, `next start` build, `MT_ENFORCE_ISOLATION=true`, `--workers=1`, chromium project (3243 tests) | 3193 passed, 39 failed, 5 flaky, 6 skipped |
+| Same 39, flag **off** | Re-run of exactly the failures, same build and DB | 31 pass → **31 fail only with the flag on**; 8 fail both ways (stale offers/weekly-reports fixtures fixed on `main` by #3645, local visual/density rendering) |
+| The 31, flag on, **post-backfill state** | A local `BEFORE INSERT` trigger set every NULL `orgId` to the default org — what `backfill-organization.mjs` makes of production | 28 pass. The 31 are almost all the e2e fixtures: `seedUser()` creates users with `orgId = NULL`, which the strict filter hides (see "Remaining risks" 3) |
+| The 3 left | Read one by one | 1 **real bug, fixed**: the world-wide e-mail lookups were scoped to the bound org, so the `/api/v1` import created a second account for an address another org of the same product held — `userWorld.ts` now runs them unscoped (#3700). 1 fixture artefact (`company-candidate-detail`: the mentee sits in another org than its relation, which no app path produces). 1 stricter behaviour (below) |
+| Sessionless writes | Static: every `create`/`createMany`/`upsert` on a `TENANT_MODELS` model without a literal `orgId` (42 sites) read and classified. Dynamic: NULL-`orgId` row counts per model before/after the flag-on run, joined back to their subject | 25 stamp from a bound context, 15 not applicable; no row was written with `orgId = NULL` whose subject still exists with an org. Known NULL writers listed under risks 1–2 |
+| MARKETING write paths | Read: leads via `createUser`, `OutboundDraft` (`orgId: draftOrg`; a draft is only held when the recipient's org is known), `PostCampaignRecipient` (`campaign.orgId`), `ContactPermission`, affiliate, demo/inquiry forms | All pass their own `orgId`; nothing found that the flag breaks |
+| Leak matrix | `isolation-gate` (flag on) and `leak-matrix-flag-off` in `e2e.yml`, on every PR | Runs on every PR (flag on and off) |
+| Topic environments | `infra/server/topic-deploy.sh` boots every PR environment with `MT_ENFORCE_ISOLATION=true` | Flag-on has been the daily click-through state of every PR environment |
+
+#### Remaining risks (known, accepted or listed)
+
+1. **NULL-`orgId` rows written between two deploys are invisible until the next
+   backfill.** With the flag on, the middleware filters with `orgId = <bound
+   org>` strictly; the flag-independent helpers (`tenantWhere`, `withinTenant`)
+   let the default org also match NULL, the middleware does not. Sessionless
+   writers that still write NULL: `AccountLockout` for an address with no
+   account (intended — no org to name), `EmailLog` for a mail to an address
+   with no account, `DomainEvent`s raised by a job with no `ctx.orgId`, the
+   router's error-only `NotificationDelivery` branch, and the **internship-only**
+   cron opt-out records in `emailService.ts` (`recordOptOut()` from the mentor
+   digest, activity digest and company-need alert — listed, not fixed, as
+   internship development is paused). Effect: those rows drop out of the
+   default org's activity / mail / audit screens until the deploy backfill
+   assigns them. A visibility lag, not a leak. No MARKETING write path is on
+   this list.
+2. **A NULL row is backfilled to the default org, whatever world it came
+   from.** Same as today with the flag off (every reader already treats NULL as
+   the default org's); the flag changes nothing about it.
+3. **The e2e fixtures are not flag-ready.** `seedUser()` in
+   `e2e/helpers/db.ts` defaults to `orgId = NULL`, so ~30 specs fail with the
+   flag on for a reason production cannot have. Do not read a flag-on run of
+   the full suite without the backfill emulation above, or stamp the default
+   org in `seedUser()` first. `tenant-scope-users-companies.spec.ts:223`
+   asserts the flag-off NULL rule on purpose and will stay red with the flag on.
+4. **Stricter, not leakier — internship surface:** a *public* project
+   (`/projects/<id>`) of another organization answers 404 to a signed-in user of
+   a different org with the flag on (`cross-tenant-projects.spec.ts:102`
+   expects the anonymous stub). Listed only.
+5. Super-admin and other deliberately cross-org reads must use `runUnscoped()`;
+   anything that does not is narrowed to the caller's org. #3700 was one such
+   place; the leak matrix and `check:tenant-queries` cover the known rest.
+
+#### Flip procedure
+
+1. On the target environment, the deploy's `backfill-organization.mjs` line is
+   green (it exits non-zero on a leftover NULL) on the deploy you flip on.
+2. **Preview first.** Add `MT_ENFORCE_ISOLATION=true` to the preview env file
+   (`deploy-prod.sh` passes it through; it is in the env capture list) and run
+   the preview deploy. Click through admin dashboard, candidates/leads,
+   companies, outbound drafts, post campaigns, affiliate, the demo form, a
+   sign-in on each world's host. Watch the logs for 404/500 spikes for a day.
+3. Production the same way, on a deploy whose backfill was green.
+4. After a day, the NULL-org count per tenant model on that DB should be only
+   the writers of risk 1, and the next deploy's backfill should clear them.
+
+#### Rollback
+
+Remove `MT_ENFORCE_ISOLATION` (or set it to anything but `true`) in the env file
+and redeploy/restart the container. Nothing was written differently while it
+was on except that more rows got an `orgId` stamped from the bound context —
+which the flag-off code reads identically — so there is no data step to undo.
+
 #### The settings writer and its history (#1623)
 
 `src/lib/settingsWrite.ts` (server-only) holds the only two writers of a
