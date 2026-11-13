@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireCapability } from '@/lib/capabilityGate';
 import { z } from 'zod';
 import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
@@ -22,6 +23,9 @@ export async function GET(request: Request) {
   const gate = await requirePermission('analytics.read', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // The internship product's report (#2348): refused in a vertical without `mentorship`.
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const params = new URL(request.url).searchParams;
   const period = defaultOutcomePeriod();
   const from = params.get('from');
@@ -56,6 +60,9 @@ export async function POST(request: Request) {
   const gate = await requirePermission('content.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // The internship product's report (#2348): refused in a vertical without `mentorship`.
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const parsed = setupSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
   const dayOffset = parsed.data.dayOffset ?? OUTCOME_DEFAULT_OFFSET;
