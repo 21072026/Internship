@@ -44,6 +44,7 @@ import { formatDate } from '@/lib/relativeTime';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { FollowUpPanel } from '@/components/FollowUpPanel';
+import { useHasCapability } from '@/lib/capabilitiesClient';
 import { RelationCadencePanel } from '@/components/RelationCadencePanel';
 import { RelationHealthBadge, useRelationHealth } from '@/components/HealthBadge';
 import { TrialEndPanel } from '@/components/TrialEndPanel';
@@ -131,6 +132,12 @@ export default function AdminMenteeDetailPage() {
   const locale = useLocale();
   const label = useStageLabel();
   const stages = useResolvedStages();
+  // Internship-only panels follow the shell's vertical (#2348): a MARKETING
+  // admin's lead page shows no offers, evaluations, goals, meeting cadence or
+  // certificate. Presentation only — each API keeps its own capability gate.
+  const hasMentorship = useHasCapability('mentorship');
+  const hasPlacements = useHasCapability('placements');
+  const hasEvaluations = useHasCapability('evaluations');
   const toast = useToast();
   const { show: showGate, dialog: gateDialog } = useStageGateDialog();
   const [user, setUser] = useState<MenteeDetail | null>(null);
@@ -596,7 +603,7 @@ export default function AdminMenteeDetailPage() {
               />
 
               {/* The pair's meeting rhythm (#2014). */}
-              <RelationCadencePanel relationId={rel.id} />
+              {hasMentorship && <RelationCadencePanel relationId={rel.id} />}
 
               {/* The trial end (#2553): shown for a record in a trial stage or
                   one that carries a trial date; renders nothing otherwise. */}
@@ -712,7 +719,7 @@ export default function AdminMenteeDetailPage() {
         {rel && <RelationTimeline relationId={rel.id} />}
         {/* The pairing's audit record (#1789); draws nothing for a reader without audit.read. */}
         {rel && <MatchDecisionPanel relationId={rel.id} />}
-        {rel && (
+        {rel && hasPlacements && (
           <OfferManagementPanel
             relationId={rel.id}
             menteeName={user.fullName}
@@ -729,11 +736,11 @@ export default function AdminMenteeDetailPage() {
         {/* Answers to the org's own questions (#1803); nothing when none is asked. */}
         <FormAnswersPanel userId={id} />
         {rel && <MeetingSchedulerPanel relationId={rel.id} menteeName={user.fullName} menteeTimezone={user.timezone ?? null} />}
-        {rel && <EvaluationPanel relationId={rel.id} />}
-        {rel && <GoalsPanel relationId={rel.id} />}
+        {rel && hasEvaluations && <EvaluationPanel relationId={rel.id} />}
+        {rel && hasMentorship && <GoalsPanel relationId={rel.id} />}
         <PersonTodos userId={id} fullName={user?.fullName} />
-        {rel && canIssueCertificate(rel, stages) && (
-          <Card>
+        {rel && hasMentorship && canIssueCertificate(rel, stages) && (
+          <Card data-testid="certificate-card">
             <CardHeader><CardTitle>{t.certificate.title}</CardTitle></CardHeader>
             <CertificateGenerator
               relationId={rel.id}

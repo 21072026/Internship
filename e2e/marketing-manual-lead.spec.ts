@@ -210,3 +210,59 @@ test('INTERNSHIP never sees the form and the route refuses it; MENTEE and COMPAN
     await prisma.organization.delete({ where: { id: internship.id } }).catch(() => {});
   }
 });
+
+// The lead page is the internship candidate page (#2348): its offer, evaluation,
+// goals, meeting-cadence and certificate panels are internship modules and
+// follow the shell's capabilities. A COMPLETED relation makes the certificate
+// rule (canIssueCertificate) genuinely true, so its absence is the gate's doing.
+const INTERNSHIP_PANELS = ['relation-cadence', 'offer-management-panel', 'evaluation-panel', 'goals-panel', 'certificate-card'];
+
+async function completedPair(orgId: string, stamp: string, label: string) {
+  const adminEmail = uniqueEmail(`${label}-panels-admin`);
+  const leadEmail = uniqueEmail(`${label}-panels-lead`);
+  const admin = await seedUser(adminEmail, PW, 'ADMIN', `${label} Panels Admin`);
+  const lead = await seedUser(leadEmail, PW, 'MENTEE', `${label} Panels Lead ${stamp}`);
+  await prisma.user.updateMany({ where: { id: { in: [admin.id, lead.id] } }, data: { orgId } });
+  await prisma.mentorshipRelation.create({
+    data: { orgId, mentorId: admin.id, menteeId: lead.id, status: 'COMPLETED', completedAt: new Date() },
+  });
+  return { adminEmail, leadEmail, lead };
+}
+
+test('a MARKETING admin sees no internship panel on a lead; an INTERNSHIP admin sees all five', async ({ browser }) => {
+  test.setTimeout(180_000);
+  const stamp = `${Date.now()}-${Math.round(performance.now())}`;
+  const { org: marketing } = await marketingOrg(`p-${stamp}`);
+  const internship = await prisma.organization.create({
+    data: { name: `Panels INT ${stamp}`, slug: `panels-int-${stamp}`, vertical: 'INTERNSHIP' },
+  });
+  const mkt = await completedPair(marketing.id, stamp, 'mkt');
+  const int = await completedPair(internship.id, stamp, 'int');
+  const mktContext = await browser.newContext({ extraHTTPHeaders: asHost(MARKETING_HOST) });
+  const intContext = await browser.newContext();
+  try {
+    const mktPage = await mktContext.newPage();
+    await signInAndSettle(mktPage, mkt.adminEmail, PW, '/admin');
+    await gotoSettled(mktPage, `/admin/candidates/${mkt.lead.id}`);
+    // The page itself rendered (the lead's name), so an absent panel is a gate,
+    // not a page that never loaded.
+    await expect(mktPage.getByText(`mkt Panels Lead ${stamp}`, { exact: true }).first()).toBeVisible({ timeout: 20_000 });
+    for (const testId of INTERNSHIP_PANELS) {
+      await expect(mktPage.getByTestId(testId), `${testId} on a MARKETING lead`).toHaveCount(0);
+    }
+
+    const intPage = await intContext.newPage();
+    await signInAndSettle(intPage, int.adminEmail, PW, '/admin');
+    await gotoSettled(intPage, `/admin/candidates/${int.lead.id}`);
+    for (const testId of INTERNSHIP_PANELS) {
+      await expect(intPage.getByTestId(testId).first(), `${testId} on an INTERNSHIP candidate`).toBeVisible({ timeout: 20_000 });
+    }
+  } finally {
+    await mktContext.close();
+    await intContext.close();
+    await prisma.mentorshipRelation.deleteMany({ where: { orgId: internship.id } }).catch(() => {});
+    for (const e of [int.adminEmail, int.leadEmail]) await cleanupByEmail(e);
+    await prisma.organization.delete({ where: { id: internship.id } }).catch(() => {});
+    await cleanupOrg(marketing.id, [mkt.adminEmail, mkt.leadEmail]);
+  }
+});
