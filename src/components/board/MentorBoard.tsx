@@ -465,10 +465,13 @@ export function MentorBoard({ detailBase = '/mentor/mentees', handoff = false }:
                         dragOver === status ? ' ring-2 ring-blue-500 ring-offset-1' : ''
                       }`}
                     >
-                      <span data-testid={`board-column-count-${status}`} className="text-[10px] text-gray-400 opacity-60">
+                      <span data-testid={`board-column-count-${status}`} className="text-[10px] text-gray-600">
                         0
                       </span>
-                      <span className="min-h-0 overflow-hidden text-ellipsis text-[10px] font-medium text-gray-500 [writing-mode:vertical-rl] rotate-180 whitespace-nowrap">
+                      {/* gray-700, not -500: the strip carries the stage tone since #3692, and
+                          10px gray-500 on a -100 tint is under AA (4.5:1). gray-700 holds
+                          on every tint; dark mode maps it light (globals.css). */}
+                      <span className="min-h-0 overflow-hidden text-ellipsis text-[10px] font-medium text-gray-700 [writing-mode:vertical-rl] rotate-180 whitespace-nowrap">
                         {label(status)}
                       </span>
                     </div>
