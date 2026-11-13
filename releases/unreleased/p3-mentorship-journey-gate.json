@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Vertical gates, P3 part 1 (MKT-6, #2348):** the mentorship-relation side routes — `POST /api/mentorship/[id]/certificate`, `/extend`, `/agreement/accept` and `GET /cadence` — and the programme journey builder (`/api/admin/programs/[id]/journey`, `/[stepId]`, `/preview`) now ask `requireCapability(…, 'mentorship')` right after the session, before the relation or programme lookup, so a MARKETING caller gets 403 `capability_unavailable` (never a 404 that confirms nothing). `/next-step` stays open (the MARKETING account page's follow-up panel uses it). INTERNSHIP is unchanged."
+}
