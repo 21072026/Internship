@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "**Board:** the per-card stage picker is an icon in the card's meta row instead of a full-width field under every card — it cost a 44px row per card and repeated the name of the column the card already sits in. The native `<select>` is still there (transparent, over the icon), so the touch and keyboard alternative to drag-and-drop and its accessible name are unchanged (`CardStageSelect`, both boards).",
+  "notes": {
+    "en": [
+      "Board cards are more compact: the stage picker is now a small icon on the card instead of a full-width field."
+    ],
+    "tr": [
+      "Pano kartları daha derli toplu: aşama seçici artık kartın altındaki geniş alan yerine kart üzerinde küçük bir ikon."
+    ],
+    "de": [
+      "Board-Karten sind kompakter: Die Phasenauswahl ist jetzt ein kleines Symbol auf der Karte statt eines Feldes über die volle Breite."
+    ]
+  }
+}
