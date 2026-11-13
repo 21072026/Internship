@@ -85,9 +85,9 @@ jobs:
   #
   # Each of the four test jobs used to run its own `next build` of the same
   # commit with the same environment: four times the 2.5-8 min build, each
-  # needing a 7 GiB heap. This job builds once, in the environment the test
-  # jobs had (the same MySQL service and schema, the same env block, `npm ci`
-  # and therefore `prisma generate`), and hands `.next` - without the webpack
+  # needing a 7 GiB heap. This job builds once, with the test jobs' env block
+  # and `npm ci` (and therefore `prisma generate`) - no database since #3710 -
+  # and with lint/tsc skipped (ci.yml runs both), and hands `.next` - without the webpack
   # cache, ~24 MB compressed - to the shards as an artifact named after the
   # run's commit. Each consumer checks the sha stamped into the archive before
   # it starts the server, so a test job can never run against another commit's
@@ -101,20 +101,10 @@ jobs:
     if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
 
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: internship_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=15
-
+    # No MySQL service (#3710): `next build` never connects — the production
+    # image is built the same way, against a placeholder URL (Dockerfile) — so
+    # the service container, `db push` and the seed only cost ~1 min here.
+    # DATABASE_URL stays because Prisma wants a well-formed one at build time.
     env:
       DATABASE_URL: "mysql://root:root@127.0.0.1:3306/internship_test"
       NODE_OPTIONS: --max-old-space-size=8192
@@ -138,14 +128,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # The builds this job replaces ran against a migrated, seeded database;
-      # keep that, so a page that reads the DB while prerendering sees the same.
-      - name: Apply DB schema
-        run: npx prisma db push
-
-      - name: Seed admin user
-        run: npx prisma db seed
-
       # Next's webpack cache. Restored on every run, SAVED only by the push to
       # main — so PR runs start from main's cache (a branch may read its base
       # branch's caches) without each PR push adding a few hundred MB to the
@@ -164,6 +146,8 @@ jobs:
         # `next build`); a hosted runner has 16 GiB.
         env:
           NODE_OPTIONS: --max-old-space-size=7168
+          # Lint and tsc run in ci.yml on the same commit (#3710).
+          NEXT_SKIP_BUILD_CHECKS: '1'
 
       - name: Save Next.js build cache
         if: ${{ github.event_name == 'push' }}
