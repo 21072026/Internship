@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Every board column its own color:** the admin board and the mentor/sales board (`MentorBoard`, also `/sales/board`) tint each column's whole surface by the stage's place in the pipeline — first sky blue, then orange, purple, yellow, red, green (teal, pink, indigo, lime past six), and the last stage always slate gray — so two neighbouring stages can never be mistaken for one another; cards stay white. The sales funnel reads New lead blue → Contacted orange → Qualified purple → Trial running yellow → Trial expired red → Won green → Lost gray. `src/lib/boardColumnTone.ts` keys the color by the stage's position among ALL stages, so hiding empty stages never repaints a column, and avoids the two utilities `globals.css` repaints (blue is the org accent, gray is remapped in dark mode). Each tone has an explicit dark-mode shade. A drop target keeps its color and gains a blue ring instead of turning blue.",
+  "notes": {
+    "en": [
+      "Every board column now has its own background color — blue, orange, purple, yellow, red, green, and gray for the last stage — so neighbouring stages are easy to tell apart. Cards stay white."
+    ],
+    "tr": [
+      "Panodaki her sütunun artık kendi zemin rengi var — mavi, turuncu, mor, sarı, kırmızı, yeşil, son aşama gri — böylece yan yana aşamalar karışmıyor. Kartlar beyaz kalıyor."
+    ],
+    "de": [
+      "Jede Spalte des Boards hat jetzt ihre eigene Hintergrundfarbe – Blau, Orange, Lila, Gelb, Rot, Grün und Grau für die letzte Phase –, damit benachbarte Phasen nicht verwechselt werden. Die Karten bleiben weiß."
+    ]
+  }
+}

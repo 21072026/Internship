@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { getServerDictionary } from '@/i18n/server';
 import { CONTRACT_PATH, requirePortalPartner } from '@/lib/affiliatePortal';
-import { partnerFunnel, partnerPlanTerms, partnerSummary } from '@/lib/affiliatePartnerView';
+import { partnerFunnel, partnerPlanTerms, partnerSummary, partnerWindowsEndingSoon } from '@/lib/affiliatePartnerView';
 import { AFFILIATE_CURRENCIES } from '@/lib/affiliateProgramSettings';
 import { formatMinorAmount } from '@/lib/money';
 import { interpolate } from '@/lib/notificationText';
@@ -16,7 +16,9 @@ import { ThresholdCard } from './ThresholdCard';
 // (the click-counting /r/<code> link with the direct one beside it, #3541),
 // the totals per commission status and the partnership's state. A partner who
 // has not accepted the current contract is sent to it first. The funnel and the
-// progress towards the plan's percent phase (#3543) sit under the totals.
+// progress towards the plan's percent phase (#3543) sit under the totals. A
+// warning names how many customers' commission ends within the programme's
+// notice lead time (#3557), with a link to the list that shows the dates.
 export default async function AffiliateHomePage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
   const { locale, t } = await getServerDictionary();
   const L = t.affiliatePortal;
@@ -30,10 +32,11 @@ export default async function AffiliateHomePage({ searchParams }: { searchParams
     );
   }
 
-  const [summary, plan, funnel] = await Promise.all([
+  const [summary, plan, funnel, endingSoon] = await Promise.all([
     partnerSummary(portal.partner),
     partnerPlanTerms(portal.partner),
     partnerFunnel(portal.partner, (await searchParams).period),
+    partnerWindowsEndingSoon(portal.partner),
   ]);
   const money = (minor: number) => formatMinorAmount(minor, AFFILIATE_CURRENCIES[0], locale);
   const tiles: [string, string, string][] = [
@@ -53,6 +56,15 @@ export default async function AffiliateHomePage({ searchParams }: { searchParams
       {summary.status === 'TERMINATED' && summary.noticeEffectiveAt && (
         <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800" role="status">
           {interpolate(L.terminated, { date: formatDate(summary.noticeEffectiveAt, locale, { timeZone: 'UTC' }) })}
+        </p>
+      )}
+
+      {endingSoon.count > 0 && (
+        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800" role="status" data-testid="affiliate-window-ending-soon">
+          {interpolate(L.windowEndingSoon, { n: String(endingSoon.count), days: String(endingSoon.leadDays) })}{' '}
+          <Link href="/affiliate/customers" className="font-medium underline">
+            {L.windowEndingSoonLink}
+          </Link>
         </p>
       )}
 
