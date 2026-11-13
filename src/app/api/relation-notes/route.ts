@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { requireRoleOrPermission } from '@/lib/authz';
+import { requireCapability } from '@/lib/capabilityGate';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
@@ -35,6 +36,9 @@ export async function GET(request: Request) {
   const gate = await requireRoleOrPermission(['MENTOR'], 'program.read', { request });
   if ('error' in gate) return gate.error;
   const { session, admin } = gate;
+  // A mentor's private notes on a mentorship (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const relationId = new URL(request.url).searchParams.get('relationId');
     if (!relationId) return NextResponse.json({ error: 'relationId is required' }, { status: 400 });
@@ -56,6 +60,9 @@ export async function POST(request: Request) {
   const gate = await requireRoleOrPermission(['MENTOR'], 'relation.write', { request });
   if ('error' in gate) return gate.error;
   const { session, admin } = gate;
+  // A mentor's private notes on a mentorship (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const parsed = bodySchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });

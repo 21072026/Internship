@@ -123,6 +123,17 @@ export async function GET(request: Request) {
     const page = Math.max(1, parseInt(pageParam || '1', 10) || 1);
     const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10) || 20));
 
+    // A COMPANY login in a vertical without `placements` (MARKETING, #2348
+    // MKT-2) sees NO relation: there the relations are the tenant's sales
+    // funnel — lead name, owner, stage — and the company is the customer, not a
+    // hiring partner. An empty list, not a 403: shared components a COMPANY
+    // session can still mount (MeetingsManager, the e-mail composers) call this
+    // route, and a refusal would break them where an empty list just renders
+    // nothing. The whole branch answers empty — never a half-filtered list.
+    if (session.user.role === 'COMPANY' && !(await shellCapabilities(session.user.orgId)).includes('placements')) {
+      return NextResponse.json(paged ? { relations: [], total: 0, page, pageSize } : { relations: [] });
+    }
+
     // Fail-closed scoping (#848): SOURCE was missing from this chain and read
     // every relation in the tenant. Roles without a defined scope are denied.
     // COMPANY stays read-only and limited to its own company's relations.
