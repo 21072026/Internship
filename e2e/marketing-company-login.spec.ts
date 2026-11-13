@@ -96,6 +96,8 @@ test('a MARKETING company login reads no funnel and is refused by the company AP
     ['POST /api/company/onboarding/domain-proof', () => page.request.post('/api/company/onboarding/domain-proof', { data: {} })],
     ['GET /api/company/integrations/api-keys', () => page.request.get('/api/company/integrations/api-keys')],
     ['GET /api/company/integrations/webhooks', () => page.request.get('/api/company/integrations/webhooks')],
+    ['GET /api/company/interests', () => page.request.get('/api/company/interests')],
+    ['GET /api/company/outreach', () => page.request.get('/api/company/outreach')],
     ['PATCH /api/company/outreach/<id>', () => page.request.patch('/api/company/outreach/does-not-exist', { data: { action: 'approve' } })],
   ];
   for (const [name, call] of refused) {
