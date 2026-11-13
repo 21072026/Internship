@@ -325,7 +325,11 @@ export default function AdminAnalyticsPage() {
           )}
           <Button variant="outline" size="sm" onClick={exportExcel} disabled={!data || !canExport} title={entitlements && !canExport ? t.common.exportLocked : undefined}>{t.analytics.exportExcel}</Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}>{t.analytics.print}</Button>
-          {/* First destination (#1912) is a compliance report, not an upsell. */}
+          {/* First destination (#1912) is a compliance report, not an upsell.
+              It, the closure report and the ROI screen are the internship
+              product's (#2348): hidden — and their pages and APIs closed — in a
+              vertical without `mentorship`. */}
+          {showMentorship && (<>
           <Link href="/admin/analytics/outcomes" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="outcomes-link">
             {t.outcomes.link}
           </Link>
@@ -333,15 +337,18 @@ export default function AdminAnalyticsPage() {
           <Link href="/admin/analytics/closure" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="closure-link">
             {t.closure.link}
           </Link>
+          </>)}
           {premium && (
             <>
               <Button variant="outline" size="sm" onClick={exportFullExcel} disabled={!data || !canExport} title={entitlements && !canExport ? t.common.exportLocked : undefined} data-testid="full-report-excel">{t.analytics.fullReportExcel}</Button>
               <Link href="/admin/analytics/report" className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors" data-testid="full-report-link">
                 {t.analytics.fullReport}
               </Link>
-              <Link href="/admin/analytics/roi" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="roi-link">
-                {t.roi.screen.openFromAnalytics}
-              </Link>
+              {showMentorship && (
+                <Link href="/admin/analytics/roi" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="roi-link">
+                  {t.roi.screen.openFromAnalytics}
+                </Link>
+              )}
               <Link href="/admin/analytics/executive" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="executive-link">
                 {t.executive.openFromAnalytics}
               </Link>
