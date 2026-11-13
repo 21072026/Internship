@@ -313,12 +313,34 @@ jobs:
       # shell — a dispatch input is untrusted text. `--pass-with-no-tests`
       # because a narrow manual grep (one test title) leaves most shards empty,
       # and an empty shard is not a failure.
+      #
+      # SMOKE SCOPE. On a PR the gate runs only the CORE files below (boot,
+      # auth, health, authz matrix, role scoping, invite, pipeline, free-core
+      # regression) plus the browserless `*.unit.spec.ts` checks — ~7 min of
+      # @smoke tests became ~1-2 min, so the build sets the pace again. A push
+      # to main and a manual dispatch still run every @smoke test, and the
+      # scheduled full suite (e2e-full.yml) covers the rest 4x a day.
+      # Back to the whole @smoke set on PRs WITHOUT a PR: set the repo
+      # variable E2E_SMOKE_SCOPE=full.
       - name: Run E2E tests (${{ matrix.label }})
         if: ${{ matrix.suite == 'smoke' }}
         env:
           E2E_GREP: ${{ inputs.grep || '@smoke' }}
           E2E_SHARD: ${{ matrix.shard }}
-        run: npx playwright test --grep "$E2E_GREP" --shard="$E2E_SHARD" --pass-with-no-tests
+          E2E_SCOPE: ${{ github.event_name == 'pull_request' && (vars.E2E_SMOKE_SCOPE || 'core') || 'full' }}
+        run: |
+          set -euo pipefail
+          files=()
+          if [ "$E2E_SCOPE" = "core" ]; then
+            files=(
+              e2e/smoke.spec.ts e2e/auth.spec.ts e2e/health.spec.ts
+              e2e/authz-matrix.spec.ts e2e/role-scoping.spec.ts
+              e2e/invite.spec.ts e2e/pipeline.spec.ts e2e/free-core-regression.spec.ts
+              e2e/*.unit.spec.ts
+            )
+          fi
+          echo "Smoke scope: $E2E_SCOPE (${#files[@]} file filter(s))"
+          npx playwright test "${files[@]}" --grep "$E2E_GREP" --shard="$E2E_SHARD" --pass-with-no-tests
 
       # The accessibility regression gate, run OUTSIDE the grep (#826).
       #
