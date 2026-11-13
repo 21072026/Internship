@@ -10,6 +10,8 @@
  * protection if that global config is ever narrowed.
  */
 
+import { transliterate } from './transliterate';
+
 /** Strip anything that could break out of the header, and bound the length. */
 function sanitizeFilename(name: string): string {
   const cleaned = (name || 'file')
@@ -17,7 +19,9 @@ function sanitizeFilename(name: string): string {
     .replace(/[\u0000-\u001f\u007f]/g, '') // control chars, incl. CR/LF
     .replace(/["\\;]/g, '')
     .trim();
-  return (cleaned || 'file').slice(0, 100);
+  // Cut by code point, not UTF-16 unit: slicing through a surrogate pair leaves
+  // half an emoji, and encodeURIComponent throws URIError on it (a 500).
+  return Array.from(cleaned || 'file').slice(0, 100).join('');
 }
 
 /**
@@ -29,9 +33,13 @@ function sanitizeFilename(name: string): string {
  * in `filename*` (RFC 6266 § 4.3), which every current browser prefers.
  */
 function asciiFallback(safe: string): string {
-  const folded = safe
+  // transliterate() first: NFKD alone turns the Turkish dotless ı into "_".
+  const folded = transliterate(safe)
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
+    // NFKD maps compatibility forms back to ASCII (fullwidth ＂ → ", ＼ → \),
+    // so the quoted-string breakers are removed again AFTER the fold.
+    .replace(/["\\;]/g, '')
     .replace(/[^\x20-\x7e]/g, '_')
     .trim();
   return folded || 'file';
