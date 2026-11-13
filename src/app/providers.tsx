@@ -26,6 +26,8 @@ import type { ReplayConfig } from '@/lib/feedbackReplayRule';
 // zod's default messages keep their zod 3 wording in the browser too (#3558):
 // a form field without its own message shows one under the input.
 installZodV3Messages();
+// (zod's JIT is switched off in src/instrumentation-client.ts, which runs before
+// any schema is constructed — too late here, #3642.)
 
 export function Providers({
   children,

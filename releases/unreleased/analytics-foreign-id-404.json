@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Security:** the executive and ROI analytics reports answer `404` for another tenant's `cohortId`, and withdrawing a destination answer (`DELETE /api/admin/analytics/outcomes?userId=`) answers `404` for a person outside the caller's tenant — both used to return a 200 that echoed the foreign id back. The leak matrix now covers nine analytics sub-routes (aging, funnel, cohorts, programs, executive, ROI, forecast, benchmark, sources) and the id-taking ones (#1577)."
+}

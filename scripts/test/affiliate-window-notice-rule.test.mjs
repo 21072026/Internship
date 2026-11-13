@@ -11,11 +11,13 @@ import { customerWindowEndsAt, evaluatePartner } from '../../src/lib/affiliateCo
 import {
   WINDOW_NOTICE_DAYS_DEFAULT,
   WINDOW_NOTICE_DAYS_MAX,
+  customerWindows,
   dueWindowNotices,
   parseWindowNoticeDays,
   planHasWindow,
   readWindowNoticeDays,
   windowNoticeDue,
+  windowsEndingSoon,
 } from '../../src/lib/affiliateWindowNoticeRule.ts';
 
 const PLAN = Object.freeze({
@@ -136,4 +138,56 @@ test('a customer that first paid after the termination counts for nothing and is
   const list = due({ partner, payments, leadDays: 200, now: '2026-06-01T05:00:00Z', customers: [...customers(), { id: 'c4', windowNoticeSentAt: null }] });
   assert.ok(!ids(list).some((x) => x.startsWith('c4@')), ids(list).join());
   assert.ok(!ids(list).some((x) => x.startsWith('c3@')), 'c3 first paid after the termination too');
+});
+
+// ── The portal's view (#3557) ─────────────────────────────────────────────────
+
+test('portal: each eligible customer shows the engine’s own window end — the date the mail names', () => {
+  const now = new Date('2026-06-20T05:00:00Z');
+  const payments = [pay('p1', 'c1', '2026-01-05T10:00:00Z'), pay('p2', 'c2', '2026-01-10T10:00:00Z'), pay('p3', 'c2', '2026-03-10T10:00:00Z')];
+  const ev = evaluatePartner(plan(), ACTIVE, payments);
+  const w = customerWindows({ plan: plan(), partner: ACTIVE, evaluation: ev, now });
+  assert.deepEqual(w.get('c1'), { kind: 'ends', endsAt: ev.payments[0].windowEndsAt, ended: false, byNotice: false });
+  assert.equal(iso(w.get('c2').endsAt), '2026-07-10');
+  // The mail's date for the same customer is the very same instant.
+  const due = dueWindowNotices({ plan: plan(), partner: ACTIVE, evaluation: ev, customers: [{ id: 'c2', windowNoticeSentAt: null }], now, leadDays: 30 });
+  assert.equal(due[0].endsAt.getTime(), w.get('c2').endsAt.getTime());
+});
+
+test('portal: a passed end reads as ended; no valid payment or no percent phase shows nothing', () => {
+  const now = new Date('2026-08-01T00:00:00Z');
+  const ev = evaluatePartner(plan(), ACTIVE, [pay('p1', 'c1', '2026-01-05T10:00:00Z'), pay('p2', 'c2', '2026-02-05T10:00:00Z', 0)]);
+  const w = customerWindows({ plan: plan(), partner: ACTIVE, evaluation: ev, now });
+  assert.equal(w.get('c1').ended, true);
+  assert.equal(w.has('c2'), false); // a zero payment is not a payment
+  assert.equal(customerWindows({ plan: plan({ percentBps: 0 }), partner: ACTIVE, evaluation: ev, now }).size, 0);
+});
+
+test('portal: no window limit is "unlimited"; a STOP_ALL termination ends it first', () => {
+  const now = new Date('2026-03-01T00:00:00Z');
+  const payments = [pay('p1', 'c1', '2026-01-05T10:00:00Z')];
+  const unlimited = plan({ windowMonths: null });
+  const ev = evaluatePartner(unlimited, ACTIVE, payments);
+  assert.deepEqual(customerWindows({ plan: unlimited, partner: ACTIVE, evaluation: ev, now }).get('c1'), { kind: 'unlimited' });
+
+  const notice = { noticeEffectiveAt: new Date('2026-04-01T00:00:00Z') };
+  const stop = plan({ afterNotice: 'STOP_ALL' });
+  const w = customerWindows({ plan: stop, partner: notice, evaluation: evaluatePartner(stop, notice, payments), now }).get('c1');
+  assert.deepEqual(w, { kind: 'ends', endsAt: notice.noticeEffectiveAt, ended: false, byNotice: true });
+  // RUN_OUT: the customer keeps its own window.
+  const run = customerWindows({ plan: plan(), partner: notice, evaluation: evaluatePartner(plan(), notice, payments), now }).get('c1');
+  assert.equal(run.byNotice, false);
+  assert.equal(iso(run.endsAt), '2026-07-05');
+});
+
+test('portal warning counts what the mail would announce: after the switch, within the lead time', () => {
+  const payments = [pay('p1', 'c1', '2026-01-05T10:00:00Z'), pay('p2', 'c2', '2026-03-10T10:00:00Z')];
+  const ev = evaluatePartner(plan(), ACTIVE, payments);
+  const soon = (now, leadDays = 30, p = plan(), e = ev) => windowsEndingSoon({ plan: p, evaluation: e, windows: customerWindows({ plan: p, partner: ACTIVE, evaluation: e, now }), now, leadDays });
+  assert.equal(soon(new Date('2026-06-20T00:00:00Z')), 1); // c1 ends 07-05; c2 ends 09-10
+  assert.equal(soon(new Date('2026-06-20T00:00:00Z'), 0), 0); // notice off
+  assert.equal(soon(new Date('2026-07-06T00:00:00Z')), 0); // c1 ended, c2 not yet within 30 days
+  // Before the switch nothing is announced.
+  const one = evaluatePartner(plan(), ACTIVE, [payments[0]]);
+  assert.equal(soon(new Date('2026-06-20T00:00:00Z'), 30, plan(), one), 0);
 });
