@@ -133,8 +133,8 @@ export default function AdminMenteeDetailPage() {
   const label = useStageLabel();
   const stages = useResolvedStages();
   // Internship-only panels follow the shell's vertical (#2348): a MARKETING
-  // admin's lead page shows no offers, evaluations, goals, meeting cadence or
-  // certificate. Presentation only — each API keeps its own capability gate.
+  // admin's lead page shows no offers, evaluations, goals, meeting cadence,
+  // certificate or CV. Presentation only — each API keeps its own capability gate.
   const hasMentorship = useHasCapability('mentorship');
   const hasPlacements = useHasCapability('placements');
   const hasEvaluations = useHasCapability('evaluations');
@@ -517,9 +517,12 @@ export default function AdminMenteeDetailPage() {
                 group this candidate belongs to; tags are as many free marks as
                 the team needs. */}
             <TagEditor userId={user.id} initial={(user.tags ?? []).map((ut) => ut.tag)} />
-            <div className="pt-1">
-              <CvManager targetUserId={user.id} initialCvUrl={user.cvUrl} />
-            </div>
+            {/* A B2B lead has no CV (#2348): the CV section is an internship module. */}
+            {hasMentorship && (
+              <div className="pt-1" data-testid="candidate-cv-section">
+                <CvManager targetUserId={user.id} initialCvUrl={user.cvUrl} />
+              </div>
+            )}
           </div>
         </Card>
 

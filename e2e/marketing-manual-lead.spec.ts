@@ -212,10 +212,10 @@ test('INTERNSHIP never sees the form and the route refuses it; MENTEE and COMPAN
 });
 
 // The lead page is the internship candidate page (#2348): its offer, evaluation,
-// goals, meeting-cadence and certificate panels are internship modules and
+// goals, meeting-cadence, certificate and CV panels are internship modules and
 // follow the shell's capabilities. A COMPLETED relation makes the certificate
 // rule (canIssueCertificate) genuinely true, so its absence is the gate's doing.
-const INTERNSHIP_PANELS = ['relation-cadence', 'offer-management-panel', 'evaluation-panel', 'goals-panel', 'certificate-card'];
+const INTERNSHIP_PANELS = ['relation-cadence', 'offer-management-panel', 'evaluation-panel', 'goals-panel', 'certificate-card', 'candidate-cv-section'];
 
 async function completedPair(orgId: string, stamp: string, label: string) {
   const adminEmail = uniqueEmail(`${label}-panels-admin`);
@@ -229,7 +229,7 @@ async function completedPair(orgId: string, stamp: string, label: string) {
   return { adminEmail, leadEmail, lead };
 }
 
-test('a MARKETING admin sees no internship panel on a lead; an INTERNSHIP admin sees all five', async ({ browser }) => {
+test('a MARKETING admin sees no internship panel on a lead; an INTERNSHIP admin sees all six', async ({ browser }) => {
   test.setTimeout(180_000);
   const stamp = `${Date.now()}-${Math.round(performance.now())}`;
   const { org: marketing } = await marketingOrg(`p-${stamp}`);
