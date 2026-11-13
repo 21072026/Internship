@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { hasSalesSurface } from '@/lib/salesSurface';
+import { isSalesDispatcher } from '@/lib/salesDispatcher';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { formatDate } from '@/lib/relativeTime';
 import { getServerDictionary } from '@/i18n/server';
@@ -24,7 +25,8 @@ import { contentLang } from '@/lib/contentLanguage';
 // form to log the next call or meeting. The follow-up (what comes next) and the
 // last interaction (what happened last) sit together at the top (#3653).
 //
-// Found only as `id AND mentorId = self AND the rep's tenant` — someone else's
+// Found only as `id AND mentorId = self AND the rep's tenant` (any owner for a
+// sales dispatcher, #3656, still inside the tenant) — someone else's
 // record, another tenant's, or an id that does not exist are the same 404 (no
 // loading.tsx above this page, so notFound() is the status line too). The
 // editors write through routes that re-check ownership themselves.
@@ -50,7 +52,8 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
 
   const tenant = await tenantWhere(session);
   const relation = await prisma.mentorshipRelation.findFirst({
-    where: withinTenant({ id, mentorId: session.user.id }, tenant),
+    // A sales dispatcher (#3656) opens any record of the tenant; a rep their own.
+    where: withinTenant((await isSalesDispatcher(session.user.id)) ? { id } : { id, mentorId: session.user.id }, tenant),
     select: {
       id: true,
       status: true,

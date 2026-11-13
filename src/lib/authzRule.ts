@@ -157,6 +157,28 @@ export interface Actor {
   orgId: string | null;
   companyId: string | null;
   impersonatorId?: string | null;
+  /**
+   * The EFFECTIVE sales-dispatcher flag (#3656): set only for a MENTOR on a
+   * vertical with the sales surface whose account carries `salesDispatcher`
+   * (src/lib/salesDispatcher.ts). Undefined/false for everybody else.
+   */
+  salesDispatcher?: boolean;
+}
+
+/**
+ * The sales dispatcher's reach (#3656): may `actor` act on a record of `orgId`
+ * AS ITS OWNER would? Deliberately NOT a permission and NOT part of `decide()`:
+ * routes read `can(…, 'relation.write' | 'program.read' | 'pipeline.transition')`
+ * as "is an admin" — admin-only fields, stage gates, relation creation — and a
+ * dispatcher is an owner, not an admin. So routes ask this next to their
+ * owner check (`relation.mentorId === me || dispatcherCovers(…)`), and every
+ * admin-only door stays an admin's. Own org only; an impersonated session reads only.
+ */
+export function dispatcherCovers(actor: Pick<Actor, 'salesDispatcher' | 'orgId' | 'impersonatorId'> | null | undefined, orgId: string | null | undefined, write: boolean): boolean {
+  if (!actor?.salesDispatcher || !orgId || !actor.orgId) return false;
+  if (orgId !== actor.orgId) return false;
+  if (write && actor.impersonatorId) return false;
+  return true;
 }
 
 export interface Subject {

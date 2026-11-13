@@ -5,6 +5,7 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { orgWhere, withinTenant, type TenantWhere } from '@/lib/tenantFilter';
 import { adminTierFor, type AdminTier, type ScopeGrant } from '@/lib/authzRule';
 import { grantRelationTerms } from '@/lib/programScopeRule';
+import { isSalesDispatcher } from '@/lib/salesDispatcher';
 
 /**
  * Fail-closed data scoping (#814 / #831 / #849).
@@ -125,7 +126,9 @@ const BUILDERS: {
     // widens reads only — every caller of `scopeForRole` is a GET — and only ever
     // to rows the user is personally named in, so it grants no one anybody else's
     // mentorship.
-    MENTOR: async (u) => ({ OR: [{ mentorId: u.id }, { menteeId: u.id }] }),
+    // …except a sales dispatcher (#3656, src/lib/salesDispatcher.ts): the whole
+    // tenant's sales book, like an ORG_ADMIN — `scopeForRole` still adds the org.
+    MENTOR: async (u) => ((await isSalesDispatcher(u.id)) ? {} : { OR: [{ mentorId: u.id }, { menteeId: u.id }] }),
     MENTEE: async (u) => ({ OR: [{ menteeId: u.id }, { mentorId: u.id }] }),
     // Read-only: only relations linked to this company.
     COMPANY: async (u) => ({ companyId: u.companyId ?? NO_MATCH }),

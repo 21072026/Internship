@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { isParticipant } from '@/lib/relationParticipants';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { actorFromSession, can } from '@/lib/authz';
+import { actorFromSession, can, dispatcherMay } from '@/lib/authz';
 import { relationSubject } from '@/lib/authzRule';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
@@ -208,8 +208,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
       // The relation is the subject (#1577), as in GET above.
       const isAdmin = !!actor && (await can(actor, 'relation.write', relationSubject(relation), session));
+      // The owner — or the org's sales dispatcher, AS an owner (#3656): the
+      // admin-only fields below still ask `isAdmin`, which a dispatcher is not.
       const isAuthorized =
-        isAdmin || relation.mentorId === session.user.id;
+        isAdmin || relation.mentorId === session.user.id || dispatcherMay(actor, 'relation.write', relation.orgId);
 
       if (!isAuthorized) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

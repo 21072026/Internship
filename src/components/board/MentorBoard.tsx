@@ -39,6 +39,10 @@ interface Mentee {
 interface Relation {
   id: string;
   status?: string;
+  // The record's owner (GET /api/mentorship includes it). Shown on the card only
+  // when the board holds more than one owner's records — a sales dispatcher's
+  // board (#3656); a rep's own board is all theirs and shows no name.
+  mentor?: { id: string; fullName: string };
   pipelineStatus: string;
   // The stage clock (#1724), both served by GET /api/mentorship inside the
   // caller's existing scope. `stageDeadline` is the org's per-stage SLA once
@@ -124,8 +128,11 @@ export function MentorBoard({ detailBase = '/mentor/mentees', handoff = false }:
   // Off on the mentor board: the hook still runs (hooks are unconditional) but
   // only `handoff` boards render what it returns. The rep's own leads are
   // already theirs, so they are not on their own strip.
+  // A sales dispatcher's board holds the whole team's records (#3656): then the
+  // card names its owner, and the dispatcher may also take a lead themself.
+  const manyOwners = useMemo(() => new Set(relations.map((r) => r.mentor?.id).filter(Boolean)).size > 1, [relations]);
   const leadHandoff = useLeadHandoff({
-    includeSelf: false,
+    includeSelf: manyOwners,
     nameOf: useCallback((id: string) => relationsRef.current.find((r) => r.id === id)?.mentee.fullName, []),
     onHandedOff: fetchRelations,
   });
@@ -294,6 +301,9 @@ export function MentorBoard({ detailBase = '/mentor/mentees', handoff = false }:
       </div>
       {r.mentee.university && (
         <p className="text-xs text-gray-500 truncate mt-0.5">{r.mentee.university}</p>
+      )}
+      {manyOwners && r.mentor && (
+        <p className="mt-1 truncate text-xs text-gray-500" data-testid="board-card-owner">{r.mentor.fullName}</p>
       )}
       <div className="flex items-center gap-1 text-xs text-gray-400 mt-2">
         <GraduationCap className="h-3 w-3" />

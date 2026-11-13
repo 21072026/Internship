@@ -196,3 +196,38 @@ writer: `src/lib/salesLeadContact.ts`):
   but do not overwrite a typed-in one (`src/lib/externalSyncPolicy.ts`), so a
   correction survives the next sync.
 - A record without an account has no contact to correct: no editor, `409 no_account`.
+
+## The sales dispatcher (#3656)
+
+A sales team lead who is not an org admin. An ORG_ADMIN marks a sales rep as
+**lead dispatcher** on `/admin/users` (`POST /api/admin/users/[id]/sales-dispatcher`,
+`user.write`, never while impersonating, audited `sales.dispatcher_granted` /
+`sales.dispatcher_revoked`). From then on that rep works the **whole tenant's
+sales book** as each record's owner would.
+
+- **One rule, owner-level.** `User.salesDispatcher` is effective only for an
+  active MENTOR of an org whose vertical has the sales surface
+  (`effectiveSalesDispatcher()`, `src/lib/salesDispatcher.ts`); on an INTERNSHIP
+  mentor, an admin or a lead it is inert. `actorFromSession()` carries the
+  effective value, and `dispatcherCovers()` (`src/lib/authzRule.ts`, via
+  `dispatcherMay()` in `src/lib/authz.ts`) answers "may act on a record of this
+  org as its owner" — own org only, impersonated → reads only.
+- **An owner, never an admin.** The dispatcher is deliberately NOT in
+  `decide()`: routes read `can(…, 'relation.write' | 'program.read' |
+  'pipeline.transition')` as "is an admin" — admin-only fields (record kind,
+  re-pointing a record at an account), stage gates set to `pipeline.transition`,
+  relation creation, the admin timeline view. Those stay admin-only. Routes add
+  `dispatcherMay(actor, permission, relation.orgId)` next to their OWNER check:
+  `PUT /api/mentorship/[id]`, interactions, trial, contract end, win-back, value
+  and the hand-off.
+- **Reads.** The relation scope (`src/lib/authzScope.ts`) gives a dispatcher the
+  whole tenant, like an ORG_ADMIN; `scopeForRole` still adds the org. The sales
+  board then shows every rep's records, each card naming its owner, and the
+  hand-off strip lets the dispatcher take a lead too. `/sales/leads/[id]` opens
+  any record of the tenant for a dispatcher. `/sales` and `/sales/accounts` stay
+  the dispatcher's own book.
+- **Ends with the account.** Deactivating the user or changing their role
+  clears the flag (`PATCH /api/users/[id]`), so a reactivation brings nothing
+  back; the users list offers "remove" on any row still carrying it.
+- **Live.** The flag is read on every request: a revoke takes effect on the
+  dispatcher's next request; no session is revoked.
