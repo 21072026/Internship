@@ -17,6 +17,7 @@ import { BoardStageFilter } from '@/components/board/BoardStageFilter';
 import { CardStageSelect } from '@/components/board/CardStageSelect';
 import { BoardPhaseGroups } from '@/components/board/BoardPhaseGroups';
 import { BoardColumnHeader } from '@/components/board/BoardColumnHeader';
+import { boardColumnTone } from '@/lib/boardColumnTone';
 import { useBoardFilters } from '@/components/board/useBoardFilters';
 import { useBoardWipLimits } from '@/components/board/useBoardWipLimits';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
@@ -66,6 +67,7 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
   const label = useStageLabel();
   const { show: showGate, dialog: gateDialog } = useStageGateDialog();
   const stages = useResolvedStages();
+  const stageKeys = useMemo(() => [...stages].sort((a, b) => a.order - b.order).map((s) => s.key), [stages]);
   const router = useRouter();
   const toast = useToast();
   const narrow = useIsNarrow();
@@ -465,8 +467,10 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
                 // target highlight, so mark the state for globals.css (#2045).
                 data-drop-active={dragOver === status ? 'true' : undefined}
                 {...dropHandlersFor(status)}
-                className={`flex-shrink-0 w-64 rounded-xl border p-3 transition-colors ${
-                  dragOver === status ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50'
+                // Each stage its own color (src/lib/boardColumnTone.ts); the drop
+                // target keeps it and gains a ring instead of turning blue.
+                className={`flex-shrink-0 w-64 rounded-xl border p-3 transition-colors ${boardColumnTone(status, stageKeys)}${
+                  dragOver === status ? ' ring-2 ring-blue-500 ring-offset-1' : ''
                 }`}
               >
                 {/* Derived from the same filtered `items` the column renders,
