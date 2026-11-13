@@ -160,6 +160,21 @@ test('the dispatcher opens a colleague’s lead page; a plain rep gets a 404', a
   expect(res.status()).toBe(404);
 });
 
+test('the dispatcher corrects a colleague’s lead contact; a plain rep gets a 404', async () => {
+  const account = await prisma.company.create({ data: { orgId: ids.orgA, name: `Disp Contact Account ${STAMP}` } });
+  await prisma.mentorshipRelation.update({ where: { id: ids.recB }, data: { companyId: account.id } });
+  try {
+    const data = { name: `Contact ${STAMP}`, phone: '+49 30 000000' };
+    expect((await api.repC.patch(`/api/sales/leads/${ids.recB}/contact`, { headers: host, data })).status()).toBe(404);
+    const res = await api.disp.patch(`/api/sales/leads/${ids.recB}/contact`, { headers: host, data });
+    expect(res.status()).toBe(200);
+    expect((await prisma.company.findUnique({ where: { id: account.id } }))!.contactName).toBe(`Contact ${STAMP}`);
+  } finally {
+    await prisma.mentorshipRelation.update({ where: { id: ids.recB }, data: { companyId: null } });
+    await prisma.company.delete({ where: { id: account.id } });
+  }
+});
+
 test('revoked, the reach is gone on the next request', { tag: '@smoke' }, async () => {
   expect((await grant('admin', ids.disp, false)).status()).toBe(200);
   expect(await boardIds('disp')).not.toContain(ids.recB);

@@ -218,8 +218,8 @@ sales book** as each record's owner would.
   re-pointing a record at an account), stage gates set to `pipeline.transition`,
   relation creation, the admin timeline view. Those stay admin-only. Routes add
   `dispatcherMay(actor, permission, relation.orgId)` next to their OWNER check:
-  `PUT /api/mentorship/[id]`, interactions, trial, contract end, win-back, value
-  and the hand-off.
+  `PUT /api/mentorship/[id]`, interactions, trial, contract end, win-back, value,
+  the hand-off and the lead contact (`PATCH /api/sales/leads/[id]/contact`).
 - **Reads.** The relation scope (`src/lib/authzScope.ts`) gives a dispatcher the
   whole tenant, like an ORG_ADMIN; `scopeForRole` still adds the org. The sales
   board then shows every rep's records, each card naming its owner, and the
