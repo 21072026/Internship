@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireCapability } from '@/lib/capabilityGate';
 import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
@@ -19,6 +20,10 @@ export async function GET(request: Request) {
   const gate = await requireRoleOrPermission(['COMPANY'], 'analytics.read', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // The company portal is the internship product's (#2348 MKT-2): a vertical
+  // without `placements` has no company portal, its COMPANY logins included.
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
 
   // A COMPANY user must be linked to a company; without it there is no scope to
   // apply, so fail closed rather than falling into the unscoped ADMIN branch and
