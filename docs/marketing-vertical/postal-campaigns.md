@@ -118,9 +118,23 @@ Bu yapılmadan marketing host'unun Impressum'u InternCRM operatörünü gösteri
   partiler önerilir (`copy-bank.md` § 9.2).
 - E-posta göndermez; kampanya listesi bir e-posta listesi değildir.
 - "Keine Werbung" levhasını bilemez — süreç.
-- Saklama süresi (Art. 14 notundaki 24 ay, `PROSPECT_RETENTION_MONTHS`) henüz otomatik
-  uygulanmıyor; ilk silme turu elle (#2559 yüzeyi). Gönderilmiş kampanya kaydı için öneri:
-  kampanya + 3 yıl.
+- Saklama süresini (Art. 14 notundaki 24 ay, `PROSPECT_RETENTION_MONTHS`) kendiliğinden
+  uygulamaz. Süreyi aşan hesapları `/admin/retention` sayfasındaki "Saklama süresi dolan
+  potansiyel müşteriler" listesi gösterir (#3676). Listeden çıkanlar:
+  - müşteri geçmişi olanlar;
+  - geçerli izni olanlar (DOI veya § 7(3));
+  - son 24 ayda teması olanlar (ilişki, mektup veya talep).
+
+  Hiç teması olmayan bir hesap için süre hesabın oluşturulma tarihinden başlar; böyle bir hesap
+  oluşturulduktan 24 ay sonra listeye girer.
+
+  Silmeyi admin yapar, satır başına "İletişim verisini sil" ile. Bu işlem hesabın iletişim
+  sütunlarını, talep kişisel alanlarını ve adres defterini temizler. Bu hesabın mektup anlık
+  görüntülerinde de `recipientName` boşalır, `addressBlock` `[erased]` olur. Company satırı ve
+  engelleme listesi (`ContactSuppression`) kalır. Zamanlanmış silme yoktur.
+
+  Gönderilmiş kampanya kaydı için önerilen "kampanya + 3 yıl" saklama süresi henüz verilmiş
+  bir karar değildir. Bu süre, mektubun 24 ay sözünü aşan anlık görüntüleri tutmaz.
 
 ## Veri modeli
 

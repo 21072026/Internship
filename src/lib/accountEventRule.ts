@@ -131,6 +131,26 @@ export function normalizeSourceLabel(raw: unknown): string | null {
 export const WON_STAGE_KEY = 'DEAL_WON';
 export const LOST_STAGE_KEY = 'DEAL_LOST';
 
+/**
+ * "Did this record ever sign?" — the ONE answer (shared by the account-event
+ * ingest's lost/reactivate guard and the prospect retention list, MKT-4). A
+ * record signed when it sits at DEAL_WON now, or when its stage history shows a
+ * move into DEAL_WON. `historyReachedWon` holds the ids whose StatusChange rows
+ * carry that move (read with `wonHistoryWhere()`).
+ */
+export function recordsEverWon(
+  records: readonly { id: string; pipelineStatus: string | null }[],
+  historyReachedWon: Iterable<string>,
+): Set<string> {
+  const history = new Set(historyReachedWon);
+  return new Set(records.filter((r) => r.pipelineStatus === WON_STAGE_KEY || history.has(r.id)).map((r) => r.id));
+}
+
+/** The StatusChange filter behind `recordsEverWon()`: a move into DEAL_WON on one of these records. */
+export function wonHistoryWhere(relationIds: readonly string[]) {
+  return { relationId: { in: [...relationIds] }, toStatus: WON_STAGE_KEY };
+}
+
 export type IngestIntent =
   | { kind: 'open_trial'; toStage: 'TRIAL_ACTIVE' }
   | { kind: 'won'; toStage: 'DEAL_WON' }

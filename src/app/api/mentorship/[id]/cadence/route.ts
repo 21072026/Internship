@@ -8,6 +8,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { relationCadence } from '@/lib/meetingCadence';
 import { loadPairMeetings } from '@/lib/meetingCadenceData';
 import { originalDurationMonths } from '@/lib/relationEnding';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // One pair's meeting cadence (#2014): the promised interval, when they last
 // actually met, and whether that is inside it. The same deterministic rule as
@@ -18,6 +19,9 @@ import { originalDurationMonths } from '@/lib/relationEnding';
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // A pair's meeting rhythm is the mentorship module (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   // Admin reach from the permission rule, not the role string (#1571).
   const actor = await actorFromSession(session);
   const isAdmin = !!actor && (await can(actor, 'program.read', undefined, session));

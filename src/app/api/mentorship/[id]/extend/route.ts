@@ -8,6 +8,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { extendRelation } from '@/lib/relationExtend';
 import { MAX_EXTEND_MONTHS } from '@/lib/relationEnding';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // Extend a pairing's agreed end date (#1786): ADMIN (relation.write) or the
 // relation's own mentor, checked here on the server. A mentee — or any other
@@ -24,6 +25,9 @@ const schema = z.object({
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Extending a pairing is the mentorship module (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const { id } = await params;
   const actor = await actorFromSession(session);
   const isAdmin = !!actor && (await can(actor, 'relation.write', undefined, session));
