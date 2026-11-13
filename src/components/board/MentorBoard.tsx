@@ -26,6 +26,7 @@ import { foldSearchText, matchesMenteeQuery } from '@/lib/menteeFilter';
 import { FollowUpChip } from '@/components/FollowUpPanel';
 import { TrialEndChip } from '@/components/TrialEndPanel';
 import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
+import { HandoffCardButton, useLeadHandoff } from '@/components/board/LeadHandoff';
 
 interface Mentee {
   id: string;
@@ -61,7 +62,9 @@ interface Relation {
 // PUT /api/mentorship/[id], which lets only the owner (or an ADMIN) write.
 // `detailBase` is the page a card opens; the default keeps the mentor board
 // exactly what it was.
-export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: string }) {
+// `handoff` (the sales board only) adds the colleague strip above the columns:
+// drop a lead on a teammate to hand it over with its next step (LeadHandoff.tsx).
+export function MentorBoard({ detailBase = '/mentor/mentees', handoff = false }: { detailBase?: string; handoff?: boolean }) {
   const t = useT();
   const label = useStageLabel();
   const { show: showGate, dialog: gateDialog } = useStageGateDialog();
@@ -115,6 +118,16 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
   useEffect(() => {
     relationsRef.current = relations;
   }, [relations]);
+
+  // Off on the mentor board: the hook still runs (hooks are unconditional) but
+  // only `handoff` boards render what it returns. The rep's own leads are
+  // already theirs, so they are not on their own strip.
+  const leadHandoff = useLeadHandoff({
+    includeSelf: false,
+    nameOf: useCallback((id: string) => relationsRef.current.find((r) => r.id === id)?.mentee.fullName, []),
+    onHandedOff: fetchRelations,
+  });
+  const showHandoff = handoff && leadHandoff.enabled;
 
   useEffect(() => {
     fetchRelations();
@@ -291,6 +304,7 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
         value={r.pipelineStatus}
         onChange={(next) => requestMove(r.id, next)}
       />
+      {showHandoff && <HandoffCardButton onClick={() => leadHandoff.openFor(r.id)} />}
     </div>
   );
 
@@ -305,6 +319,7 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
   return (
     <div>
       {gateDialog}
+      {handoff && leadHandoff.dialog}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           {t.nav.board}
@@ -318,6 +333,8 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
           {t.mentor.boardSubtitle}
         </p>
       </div>
+
+      {showHandoff && relations.length > 0 && leadHandoff.strip}
 
       {relations.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 mb-4">
