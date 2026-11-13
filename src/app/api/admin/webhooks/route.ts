@@ -9,6 +9,8 @@ import { emit } from '@/lib/events/emit';
 import { redactedDiff, WEBHOOK_DIFF_SPEC } from '@/lib/events/diff';
 import { z } from 'zod';
 import { WEBHOOK_EVENTS } from '@/lib/webhooks';
+import { ignoredWebhookEvents, webhookEventAvailable, webhookEventsForCapabilities } from '@/lib/webhookEventCapability';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import { assertPublicHttpsUrl, SsrfBlockedError } from '@/lib/ssrfGuard';
 import { integrationsLocked } from '@/lib/integrationsGate';
 
@@ -33,7 +35,25 @@ export async function GET(request: Request) {
       ownerSource: { select: { id: true, name: true } },
     },
   });
-  return NextResponse.json({ webhooks, eventTypes: WEBHOOK_EVENTS });
+  // This org's product only (MKT-6b): a stored event of a module it lacks is
+  // listed apart as ignored — delivery skips it too — never deleted.
+  const capabilities = await shellCapabilities(resolveOrgId(session));
+  return NextResponse.json({
+    webhooks: webhooks.map((w) => {
+      const events = Array.isArray(w.events) ? (w.events as string[]) : [];
+      return { ...w, events: events.filter((e) => !ignoredWebhookEvents([e], capabilities).length), ignoredEvents: ignoredWebhookEvents(events, capabilities) };
+    }),
+    eventTypes: webhookEventsForCapabilities(WEBHOOK_EVENTS, capabilities),
+  });
+}
+
+/** 400 naming the events this org's product does not have (MKT-6b), or null. */
+async function unavailableEvents(orgId: string | null, events: readonly string[] | undefined): Promise<NextResponse | null> {
+  if (!events) return null;
+  const capabilities = await shellCapabilities(orgId);
+  const unavailable = events.filter((e) => !webhookEventAvailable(e, capabilities));
+  if (!unavailable.length) return null;
+  return NextResponse.json({ error: 'Event not available in this product', code: 'event_unavailable', events: unavailable }, { status: 400 });
 }
 
 const schema = z.object({
@@ -50,6 +70,8 @@ export async function POST(request: Request) {
   if (locked) return locked;
   const parsed = schema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
+  const offProduct = await unavailableEvents(resolveOrgId(session), parsed.data.events);
+  if (offProduct) return offProduct;
   // The URL is called from the server's network position, so a schema check is
   // not enough — 127.0.0.1 and the cloud metadata address both pass `.url()`.
   try {
@@ -112,6 +134,8 @@ export async function PATCH(request: Request) {
     const locked = await integrationsLocked(session);
     if (locked) return locked;
   }
+  const offProduct = await unavailableEvents(resolveOrgId(session), parsed.data.events);
+  if (offProduct) return offProduct;
   if (parsed.data.url) {
     // Same guard as create — an edit is just as much a server-side fetch target.
     try {
