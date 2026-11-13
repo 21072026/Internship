@@ -10,6 +10,7 @@ import { getLocale } from '@/i18n/server';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
 import { rangeEnd, rangeStart } from '@/lib/dateRange';
 import { countsAsPlacement, funnelStartedAt, isPlacementRelation } from '@/lib/placement';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // GET — mentor-scoped analytics: their own pipeline funnel, goal summary and
 // engagement stats (EPIC: mentor analytics / pipeline funnel, roadmap #370).
@@ -27,6 +28,9 @@ export async function GET(request: Request) {
   const gate = await requireRoleOrPermission(['MENTOR'], 'analytics.read', { request });
   if ('error' in gate) return gate.error;
   const { session, admin } = gate;
+  // A mentor's own analytics (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
 
   const locale = await getLocale();
 

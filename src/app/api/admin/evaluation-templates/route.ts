@@ -7,6 +7,7 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { EVALUATION_SCOPES, defaultCriteria, isEvaluationScope } from '@/lib/evaluation';
 import { locales } from '@/i18n/config';
 import { requirePermission } from '@/lib/authz';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // Admin management of the org's competency framework (#822).
 //
@@ -46,6 +47,9 @@ export async function GET(request: Request) {
   const gate = await requirePermission('content.read', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // Evaluation criteria are the evaluations module (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'evaluations');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     const templates = orgId
@@ -86,6 +90,9 @@ export async function PUT(request: Request) {
   const gate = await requirePermission('content.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // Evaluation criteria are the evaluations module (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'evaluations');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'No organization' }, { status: 400 });
