@@ -240,6 +240,8 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
         'orphanApplicant',
         'outboundDraft',
         'pageView',
+        // REPORT ONLY (MKT-4): counts overdue prospects, erases nothing.
+        'prospectContact',
         'pushSubscription',
         'rosterRowResult',
         'supportReport',
