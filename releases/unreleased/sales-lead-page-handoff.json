@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Sales lead page: a \"Hand over\" button opens the board's hand-off dialog (#3672) — same `POST /api/sales/leads/[id]/handoff`, same rule — and takes the rep back to `/sales` once the record has left their book (#3657).",
+  "notes": {
+    "en": ["Lead page: hand a lead to a colleague right from its page, with the next step for them."],
+    "tr": ["Müşteri adayı sayfası: adayı, yapılacak sonraki adımla birlikte doğrudan sayfasından bir iş arkadaşına devredin."],
+    "de": ["Lead-Seite: Einen Lead direkt von seiner Seite an eine Kollegin oder einen Kollegen übergeben, mit dem nächsten Schritt."]
+  }
+}
