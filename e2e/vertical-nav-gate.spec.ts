@@ -222,3 +222,55 @@ test('INTERNSHIP keeps them: /interviews and /onboarding render, mentee-onboardi
     for (const id of [admin.org.id, mentor.org.id]) await prisma.organization.delete({ where: { id } }).catch(() => {});
   }
 });
+
+// MKT-6a, part 2: the mentorship/placement APIs only the mentor and portal
+// shells call. A MARKETING org's rep (MENTOR) and admin are refused with the
+// module's name; the routes MARKETING screens DO use (interactions, stage
+// history, CV on the account page) stay open on purpose.
+const MARKETING_REFUSED: Array<{ method: 'get' | 'post' | 'patch' | 'delete'; path: string; capability: string }> = [
+  { method: 'get', path: '/api/relation-notes?relationId=x', capability: 'mentorship' },
+  { method: 'post', path: '/api/relation-notes', capability: 'mentorship' },
+  { method: 'patch', path: '/api/relation-notes/x', capability: 'mentorship' },
+  { method: 'delete', path: '/api/relation-notes/x', capability: 'mentorship' },
+  { method: 'get', path: '/api/meeting-requests', capability: 'mentorship' },
+  { method: 'post', path: '/api/meeting-requests', capability: 'mentorship' },
+  { method: 'patch', path: '/api/meeting-requests/x', capability: 'mentorship' },
+  { method: 'get', path: '/api/interview-prep', capability: 'placements' },
+  { method: 'post', path: '/api/interview-prep', capability: 'placements' },
+  { method: 'get', path: '/api/interview-prep/session', capability: 'placements' },
+  { method: 'post', path: '/api/interview-prep/session', capability: 'placements' },
+  { method: 'post', path: '/api/interview-prep/session/x/turn', capability: 'placements' },
+];
+
+for (const role of ['MENTOR', 'ADMIN'] as const) {
+  test(`a MARKETING ${role}: the mentorship/placement APIs answer 403 with the module`, async ({ page }) => {
+    const { org, email } = await makeUser('MARKETING', role);
+    try {
+      await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
+      await signInAndSettle(page, email, 'NavPass123', role === 'ADMIN' ? '/admin' : '/sales');
+      for (const { method, path, capability } of MARKETING_REFUSED) {
+        const res = await page.request[method](path, method === 'get' || method === 'delete' ? {} : { data: {} });
+        expect(res.status(), `${method.toUpperCase()} ${path}`).toBe(403);
+        expect((await res.json()).capability, `${method.toUpperCase()} ${path}`).toBe(capability);
+      }
+    } finally {
+      await cleanupByEmail(email);
+      await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+    }
+  });
+}
+
+test('INTERNSHIP: the same APIs are not refused by the module gate', async ({ page }) => {
+  const { org, email } = await makeUser('INTERNSHIP', 'MENTOR');
+  try {
+    await signInAndSettle(page, email, 'NavPass123', '/mentor');
+    for (const path of ['/api/meeting-requests', '/api/interview-prep', '/api/interview-prep/session']) {
+      const res = await page.request.get(path);
+      const body = await res.json().catch(() => ({}));
+      expect(body.code, `GET ${path}`).not.toBe('capability_unavailable');
+    }
+  } finally {
+    await cleanupByEmail(email);
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});
