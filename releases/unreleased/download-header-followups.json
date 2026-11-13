@@ -1,4 +1,15 @@
 {
   "bump": "patch",
-  "changelog": "**Download file names: three edge cases of the #3623 fallback fixed.** A fullwidth quote or backslash in a name no longer breaks the `filename=\"…\"` header (NFKD folded them back to `\"`/`\\` after they had been stripped). A name over 100 characters is cut by code point, so an emoji at the cut no longer turns the download into a 500. The Turkish dotless `ı` transliterates to `i` (through `transliterate()`) instead of becoming `_`."
+  "changelog": "**Download file names: three edge cases of the #3623 fallback fixed.** A fullwidth quote or backslash in a name no longer breaks the `filename=\"…\"` header (NFKD folded them back to `\"`/`\\` after they had been stripped). A name over 100 characters is cut by code point, so an emoji at the cut no longer turns the download into a 500. The Turkish dotless `ı` transliterates to `i` (through `transliterate()`) instead of becoming `_`.",
+  "notes": {
+    "en": [
+      "Downloads whose file name contains an emoji, a fullwidth quote or the letter ı no longer fail."
+    ],
+    "tr": [
+      "Dosya adında emoji, tam genişlikli tırnak ya da ı harfi bulunan indirmeler artık hata vermiyor."
+    ],
+    "de": [
+      "Downloads, deren Dateiname ein Emoji, ein breites Anführungszeichen oder den Buchstaben ı enthält, schlagen nicht mehr fehl."
+    ]
+  }
 }
