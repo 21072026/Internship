@@ -179,7 +179,25 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
 
 ## Admin screens
 
-`/admin/affiliates` has one sidebar entry and its own tabs:
+`/admin/affiliates` has one sidebar entry and its own tabs, in two groups (#3538)
+so the two money flows are not mistaken for each other: **Customers** (the customer
+list, and the customer payments — what customers pay the product) and **Partners**
+(partners, applications, funnel, commissions, and the partner payouts — what the
+partners earn and are paid). Overview, Migration and Settings stand alone. A group
+opens its first screen; the open group shows its screens in a second row, the group
+carries `aria-current="true"` and the screen `aria-current="page"`. The URLs did not
+change. The applications badge sits on the open sub-tab, or on the Partners group
+while it is closed — never twice.
+
+- **Customer list** (`/admin/affiliates/customers`, `/api/admin/affiliate/customers`,
+  `src/lib/affiliateCustomerList.ts`, #3538) — one row per referred customer, newest
+  first, paged: its partner, first and last payment day, number of payments, the end
+  of its commission window and the commission it earned (everything but REJECTED).
+  The window is the engine's, through `customerWindowsByPartner()`
+  (`src/lib/affiliateCustomerWindows.ts`) — the reading the partner portal shares, so
+  admin and partner see the same date; the column is hidden when the plan has no
+  percent phase. Read-only, `affiliate.read` (OBSERVER included). `?partnerId=` of
+  another organisation answers 404. Five queries per page whatever its size.
 
 - **Overview** (`src/lib/affiliateOverview.ts`, `/api/admin/affiliate/overview`,
   #3173) — partners per state, referred customers, commission totals per status,
@@ -229,7 +247,7 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   instead of rolling it into the next month. The full IBAN is revealed to an
   `affiliate.write` admin only, and every reveal is audited
   (`affiliate.payout_details.read`).
-- **Payments** (`/api/admin/affiliate/payments`, list in `src/lib/affiliatePayments.ts`) —
+- **Customer payments** (`/api/admin/affiliate/payments`, list in `src/lib/affiliatePayments.ts`) —
   a manual entry goes straight to `recordAffiliatePayment()`; the currency is the
   plan's, the amount is typed as people write it (`19,99`) and sent as minor
   units, the received date is a calendar day (UTC midnight, up to +14 h ahead of
@@ -250,7 +268,7 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   final. `driftReport()` lists the frozen rows the current plan would calculate
   differently — read only, nothing written, the whole programme in three queries,
   and run only when the admin asks for it ("Check for differences").
-- **Payouts** (`/api/admin/affiliate/payouts`, list in `src/lib/affiliatePayouts.ts`) —
+- **Partner payouts** (`/api/admin/affiliate/payouts`, list in `src/lib/affiliatePayouts.ts`) —
   recorded after the manual bank transfer. The screen lists a partner's approved
   commissions unpaged (`/payouts/candidates`, up to the 200 a payout can take) and
   says when there are more, so the sum shown is always the rows selected. `createPayout()` (payment writer)
