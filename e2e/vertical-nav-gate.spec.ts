@@ -169,3 +169,56 @@ test('a MENTEE in a MARKETING org lands on /account, not an infinite redirect', 
   }
 });
 
+
+// MKT-6a: the internship-only surfaces that sat outside the gated shells.
+test('a MARKETING admin: /interviews 404s and the interview-request decision refuses', async ({ page }) => {
+  const { org, email } = await makeAdmin('MARKETING');
+  try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
+    await signInAndSettle(page, email, 'NavPass123', '/admin');
+    for (const path of ['/interviews', '/interviews/any-panel']) {
+      expect((await page.goto(path))?.status(), `${path} on a MARKETING org`).toBe(404);
+    }
+    const res = await page.request.patch('/api/interview-requests/any-request', { data: { decision: 'APPROVE' } });
+    expect(res.status()).toBe(403);
+    expect((await res.json()).capability).toBe('placements');
+  } finally {
+    await cleanupByEmail(email);
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});
+
+test('a MARKETING rep (MENTOR): /onboarding 404s and the mentee-onboarding API refuses', async ({ page }) => {
+  const { org, email } = await makeUser('MARKETING', 'MENTOR');
+  try {
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST)); // MARKETING-org account => marketing host only (#2590)
+    await signInAndSettle(page, email, 'NavPass123', '/sales');
+    expect((await page.goto('/onboarding'))?.status(), '/onboarding on a MARKETING org').toBe(404);
+    expect((await page.goto('/onboarding/contributor-terms'))?.status(), '/onboarding/contributor-terms on a MARKETING org').toBe(404);
+    const get = await page.request.get('/api/mentee-onboarding');
+    expect(get.status()).toBe(403);
+    expect((await get.json()).capability).toBe('mentorship');
+    const patch = await page.request.patch('/api/mentee-onboarding', { data: { menteeId: 'x', dismissed: true } });
+    expect(patch.status()).toBe(403);
+  } finally {
+    await cleanupByEmail(email);
+    await prisma.organization.delete({ where: { id: org.id } }).catch(() => {});
+  }
+});
+
+test('INTERNSHIP keeps them: /interviews and /onboarding render, mentee-onboarding answers', async ({ page }) => {
+  const admin = await makeAdmin('INTERNSHIP');
+  const mentor = await makeUser('INTERNSHIP', 'MENTOR');
+  try {
+    await signInAndSettle(page, admin.email, 'NavPass123', '/admin');
+    expect((await page.goto('/interviews'))?.status(), '/interviews on an INTERNSHIP org').toBe(200);
+    await page.context().clearCookies();
+    await signInAndSettle(page, mentor.email, 'NavPass123', '/mentor');
+    expect((await page.goto('/onboarding'))?.status(), '/onboarding on an INTERNSHIP org').toBe(200);
+    expect((await page.request.get('/api/mentee-onboarding')).status()).toBe(200);
+  } finally {
+    await cleanupByEmail(admin.email);
+    await cleanupByEmail(mentor.email);
+    for (const id of [admin.org.id, mentor.org.id]) await prisma.organization.delete({ where: { id } }).catch(() => {});
+  }
+});
