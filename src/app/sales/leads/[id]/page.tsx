@@ -15,6 +15,8 @@ import { Badge } from '@/components/ui/Badge';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { SalesRecordPanels } from '@/components/sales/SalesRecordPanels';
 import { SalesLogInteraction } from '@/components/sales/SalesLogInteraction';
+import { LeadContactEditor } from '@/components/sales/LeadContactEditor';
+import { shownEmail } from '@/lib/leadEmail';
 import { contentLang } from '@/lib/contentLanguage';
 
 // One of the rep's own records (#2580): who the lead is, the account behind it,
@@ -74,7 +76,9 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
     relation.companyId
       ? prisma.company.findFirst({
           where: withinTenant({ id: relation.companyId }, tenant),
-          select: { id: true, name: true, industry: true },
+          // The account's primary contact IS the lead's contact (#3655): the lead
+          // row carries a stand-in address (src/lib/leadEmail.ts).
+          select: { id: true, name: true, industry: true, contactName: true, contactEmail: true, contactPhone: true, contactPosition: true },
         })
       : null,
     prisma.interactionLog.findMany({
@@ -90,6 +94,14 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   const stages = await resolvePipelineStages(session.user.orgId, locale);
   const date = (value: Date) => formatDate(value, locale);
   const iso = (value: Date | null) => (value ? value.toISOString() : null);
+  // Never the `@import.local` stand-in: the account's address, else none.
+  const leadEmail = shownEmail(relation.mentee.email, company?.contactEmail);
+  const contact = {
+    name: company?.contactName ?? relation.mentee.fullName,
+    email: company?.contactEmail ?? (leadEmail.toLowerCase().endsWith('@import.local') ? null : leadEmail),
+    phone: company?.contactPhone ?? relation.mentee.phone,
+    position: company?.contactPosition ?? null,
+  };
   const last = interactions[0] ?? null;
 
   // The newest interaction, right under the follow-up (#3653); the full list stays below.
@@ -172,9 +184,9 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
           <CardHeader>
             <CardTitle>{s.contact}</CardTitle>
           </CardHeader>
-          <dl className="grid grid-cols-1 gap-4" data-testid="sales-lead-contact">
-            <Field label={s.email} value={relation.mentee.email} testId="sales-lead-email" />
-            <Field label={s.phone} value={relation.mentee.phone} />
+          {/* The person — editable by the record's rep (#3655); the account and the date below are not. */}
+          <LeadContactEditor relationId={relation.id} initial={contact} canEdit={!!company} />
+          <dl className="mt-4 grid grid-cols-1 gap-4 border-t border-gray-100 pt-4 dark:border-gray-800" data-testid="sales-lead-contact">
             <Field label={s.company} value={company?.name} />
             <Field label={s.since} value={date(relation.startDate)} hint={s.sinceHint} testId="sales-lead-since" />
           </dl>
