@@ -125,6 +125,9 @@ Bu yapılmadan marketing host'unun Impressum'u InternCRM operatörünü gösteri
   - geçerli izni olanlar (DOI veya § 7(3));
   - son 24 ayda teması olanlar (ilişki, mektup veya talep).
 
+  Hiç teması olmayan bir hesap için süre hesabın oluşturulma tarihinden başlar; böyle bir hesap
+  oluşturulduktan 24 ay sonra listeye girer.
+
   Silmeyi admin yapar, satır başına "İletişim verisini sil" ile. Bu işlem hesabın iletişim
   sütunlarını, talep kişisel alanlarını ve adres defterini temizler. Bu hesabın mektup anlık
   görüntülerinde de `recipientName` boşalır, `addressBlock` `[erased]` olur. Company satırı ve
