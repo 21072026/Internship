@@ -13,6 +13,7 @@ import { AdminNav } from '@/components/AdminNav';
 import { isSuperAdmin } from '@/lib/superAdmin';
 import { adminTierFor } from '@/lib/authzRule';
 import { resolveQueueScope } from '@/lib/mailQueueAdmin';
+import { CapabilitiesProvider } from '@/lib/capabilitiesClient';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { ModeSwitcher } from '@/components/ModeSwitcher';
 import { availableModes } from '@/lib/dualRole';
@@ -102,7 +103,11 @@ async function AdminLayout({ children }: { children: React.ReactNode }) {
       }
     >
       <PipelineStagesProvider stages={customStages}>
-        <EvaluationCriteriaProvider criteria={customCriteria}>{children}</EvaluationCriteriaProvider>
+        <EvaluationCriteriaProvider criteria={customCriteria}>
+          {/* The capability list the sidebar and palette already read, for the
+              client pages inside the shell (#2348). Presentation only. */}
+          <CapabilitiesProvider capabilities={capabilities}>{children}</CapabilitiesProvider>
+        </EvaluationCriteriaProvider>
       </PipelineStagesProvider>
     </ResponsiveShell>
     </TourProvider>

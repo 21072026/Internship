@@ -413,7 +413,7 @@ export function GoalsPanel({ relationId, readOnly = false }: { relationId: strin
 
   return (
     <>
-    <Card>
+    <Card data-testid="goals-panel">
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle>{t.goals.title}</CardTitle>
