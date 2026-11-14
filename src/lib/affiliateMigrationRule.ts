@@ -24,10 +24,16 @@
 // are YYYY-MM-DD. Files must be UTF-8: a cell holding U+FFFD (what a Windows-1252
 // export becomes when read as UTF-8) is refused, since two different names would
 // otherwise collapse into one. Clicks are not part of a migration.
+//
+// A payment's amount is its commission base (#3553): `payment_amount`, or
+// `transaction_count` × `unit_price` (the undiscounted gross price per
+// transaction), or both when they agree. resolvePaymentBase() decides, the same
+// rule as the payment writer; the breakdown is stored beside the base.
 
 import { headerIndex, type ParsedRow, type ParsedTable, type ValidatedRow } from './importPreview';
 import { parseCalendarDay } from './calendarDay';
 import { PARTNER_CODE_RE } from './affiliateCodeRule';
+import { resolvePaymentBase } from './affiliatePaymentBaseRule';
 
 export const MIGRATION_MAX_ROWS = { partners: 5_000, commissions: 50_000, payouts: 20_000 } as const;
 /** The largest amount a column holds (a signed 32-bit INT). */
@@ -42,8 +48,9 @@ export type MigrationFile = 'partners' | 'commissions' | 'payouts';
 export const MIGRATION_COLUMNS: Record<MigrationFile, { required: readonly string[]; optional: readonly string[] }> = {
   partners: { required: ['code', 'name', 'paid_total', 'unpaid_total'], optional: ['email', 'status', 'ended_on'] },
   commissions: {
-    required: ['partner_code', 'customer_ref', 'payment_ref', 'payment_amount', 'payment_date', 'commission_amount', 'status'],
-    optional: ['due_date', 'payout_ref'],
+    // `payment_amount` or the breakdown (`transaction_count` + `unit_price`), per row (#3553).
+    required: ['partner_code', 'customer_ref', 'payment_ref', 'payment_date', 'commission_amount', 'status'],
+    optional: ['payment_amount', 'transaction_count', 'unit_price', 'due_date', 'payout_ref'],
   },
   payouts: { required: ['payout_ref', 'partner_code', 'amount', 'paid_date'], optional: ['bank_reference'] },
 };
@@ -59,6 +66,9 @@ export type MigrationIssueCode =
   | 'code_needs_new'
   | 'invalid_email'
   | 'invalid_amount'
+  | 'invalid_count' // transaction_count is not a whole number ≥ 1
+  | 'amount_mismatch' // payment_amount differs from transaction_count × unit_price
+  | 'amount_range' // transaction_count × unit_price is zero or too large
   | 'invalid_date'
   | 'future_date'
   | 'invalid_status'
@@ -105,6 +115,9 @@ export interface MigrationCommission {
   customerRef: string;
   paymentRef: string;
   paymentAmountMinor: number;
+  /** The breakdown, when the row gave one (#3553); both or neither. */
+  transactionCount: number | null;
+  unitPriceMinor: number | null;
   receivedAt: Date;
   amountMinor: number;
   status: CommissionStatus;
@@ -196,6 +209,50 @@ function amount(raw: string, allowZero: boolean): Field<number> {
   const minor = parseMigrationAmount(raw);
   if (minor === null || (!allowZero && minor === 0) || minor > MAX_MINOR) return { ok: false, code: 'invalid_amount' };
   return { ok: true, value: minor };
+}
+
+type PaymentBaseCells =
+  | { ok: true; amountMinor: number; transactionCount: number | null; unitPriceMinor: number | null }
+  | { ok: false; subject: string; code: MigrationIssueCode };
+
+/** A row's commission base from `payment_amount` and/or `transaction_count` × `unit_price` (#3553). */
+function readPaymentBase(get: (column: string) => string): PaymentBaseCells {
+  const rawAmount = get('payment_amount');
+  const rawCount = get('transaction_count');
+  const rawPrice = get('unit_price');
+  let amountMinor: number | null = null;
+  if (rawAmount) {
+    const a = amount(rawAmount, false);
+    if (!a.ok) return { ok: false, subject: 'payment_amount', code: a.code };
+    amountMinor = a.value;
+  }
+  let transactionCount: number | null = null;
+  if (rawCount) {
+    if (!/^\d{1,10}$/.test(rawCount) || Number(rawCount) < 1) return { ok: false, subject: 'transaction_count', code: 'invalid_count' };
+    transactionCount = Number(rawCount);
+  }
+  let unitPriceMinor: number | null = null;
+  if (rawPrice) {
+    const p = amount(rawPrice, true);
+    if (!p.ok) return { ok: false, subject: 'unit_price', code: p.code };
+    unitPriceMinor = p.value;
+  }
+  const base = resolvePaymentBase({ amountMinor, transactionCount, unitPriceMinor });
+  if (base.ok) return { ok: true, amountMinor: base.amountMinor, transactionCount: base.transactionCount, unitPriceMinor: base.unitPriceMinor };
+  switch (base.issue) {
+    case 'amount_required':
+      return { ok: false, subject: 'payment_amount', code: 'required' };
+    case 'incomplete_breakdown':
+      return { ok: false, subject: rawCount ? 'unit_price' : 'transaction_count', code: 'required' };
+    case 'transaction_count':
+      return { ok: false, subject: 'transaction_count', code: 'invalid_count' };
+    case 'unit_price':
+      return { ok: false, subject: 'unit_price', code: 'invalid_amount' };
+    case 'amount_range':
+      return { ok: false, subject: 'unit_price', code: 'amount_range' };
+    case 'amount_mismatch':
+      return { ok: false, subject: 'payment_amount', code: 'amount_mismatch' };
+  }
 }
 
 function day(raw: string, now: Date): Field<Date> {
@@ -327,8 +384,8 @@ export function validateCommissionRow(row: ParsedRow, header: string[], now: Dat
   if (!customer.ok) return fail('customer_ref', customer.code);
   const payment = text(get('payment_ref'), MAX_REF);
   if (!payment.ok) return fail('payment_ref', payment.code);
-  const paymentAmount = amount(get('payment_amount'), false);
-  if (!paymentAmount.ok) return fail('payment_amount', paymentAmount.code);
+  const paymentBase = readPaymentBase(get);
+  if (!paymentBase.ok) return fail(paymentBase.subject, paymentBase.code);
   const received = day(get('payment_date'), now);
   if (!received.ok) return fail('payment_date', received.code);
   const commission = amount(get('commission_amount'), true);
@@ -353,7 +410,9 @@ export function validateCommissionRow(row: ParsedRow, header: string[], now: Dat
       partnerCode: partner.value,
       customerRef: customer.value,
       paymentRef: payment.value,
-      paymentAmountMinor: paymentAmount.value,
+      paymentAmountMinor: paymentBase.amountMinor,
+      transactionCount: paymentBase.transactionCount,
+      unitPriceMinor: paymentBase.unitPriceMinor,
       receivedAt: received.value,
       amountMinor: commission.value,
       status,

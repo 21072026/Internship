@@ -135,8 +135,22 @@ caller multiplies. Refusals come back as `invalid_input` with one issue:
 ≥ 0), `amount_range` (a product of zero, or past `MAX_AMOUNT_MINOR`) and
 `amount_mismatch` (both shapes, different amounts). The engine keeps reading
 `amountMinor` only, so existing payments and their commissions do not change.
-The entry paths (admin form, API, account event, migration CSV) take the
-breakdown in #3553; the breakdown is shown in #3554.
+Every entry path takes both shapes (#3553) and leaves the decision to the rule:
+
+- **Admin form** (`/admin/affiliates/payments`): "Transactions × price" (the
+  default, with the product shown live, e.g. `340 × €0.15 = €51.00`) or "Base
+  amount", with the undiscounted/gross/partial-month note under the fields. A
+  refusal names its issue.
+- **Admin API** (`POST /api/admin/affiliate/payments`): `amountMinor`,
+  `transactionCount` + `unitPriceMinor`, or all three; a refusal is
+  `400 { code: 'invalid_input', issues: [<issue>] }`. A client sending only
+  `amountMinor` is unchanged.
+- **Account event** `payment_received`: `amount_minor` and/or `transaction_count` +
+  `unit_price_minor` ([account-events.md](integrations/account-events.md#customer-payments-3355)).
+- **Migration CSV**: `payment_amount` and/or `transaction_count` + `unit_price`
+  (see [Migration](#migration-from-a-previous-system)).
+
+The breakdown is shown in the lists in #3554.
 
 ### Re-evaluation after a plan change (#3170)
 
@@ -1102,8 +1116,11 @@ run only after a clean dry run of exactly the files it checked.
 
 - **Input** — three CSV files (comma or semicolon, a header row). Partners:
   `code, name, paid_total, unpaid_total` (+ `email, status, ended_on`). Commissions:
-  `partner_code, customer_ref, payment_ref, payment_amount, payment_date,
-  commission_amount, status` (+ `due_date, payout_ref`). Payouts:
+  `partner_code, customer_ref, payment_ref, payment_date, commission_amount,
+  status` and the payment's commission base as `payment_amount` and/or
+  `transaction_count` + `unit_price` (#3553; both when they agree — the same
+  `resolvePaymentBase()` as the writer, the breakdown stored beside it)
+  (+ `due_date, payout_ref`). Payouts:
   `payout_ref, partner_code, amount, paid_date` (+ `bank_reference`). Amounts in
   euros in an unambiguous shape only (`1234`, `19,99`, `19.99`, `1.234,56`,
   `1,234.56`, `1 234,56`; three digits after a mark are a thousands group) —

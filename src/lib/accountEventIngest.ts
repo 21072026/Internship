@@ -437,6 +437,8 @@ async function recordPayment(ctx: Ctx): Promise<Applied> {
         orgId,
         customerExternalRef: customerRef,
         amountMinor: payment.amount_minor,
+        transactionCount: payment.transaction_count,
+        unitPriceMinor: payment.unit_price_minor,
         currency: payment.currency,
         receivedAt: payment.received_at ?? event.occurred_at,
         externalPaymentRef: payment.id,
@@ -455,7 +457,8 @@ async function recordPayment(ctx: Ctx): Promise<Applied> {
     });
     return { outcome: 'applied', detail: `payment ${payment.id} recorded` };
   } catch (e) {
-    if (e instanceof AffiliateWriteError) return paymentRefusal(e.code);
+    // An input refusal names its issue (e.g. `invalid_input (amount_mismatch)`), so the sender can fix it.
+    if (e instanceof AffiliateWriteError) return paymentRefusal(e.code === 'invalid_input' && e.issues.length ? `invalid_input (${e.issues.join(', ')})` : e.code);
     throw e;
   }
 }
