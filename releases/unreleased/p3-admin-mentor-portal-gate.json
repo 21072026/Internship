@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Vertical gates, P3 part 2 (MKT-6, #2348):** `requireCapability()` on the admin, mentor-shell, portal and cohort routes that had none — `/api/admin/evaluation-templates` (`evaluations`); `/api/admin/program-costs`, `/api/admin/mentor-suggest/feedback`, `/api/mentor/applications`, `POST /api/mentor/mentees`, `/api/mentor/analytics`, `/api/mentor/meeting-feedback`, `/api/portal/insights` and `PATCH`/`DELETE /api/cohorts/[id]` (`mentorship`; the cohort gate runs before the programme lookup). A MARKETING caller gets 403 `capability_unavailable`; INTERNSHIP is unchanged. `/api/mentor/mentees/[id]` stays open (the MARKETING lead page's activation panel)."
-}

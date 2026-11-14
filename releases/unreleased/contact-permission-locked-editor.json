@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Contact permission editor (UWG § 7):** a channel the address owner withdrew themselves (the opt-out link or a recorded objection, `ownerObjected()`) is now shown as locked in the account page's editor before anyone types — a notice, with save and revoke disabled — instead of only answering a save with `owner_objected`. The rule is unchanged. New `e2e/contact-permission-editor.spec.ts` drives the editor end to end: § 7(3) refused without its reason and saved with it, an admin revocation written over again, and the locked state (API still refuses; other channels stay open).",
-  "notes": {
-    "en": ["On an account page, a channel the contact withdrew themselves is now marked as locked in the contact-permission editor, before you try to change it."],
-    "tr": ["Hesap sayfasında, kişinin kendisinin geri çektiği bir kanal artık iletişim izni düzenleyicisinde, değiştirmeye çalışmadan önce kilitli olarak gösteriliyor."],
-    "de": ["Auf der Account-Seite wird ein Kanal, den der Kontakt selbst widerrufen hat, im Editor für die Kontakterlaubnis jetzt als gesperrt angezeigt – bevor Sie ihn ändern wollen."]
-  }
-}

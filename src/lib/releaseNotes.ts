@@ -65,6 +65,482 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.661.0-beta',
+    date: '2026-11-14',
+    time: '09:32',
+    commit: 'a45ee04',
+    highlights: {
+      en: [
+        "Affiliate admin: customer and partner screens are now in two separate groups, and a new customer list shows each referred customer with its partner, payments and commission.",
+      ],
+      tr: [
+        "Affiliate yönetimi: müşteri ve partner ekranları artık iki ayrı grupta; yeni müşteri listesi yönlendirilen her müşteriyi partneri, ödemeleri ve komisyonuyla gösteriyor.",
+      ],
+      de: [
+        "Affiliate-Verwaltung: Kunden- und Partnerseiten sind jetzt in zwei getrennten Gruppen, und eine neue Kundenliste zeigt jeden vermittelten Kunden mit Partner, Zahlungen und Provision.",
+      ],
+    },
+  },
+  {
+    version: '0.660.1-beta',
+    date: '2026-11-13',
+    time: '15:53',
+    commit: 'd11388a',
+    highlights: {
+      en: [
+        "Partner codes can now contain dots and @, so partners' existing links from the previous system keep working.",
+      ],
+      tr: [
+        "Partner kodları artık nokta ve @ içerebiliyor; partnerlerin önceki sistemden kalan linkleri çalışmaya devam ediyor.",
+      ],
+      de: [
+        "Partnercodes dürfen jetzt Punkte und @ enthalten, damit die bestehenden Links der Partner aus dem bisherigen System weiter funktionieren.",
+      ],
+    },
+  },
+  {
+    version: '0.660.0-beta',
+    date: '2026-11-13',
+    time: '15:53',
+    commit: '41137ba',
+    highlights: {
+      en: [
+        "Sales: an admin can make a rep the lead dispatcher, who then sees the whole team's leads and can assign and work them without being an admin.",
+      ],
+      tr: [
+        "Satış: admin bir temsilciyi lead dağıtıcısı yapabilir; bu kişi admin olmadan ekibin bütün lead'lerini görür, dağıtır ve üzerinde çalışabilir.",
+      ],
+      de: [
+        "Vertrieb: Eine Administratorin kann einen Vertriebler zum Lead-Verteiler machen, der dann ohne Adminrechte alle Leads des Teams sieht, verteilt und bearbeitet.",
+      ],
+    },
+  },
+  {
+    version: '0.659.0-beta',
+    date: '2026-11-13',
+    time: '15:53',
+    commit: 'aea31e0',
+    highlights: {
+      en: [
+        "Lead page: hand a lead to a colleague right from its page, with the next step for them.",
+      ],
+      tr: [
+        "Müşteri adayı sayfası: adayı, yapılacak sonraki adımla birlikte doğrudan sayfasından bir iş arkadaşına devredin.",
+      ],
+      de: [
+        "Lead-Seite: Einen Lead direkt von seiner Seite an eine Kollegin oder einen Kollegen übergeben, mit dem nächsten Schritt.",
+      ],
+    },
+  },
+  {
+    version: '0.658.0-beta',
+    date: '2026-11-13',
+    time: '15:25',
+    commit: '21c5310',
+    highlights: {
+      en: [
+        "Board: filter by owner to see one colleague's records, and see at a glance whose each card is.",
+      ],
+      tr: [
+        "Pano: sorumluya göre filtreleyerek bir iş arkadaşının kayıtlarını görün; her kartın kime ait olduğu bir bakışta belli.",
+      ],
+      de: [
+        "Board: Nach Zuständigen filtern, um die Datensätze einer Kollegin oder eines Kollegen zu sehen; jede Karte zeigt auf einen Blick, wem sie gehört.",
+      ],
+    },
+  },
+  {
+    version: '0.657.0-beta',
+    date: '2026-11-13',
+    time: '15:23',
+    commit: '2b94185',
+    highlights: {
+      en: [
+        "Lead page: the contact now shows the real person on the account, and you can correct the name, position, e-mail and phone right there.",
+      ],
+      tr: [
+        "Müşteri adayı sayfası: iletişim kartı artık hesaptaki gerçek kişiyi gösteriyor; ad, pozisyon, e-posta ve telefonu doğrudan buradan düzeltebilirsiniz.",
+      ],
+      de: [
+        "Lead-Seite: Der Kontakt zeigt jetzt die echte Person beim Account, und Name, Position, E-Mail und Telefon lassen sich direkt dort korrigieren.",
+      ],
+    },
+  },
+  {
+    version: '0.656.10-beta',
+    date: '2026-11-13',
+    time: '14:10',
+    commit: '7e3aec8',
+    highlights: {
+      en: [
+        "The executive dashboard in a marketing workspace speaks sales: \"Won deals\" and \"Wins by the horizon\", without the internship-only skills block and cohort filter.",
+      ],
+      tr: [
+        "Marketing çalışma alanındaki yönetici panosu artık satış dilinde: \"Kazanılan anlaşmalar\" ve \"Ufka kadar kazanımlar\"; staja özgü beceri bloğu ve kohort filtresi yok.",
+      ],
+      de: [
+        "Das Executive-Dashboard in einem Marketing-Arbeitsbereich spricht jetzt Vertrieb: „Gewonnene Deals“ und „Abschlüsse bis zum Horizont“, ohne den praktikumsspezifischen Kompetenzblock und den Kohortenfilter.",
+      ],
+    },
+  },
+  {
+    version: '0.656.8-beta',
+    date: '2026-11-13',
+    time: '13:29',
+    commit: '568028c',
+    highlights: {
+      en: [
+        "On an account page, a channel the contact withdrew themselves is now marked as locked in the contact-permission editor, before you try to change it.",
+      ],
+      tr: [
+        "Hesap sayfasında, kişinin kendisinin geri çektiği bir kanal artık iletişim izni düzenleyicisinde, değiştirmeye çalışmadan önce kilitli olarak gösteriliyor.",
+      ],
+      de: [
+        "Auf der Account-Seite wird ein Kanal, den der Kontakt selbst widerrufen hat, im Editor für die Kontakterlaubnis jetzt als gesperrt angezeigt – bevor Sie ihn ändern wollen.",
+      ],
+    },
+  },
+  {
+    version: '0.656.3-beta',
+    date: '2026-11-13',
+    time: '12:34',
+    commit: 'dd64aa5',
+    highlights: {
+      en: [
+        "Marketing admin dashboard: every card and checklist step now opens a working page — reps, deals and accounts.",
+      ],
+      tr: [
+        "Pazarlama yönetici panosu: tüm kartlar ve kontrol listesi adımları artık çalışan bir sayfayı açıyor — temsilciler, fırsatlar ve hesaplar.",
+      ],
+      de: [
+        "Marketing-Admin-Dashboard: Jede Karte und jeder Checklisten-Schritt öffnet jetzt eine funktionierende Seite — Vertriebsmitarbeiter, Deals und Accounts.",
+      ],
+    },
+  },
+  {
+    version: '0.656.1-beta',
+    date: '2026-11-13',
+    time: '12:27',
+    commit: 'bc34c2a',
+    highlights: {
+      en: [
+        "Board: the drop highlight uses your organisation's accent colour, and collapsed empty stages keep their stage colour.",
+      ],
+      tr: [
+        "Pano: bırakma vurgusu kurumunuzun vurgu rengini kullanıyor, daraltılmış boş aşamalar da kendi aşama rengini koruyor.",
+      ],
+      de: [
+        "Board: Die Ablage-Hervorhebung nutzt die Akzentfarbe Ihrer Organisation, eingeklappte leere Phasen behalten ihre Phasenfarbe.",
+      ],
+    },
+  },
+  {
+    version: '0.656.0-beta',
+    date: '2026-11-13',
+    time: '12:26',
+    commit: '7e37efa',
+    highlights: {
+      en: [
+        "Admins of the sales product now see which prospects are past the 24-month retention period promised in every letter, and can erase their contact data with one click per account.",
+      ],
+      tr: [
+        "Satış ürününün yöneticileri artık her mektupta söz verilen 24 aylık saklama süresini aşan potansiyel müşterileri görüyor ve iletişim verilerini hesap başına tek tıkla silebiliyor.",
+      ],
+      de: [
+        "Admins des Vertriebsprodukts sehen jetzt, welche Interessenten die in jedem Brief zugesagte Speicherfrist von 24 Monaten überschritten haben, und können deren Kontaktdaten pro Account mit einem Klick löschen.",
+      ],
+    },
+  },
+  {
+    version: '0.655.0-beta',
+    date: '2026-11-13',
+    time: '12:23',
+    commit: '8c52a7b',
+    highlights: {
+      en: [
+        "API keys in a marketing workspace now only offer the scopes your product has — internship hiring scopes are no longer listed or accepted.",
+      ],
+      tr: [
+        "Marketing çalışma alanındaki API anahtarları artık yalnızca ürününüzde bulunan kapsamları sunuyor; staja özgü işe alım kapsamları listelenmiyor ve kabul edilmiyor.",
+      ],
+      de: [
+        "API-Schlüssel in einem Marketing-Arbeitsbereich bieten jetzt nur noch die Berechtigungen Ihres Produkts an – praktikumsspezifische Recruiting-Berechtigungen werden weder angezeigt noch akzeptiert.",
+      ],
+    },
+  },
+  {
+    version: '0.654.0-beta',
+    date: '2026-11-13',
+    time: '12:05',
+    commit: '4338a00',
+    highlights: {
+      en: [
+        "Hand a lead to a colleague right from the board: drag the card onto their name and say what's next — call, e-mail, appointment or demo.",
+      ],
+      tr: [
+        "Bir müşteri adayını panodan doğrudan bir ekip arkadaşına devredin: kartı adının üzerine sürükleyin ve sıradaki adımı seçin — arama, e-posta, randevu veya demo.",
+      ],
+      de: [
+        "Übergib einen Lead direkt vom Board an eine Kolleg:in: Karte auf den Namen ziehen und den nächsten Schritt wählen — Anruf, E-Mail, Termin oder Demo.",
+      ],
+    },
+  },
+  {
+    version: '0.653.2-beta',
+    date: '2026-11-13',
+    time: '12:02',
+    commit: '907da9a',
+    highlights: {
+      en: [
+        "Marketing workspaces no longer create company portal logins — customers never see your sales funnel.",
+      ],
+      tr: [
+        "Pazarlama çalışma alanlarında artık şirket portalı girişi oluşturulmuyor — müşteriler satış hunini hiçbir zaman görmez.",
+      ],
+      de: [
+        "Marketing-Arbeitsbereiche legen keine Firmenportal-Zugänge mehr an — Kunden sehen Ihren Vertriebstrichter nie.",
+      ],
+    },
+  },
+  {
+    version: '0.653.0-beta',
+    date: '2026-11-13',
+    time: '11:51',
+    commit: '3c94969',
+    highlights: {
+      en: [
+        "Marketing analytics: the median time to first contact and the share of live trials with an end date, and demo requests without a campaign tag are attributed to the site that referred them.",
+      ],
+      tr: [
+        "Marketing analitiği: ilk temasa medyan süre ve bitiş tarihi dolu aktif denemelerin oranı eklendi; kampanya etiketi olmayan demo talepleri artık yönlendiren siteye atfediliyor.",
+      ],
+      de: [
+        "Marketing-Analytics: Median bis zum ersten Kontakt und Anteil laufender Tests mit Enddatum; Demo-Anfragen ohne Kampagnen-Tag werden der verweisenden Website zugeordnet.",
+      ],
+    },
+  },
+  {
+    version: '0.652.2-beta',
+    date: '2026-11-13',
+    time: '11:45',
+    commit: '081cd52',
+    highlights: {
+      en: [
+        "Marketing CRM: interview panels and the mentor/mentee onboarding step are no longer reachable from a marketing workspace.",
+      ],
+      tr: [
+        "Pazarlama CRM'i: mülakat panelleri ve mentor/mentee karşılama adımı artık bir pazarlama çalışma alanından açılamıyor.",
+      ],
+      de: [
+        "Marketing-CRM: Interview-Panels und der Onboarding-Schritt für Mentoren und Mentees sind aus einem Marketing-Arbeitsbereich nicht mehr erreichbar.",
+      ],
+    },
+  },
+  {
+    version: '0.652.1-beta',
+    date: '2026-11-13',
+    time: '11:28',
+    commit: '403e23a',
+    highlights: {
+      en: [
+        "Postal campaigns can only be printed and posted once your deployment has named its own marketing sender — a letter never goes out under the wrong company's name.",
+      ],
+      tr: [
+        "Posta kampanyaları artık ancak kurulum kendi pazarlama göndericisini tanımladığında basılıp postalanabiliyor; bir mektup asla yanlış şirketin adıyla çıkmıyor.",
+      ],
+      de: [
+        "Briefkampagnen lassen sich erst drucken und versenden, wenn die Installation ihren eigenen Marketing-Absender hinterlegt hat — kein Brief geht unter dem Namen des falschen Unternehmens hinaus.",
+      ],
+    },
+  },
+  {
+    version: '0.652.0-beta',
+    date: '2026-11-13',
+    time: '11:19',
+    commit: '9269906',
+    highlights: {
+      en: [
+        "Every board column now has its own background color — blue, orange, purple, yellow, red, green, and gray for the last stage — so neighbouring stages are easy to tell apart. Cards stay white.",
+      ],
+      tr: [
+        "Panodaki her sütunun artık kendi zemin rengi var — mavi, turuncu, mor, sarı, kırmızı, yeşil, son aşama gri — böylece yan yana aşamalar karışmıyor. Kartlar beyaz kalıyor.",
+      ],
+      de: [
+        "Jede Spalte des Boards hat jetzt ihre eigene Hintergrundfarbe – Blau, Orange, Lila, Gelb, Rot, Grün und Grau für die letzte Phase –, damit benachbarte Phasen nicht verwechselt werden. Die Karten bleiben weiß.",
+      ],
+    },
+  },
+  {
+    version: '0.651.0-beta',
+    date: '2026-11-13',
+    time: '11:19',
+    commit: '223093d',
+    highlights: {
+      en: [
+        "Partner programme: download the programme's settings as one file and load them into another environment — page, theme and pictures, contract and more. The commission plan is only loaded if you confirm it.",
+      ],
+      tr: [
+        "Partner programı: programın ayarlarını tek bir dosya olarak indirip başka bir ortama yükleyin — sayfa, tema ve görseller, sözleşme ve diğerleri. Komisyon planı yalnızca onaylarsanız yüklenir.",
+      ],
+      de: [
+        "Partnerprogramm: Laden Sie die Einstellungen des Programms als eine Datei herunter und spielen Sie sie in einer anderen Umgebung ein — Seite, Design und Bilder, Vertrag und mehr. Der Provisionsplan wird nur nach Ihrer Bestätigung übernommen.",
+      ],
+    },
+  },
+  {
+    version: '0.650.0-beta',
+    date: '2026-11-13',
+    time: '11:18',
+    commit: '0f05fc5',
+    highlights: {
+      en: [
+        "Partner portal: see until when your commission runs for each customer, and get a heads-up on the home page when some are about to end.",
+      ],
+      tr: [
+        "Partner portalı: her müşteri için komisyonunuzun ne zamana kadar sürdüğünü görün; bitmek üzere olanlar için ana sayfada uyarı alın.",
+      ],
+      de: [
+        "Partnerportal: Sehen Sie, bis wann Ihre Provision für jeden Kunden läuft, und erhalten Sie auf der Startseite einen Hinweis, wenn welche bald enden.",
+      ],
+    },
+  },
+  {
+    version: '0.649.0-beta',
+    date: '2026-11-13',
+    time: '11:18',
+    commit: 'cc853cd',
+    highlights: {
+      en: [
+        "Lead page: the last interaction is shown right under the follow-up, the date and value panels sit side by side, and every section says what it is for.",
+      ],
+      tr: [
+        "Müşteri adayı sayfası: son etkileşim takibin hemen altında, tarih ve değer kutuları yan yana; her bölüm ne için olduğunu söylüyor.",
+      ],
+      de: [
+        "Lead-Seite: Die letzte Interaktion steht direkt unter dem Follow-up, Datums- und Wertfelder stehen nebeneinander, und jeder Bereich sagt, wofür er da ist.",
+      ],
+    },
+  },
+  {
+    version: '0.648.6-beta',
+    date: '2026-11-13',
+    time: '11:18',
+    commit: '0e5efbe',
+    highlights: {
+      en: [
+        "Downloads whose file name contains an emoji, a fullwidth quote or the letter ı no longer fail.",
+      ],
+      tr: [
+        "Dosya adında emoji, tam genişlikli tırnak ya da ı harfi bulunan indirmeler artık hata vermiyor.",
+      ],
+      de: [
+        "Downloads, deren Dateiname ein Emoji, ein breites Anführungszeichen oder den Buchstaben ı enthält, schlagen nicht mehr fehl.",
+      ],
+    },
+  },
+  {
+    version: '0.648.5-beta',
+    date: '2026-11-13',
+    time: '11:18',
+    commit: 'b789bdc',
+    highlights: {
+      en: [
+        "A programme's own terms (e.g. \"guide\" instead of \"mentor\") show on that programme's admin pages again.",
+      ],
+      tr: [
+        "Bir programın kendi terimleri (ör. \"mentor\" yerine \"rehber\") o programın yönetim sayfalarında yeniden görünüyor.",
+      ],
+      de: [
+        "Die eigenen Begriffe eines Programms (z. B. „Guide“ statt „Mentor“) erscheinen wieder auf seinen Verwaltungsseiten.",
+      ],
+    },
+  },
+  {
+    version: '0.648.1-beta',
+    date: '2026-11-11',
+    time: '11:08',
+    commit: 'd5c0ded',
+    highlights: {
+      en: [
+        "Programme comparison: average time to hire now starts when a person entered the placement funnel, matching the other reports.",
+      ],
+      tr: [
+        "Program karşılaştırması: ortalama işe alım süresi artık kişinin yerleştirme hattına girdiği andan ölçülüyor, diğer raporlarla aynı.",
+      ],
+      de: [
+        "Programmvergleich: Die durchschnittliche Zeit bis zur Einstellung zählt jetzt ab dem Eintritt in den Vermittlungstrichter, wie in den anderen Berichten.",
+      ],
+    },
+  },
+  {
+    version: '0.648.0-beta',
+    date: '2026-11-11',
+    time: '10:54',
+    commit: 'b08bab1',
+    highlights: {
+      en: [
+        "Screen readers now read Turkish, German and English messages, notes and bios in the right voice when the language is clear from the text.",
+      ],
+      tr: [
+        "Ekran okuyucular artık Türkçe, Almanca ve İngilizce mesajları, notları ve biyografileri, dil metinden açıkça anlaşılıyorsa doğru sesle okuyor.",
+      ],
+      de: [
+        "Screenreader lesen türkische, deutsche und englische Nachrichten, Notizen und Profiltexte jetzt mit der richtigen Stimme vor, wenn die Sprache aus dem Text klar hervorgeht.",
+      ],
+    },
+  },
+  {
+    version: '0.647.0-beta',
+    date: '2026-11-11',
+    time: '10:49',
+    commit: '28c83cf',
+    highlights: {
+      en: [
+        "The pairing timeline now also shows questions to the mentor and submitted evaluations — a mentee sees only that an evaluation was made, never its scores.",
+      ],
+      tr: [
+        "Eşleşme zaman çizelgesi artık mentöre sorulan soruları ve gönderilen değerlendirmeleri de gösteriyor — mentee yalnızca bir değerlendirme yapıldığını görür, puanlarını asla görmez.",
+      ],
+      de: [
+        "Die Zeitleiste einer Zuordnung zeigt jetzt auch Fragen an den Mentor und abgegebene Bewertungen – Mentees sehen nur, dass eine Bewertung erfolgt ist, nie die Punkte.",
+      ],
+    },
+  },
+  {
+    version: '0.646.4-beta',
+    date: '2026-11-11',
+    time: '10:37',
+    commit: '12a042e',
+    highlights: {
+      en: [
+        "After sending a partner application, switching the language keeps the confirmation instead of showing an empty form.",
+      ],
+      tr: [
+        "Partner başvurusu gönderildikten sonra dil değiştirildiğinde boş form yerine onay mesajı görünmeye devam ediyor.",
+      ],
+      de: [
+        "Nach dem Absenden einer Partnerbewerbung bleibt beim Sprachwechsel die Bestätigung sichtbar statt eines leeren Formulars.",
+      ],
+    },
+  },
+  {
+    version: '0.646.3-beta',
+    date: '2026-11-11',
+    time: '10:37',
+    commit: 'd6916e0',
+    highlights: {
+      en: [
+        "Files with Turkish or other special characters in their name download again.",
+      ],
+      tr: [
+        "Adında Türkçe ya da başka özel karakter bulunan dosyalar yeniden indirilebiliyor.",
+      ],
+      de: [
+        "Dateien mit türkischen oder anderen Sonderzeichen im Namen lassen sich wieder herunterladen.",
+      ],
+    },
+  },
+  {
     version: '0.646.0-beta',
     date: '2026-11-11',
     time: '01:37',

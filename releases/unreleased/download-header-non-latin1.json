@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**A download whose file name has Turkish or other non-Latin-1 characters no longer fails (500):** `Content-Disposition` now carries an ASCII fallback in `filename=` and the real name only in `filename*=UTF-8''…` (RFC 6266). Node/undici refuse header characters above U+00FF, and Next 15.5.29 stopped smoothing that over, so CV, document, message and support attachment downloads named e.g. `özgeçmiş.pdf` broke. The two support attachment routes now use the same `contentDisposition()` helper.",
-  "notes": {
-    "en": ["Files with Turkish or other special characters in their name download again."],
-    "tr": ["Adında Türkçe ya da başka özel karakter bulunan dosyalar yeniden indirilebiliyor."],
-    "de": ["Dateien mit türkischen oder anderen Sonderzeichen im Namen lassen sich wieder herunterladen."]
-  }
-}

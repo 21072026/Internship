@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Security:** a session without an organization (a token minted before the org backfill) is read as the default organization's on the tag routes (`/api/tags/[id]`, `/api/tags/[id]/merge`, `/api/tags/assign`) and the document review routes, instead of dropping the tenant filter — `orgId ?? undefined` and `orgId && row.orgId !== orgId` let such a session act on every org's rows (#3603)."
-}
