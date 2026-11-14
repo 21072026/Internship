@@ -174,3 +174,26 @@ test('no partner, another currency, another org\'s customer and a dry run write 
   // A payment without its `payment` block is refused at the door.
   expect((await post(request, envelope({ event_type: 'payment_received', external_id: linked }))).status()).toBe(400);
 });
+
+test('the commission base arrives as transactions × unit price, or is refused when the shapes disagree (#3553)', async ({ request }) => {
+  const ext = `acct-${rid()}`;
+  expect((await (await post(request, envelope({ external_id: ext, referral_code: CODE }))).json()).outcome).toBe('applied');
+
+  // 340 transactions × 0,15 € = 51,00 €: the base, with its breakdown stored.
+  const ref = `INV-${STAMP}-b1`;
+  expect(await (await post(request, paymentEvent(ext, { id: ref, transaction_count: 340, unit_price_minor: 15, currency: 'EUR' }))).json()).toMatchObject({ outcome: 'applied' });
+  expect(await prisma.affiliatePayment.findFirstOrThrow({ where: { orgId: orgA, externalPaymentRef: ref }, select: { amountMinor: true, transactionCount: true, unitPriceMinor: true } })).toEqual({
+    amountMinor: 5_100,
+    transactionCount: 340,
+    unitPriceMinor: 15,
+  });
+
+  // Both shapes that agree are fine; disagreeing or half a breakdown is a conflict naming the issue.
+  expect(await (await post(request, paymentEvent(ext, { id: `INV-${STAMP}-b2`, amount_minor: 5_100, transaction_count: 340, unit_price_minor: 15, currency: 'EUR' }))).json()).toMatchObject({ outcome: 'applied' });
+  const before = await prisma.affiliatePayment.count({ where: { orgId: orgA } });
+  const mismatch = await (await post(request, paymentEvent(ext, { id: `INV-${STAMP}-b3`, amount_minor: 4_000, transaction_count: 340, unit_price_minor: 15, currency: 'EUR' }))).json();
+  expect(mismatch).toMatchObject({ outcome: 'conflict', detail: 'payment refused: invalid_input (amount_mismatch)' });
+  const half = await (await post(request, paymentEvent(ext, { id: `INV-${STAMP}-b4`, transaction_count: 340, currency: 'EUR' }))).json();
+  expect(half).toMatchObject({ outcome: 'conflict', detail: 'payment refused: invalid_input (incomplete_breakdown)' });
+  expect(await prisma.affiliatePayment.count({ where: { orgId: orgA } })).toBe(before);
+});

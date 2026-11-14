@@ -23,6 +23,9 @@ import { PAYMENT_LIST, hasListFilter, listQueryParams } from '@/lib/affiliateLis
 // Customer payments (docs/affiliate-module.md, #3116): record one by hand, see
 // the commission the plan gave it. The writer decides everything; the amount is
 // typed the way a person writes it ("19,99") and sent as minor units.
+// The amount is the COMMISSION BASE (#3553): either transactions × the
+// undiscounted price per transaction, or the base amount itself — the writer's
+// resolvePaymentBase() decides; this screen only shows the product it will get.
 // A customer's partner-facing label (#3352) is edited from its row.
 // Partner, search and date filters and the column sort (#3539) live in the URL
 // and are applied on the server.
@@ -44,6 +47,14 @@ interface Partner {
   code: string;
   displayName: string;
   status: string;
+}
+
+/** A whole number of transactions (≥ 1), or null. Digits only: "1.000" is not a count. */
+function parseCount(raw: string): number | null {
+  const t = raw.trim();
+  if (!/^\d{1,10}$/.test(t)) return null;
+  const n = Number(t);
+  return n >= 1 && Number.isSafeInteger(n) ? n : null;
 }
 
 // The admin's own calendar day (the server allows up to +14 h ahead of UTC).
@@ -75,7 +86,8 @@ function AffiliatePayments() {
   const [forbidden, setForbidden] = useState(false);
   const [busy, setBusy] = useState(false);
   const [labelFor, setLabelFor] = useState<{ customerId: string; draft: string } | null>(null);
-  const [form, setForm] = useState({ partnerId: '', customerExternalRef: '', amount: '', receivedOn: today(), externalPaymentRef: '' });
+  const [form, setForm] = useState({ partnerId: '', customerExternalRef: '', amount: '', transactionCount: '', unitPrice: '', receivedOn: today(), externalPaymentRef: '' });
+  const [mode, setMode] = useState<'breakdown' | 'amount'>('breakdown');
 
   const load = useCallback(async () => {
     const [p, q] = await Promise.all([fetch(`/api/admin/affiliate/payments?${qs}`), fetch('/api/admin/affiliate/partners')]);
@@ -119,10 +131,26 @@ function AffiliatePayments() {
   }
 
   async function save() {
-    const amountMinor = parseMinorUnits(form.amount);
-    if (amountMinor === null || Number.isNaN(amountMinor)) {
-      toast(L.errors.invalid_input, 'error');
-      return;
+    let base: { amountMinor: number } | { transactionCount: number; unitPriceMinor: number };
+    if (mode === 'amount') {
+      const amountMinor = parseMinorUnits(form.amount);
+      if (amountMinor === null || Number.isNaN(amountMinor)) {
+        toast(L.errors.invalid_input, 'error');
+        return;
+      }
+      base = { amountMinor };
+    } else {
+      const transactionCount = parseCount(form.transactionCount);
+      const unitPriceMinor = parseMinorUnits(form.unitPrice);
+      if (transactionCount === null) {
+        toast(L.baseErrors.transaction_count, 'error');
+        return;
+      }
+      if (unitPriceMinor === null || Number.isNaN(unitPriceMinor)) {
+        toast(L.baseErrors.unit_price, 'error');
+        return;
+      }
+      base = { transactionCount, unitPriceMinor };
     }
     setBusy(true);
     try {
@@ -132,7 +160,7 @@ function AffiliatePayments() {
         body: JSON.stringify({
           partnerId: form.partnerId || null,
           customerExternalRef: form.customerExternalRef,
-          amountMinor,
+          ...base,
           receivedOn: form.receivedOn,
           externalPaymentRef: form.externalPaymentRef,
         }),
@@ -142,14 +170,16 @@ function AffiliatePayments() {
         const moved = (body.created ?? 0) + (body.updated ?? 0);
         toast(moved > 0 ? interpolate(L.savedCommission, { n: String(moved) }) : L.saved);
         if (body.drift > 0) toast(interpolate(L.drift, { n: String(body.drift) }), 'error');
-        setForm({ ...form, customerExternalRef: '', amount: '', externalPaymentRef: '' });
+        setForm({ ...form, customerExternalRef: '', amount: '', transactionCount: '', unitPrice: '', externalPaymentRef: '' });
         // The new payment is the newest: back to the first page of the default order.
         // (A changed URL reloads by itself; an unchanged one is reloaded here.)
         if (page > 1 || query.sort !== PAYMENT_LIST.defaultSort || query.dir !== PAYMENT_LIST.defaultDir) set({ page: 1, sort: PAYMENT_LIST.defaultSort, dir: PAYMENT_LIST.defaultDir });
         else await load();
       } else {
         const code = body.code as keyof typeof L.errors | undefined;
-        toast(code && code in L.errors ? L.errors[code] : L.failed, 'error');
+        // A commission-base refusal names its issue (#3553); say which one.
+        const issue = Array.isArray(body.issues) ? (body.issues as string[]).find((i): i is keyof typeof L.baseErrors => i in L.baseErrors) : undefined;
+        toast(issue ? L.baseErrors[issue] : code && code in L.errors ? L.errors[code] : L.failed, 'error');
       }
     } finally {
       setBusy(false);
@@ -162,6 +192,13 @@ function AffiliatePayments() {
   // What the server will receive, before saving: "1.000" is a thousand euro.
   const parsedAmount = parseMinorUnits(form.amount);
   const amountPreview = parsedAmount === null || Number.isNaN(parsedAmount) ? undefined : interpolate(L.amountPreview, { amount: money(parsedAmount) });
+  // The product the writer will record, live: "340 × 0,15 € = 51,00 €".
+  const parsedCount = parseCount(form.transactionCount);
+  const parsedPrice = parseMinorUnits(form.unitPrice);
+  const breakdownPreview =
+    parsedCount === null || parsedPrice === null || Number.isNaN(parsedPrice)
+      ? undefined
+      : interpolate(L.breakdownPreview, { count: new Intl.NumberFormat(locale).format(parsedCount), price: money(parsedPrice), amount: money(parsedCount * parsedPrice) });
 
   return (
     <div className="space-y-6">
@@ -187,7 +224,38 @@ function AffiliatePayments() {
               data-testid="affiliate-payment-partner"
             />
             <Input label={L.customerRef} hint={L.customerRefHint} value={form.customerExternalRef} onChange={(e) => setForm({ ...form, customerExternalRef: e.target.value })} data-testid="affiliate-payment-customer" />
-            <Input label={L.amount} hint={amountPreview} inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="affiliate-payment-amount" />
+            <div className="space-y-2 sm:col-span-2 lg:col-span-3">
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label={L.baseMode}>
+                <span className="text-sm text-gray-600 dark:text-gray-400">{L.baseMode}</span>
+                {(['breakdown', 'amount'] as const).map((m) => (
+                  <Button
+                    key={m}
+                    type="button"
+                    size="sm"
+                    variant={mode === m ? 'primary' : 'secondary'}
+                    aria-pressed={mode === m}
+                    onClick={() => setMode(m)}
+                    data-testid={`affiliate-payment-mode-${m}`}
+                  >
+                    {m === 'breakdown' ? L.modeBreakdown : L.modeAmount}
+                  </Button>
+                ))}
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {mode === 'breakdown' ? (
+                  <>
+                    <Input label={L.transactionCount} inputMode="numeric" value={form.transactionCount} onChange={(e) => setForm({ ...form, transactionCount: e.target.value })} data-testid="affiliate-payment-count" />
+                    <Input label={L.unitPrice} inputMode="decimal" value={form.unitPrice} onChange={(e) => setForm({ ...form, unitPrice: e.target.value })} data-testid="affiliate-payment-unit-price" />
+                    <p className="self-end pb-2 text-sm font-medium text-gray-900 tabular-nums dark:text-gray-100" aria-live="polite" data-testid="affiliate-payment-breakdown-preview">
+                      {breakdownPreview}
+                    </p>
+                  </>
+                ) : (
+                  <Input label={L.amount} hint={amountPreview} inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="affiliate-payment-amount" />
+                )}
+              </div>
+              <p className="text-xs text-gray-500" data-testid="affiliate-payment-base-hint">{L.baseHint}</p>
+            </div>
             <Input label={L.receivedOn} type="date" max={today()} value={form.receivedOn} onChange={(e) => setForm({ ...form, receivedOn: e.target.value })} data-testid="affiliate-payment-date" />
             <Input label={L.paymentRef} hint={L.paymentRefHint} value={form.externalPaymentRef} onChange={(e) => setForm({ ...form, externalPaymentRef: e.target.value })} data-testid="affiliate-payment-ref" />
           </div>

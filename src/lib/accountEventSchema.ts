@@ -81,12 +81,16 @@ export const accountEventSchema = z
       .optional(),
     // A customer's payment (#3355), on `payment_received` only. `id` is the
     // billing side's payment reference (unique per organisation: a repeat writes
-    // nothing); the amount is integer minor units; `received_at` defaults to
-    // `occurred_at`.
+    // nothing); `received_at` defaults to `occurred_at`. The commission base
+    // (#3553) is `amount_minor`, or `transaction_count` × `unit_price_minor`
+    // (undiscounted gross price per transaction), or both when they agree —
+    // integer minor units; the writer's resolvePaymentBase() decides.
     payment: z
       .object({
         id: z.string().trim().min(1).max(MAX_REF_LENGTH),
-        amount_minor: z.number().int().positive().max(MAX_AMOUNT_MINOR),
+        amount_minor: z.number().int().positive().max(MAX_AMOUNT_MINOR).nullable().optional(),
+        transaction_count: z.number().int().positive().max(MAX_AMOUNT_MINOR).nullable().optional(),
+        unit_price_minor: z.number().int().nonnegative().max(MAX_AMOUNT_MINOR).nullable().optional(),
         currency: z.string().regex(/^[A-Z]{3}$/, 'payment.currency: an ISO 4217 code in capitals'),
         received_at: nullableIsoDate,
       })
