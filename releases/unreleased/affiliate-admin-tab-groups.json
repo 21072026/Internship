@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Affiliate admin: the tabs are split into a **Customers** group (new customer list, customer payments) and a **Partners** group (partners, applications, funnel, commissions, partner payouts), and the two payment tabs are renamed so they are no longer confused. The new customer list (`/admin/affiliates/customers`, `GET /api/admin/affiliate/customers`, `affiliate.read`, read-only) shows one row per referred customer with its partner, first and last payment, payment count, commission window end and earned commission; the window comes from the engine through `customerWindowsByPartner()`, shared with the partner portal (#3538).",
+  "notes": {
+    "en": ["Affiliate admin: customer and partner screens are now in two separate groups, and a new customer list shows each referred customer with its partner, payments and commission."],
+    "tr": ["Affiliate yönetimi: müşteri ve partner ekranları artık iki ayrı grupta; yeni müşteri listesi yönlendirilen her müşteriyi partneri, ödemeleri ve komisyonuyla gösteriyor."],
+    "de": ["Affiliate-Verwaltung: Kunden- und Partnerseiten sind jetzt in zwei getrennten Gruppen, und eine neue Kundenliste zeigt jeden vermittelten Kunden mit Partner, Zahlungen und Provision."]
+  }
+}
