@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Affiliate admin: the commission, customer payment, partner payout and partner lists get a shared filter bar (partner, status, type, date range, search) and sortable columns, applied on the server and kept in the URL. Every route reads its query through `parseListQuery()` (`src/lib/affiliateListQueryRule.ts`, allowlisted sort keys, 400 `invalid_query` on anything else, id tiebreak); commission totals follow the filters, a changed filter clears the bulk selection, and the payout history is now paged (#3539).",
+  "notes": {
+    "en": ["Affiliate admin: commissions, payments, payouts and partners can now be filtered by partner, status, date and search, and sorted by column. The view stays in the link, so it can be shared."],
+    "tr": ["Affiliate yönetimi: komisyonlar, ödemeler, partner ödemeleri ve partnerler artık partnere, duruma, tarihe ve aramaya göre filtrelenip sütunlara göre sıralanabiliyor. Görünüm linkte kalıyor, paylaşılabiliyor."],
+    "de": ["Affiliate-Verwaltung: Provisionen, Zahlungen, Auszahlungen und Partner lassen sich jetzt nach Partner, Status, Datum und Suche filtern und nach Spalten sortieren. Die Ansicht bleibt im Link und lässt sich teilen."]
+  }
+}

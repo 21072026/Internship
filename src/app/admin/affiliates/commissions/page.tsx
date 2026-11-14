@@ -1,7 +1,6 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -15,12 +14,16 @@ import { formatDate } from '@/lib/relativeTime';
 import { interpolate } from '@/lib/notificationText';
 import { AffiliateTabs } from '../AffiliateTabs';
 import { CustomerName } from '@/components/affiliate/CustomerName';
+import { AffiliateListToolbar, SortHeader, useAffiliateListQuery } from '@/components/affiliate/AffiliateListControls';
+import { COMMISSION_LIST, hasListFilter, listQueryParams } from '@/lib/affiliateListQueryRule';
 
 // Commissions (docs/affiliate-module.md, #3116): by status, oldest due first;
 // approve / reject / back to pending in bulk; and the drift list — frozen rows
 // the current plan would calculate differently, shown, never changed.
+// Partner, type and due-date filters and the column sort (#3539) live in the URL
+// and are applied on the server; the totals per status follow the filters.
 
-const STATUSES = ['PENDING', 'APPROVED', 'PAID', 'REJECTED'] as const;
+const STATUSES = COMMISSION_LIST.statuses;
 type Status = (typeof STATUSES)[number];
 type Transition = 'APPROVE' | 'REJECT' | 'UNAPPROVE';
 
@@ -68,9 +71,13 @@ function AffiliateCommissions() {
   const L = t.affiliateCommissions;
   const locale = useLocale();
   const toast = useToast();
-  const asked = useSearchParams().get('status');
-  const [status, setStatus] = useState<Status>(() => STATUSES.find((s) => s === asked) ?? 'PENDING');
-  const [page, setPage] = useState(1);
+  const A = t.affiliateList;
+  const { query, set } = useAffiliateListQuery(COMMISSION_LIST);
+  // The screen always shows one status: PENDING unless the URL names another.
+  const status: Status = STATUSES.find((s) => s === query.status) ?? 'PENDING';
+  const page = query.page;
+  const qs = listQueryParams(COMMISSION_LIST, { ...query, status }).toString();
+  const [partners, setPartners] = useState<{ id: string; code: string; displayName: string }[]>([]);
   const [data, setData] = useState<Data | null>(null);
   const [drift, setDrift] = useState<Drift[] | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -81,7 +88,7 @@ function AffiliateCommissions() {
   const [checkingDrift, setCheckingDrift] = useState(false);
 
   const load = useCallback(async () => {
-    const c = await fetch(`/api/admin/affiliate/commissions?status=${status}&page=${page}`);
+    const c = await fetch(`/api/admin/affiliate/commissions?${qs}`);
     if (c.status === 403) {
       setForbidden(true);
       return;
@@ -91,8 +98,9 @@ function AffiliateCommissions() {
       return;
     }
     setData(await c.json());
+    // A changed filter, sort or page is a different list: nothing stays selected.
     setSelected(new Set());
-  }, [status, page]);
+  }, [qs]);
 
   // The drift list re-evaluates the whole programme, so it runs when asked for,
   // not on every load (a migrated programme holds thousands of partners).
@@ -110,6 +118,13 @@ function AffiliateCommissions() {
   useEffect(() => {
     void load();
   }, [load]);
+  // The partner filter's choices; a failure leaves the rest of the screen working.
+  useEffect(() => {
+    void fetch('/api/admin/affiliate/partners')
+      .then((r) => (r.ok ? r.json() : { partners: [] }))
+      .then((b) => setPartners(b.partners ?? []))
+      .catch(() => {});
+  }, []);
 
   const money = (minor: number) => formatMinorAmount(minor, 'EUR', locale);
 
@@ -163,10 +178,7 @@ function AffiliateCommissions() {
             size="sm"
             variant={s === status ? 'primary' : 'outline'}
             aria-pressed={s === status}
-            onClick={() => {
-              setStatus(s);
-              setPage(1);
-            }}
+            onClick={() => set({ status: s })}
             data-testid={`affiliate-commissions-${s}`}
           >
             {L[`status${s}`]}
@@ -175,10 +187,20 @@ function AffiliateCommissions() {
         ))}
       </div>
 
+      <AffiliateListToolbar
+        spec={COMMISSION_LIST}
+        query={query}
+        set={set}
+        partners={partners}
+        dateLabel={A.dateDue}
+        kindOptions={COMMISSION_LIST.kinds.map((k) => ({ value: k, label: L[`kind${k}`] }))}
+        resultCount={data?.total ?? null}
+      />
+
       {!data ? (
         <SkeletonRows rows={5} />
       ) : data.rows.length === 0 ? (
-        <EmptyState testId="affiliate-commissions" title={L.empty} />
+        <EmptyState testId="affiliate-commissions" title={hasListFilter({ ...query, status: null }) ? A.noMatch : L.empty} />
       ) : (
         <Card padding="none">
           {data.canWrite && actions.length > 0 && (
@@ -191,7 +213,7 @@ function AffiliateCommissions() {
             </div>
           )}
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" data-testid="affiliate-commission-table">
               <thead className="text-left text-gray-500">
                 <tr>
                   {data.canWrite && actions.length > 0 && (
@@ -204,17 +226,17 @@ function AffiliateCommissions() {
                       />
                     </th>
                   )}
-                  <th className="px-4 py-2">{L.colDue}</th>
-                  <th className="px-4 py-2">{L.colPartner}</th>
+                  <SortHeader label={L.colDue} sortKey="due" query={query} set={set} firstDir="asc" />
+                  <SortHeader label={L.colPartner} sortKey="partner" query={query} set={set} firstDir="asc" />
                   <th className="px-4 py-2">{L.colCustomer}</th>
                   <th className="px-4 py-2 text-right">{L.colPayment}</th>
-                  <th className="px-4 py-2 text-right">{L.colCommission}</th>
+                  <SortHeader label={L.colCommission} sortKey="amount" query={query} set={set} numeric />
                   <th className="px-4 py-2">{L.colPlan}</th>
                 </tr>
               </thead>
               <tbody>
                 {data.rows.map((r) => (
-                  <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800">
+                  <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800" data-testid="affiliate-commission-row" data-commission-id={r.id}>
                     {data.canWrite && actions.length > 0 && (
                       <td className="px-4 py-2">
                         <input type="checkbox" aria-label={`${L.select}: ${r.payment.externalPaymentRef}`} checked={selected.has(r.id)} onChange={() => toggle(r.id)} />
@@ -235,9 +257,9 @@ function AffiliateCommissions() {
           </div>
           {pages > 1 && (
             <div className="flex items-center justify-between px-4 py-2 text-sm">
-              <Button type="button" size="sm" variant="ghost" disabled={page <= 1} onClick={() => setPage(page - 1)}>{L.prev}</Button>
+              <Button type="button" size="sm" variant="ghost" disabled={page <= 1} onClick={() => set({ page: page - 1 })}>{L.prev}</Button>
               <span>{interpolate(L.page, { page: String(page), pages: String(pages) })}</span>
-              <Button type="button" size="sm" variant="ghost" disabled={page >= pages} onClick={() => setPage(page + 1)}>{L.next}</Button>
+              <Button type="button" size="sm" variant="ghost" disabled={page >= pages} onClick={() => set({ page: page + 1 })}>{L.next}</Button>
             </div>
           )}
         </Card>
