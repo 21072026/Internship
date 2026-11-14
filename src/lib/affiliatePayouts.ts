@@ -1,7 +1,9 @@
 // Reading the programme's payouts for the admin screen (docs/affiliate-module.md,
 // #3116). Recording one is createPayout() in src/lib/affiliatePaymentWriter.ts.
 
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { listDateRange, payoutOrderBy, type ListQuery } from '@/lib/affiliateListQueryRule';
 
 export const PAYOUTS_PER_PAGE = 50;
 
@@ -15,16 +17,26 @@ export interface PayoutRow {
   commissions: number;
 }
 
-/** Newest transfer first, paged. */
-export async function listPayouts(orgId: string, opts: { partnerId?: string | null; page?: number } = {}): Promise<{ rows: PayoutRow[]; total: number; page: number; perPage: number }> {
+/** Newest transfer first by default, paged. `q` finds the transfer reference (#3539). */
+export async function listPayouts(
+  orgId: string,
+  opts: { partnerId?: string | null; page?: number; q?: string | null; from?: string | null; to?: string | null; sort?: ListQuery['sort']; dir?: ListQuery['dir'] } = {},
+): Promise<{ rows: PayoutRow[]; total: number; page: number; perPage: number }> {
   // Bounded: a huge or non-finite page would overflow Prisma's `skip`.
   const raw = Math.floor(opts.page ?? 1);
   const page = Number.isFinite(raw) ? Math.min(10_000, Math.max(1, raw)) : 1;
-  const where = { orgId, ...(opts.partnerId ? { partnerId: opts.partnerId } : {}) };
+  const paidAt = listDateRange({ from: opts.from ?? null, to: opts.to ?? null });
+  const where = {
+    orgId,
+    ...(opts.partnerId ? { partnerId: opts.partnerId } : {}),
+    ...(paidAt ? { paidAt } : {}),
+    ...(opts.q ? { reference: { contains: opts.q } } : {}),
+  };
   const [rows, total] = await Promise.all([
     prisma.affiliatePayout.findMany({
       where,
-      orderBy: [{ paidAt: 'desc' }, { id: 'desc' }],
+      // Built from the rule's constant table; the cast only names Prisma's type.
+      orderBy: payoutOrderBy({ sort: opts.sort ?? 'date', dir: opts.dir ?? 'desc' }) as Prisma.AffiliatePayoutOrderByWithRelationInput[],
       skip: (page - 1) * PAYOUTS_PER_PAGE,
       take: PAYOUTS_PER_PAGE,
       select: {

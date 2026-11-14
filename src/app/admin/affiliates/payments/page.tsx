@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -17,11 +17,15 @@ import { formatMinorAmount, parseMinorUnits } from '@/lib/money';
 import { formatDate } from '@/lib/relativeTime';
 import { interpolate } from '@/lib/notificationText';
 import { AffiliateTabs } from '../AffiliateTabs';
+import { AffiliateListToolbar, SortHeader, useAffiliateListQuery } from '@/components/affiliate/AffiliateListControls';
+import { PAYMENT_LIST, hasListFilter, listQueryParams } from '@/lib/affiliateListQueryRule';
 
 // Customer payments (docs/affiliate-module.md, #3116): record one by hand, see
 // the commission the plan gave it. The writer decides everything; the amount is
 // typed the way a person writes it ("19,99") and sent as minor units.
 // A customer's partner-facing label (#3352) is edited from its row.
+// Partner, search and date filters and the column sort (#3539) live in the URL
+// and are applied on the server.
 
 interface Row {
   id: string;
@@ -49,13 +53,24 @@ const today = () => {
 };
 
 export default function AffiliatePaymentsPage() {
+  return (
+    <Suspense fallback={<SkeletonRows rows={5} />}>
+      <AffiliatePayments />
+    </Suspense>
+  );
+}
+
+function AffiliatePayments() {
   const t = useT();
   const L = t.affiliatePayments;
   const locale = useLocale();
   const toast = useToast();
   const [data, setData] = useState<{ rows: Row[]; total: number; page: number; perPage: number; canWrite: boolean } | null>(null);
   const [partners, setPartners] = useState<Partner[]>([]);
-  const [page, setPage] = useState(1);
+  const A = t.affiliateList;
+  const { query, set } = useAffiliateListQuery(PAYMENT_LIST);
+  const page = query.page;
+  const qs = listQueryParams(PAYMENT_LIST, query).toString();
   const [failed, setFailed] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -63,7 +78,7 @@ export default function AffiliatePaymentsPage() {
   const [form, setForm] = useState({ partnerId: '', customerExternalRef: '', amount: '', receivedOn: today(), externalPaymentRef: '' });
 
   const load = useCallback(async () => {
-    const [p, q] = await Promise.all([fetch(`/api/admin/affiliate/payments?page=${page}`), fetch('/api/admin/affiliate/partners')]);
+    const [p, q] = await Promise.all([fetch(`/api/admin/affiliate/payments?${qs}`), fetch('/api/admin/affiliate/partners')]);
     if (p.status === 403 || q.status === 403) {
       setForbidden(true);
       return;
@@ -74,7 +89,7 @@ export default function AffiliatePaymentsPage() {
     }
     setData(await p.json());
     setPartners((await q.json()).partners);
-  }, [page]);
+  }, [qs]);
 
   useEffect(() => {
     void load();
@@ -128,8 +143,10 @@ export default function AffiliatePaymentsPage() {
         toast(moved > 0 ? interpolate(L.savedCommission, { n: String(moved) }) : L.saved);
         if (body.drift > 0) toast(interpolate(L.drift, { n: String(body.drift) }), 'error');
         setForm({ ...form, customerExternalRef: '', amount: '', externalPaymentRef: '' });
-        setPage(1);
-        await load();
+        // The new payment is the newest: back to the first page of the default order.
+        // (A changed URL reloads by itself; an unchanged one is reloaded here.)
+        if (page > 1 || query.sort !== PAYMENT_LIST.defaultSort || query.dir !== PAYMENT_LIST.defaultDir) set({ page: 1, sort: PAYMENT_LIST.defaultSort, dir: PAYMENT_LIST.defaultDir });
+        else await load();
       } else {
         const code = body.code as keyof typeof L.errors | undefined;
         toast(code && code in L.errors ? L.errors[code] : L.failed, 'error');
@@ -182,27 +199,29 @@ export default function AffiliatePaymentsPage() {
         </Card>
       )}
 
+      <AffiliateListToolbar spec={PAYMENT_LIST} query={query} set={set} partners={partners} searchLabel={A.searchPayments} dateLabel={A.dateReceived} resultCount={data?.total ?? null} />
+
       {!data ? (
         <SkeletonRows rows={5} />
       ) : data.rows.length === 0 ? (
-        <EmptyState testId="affiliate-payments" title={L.empty} />
+        <EmptyState testId="affiliate-payments" title={hasListFilter(query) ? A.noMatch : L.empty} />
       ) : (
         <Card padding="none">
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="affiliate-payment-table">
               <thead className="text-left text-gray-500">
                 <tr>
-                  <th className="px-4 py-2">{L.colDate}</th>
+                  <SortHeader label={L.colDate} sortKey="date" query={query} set={set} />
                   <th className="px-4 py-2">{L.colCustomer}</th>
                   <th className="px-4 py-2">{L.colPartner}</th>
-                  <th className="px-4 py-2 text-right">{L.colAmount}</th>
+                  <SortHeader label={L.colAmount} sortKey="amount" query={query} set={set} numeric />
                   <th className="px-4 py-2">{L.colRef}</th>
                   <th className="px-4 py-2">{L.colCommission}</th>
                 </tr>
               </thead>
               <tbody>
                 {data.rows.map((r) => (
-                  <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800">
+                  <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800" data-testid="affiliate-payment-row">
                     <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.receivedAt, locale, { timeZone: 'UTC' })}</td>
                     <td className="px-4 py-2">
                       <div className="flex items-start gap-2">
@@ -239,9 +258,9 @@ export default function AffiliatePaymentsPage() {
           </div>
           {pages > 1 && (
             <div className="flex items-center justify-between px-4 py-2 text-sm">
-              <Button type="button" size="sm" variant="ghost" disabled={page <= 1} onClick={() => setPage(page - 1)}>{L.prev}</Button>
+              <Button type="button" size="sm" variant="ghost" disabled={page <= 1} onClick={() => set({ page: page - 1 })}>{L.prev}</Button>
               <span>{interpolate(L.page, { page: String(page), pages: String(pages) })}</span>
-              <Button type="button" size="sm" variant="ghost" disabled={page >= pages} onClick={() => setPage(page + 1)}>{L.next}</Button>
+              <Button type="button" size="sm" variant="ghost" disabled={page >= pages} onClick={() => set({ page: page + 1 })}>{L.next}</Button>
             </div>
           )}
         </Card>

@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { requirePermission } from '@/lib/authz';
 import { decide } from '@/lib/authzRule';
 import { requireCapability } from '@/lib/capabilityGate';
-import { PartnerCodeTakenError, createPartner, listPartners, parsePartnerInput } from '@/lib/affiliatePartners';
+import { PARTNER_LIST, parseListQuery } from '@/lib/affiliateListQueryRule';
+import { PartnerCodeTakenError, createPartner, listPartners, parsePartnerInput, type PartnerRow } from '@/lib/affiliatePartners';
 
 // The programme's partners (docs/affiliate-module.md, #3116). GET: `affiliate.read`;
 // POST (new partner): `affiliate.write`. The org is the session's, never the request's.
@@ -13,8 +14,13 @@ export async function GET(request: Request) {
   if (!orgId) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const refusal = await requireCapability(orgId, 'affiliate');
   if (refusal) return refusal;
+  // Filters and sort (#3539): `status`, `q` (name, code or contact e-mail),
+  // `sort` = created | name | customers | open, `dir`. Outside the allowlist: 400.
+  const parsed = parseListQuery(PARTNER_LIST, new URL(request.url).searchParams);
+  if (!parsed.ok) return NextResponse.json({ code: 'invalid_query', field: parsed.field }, { status: 400 });
+  const { status, ...query } = parsed.query;
   const canWrite = decide({ actor: auth.actor, permission: 'affiliate.write' }).allow;
-  return NextResponse.json({ partners: await listPartners(orgId), canWrite });
+  return NextResponse.json({ partners: await listPartners(orgId, { ...query, status: status as PartnerRow['status'] | null }), canWrite });
 }
 
 export async function POST(request: Request) {

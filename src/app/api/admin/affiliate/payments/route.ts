@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/authz';
 import { decide } from '@/lib/authzRule';
 import { requireCapability } from '@/lib/capabilityGate';
 import { prisma } from '@/lib/prisma';
+import { PAYMENT_LIST, parseListQuery } from '@/lib/affiliateListQueryRule';
 import { listPayments } from '@/lib/affiliatePayments';
 import { parseCalendarDay } from '@/lib/calendarDay';
 import { AffiliateWriteError, recordAffiliatePayment, type AffiliateWriteErrorCode } from '@/lib/affiliatePaymentWriter';
@@ -21,8 +22,11 @@ export async function GET(request: Request) {
   const refusal = await requireCapability(orgId, 'affiliate');
   if (refusal) return refusal;
 
-  const url = new URL(request.url);
-  const result = await listPayments(orgId, { partnerId: url.searchParams.get('partnerId'), page: Number(url.searchParams.get('page') ?? 1) || 1 });
+  // Filters and sort (#3539): `partnerId`, `q` (customer number, label or payment reference), `from`/`to`
+  // (received days), `sort` = date | amount, `dir`. A value outside the allowlist is a 400.
+  const parsed = parseListQuery(PAYMENT_LIST, new URL(request.url).searchParams);
+  if (!parsed.ok) return NextResponse.json({ code: 'invalid_query', field: parsed.field }, { status: 400 });
+  const result = await listPayments(orgId, parsed.query);
   return NextResponse.json({ ...result, canWrite: decide({ actor: auth.actor, permission: 'affiliate.write' }).allow });
 }
 

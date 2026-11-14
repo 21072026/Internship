@@ -8,6 +8,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { maskedIbanFromCipher } from '@/lib/affiliatePayoutDetails';
+import { sortPartnerRows, type ListQuery } from '@/lib/affiliateListQueryRule';
 
 /** A referral code: what follows `?ref=`. Numbers and slugs both (a migrated code is kept verbatim). */
 // The code's shape is one rule for every path (#3550).
@@ -97,11 +98,24 @@ export interface PartnerRow {
   createdAt: string;
 }
 
-/** The programme's partners with their counts and totals, summed in SQL (never from a page of rows). */
-export async function listPartners(orgId: string): Promise<PartnerRow[]> {
+/**
+ * The programme's partners with their counts and totals, summed in SQL (never
+ * from a page of rows). Newest first by default. `status` and `q` (name, code or
+ * contact e-mail) narrow it, and `sort` orders it after the sums (#3539) — the
+ * list is not paged, so every partner that matches is in it.
+ */
+export async function listPartners(
+  orgId: string,
+  opts: { status?: PartnerRow['status'] | null; q?: string | null; sort?: ListQuery['sort']; dir?: ListQuery['dir'] } = {},
+): Promise<PartnerRow[]> {
+  const where = {
+    orgId,
+    ...(opts.status ? { status: opts.status } : {}),
+    ...(opts.q ? { OR: [{ displayName: { contains: opts.q } }, { code: { contains: opts.q } }, { contactEmail: { contains: opts.q } }] } : {}),
+  };
   const [partners, customers, sums] = await Promise.all([
     prisma.affiliatePartner.findMany({
-      where: { orgId },
+      where,
       orderBy: { createdAt: 'desc' },
       select: { id: true, code: true, displayName: true, contactEmail: true, status: true, noticeEffectiveAt: true, userId: true, payoutDetailsCipher: true, createdAt: true },
     }),
@@ -110,7 +124,7 @@ export async function listPartners(orgId: string): Promise<PartnerRow[]> {
   ]);
   const customerCount = new Map(customers.map((c) => [c.partnerId, c._count._all]));
   const sumBy = new Map(sums.map((s) => [`${s.partnerId}:${s.status}`, s._sum.amountMinor ?? 0]));
-  return partners.map((p) => {
+  const rows = partners.map((p) => {
     const total = (status: 'PENDING' | 'APPROVED' | 'PAID') => sumBy.get(`${p.id}:${status}`) ?? 0;
     return {
       id: p.id,
@@ -126,4 +140,5 @@ export async function listPartners(orgId: string): Promise<PartnerRow[]> {
       createdAt: p.createdAt.toISOString(),
     };
   });
+  return sortPartnerRows(rows, { sort: opts.sort ?? 'created', dir: opts.dir ?? 'desc' });
 }
