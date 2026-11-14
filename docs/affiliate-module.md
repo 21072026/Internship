@@ -110,6 +110,34 @@ reconciliation.
 The engine is pure and dependency-free (`src/lib/affiliateCommissionRule.ts`) and
 unit-tested with synthetic plans.
 
+### Commission base (#3551/#3552)
+
+A payment's `amountMinor` is the **commission base**, not the amount the customer
+actually paid: the undiscounted, gross (VAT included) amount for the period's
+transaction count. A discount the customer got does not lower the partner's
+commission. In a partial month (a free period ending mid-month) the free and the
+paid transactions are added up, and the base is the amount for that total.
+
+A payment may arrive in two shapes, and the writer accepts both:
+
+- **(a) breakdown** — `transactionCount` × `unitPriceMinor` (the undiscounted gross
+  price per transaction). The base is their product, and both are stored on the
+  payment so the partner can see where the amount came from.
+- **(b) base** — `amountMinor`, already computed by the sender. The breakdown
+  columns stay null.
+
+Both together are accepted only when they agree. `resolvePaymentBase()`
+(`src/lib/affiliatePaymentBaseRule.ts`, pure, unit-tested) is the ONE place that
+decides; `recordAffiliatePayment()` calls it before the shape checks, and no
+caller multiplies. Refusals come back as `invalid_input` with one issue:
+`amount_required` (neither shape), `incomplete_breakdown` (only one of the two),
+`transaction_count` (not a whole number ≥ 1), `unit_price` (not whole minor units
+≥ 0), `amount_range` (a product of zero, or past `MAX_AMOUNT_MINOR`) and
+`amount_mismatch` (both shapes, different amounts). The engine keeps reading
+`amountMinor` only, so existing payments and their commissions do not change.
+The entry paths (admin form, API, account event, migration CSV) take the
+breakdown in #3553; the breakdown is shown in #3554.
+
 ### Re-evaluation after a plan change (#3170)
 
 A plan save returns as soon as the plan is committed, whatever the number of
@@ -158,8 +186,9 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   writer `src/lib/affiliateCustomerLabel.ts`.
   `createdAt` is the registration (the linking event's time); `endedAt` is the
   account's cancellation, null while live (#3542, [Customer status](#customer-status-3542)).
-- **AffiliatePayment** — `amountMinor`, `currency`, `receivedAt` (never in the
-  future), `source` (MANUAL / API / IMPORT), `externalPaymentRef` (**required,
+- **AffiliatePayment** — `amountMinor` (the [commission base](#commission-base-35513552)),
+  `transactionCount` + `unitPriceMinor` (the breakdown when it arrived as one, both
+  or neither), `currency`, `receivedAt` (never in the future), `source` (MANUAL / API / IMPORT), `externalPaymentRef` (**required,
   unique per organisation**, so a double entry is caught even under a mistyped customer).
 - **AffiliateCommission** — one per payment at most: `kind` (TIER / PERCENT, or
   IMPORTED for a migrated one),
