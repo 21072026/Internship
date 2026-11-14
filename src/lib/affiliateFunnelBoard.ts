@@ -13,7 +13,8 @@
 import { prisma } from '@/lib/prisma';
 import { parseCommissionPlan } from '@/lib/affiliateCommissionRule';
 import { partnerCustomerStatuses } from '@/lib/affiliateCustomerStatus';
-import { partnerFunnels, partnerThresholds } from '@/lib/affiliateFunnel';
+import { partnerEarnings, partnerFunnels, partnerThresholds } from '@/lib/affiliateFunnel';
+import { earningsPerClick } from '@/lib/affiliateTrendRule';
 import { periodStart, type Funnel, type FunnelPeriod } from '@/lib/affiliateFunnelRule';
 import { emptyFunnel, funnelBadges, funnelRates, funnelTotal, windowEndingSoon, type FunnelBadge, type FunnelBoardRow } from '@/lib/affiliateFunnelBoardRule';
 
@@ -31,7 +32,9 @@ export interface FunnelBoard {
   /** The plan's `switchAtCustomer`, null when the plan has no switch to a percent. */
   switchAtCustomer: number | null;
   rows: FunnelBoardPartnerRow[];
-  total: Funnel & { registrationRate: number | null; payingRate: number | null };
+  /** The plan's currency, of `earnedMinor` / `earningsPerClick` (#3545); null without a plan. */
+  currency: string | null;
+  total: Funnel & { registrationRate: number | null; payingRate: number | null; earnedMinor: number; earningsPerClick: number | null };
 }
 
 /** Every partner of `orgId` with its funnel for `period`, plus the org total. Unsorted. */
@@ -41,7 +44,7 @@ export async function affiliateFunnelBoard(orgId: string, options: { period: Fun
   const parsed = settingsRow?.plan ? parseCommissionPlan(settingsRow.plan) : null;
   const plan = parsed?.ok ? parsed.plan : null;
 
-  const [partners, funnels, thresholds, statuses, firstPayments] = await Promise.all([
+  const [partners, funnels, thresholds, statuses, firstPayments, earnings] = await Promise.all([
     prisma.affiliatePartner.findMany({
       where: { orgId },
       select: { id: true, code: true, displayName: true, status: true, noticeEffectiveAt: true },
@@ -58,6 +61,7 @@ export async function affiliateFunnelBoard(orgId: string, options: { period: Fun
       where: { orgId, amountMinor: { gt: 0 }, currency: plan?.currency ?? '' },
       _min: { receivedAt: true },
     }),
+    partnerEarnings(orgId, { period: options.period, now }),
   ]);
 
   const firstValid = new Map(firstPayments.map((p) => [p.customerId, p._min.receivedAt ?? null]));
@@ -81,9 +85,12 @@ export async function affiliateFunnelBoard(orgId: string, options: { period: Fun
           customers: customersOf.get(p.id) ?? [],
         })
       : 0;
+    const earnedMinor = earnings.byPartner.get(p.id) ?? 0;
     return {
       ...funnel,
       ...funnelRates(funnel),
+      earnedMinor,
+      earningsPerClick: earnings.currency ? earningsPerClick(earnedMinor, funnel.clicks) : null,
       partnerId: p.id,
       code: p.code,
       displayName: p.displayName,
@@ -95,11 +102,13 @@ export async function affiliateFunnelBoard(orgId: string, options: { period: Fun
   });
 
   const total = funnelTotal(rows);
+  const earnedTotal = rows.reduce((n, r) => n + r.earnedMinor, 0);
   return {
     period: options.period,
     from: periodStart(options.period, now)?.toISOString() ?? null,
     switchAtCustomer: plan && plan.percentBps > 0 ? plan.switchAtCustomer : null,
     rows,
-    total: { ...total, ...funnelRates(total) },
+    currency: earnings.currency,
+    total: { ...total, ...funnelRates(total), earnedMinor: earnedTotal, earningsPerClick: earnings.currency ? earningsPerClick(earnedTotal, total.clicks) : null },
   };
 }

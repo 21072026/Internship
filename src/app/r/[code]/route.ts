@@ -1,7 +1,7 @@
 import { after } from 'next/server';
 import { clientIp } from '@/lib/clientIp';
 import { requestHostHeader } from '@/lib/publicHostOrg';
-import { clickRedirectTarget, isCountableRequest, CLICK_CODE_RE } from '@/lib/affiliateClickRule';
+import { clickRedirectTarget, isCountableRequest, parseCampaignTag, CLICK_CODE_RE } from '@/lib/affiliateClickRule';
 import { codeFromPath } from '@/lib/affiliateCodeRule';
 import { clickProgrammeForHost, recordAffiliateClickQuietly } from '@/lib/affiliateClicks';
 
@@ -16,6 +16,7 @@ import { clickProgrammeForHost, recordAffiliateClickQuietly } from '@/lib/affili
 // partner of the host's org, only for a countable request (GET, no prefetch,
 // not a bot) and only under the per-visitor limit — over it the visitor is
 // still redirected. Nothing about the visitor is stored (src/lib/affiliateClicks.ts).
+// A campaign tag (`?c=`) only splits the count; it never reaches the target.
 export const dynamic = 'force-dynamic';
 
 function redirect(location: string): Response {
@@ -39,7 +40,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ code
       purpose: request.headers.get('sec-purpose') ?? request.headers.get('purpose'),
     });
   if (countable) {
-    const input = { orgId: programme.orgId, code, ip: clientIp(request), userAgent: userAgent ?? '' };
+    // `?c=<tag>` (#3545): an invalid tag is dropped, the click is counted all the same.
+    const campaign = parseCampaignTag(new URL(request.url).searchParams.get('c'));
+    const input = { orgId: programme.orgId, code, ip: clientIp(request), userAgent: userAgent ?? '', campaign };
     after(() => recordAffiliateClickQuietly(input));
   }
   return redirect(target);

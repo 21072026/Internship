@@ -398,6 +398,7 @@ model Organization {
   affiliatePayouts        AffiliatePayout[]
   affiliateAcceptances    AffiliateContractAcceptance[]
   affiliateClicks         AffiliateClickDaily[]
+  affiliateCampaignClicks AffiliateClickCampaignDaily[]
   requisitionFits         RequisitionFit[]
 
   @@index([archivedAt])
@@ -9495,6 +9496,7 @@ model AffiliatePartner {
   payouts             AffiliatePayout[]
   contractAcceptances AffiliateContractAcceptance[]
   clicks              AffiliateClickDaily[]
+  campaignClicks      AffiliateClickCampaignDaily[]
 
   @@unique([orgId, code])
   @@index([orgId, status])
@@ -9629,6 +9631,29 @@ model AffiliateClickDaily {
   updatedAt    DateTime         @updatedAt
 
   @@unique([partnerId, day])
+  @@index([orgId, day])
+}
+
+// The same clicks split by the campaign tag of the link (`/r/<code>?c=<tag>`,
+// #3545, docs/affiliate-module.md § Campaign tags): one row per partner, UTC
+// day and tag. A click WITHOUT a (valid) tag has no row here — it is counted in
+// AffiliateClickDaily only, which stays the total. Counters only, like that
+// table; the tag is the partner's own word from the link, never the visitor's.
+// Additive on purpose: AffiliateClickDaily's unique key is left as it was.
+model AffiliateClickCampaignDaily {
+  id           String           @id @default(cuid())
+  orgId        String
+  org          Organization     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  partnerId    String
+  partner      AffiliatePartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  day          DateTime         @db.Date
+  // `[a-z0-9_-]{1,32}` (src/lib/affiliateClickRule.ts `parseCampaignTag`).
+  campaign     String           @db.VarChar(32)
+  clicks       Int              @default(0)
+  uniqueClicks Int              @default(0)
+  updatedAt    DateTime         @updatedAt
+
+  @@unique([partnerId, day, campaign])
   @@index([orgId, day])
 }
 
