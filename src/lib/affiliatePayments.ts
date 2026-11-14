@@ -2,7 +2,9 @@
 // #3116). Writing one is recordAffiliatePayment() in src/lib/affiliatePaymentWriter.ts
 // — never here.
 
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { listDateRange, paymentOrderBy, type ListQuery } from '@/lib/affiliateListQueryRule';
 
 export const PAYMENTS_PER_PAGE = 50;
 
@@ -21,16 +23,38 @@ export interface PaymentRow {
   commission: { kind: 'TIER' | 'PERCENT' | 'IMPORTED'; amountMinor: number; status: string; planVersion: number } | null;
 }
 
-/** Newest received first; one page, plus the total for the pager. */
-export async function listPayments(orgId: string, opts: { partnerId?: string | null; page?: number } = {}): Promise<{ rows: PaymentRow[]; total: number; page: number; perPage: number }> {
+/**
+ * Newest received first by default; one page, plus the total for the pager.
+ * `q` finds a customer number, the customer's label or the payment reference
+ * (#3539); `from` / `to` are received days, both inclusive.
+ */
+export async function listPayments(
+  orgId: string,
+  opts: { partnerId?: string | null; page?: number; q?: string | null; from?: string | null; to?: string | null; sort?: ListQuery['sort']; dir?: ListQuery['dir'] } = {},
+): Promise<{ rows: PaymentRow[]; total: number; page: number; perPage: number }> {
   // Bounded: a huge or non-finite page would overflow Prisma's `skip`.
   const raw = Math.floor(opts.page ?? 1);
   const page = Number.isFinite(raw) ? Math.min(10_000, Math.max(1, raw)) : 1;
-  const where = { orgId, ...(opts.partnerId ? { customer: { partnerId: opts.partnerId } } : {}) };
+  const receivedAt = listDateRange({ from: opts.from ?? null, to: opts.to ?? null });
+  const where = {
+    orgId,
+    ...(opts.partnerId ? { customer: { partnerId: opts.partnerId } } : {}),
+    ...(receivedAt ? { receivedAt } : {}),
+    ...(opts.q
+      ? {
+          OR: [
+            { externalPaymentRef: { contains: opts.q } },
+            { customer: { externalRef: { contains: opts.q } } },
+            { customer: { partnerLabel: { contains: opts.q } } },
+          ],
+        }
+      : {}),
+  };
   const [rows, total] = await Promise.all([
     prisma.affiliatePayment.findMany({
       where,
-      orderBy: [{ receivedAt: 'desc' }, { id: 'desc' }],
+      // Built from the rule's constant table; the cast only names Prisma's type.
+      orderBy: paymentOrderBy({ sort: opts.sort ?? 'date', dir: opts.dir ?? 'desc' }) as Prisma.AffiliatePaymentOrderByWithRelationInput[],
       skip: (page - 1) * PAYMENTS_PER_PAGE,
       take: PAYMENTS_PER_PAGE,
       select: {

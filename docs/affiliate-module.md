@@ -189,6 +189,36 @@ carries `aria-current="true"` and the screen `aria-current="page"`. The URLs did
 change. The applications badge sits on the open sub-tab, or on the Partners group
 while it is closed — never twice.
 
+**Filters and sort** (#3539): commissions, customer payments, partner payouts and
+partners share one filter bar and sortable column headers
+(`src/components/affiliate/AffiliateListControls.tsx`). The lists are paged, so
+both happen on the **server**: every route reads its query through
+`parseListQuery()` in `src/lib/affiliateListQueryRule.ts` (pure, unit-tested in
+`scripts/test/affiliate-list-query-rule.test.mjs`) — the same allowlist pattern as
+the funnel. A `sort`, `dir`, `status`, `kind`, day or partner id outside the
+allowlist is a **400** (`invalid_query` + the field), never passed on; an order is
+built from a constant table and always ends with the row id, so a request string
+never reaches Prisma as a field name and equal rows keep their place across pages.
+Every query carries the session's `orgId`, so another organisation's `partnerId`
+simply matches nothing. The URL is the state — the screen parses it with the same
+function (dropping only a value the server would refuse) and writes every change
+back, so a link opens the same view; any change but the page goes back to page 1.
+
+| List | Filters | Sort (default first) |
+|------|---------|----------------------|
+| Commissions | partner, status, type (TIER/PERCENT/IMPORTED), due days | due ↑, amount, partner |
+| Customer payments | partner, `q` (customer number, label or payment reference), received days | received ↓, amount |
+| Partner payouts | partner, `q` (transfer reference), paid days | paid ↓, amount |
+| Partners | status, `q` (name, code or contact e-mail) | added ↓, name, customers, open commission |
+
+Days are `from`/`to` calendar days, **both inclusive** (`listDateRange()`: a
+half-open UTC interval). The commission totals per status follow every filter but
+the status itself, so the chips count the filtered list. A changed filter, sort or
+page reloads the commission list and clears its selection, so a bulk action never
+acts on rows that are no longer shown. The partner list is not paged, so its sort
+(on sums such as the open commission, pending + approved) runs after the SQL sums,
+over every matching partner. The payout history got its pager here too.
+
 - **Customer list** (`/admin/affiliates/customers`, `/api/admin/affiliate/customers`,
   `src/lib/affiliateCustomerList.ts`, #3538) — one row per referred customer, newest
   first, paged: its partner, first and last payment day, number of payments, the end

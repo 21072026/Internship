@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -15,6 +15,8 @@ import { formatDate } from '@/lib/relativeTime';
 import { interpolate } from '@/lib/notificationText';
 import { AffiliateTabs } from '../AffiliateTabs';
 import { CustomerName } from '@/components/affiliate/CustomerName';
+import { AffiliateListToolbar, SortHeader, useAffiliateListQuery } from '@/components/affiliate/AffiliateListControls';
+import { PAYOUT_LIST, hasListFilter, listQueryParams } from '@/lib/affiliateListQueryRule';
 
 // Payouts (docs/affiliate-module.md, #3116): after the bank transfer, record it —
 // the selected APPROVED commissions of one partner become PAID together, or
@@ -23,6 +25,9 @@ import { CustomerName } from '@/components/affiliate/CustomerName';
 // A partner without payout details can still be paid (#3351): the transfer
 // happens outside the CRM and may already have gone another way, so the server
 // records it — but the admin confirms that knowingly first.
+//
+// The history is paged, filtered (partner, paid days, reference) and sorted on
+// the server; the filters live in the URL (#3539).
 
 interface Partner {
   id: string;
@@ -55,12 +60,23 @@ const today = () => {
 };
 
 export default function AffiliatePayoutsPage() {
+  return (
+    <Suspense fallback={<SkeletonRows rows={5} />}>
+      <AffiliatePayouts />
+    </Suspense>
+  );
+}
+
+function AffiliatePayouts() {
   const t = useT();
   const L = t.affiliatePayouts;
   const locale = useLocale();
   const toast = useToast();
   const [partners, setPartners] = useState<Partner[]>([]);
-  const [payouts, setPayouts] = useState<{ rows: Payout[]; canWrite: boolean } | null>(null);
+  const A = t.affiliateList;
+  const { query, set } = useAffiliateListQuery(PAYOUT_LIST);
+  const qs = listQueryParams(PAYOUT_LIST, query).toString();
+  const [payouts, setPayouts] = useState<{ rows: Payout[]; total: number; page: number; perPage: number; canWrite: boolean } | null>(null);
   const [partnerId, setPartnerId] = useState('');
   const [approved, setApproved] = useState<Commission[] | null>(null);
   const [approvedAll, setApprovedAll] = useState<{ totalCount: number; totalAmountMinor: number } | null>(null);
@@ -73,7 +89,7 @@ export default function AffiliatePayoutsPage() {
   const [confirmNoDetails, setConfirmNoDetails] = useState(false);
 
   const load = useCallback(async () => {
-    const [p, q] = await Promise.all([fetch('/api/admin/affiliate/payouts'), fetch('/api/admin/affiliate/partners')]);
+    const [p, q] = await Promise.all([fetch(`/api/admin/affiliate/payouts?${qs}`), fetch('/api/admin/affiliate/partners')]);
     if (p.status === 403 || q.status === 403) {
       setForbidden(true);
       return;
@@ -84,7 +100,7 @@ export default function AffiliatePayoutsPage() {
     }
     setPayouts(await p.json());
     setPartners((await q.json()).partners);
-  }, []);
+  }, [qs]);
 
   const loadApproved = useCallback(async (id: string) => {
     setApproved(null);
@@ -220,25 +236,28 @@ export default function AffiliatePayoutsPage() {
         <div className="px-4 pt-4">
           <CardTitle>{L.history}</CardTitle>
         </div>
+        <div className="px-4 pt-4">
+          <AffiliateListToolbar spec={PAYOUT_LIST} query={query} set={set} partners={partners} searchLabel={A.searchPayouts} dateLabel={A.datePaid} resultCount={payouts?.total ?? null} />
+        </div>
         {!payouts ? (
           <div className="p-4"><SkeletonRows rows={3} /></div>
         ) : payouts.rows.length === 0 ? (
-          <div className="p-4"><EmptyState testId="affiliate-payouts" title={L.empty} size="sm" /></div>
+          <div className="p-4"><EmptyState testId="affiliate-payouts" title={hasListFilter(query) ? A.noMatch : L.empty} size="sm" /></div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm" data-testid="affiliate-payout-table">
               <thead className="text-left text-gray-500">
                 <tr>
-                  <th className="px-4 py-2">{L.colDate}</th>
+                  <SortHeader label={L.colDate} sortKey="date" query={query} set={set} />
                   <th className="px-4 py-2">{L.colPartner}</th>
-                  <th className="px-4 py-2 text-right">{L.colAmount}</th>
+                  <SortHeader label={L.colAmount} sortKey="amount" query={query} set={set} numeric />
                   <th className="px-4 py-2 text-right">{L.colCount}</th>
                   <th className="px-4 py-2">{L.colRef}</th>
                 </tr>
               </thead>
               <tbody>
                 {payouts.rows.map((r) => (
-                  <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800">
+                  <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800" data-testid="affiliate-payout-row">
                     <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.paidAt, locale, { timeZone: 'UTC' })}</td>
                     <td className="px-4 py-2">{r.partner.displayName}</td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">{money(r.amountMinor, r.currency)}</td>
@@ -248,6 +267,13 @@ export default function AffiliatePayoutsPage() {
                 ))}
               </tbody>
             </table>
+            {payouts.total > payouts.perPage && (
+              <div className="flex items-center justify-between px-4 py-2 text-sm">
+                <Button type="button" size="sm" variant="ghost" disabled={query.page <= 1} onClick={() => set({ page: query.page - 1 })}>{A.prev}</Button>
+                <span>{interpolate(A.page, { page: String(query.page), pages: String(Math.ceil(payouts.total / payouts.perPage)) })}</span>
+                <Button type="button" size="sm" variant="ghost" disabled={query.page >= Math.ceil(payouts.total / payouts.perPage)} onClick={() => set({ page: query.page + 1 })}>{A.next}</Button>
+              </div>
+            )}
           </div>
         )}
       </Card>
