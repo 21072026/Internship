@@ -22,7 +22,8 @@ import { referralLink } from '@/lib/affiliateReferralRule';
 import { trackedReferralLink } from '@/lib/affiliateClicks';
 import { partnerCustomerStatuses } from '@/lib/affiliateCustomerStatus';
 import { CUSTOMER_STATUSES, emptyStatusCounts, type CustomerStatus } from '@/lib/affiliateCustomerStatusRule';
-import { partnerFunnels, partnerThresholds } from '@/lib/affiliateFunnel';
+import { partnerCampaigns, partnerEarnings, partnerFunnels, partnerThresholds, partnerTrend } from '@/lib/affiliateFunnel';
+import { earningsPerClick } from '@/lib/affiliateTrendRule';
 import { funnelFromCounts, parseFunnelPeriod } from '@/lib/affiliateFunnelRule';
 import type { GatedPartner } from '@/lib/affiliateContract';
 
@@ -92,20 +93,34 @@ export async function partnerPlanTerms(partner: GatedPartner) {
  * The partner's own funnel for a period and its progress towards the plan's
  * switch to a percent (#3543) — through the same aggregate the admin screens
  * read (src/lib/affiliateFunnel.ts), narrowed to this partner. `threshold` is
- * null when the plan has no threshold (the indicator is then hidden).
+ * null when the plan has no threshold (the indicator is then hidden). Since
+ * #3545 also the period's earnings per click, its clicks per campaign tag and
+ * the monthly trend.
  */
 export async function partnerFunnel(partner: GatedPartner, rawPeriod?: unknown) {
   const scope = scopeOf(partner);
   const period = parseFunnelPeriod(rawPeriod);
-  const [funnels, thresholds] = await Promise.all([
-    partnerFunnels(scope.orgId, { partnerIds: [scope.partnerId], period }),
+  const now = new Date();
+  const [funnels, thresholds, earnings, campaigns, trend] = await Promise.all([
+    partnerFunnels(scope.orgId, { partnerIds: [scope.partnerId], period, now }),
     partnerThresholds(scope.orgId, { partnerIds: [scope.partnerId] }),
+    partnerEarnings(scope.orgId, { partnerIds: [scope.partnerId], period, now }),
+    partnerCampaigns(scope.orgId, scope.partnerId, { period, now }),
+    partnerTrend(scope.orgId, scope.partnerId, now),
   ]);
   const threshold = thresholds.get(scope.partnerId) ?? null;
+  const funnel = funnels.get(scope.partnerId) ?? funnelFromCounts({ clicks: 0, uniqueClicks: 0 }, emptyStatusCounts());
+  const earned = earnings.byPartner.get(scope.partnerId) ?? 0;
   return {
     period,
-    funnel: funnels.get(scope.partnerId) ?? funnelFromCounts({ clicks: 0, uniqueClicks: 0 }, emptyStatusCounts()),
+    funnel,
     threshold: threshold && { ...threshold, reachedAt: threshold.reachedAt?.toISOString() ?? null },
+    // #3545: earnings per click in the period, the clicks per campaign tag and the 12-month trend.
+    earnedMinor: earned,
+    currency: earnings.currency,
+    earningsPerClickMinor: earnings.currency ? earningsPerClick(earned, funnel.clicks) : null,
+    campaigns,
+    trend,
   };
 }
 

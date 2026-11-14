@@ -15,7 +15,9 @@ import { freshIp as freshIpHeaders } from './helpers/rateLimit';
  *   2. an unknown code, a suspended partner, another org's code, a bot and a
  *      visitor over the limit are redirected all the same and counted never;
  *   3. without a referral URL the visitor lands on the home page, not an error;
- *   4. the portal hands out the /r/ link with the direct one kept as the old link.
+ *   4. the portal hands out the /r/ link with the direct one kept as the old link;
+ *   5. a campaign tag (`?c=`, #3545) splits the count without reaching the target,
+ *      and an invalid tag is ignored while the click still counts.
  * @smoke on the counting boundaries: a public, sessionless write.
  *
  * Serial and host-borrowing, like e2e/affiliate-public-page.spec.ts: `publicHost`
@@ -31,8 +33,8 @@ const PW = 'AffClick123!';
 const BROWSER = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15';
 const REFERRAL_URL = 'https://app.acme.example/auth/registration';
 const stamp = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
-const codes = { active: `acme-${stamp}`, suspended: `paused-${stamp}`, other: `other-${stamp}`, limited: `busy-${stamp}`, legacy: `ada.l@${stamp}` };
-const ids = { active: '', suspended: '', other: '', limited: '', legacy: '' };
+const codes = { active: `acme-${stamp}`, suspended: `paused-${stamp}`, other: `other-${stamp}`, limited: `busy-${stamp}`, legacy: `ada.l@${stamp}`, campaign: `tagged-${stamp}` };
+const ids = { active: '', suspended: '', other: '', limited: '', legacy: '', campaign: '' };
 let orgId = '';
 let otherOrgId = '';
 let previousHolderId: string | null = null;
@@ -83,12 +85,14 @@ test.beforeAll(async ({ playwright, baseURL }) => {
   ids.limited = (await prisma.affiliatePartner.create({ data: { orgId, code: codes.limited, displayName: 'Busy' } })).id;
   ids.other = (await prisma.affiliatePartner.create({ data: { orgId: otherOrgId, code: codes.other, displayName: 'Other org' } })).id;
   ids.legacy = (await prisma.affiliatePartner.create({ data: { orgId, code: codes.legacy, displayName: 'Legacy' } })).id;
+  ids.campaign = (await prisma.affiliatePartner.create({ data: { orgId, code: codes.campaign, displayName: 'Tagged' } })).id;
 });
 
 test.afterAll(async () => {
   await api?.dispose();
   for (const id of [orgId, otherOrgId].filter(Boolean)) {
     await prisma.affiliateClickDaily.deleteMany({ where: { orgId: id } }).catch(() => {});
+    await prisma.affiliateClickCampaignDaily.deleteMany({ where: { orgId: id } }).catch(() => {});
     await prisma.affiliatePartner.deleteMany({ where: { orgId: id } }).catch(() => {});
     await prisma.affiliateProgramSettings.deleteMany({ where: { orgId: id } }).catch(() => {});
   }
@@ -203,3 +207,36 @@ test('a code with . and @ is one code with or without the escape, and its link c
   await expectCounts(ids.legacy, { clicks: 2, uniqueClicks: 2 });
 });
 
+
+test('a campaign tag splits the count, never reaches the target, and an invalid one is ignored (#3545)', async () => {
+  // Runs after the test that restores the referral URL.
+  const tagged = (tag: string, visitor: Record<string, string>) =>
+    api.get(`/r/${codes.campaign}?c=${encodeURIComponent(tag)}`, {
+      maxRedirects: 0,
+      headers: { ...asHost(MARKETING_HOST), ...visitor, 'user-agent': BROWSER },
+    });
+  const campaigns = async () =>
+    Object.fromEntries(
+      (await prisma.affiliateClickCampaignDaily.findMany({ where: { partnerId: ids.campaign } })).map((r) => [r.campaign, [r.clicks, r.uniqueClicks]]),
+    );
+
+  const visitor = freshIp();
+  const first = await tagged(' Newsletter ', visitor);
+  expect(first.status()).toBe(302);
+  // The tag only splits the count: the target is the settings' URL with ref, nothing else.
+  expect(first.headers().location).toBe(`${REFERRAL_URL}?ref=${codes.campaign}`);
+  await expectCounts(ids.campaign, { clicks: 1, uniqueClicks: 1 });
+  await expect.poll(campaigns, { timeout: 10_000 }).toEqual({ newsletter: [1, 1] });
+
+  // The same visitor again: a click, not a new visitor. Then through another
+  // channel: a first visitor of THAT campaign, still not a new one in the total.
+  await tagged('newsletter', visitor);
+  await tagged('video', visitor);
+  await expectCounts(ids.campaign, { clicks: 3, uniqueClicks: 1 });
+  await expect.poll(campaigns, { timeout: 10_000 }).toEqual({ newsletter: [2, 1], video: [1, 1] });
+
+  // Invalid tags: redirected and counted in the total, no campaign row.
+  for (const bad of ['two words', 'x'.repeat(33), 'mail@example']) expect((await tagged(bad, freshIp())).status()).toBe(302);
+  await expectCounts(ids.campaign, { clicks: 6, uniqueClicks: 4 });
+  expect(await campaigns()).toEqual({ newsletter: [2, 1], video: [1, 1] });
+});

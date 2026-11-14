@@ -694,6 +694,30 @@ server half: `src/lib/affiliateClicks.ts`.
   ties a click to a later registration — attribution stays with the
   `referral_code` of the account event (below).
 
+### Campaign tags (#3545)
+
+A partner tells its channels apart by appending a tag to its tracked link:
+`/r/<code>?c=newsletter`. The rule is `parseCampaignTag()` in
+`src/lib/affiliateClickRule.ts`: trimmed, lower-cased, `[a-z0-9_-]{1,32}`.
+
+- An **invalid tag is ignored**, never an error: the visitor is redirected and the
+  click is counted in the partner's total, only without a campaign.
+- The tag **never reaches the redirect target** — the target still comes from the
+  settings alone (`clickRedirectTarget`).
+- A tagged click adds to `AffiliateClickDaily` (the total, unchanged) **and** to
+  `AffiliateClickCampaignDaily` — one row per partner, UTC day and tag, counters
+  only, registered in `TENANT_MODELS`. Untagged clicks have no row there, so
+  "without a campaign" is the total minus the tagged rows.
+- "Unique" is per campaign: the same hashed visitor key, scoped to the tag, so a
+  visitor who follows two channels is a first visitor of each but still one in
+  the total.
+- At most `CAMPAIGNS_PER_PARTNER_DAY` (50) distinct tags per partner and day; a new
+  tag past it is counted in the total only. Whoever holds the link chooses the tag,
+  so without a ceiling a script could mint one row per request.
+- **Not yet:** the tag is not carried on to the product (`?campaign=`) and does
+  not come back with the account event, so registrations and payments are not
+  split by campaign. That needs a product-side decision and is a follow-up.
+
 ## Automatic attribution (#3354)
 
 A partner's link is `<base URL>?ref=<code>` (`src/lib/affiliateReferralRule.ts`). The
@@ -799,6 +823,28 @@ rules are pure in `src/lib/affiliateFunnelRule.ts`
   fold, so a filter count and a funnel number cannot disagree. A partner reads
   only its own partner id (session scope); every query names `orgId`.
 
+### Trend and earnings per click (#3545)
+
+Under the funnel the portal shows three more cards, all read from
+`src/lib/affiliateFunnel.ts` (the rules pure in `src/lib/affiliateTrendRule.ts`,
+`scripts/test/affiliate-trend-rule.test.mjs`):
+
+- **Earnings per click** for the funnel's period: commission with `accruedAt` in
+  the period, in every status but `REJECTED`, in the plan's currency
+  (`partnerEarnings()`), divided by the period's clicks, in minor units, rounded.
+  Not shown without clicks ("no clicks yet", never "0 per click") and not at all
+  without a valid plan. Customers who came through the direct link earn without a
+  click, as they register without one in the funnel — the figure is a guide.
+- **Campaigns** for the period: clicks and unique clicks per tag
+  (`partnerCampaigns()`, most clicks first, at most 20 rows) and a "without a
+  campaign" row; the hint shows the partner's own tracked link with `?c=`.
+- **The last 12 months** (`partnerTrend()`): per UTC month, clicks, registrations
+  and paying customers by the funnel's own definitions — paying is a cohort of the
+  month's registrations, judged by the same `partnerCustomerStatuses()`. Two bar
+  charts (clicks on their own axis, registrations and paying side by side) and the
+  same numbers as a table under a disclosure. Every month is present; an empty one
+  is zeros.
+
 ## Admin funnel board (#3544)
 
 The admin's Funnel tab (`/admin/affiliates/funnel`, `GET /api/admin/affiliate/funnel`,
@@ -811,7 +857,9 @@ through `evaluatePartner()`). The board adds only admin-only pieces on top, in
 
 - **Columns**: clicks, unique clicks, registrations, paying, active, passive, click →
   registration and registration → paying (whole %, the portal card's `stepRate`;
-  empty when there is nothing to divide by), and the customers left to the plan's
+  empty when there is nothing to divide by), earnings per click (the portal's
+  figure, `partnerEarnings()` ÷ clicks, #3545; empty without clicks or a plan),
+  and the customers left to the plan's
   switch (lifetime whatever the period; "Reached" at 0; empty without a switch).
 - **Periods**: the shared vocabulary, `month` / `year` / `all`.
 - **Badges** (thresholds fixed in the rule file, not settings):

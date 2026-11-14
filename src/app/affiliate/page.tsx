@@ -10,13 +10,15 @@ import { formatDate } from '@/lib/relativeTime';
 import { CommissionTerms } from './CommissionTerms';
 import { CopyLink } from './CopyLink';
 import { FunnelCard } from './FunnelCard';
+import { CampaignsCard, EarningsPerClickCard, TrendCard } from './PerformanceCard';
 import { ThresholdCard } from './ThresholdCard';
 
 // The partner portal's home (docs/affiliate-module.md, #3117): the referral link
 // (the click-counting /r/<code> link with the direct one beside it, #3541),
 // the totals per commission status and the partnership's state. A partner who
 // has not accepted the current contract is sent to it first. The funnel and the
-// progress towards the plan's percent phase (#3543) sit under the totals. A
+// progress towards the plan's percent phase (#3543) sit under the totals,
+// followed by the earnings per click, the campaign tags and the 12-month trend (#3545). A
 // warning names how many customers' commission ends within the programme's
 // notice lead time (#3557), with a link to the list that shows the dates.
 export default async function AffiliateHomePage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
@@ -109,6 +111,20 @@ export default async function AffiliateHomePage({ searchParams }: { searchParams
       {funnel.threshold && <ThresholdCard threshold={funnel.threshold} locale={locale} L={L} />}
 
       <FunnelCard funnel={funnel.funnel} period={funnel.period} L={L} />
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {funnel.currency && (
+          <EarningsPerClickCard epcMinor={funnel.earningsPerClickMinor} earnedMinor={funnel.earnedMinor} currency={funnel.currency} clicks={funnel.funnel.clicks} locale={locale} L={L} />
+        )}
+        <CampaignsCard
+          campaigns={funnel.campaigns}
+          totalClicks={funnel.funnel.clicks}
+          exampleLink={summary.trackedLink ? `${summary.trackedLink}?c=newsletter` : null}
+          L={L}
+        />
+      </div>
+
+      <TrendCard trend={funnel.trend} locale={locale} L={L} />
 
       <CommissionTerms terms={plan.terms} planVersion={plan.planVersion} effectiveAt={plan.effectiveAt} locale={locale} L={L} />
 

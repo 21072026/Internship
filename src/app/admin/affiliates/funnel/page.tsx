@@ -8,14 +8,15 @@ import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
 import { useLocale, useT } from '@/i18n/client';
 import { interpolate } from '@/lib/notificationText';
+import { formatMinorAmount } from '@/lib/money';
 import { FUNNEL_PERIODS, type Funnel } from '@/lib/affiliateFunnelRule';
 import { parseFunnelBoardQuery, type FunnelBadge, type FunnelBoardQuery, type FunnelSort } from '@/lib/affiliateFunnelBoardRule';
 import type { FunnelBoard, FunnelBoardPartnerRow } from '@/lib/affiliateFunnelBoard';
 import { AffiliateTabs } from '../AffiliateTabs';
 
 // The partner funnel (docs/affiliate-module.md § Partner funnel, #3544): one row
-// per partner — clicks, registrations, paying, active, passive, conversion and
-// the customers left to the plan's switch — read through
+// per partner — clicks, registrations, paying, active, passive, conversion, the
+// earnings per click (#3545) and the customers left to the plan's switch — read through
 // GET /api/admin/affiliate/funnel, which sorts and pages on the server. The
 // period, sort and page live in the URL, so a link opens the same view.
 
@@ -31,6 +32,7 @@ const COLUMNS: { key: FunnelSort; numeric: boolean }[] = [
   { key: 'passive', numeric: true },
   { key: 'registrationRate', numeric: true },
   { key: 'payingRate', numeric: true },
+  { key: 'earningsPerClick', numeric: true },
   { key: 'toThreshold', numeric: true },
 ];
 
@@ -93,7 +95,8 @@ function AffiliateFunnelScreen() {
   if (forbidden) return <p className="text-sm text-gray-600 dark:text-gray-400">{A.noAccess}</p>;
 
   const pages = data ? Math.max(1, Math.ceil(data.totalRows / data.pageSize)) : 1;
-  const cells = (c: Funnel & { registrationRate: number | null; payingRate: number | null }) => [c.clicks, c.uniqueClicks, c.registrations, c.paying, c.active, c.passive, rate(c.registrationRate), rate(c.payingRate)];
+  const epc = (minor: number | null) => (minor === null || !data?.currency ? '—' : formatMinorAmount(minor, data.currency, locale));
+  const cells = (c: Funnel & { registrationRate: number | null; payingRate: number | null; earningsPerClick: number | null }) => [c.clicks, c.uniqueClicks, c.registrations, c.paying, c.active, c.passive, rate(c.registrationRate), rate(c.payingRate), epc(c.earningsPerClick)];
 
   return (
     <div className="space-y-6">

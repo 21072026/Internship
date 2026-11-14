@@ -11,7 +11,8 @@
 import { prisma } from '@/lib/prisma';
 import { evaluatePartner, parseCommissionPlan } from '@/lib/affiliateCommissionRule';
 import { emptyStatusCounts } from '@/lib/affiliateCustomerStatusRule';
-import { partnerCustomerStatusCounts } from '@/lib/affiliateCustomerStatus';
+import { partnerCustomerStatusCounts, partnerCustomerStatuses } from '@/lib/affiliateCustomerStatus';
+import { buildTrend, trendStart, type TrendMonth } from '@/lib/affiliateTrendRule';
 import {
   funnelFromCounts,
   periodStart,
@@ -89,4 +90,84 @@ export async function partnerThresholds(
     if (progress) result.set(partner.id, progress);
   }
   return result;
+}
+
+/**
+ * Commission earned per partner of `orgId` in `period`, in minor units of the
+ * plan's currency (#3545) — the numerator of the earnings per click. A
+ * commission counts by `accruedAt` (its payment's date) in any status but
+ * REJECTED: pending and approved money is earned, a rejected row never was.
+ * Without a valid plan there is no currency and nothing has been earned
+ * (commission is only ever written under a plan): `currency` is null.
+ */
+export async function partnerEarnings(
+  orgId: string,
+  options: { partnerIds?: string[]; period: FunnelPeriod; now?: Date },
+): Promise<{ currency: string | null; byPartner: Map<string, number> }> {
+  const settings = await prisma.affiliateProgramSettings.findUnique({ where: { orgId }, select: { plan: true } });
+  const parsed = settings?.plan ? parseCommissionPlan(settings.plan) : null;
+  const currency = parsed?.ok ? parsed.plan.currency : null;
+  if (!currency || options.partnerIds?.length === 0) return { currency, byPartner: new Map() };
+  const from = periodStart(options.period, options.now ?? new Date());
+  const rows = await prisma.affiliateCommission.groupBy({
+    by: ['partnerId'],
+    where: {
+      orgId,
+      ...(options.partnerIds ? { partnerId: { in: options.partnerIds } } : {}),
+      status: { not: 'REJECTED' },
+      currency,
+      ...(from ? { accruedAt: { gte: from } } : {}),
+    },
+    _sum: { amountMinor: true },
+  });
+  return { currency, byPartner: new Map(rows.map((r) => [r.partnerId, r._sum.amountMinor ?? 0])) };
+}
+
+/**
+ * One partner's monthly trend over the last `TREND_MONTHS` UTC months (#3545):
+ * clicks, registrations and paying customers, by the funnel's definitions —
+ * the statuses come from the same `partnerCustomerStatuses()` the funnel folds.
+ */
+export async function partnerTrend(orgId: string, partnerId: string, now: Date = new Date()): Promise<TrendMonth[]> {
+  const from = trendStart(now);
+  const [clickDays, customers] = await Promise.all([
+    prisma.affiliateClickDaily.findMany({ where: { orgId, partnerId, day: { gte: from } }, select: { day: true, clicks: true } }),
+    partnerCustomerStatuses(orgId, { partnerIds: [partnerId], registeredFrom: from, now }),
+  ]);
+  return buildTrend(
+    now,
+    clickDays,
+    customers.map((c) => ({ createdAt: c.createdAt, paying: c.status === 'ACTIVE' || c.status === 'PASSIVE' })),
+  );
+}
+
+/** Rows of the campaign table: more would not be a comparison any more. */
+export const CAMPAIGN_ROWS = 20;
+
+export interface CampaignClicks {
+  campaign: string;
+  clicks: number;
+  uniqueClicks: number;
+}
+
+/**
+ * One partner's clicks per campaign tag in `period` (#3545), most clicks first,
+ * at most `CAMPAIGN_ROWS`. Untagged clicks are not a row: they are the funnel's
+ * total minus these.
+ */
+export async function partnerCampaigns(
+  orgId: string,
+  partnerId: string,
+  options: { period: FunnelPeriod; now?: Date },
+): Promise<CampaignClicks[]> {
+  const from = periodStart(options.period, options.now ?? new Date());
+  const rows = await prisma.affiliateClickCampaignDaily.groupBy({
+    by: ['campaign'],
+    where: { orgId, partnerId, ...(from ? { day: { gte: from } } : {}) },
+    _sum: { clicks: true, uniqueClicks: true },
+  });
+  return rows
+    .map((r) => ({ campaign: r.campaign, clicks: r._sum.clicks ?? 0, uniqueClicks: r._sum.uniqueClicks ?? 0 }))
+    .sort((a, b) => b.clicks - a.clicks || a.campaign.localeCompare(b.campaign))
+    .slice(0, CAMPAIGN_ROWS);
 }

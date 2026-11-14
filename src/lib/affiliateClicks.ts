@@ -10,7 +10,8 @@
 // header can at most add a click to another org's partner — the same trust
 // note as the public form, and the same per-visitor limit applies.
 //
-// WHAT IS KEPT. One `AffiliateClickDaily` row per partner and UTC day. The rate
+// WHAT IS KEPT. One `AffiliateClickDaily` row per partner and UTC day, and
+// for a tagged link one `AffiliateClickCampaignDaily` row per tag too (#3545). The rate
 // limit and the "unique" check run in the shared rate-limit store under
 // HMAC-derived keys (`ipKey`, `visitorKey`) that change every UTC day and expire
 // by the end of it; the raw IP and user-agent are read from the request, hashed,
@@ -26,7 +27,7 @@ import { resolvePublicInquiryTarget } from '@/lib/publicHostOrg';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { appLinkOrigin, isServedHost } from '@/lib/servedHosts';
 import { parseReferralUrl } from '@/lib/affiliateReferralRule';
-import { CLICK_RATE_LIMIT, clickDay, ipKey, msUntilNextUtcDay, visitorKey } from '@/lib/affiliateClickRule';
+import { CAMPAIGNS_PER_PARTNER_DAY, CLICK_RATE_LIMIT, clickDay, ipKey, msUntilNextUtcDay, visitorKey } from '@/lib/affiliateClickRule';
 
 /** The programme this host serves, with its referral URL; null when no programme answers here. */
 export async function clickProgrammeForHost(
@@ -53,6 +54,8 @@ export async function recordAffiliateClick(input: {
   code: string;
   ip: string;
   userAgent: string;
+  /** A tag already checked by `parseCampaignTag()`; null for an untagged click. */
+  campaign?: string | null;
   now?: Date;
 }): Promise<ClickOutcome> {
   const secret = process.env.NEXTAUTH_SECRET;
@@ -82,15 +85,54 @@ export async function recordAffiliateClick(input: {
       create: { orgId: input.orgId, partnerId: partner.id, day, clicks: 1, uniqueClicks: unique ? 1 : 0 },
       update: { clicks: { increment: 1 }, ...(unique ? { uniqueClicks: { increment: 1 } } : {}) },
     });
+  await retryOnCreateRace(write);
+  if (input.campaign) await recordCampaignClick({ orgId: input.orgId, partnerId: partner.id, day, campaign: input.campaign, secret, now, ip: input.ip, userAgent: input.userAgent });
+  return 'counted';
+}
+
+/** Two first clicks of the day raced on the create: the row exists now, so the second attempt takes the update branch. */
+async function retryOnCreateRace(write: () => Promise<unknown>): Promise<void> {
   try {
     await write();
   } catch (e) {
-    // Two first clicks of the day raced on the create: the row exists now, so
-    // the second attempt takes the update branch.
     if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002')) throw e;
     await write();
   }
-  return 'counted';
+}
+
+/**
+ * The same click in its campaign's row (#3545). "Unique" is decided per
+ * campaign — a visitor who follows the newsletter link and then the video link
+ * is a first visitor of both. A tag past the day's ceiling of distinct rows
+ * (`CAMPAIGNS_PER_PARTNER_DAY`) is left out; the total above already has it.
+ */
+async function recordCampaignClick(input: {
+  orgId: string;
+  partnerId: string;
+  day: Date;
+  campaign: string;
+  secret: string;
+  now: Date;
+  ip: string;
+  userAgent: string;
+}): Promise<void> {
+  const key = { partnerId: input.partnerId, day: input.day, campaign: input.campaign };
+  const existing = await prisma.affiliateClickCampaignDaily.findUnique({ where: { partnerId_day_campaign: key }, select: { id: true } });
+  if (!existing) {
+    const rows = await prisma.affiliateClickCampaignDaily.count({ where: { orgId: input.orgId, partnerId: input.partnerId, day: input.day } });
+    if (rows >= CAMPAIGNS_PER_PARTNER_DAY) return;
+  }
+  const unique = rateLimit(
+    `affiliate-click-seen:${input.partnerId}:c:${input.campaign}:${visitorKey(input.secret, input.now, input.ip, input.userAgent)}`,
+    { limit: 1, windowMs: msUntilNextUtcDay(input.now) },
+  ).ok;
+  await retryOnCreateRace(() =>
+    prisma.affiliateClickCampaignDaily.upsert({
+      where: { partnerId_day_campaign: key },
+      create: { orgId: input.orgId, ...key, clicks: 1, uniqueClicks: unique ? 1 : 0 },
+      update: { clicks: { increment: 1 }, ...(unique ? { uniqueClicks: { increment: 1 } } : {}) },
+    }),
+  );
 }
 
 /** Count a click after the response; a failure is logged (without the visitor) and swallowed. */
