@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**zod 4 deprecations, part 4 (#3568):** the `{ message }` parameter is `{ error }` on the 25 `.refine()` calls that used it (found with the type checker, so a schema field named `message` and the many non-zod `{ message }` objects were left alone); the four `.superRefine(fn)` calls are `.check(z.superRefine(fn))` — the same callback and ctx, which is how zod 4 implements the deprecated method — and `z.ZodIssueCode.custom` is the literal `'custom'`. `scripts/test/zod-error-param.test.mjs` pins that both produce the same issues."
-}

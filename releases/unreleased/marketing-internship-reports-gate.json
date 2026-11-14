@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Fixed:** the internship product's analytics reports — first destinations (`/admin/analytics/outcomes`), how pairings ended (`/closure`) and programme ROI (`/roi`) — are hidden from the analytics screen, 404 as pages and refuse their API (`GET`/`POST` outcomes and closure, `GET` roi; 403 `capability_unavailable`) in a vertical without `mentorship`. The testimonial approval page (`/testimonials/approve`), whose API already refused such a vertical, now 404s there too. The funnel, go-live KPIs and the executive dashboard are unchanged (#2348)."
-}

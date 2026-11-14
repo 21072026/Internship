@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Vertical gates, part 2 (MKT-6a, epic #2348):** the mentorship and placement APIs that only the mentor and portal shells call now ask `requireCapability()` — `/api/relation-notes` (+`/[id]`) and `/api/meeting-requests` (+`/[id]`) for `mentorship`, `/api/interview-prep` (+`/session`, `/session/[id]/turn`) for `placements` — so a MARKETING org's rep or admin gets 403 `capability_unavailable` instead of a mentorship write path. Left open on purpose because MARKETING screens call them: `/api/interactions` (the sales rep's activity log), `/api/status-changes` and `/api/cv` (the account page). INTERNSHIP is unchanged."
-}

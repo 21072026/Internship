@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "Sales lead page: the contact card shows the account's primary contact (name, position, e-mail, phone) instead of the lead row's `@import.local` stand-in address, and the record's rep corrects it in place through `PATCH /api/sales/leads/[id]/contact` — the account's contact columns and the lead's name and phone in one transaction, never the login address, audited by field name, sending nothing (#3655).",
-  "notes": {
-    "en": ["Lead page: the contact now shows the real person on the account, and you can correct the name, position, e-mail and phone right there."],
-    "tr": ["Müşteri adayı sayfası: iletişim kartı artık hesaptaki gerçek kişiyi gösteriyor; ad, pozisyon, e-posta ve telefonu doğrudan buradan düzeltebilirsiniz."],
-    "de": ["Lead-Seite: Der Kontakt zeigt jetzt die echte Person beim Account, und Name, Position, E-Mail und Telefon lassen sich direkt dort korrigieren."]
-  }
-}

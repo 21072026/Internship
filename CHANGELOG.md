@@ -24,6 +24,307 @@ each fragment — so only the *recording* was late, not the numbering. The app
 had been serving these versions correctly all along, deriving them from
 base+fragments at build time.
 
+## [0.661.0-beta] - 2026-11-14
+
+_Shipped 2026-11-14 09:32 UTC · commit [a45ee04](https://github.com/21072026/Internship/commit/a45ee04fd97c6ff6584a6c981103e0975427cee5)_
+
+Affiliate admin: the tabs are split into a **Customers** group (new customer list, customer payments) and a **Partners** group (partners, applications, funnel, commissions, partner payouts), and the two payment tabs are renamed so they are no longer confused. The new customer list (`/admin/affiliates/customers`, `GET /api/admin/affiliate/customers`, `affiliate.read`, read-only) shows one row per referred customer with its partner, first and last payment, payment count, commission window end and earned commission; the window comes from the engine through `customerWindowsByPartner()`, shared with the partner portal (#3538).
+
+## [0.660.1-beta] - 2026-11-13
+
+_Shipped 2026-11-13 15:53 UTC · commit [d11388a](https://github.com/21072026/Internship/commit/d11388a8fffe63a0f9adff0ce4ee2f1cdbd53829)_
+
+Affiliate: partner codes may contain `.` and `@` (`ada.lovelace`, `ada@example`), so codes the previous system issued from user names — and the links in circulation — keep working. One rule for every path in `src/lib/affiliateCodeRule.ts` (create, application approval, `?ref=` redirect, `/r/<code>` with or without `%40`, migration); the migration names a code with a space as needing a new code (#3550).
+
+## [0.660.0-beta] - 2026-11-13
+
+_Shipped 2026-11-13 15:53 UTC · commit [41137ba](https://github.com/21072026/Internship/commit/41137ba630b097c006c7d9598b434fc14f58efe7)_
+
+Sales: the lead dispatcher — an org admin marks a sales rep on `/admin/users`, and that rep (not an admin) sees every sales record of the org on the board, opens any lead page, moves stages, logs interactions and hands any lead to any rep. One rule: `User.salesDispatcher` is effective only for an active MENTOR on a sales vertical (`src/lib/salesDispatcher.ts`); `decide()` grants `program.read`/`relation.write`/`pipeline.transition` only on a named record of the own org; audited, read live (#3656).
+
+## [0.659.0-beta] - 2026-11-13
+
+_Shipped 2026-11-13 15:53 UTC · commit [aea31e0](https://github.com/21072026/Internship/commit/aea31e0e2d043fda6c3af4dc7b435a4a9c950147)_
+
+Sales lead page: a "Hand over" button opens the board's hand-off dialog (#3672) — same `POST /api/sales/leads/[id]/handoff`, same rule — and takes the rep back to `/sales` once the record has left their book (#3657).
+
+## [0.658.0-beta] - 2026-11-13
+
+_Shipped 2026-11-13 15:25 UTC · commit [21c5310](https://github.com/21072026/Internship/commit/21c53103c99142a478637e28f4a9919737018797)_
+
+Admin board: an "Owner" filter narrows the board to one or more owners' records — applied on the server (`?owners=` on `GET /api/mentorship`, ANDed with the caller's scope so it narrows but never widens), so counts and paging match; kept in the URL and in saved views. Each card shows its owner's initials beside the name (#3658).
+
+## [0.657.0-beta] - 2026-11-13
+
+_Shipped 2026-11-13 15:23 UTC · commit [2b94185](https://github.com/21072026/Internship/commit/2b941855439a61523d0370b32af504695670af4b)_
+
+Sales lead page: the contact card shows the account's primary contact (name, position, e-mail, phone) instead of the lead row's `@import.local` stand-in address, and the record's rep corrects it in place through `PATCH /api/sales/leads/[id]/contact` — the account's contact columns and the lead's name and phone in one transaction, never the login address, audited by field name, sending nothing (#3655).
+
+## [0.656.10-beta] - 2026-11-13
+
+_Shipped 2026-11-13 14:10 UTC · commit [7e3aec8](https://github.com/21072026/Internship/commit/7e3aec88fe04d05136781bae85a2967bcbcf0a41)_
+
+**Executive dashboard in MARKETING (#3706):** a vertical without `mentorship` no longer sees the skills-growth Capability block or the programme-cohort selector on `/admin/analytics/executive`; the capability is resolved on the server (`page.tsx` is now a server parent of `ExecutiveDashboard`). MARKETING overlay copy (EN/TR/DE) names the third score "Won deals", the forecast "Wins by the horizon" and the subtitle three scores. Metrics unchanged; INTERNSHIP unchanged.
+
+## [0.656.9-beta] - 2026-11-13
+
+_Shipped 2026-11-13 13:53 UTC · commit [31e5b46](https://github.com/21072026/Internship/commit/31e5b46f868282a1527cad02127f3da28fbcb7a1)_
+
+**Accessibility:** the collapsed empty-stage strip on the board prints its vertical label in `text-gray-700` (was `-500`) and its count in `text-gray-600` without opacity, so both hold WCAG AA on the stage tint the strip took in #3692; the overdue badge reads `text-red-700` on `bg-red-50` (was `-600`, 4.4:1 at 10px). Fixes the red a11y baseline on `/mentor/board` (#3675).
+
+## [0.656.8-beta] - 2026-11-13
+
+_Shipped 2026-11-13 13:29 UTC · commit [568028c](https://github.com/21072026/Internship/commit/568028cfc85c5e1be93d8eeded3d10762f4c4068)_
+
+**Contact permission editor (UWG § 7):** a channel the address owner withdrew themselves (the opt-out link or a recorded objection, `ownerObjected()`) is now shown as locked in the account page's editor before anyone types — a notice, with save and revoke disabled — instead of only answering a save with `owner_objected`. The rule is unchanged. New `e2e/contact-permission-editor.spec.ts` drives the editor end to end: § 7(3) refused without its reason and saved with it, an admin revocation written over again, and the locked state (API still refuses; other channels stay open).
+
+## [0.656.7-beta] - 2026-11-13
+
+_Shipped 2026-11-13 13:20 UTC · commit [fba3aed](https://github.com/21072026/Internship/commit/fba3aed186805fe2f6e98807d7c507a1f89d412c)_
+
+**Fixed:** the internship product's analytics reports — first destinations (`/admin/analytics/outcomes`), how pairings ended (`/closure`) and programme ROI (`/roi`) — are hidden from the analytics screen, 404 as pages and refuse their API (`GET`/`POST` outcomes and closure, `GET` roi; 403 `capability_unavailable`) in a vertical without `mentorship`. The testimonial approval page (`/testimonials/approve`), whose API already refused such a vertical, now 404s there too. The funnel, go-live KPIs and the executive dashboard are unchanged (#2348).
+
+## [0.656.6-beta] - 2026-11-13
+
+_Shipped 2026-11-13 13:00 UTC · commit [1e8066b](https://github.com/21072026/Internship/commit/1e8066b388934b81fd0108042792c6437ff119ff)_
+
+**Webhook events follow the product (MKT-6b):** every public webhook event maps to a vertical capability (`WEBHOOK_EVENT_CAPABILITY`, `src/lib/webhookEventCapability.ts`). A MARKETING org is no longer offered offer/requisition/interview/application events, subscribing to one answers `400 event_unavailable` (admin, SOURCE) or `422` (`POST /api/v1/hooks`), and the fan-out never delivers one; a stored subscription keeps its row and lists the event as `ignoredEvents`. INTERNSHIP is unchanged. `check:api-scope-capabilities` now also fails an unmapped or stale webhook event.
+
+## [0.656.5-beta] - 2026-11-13
+
+_Shipped 2026-11-13 12:54 UTC · commit [5debbb9](https://github.com/21072026/Internship/commit/5debbb98263dbd3bf461cda7c70118a7ebe56e20)_
+
+**Vertical gates, P3 part 2 (MKT-6, #2348):** `requireCapability()` on the admin, mentor-shell, portal and cohort routes that had none — `/api/admin/evaluation-templates` (`evaluations`); `/api/admin/program-costs`, `/api/admin/mentor-suggest/feedback`, `/api/mentor/applications`, `POST /api/mentor/mentees`, `/api/mentor/analytics`, `/api/mentor/meeting-feedback`, `/api/portal/insights` and `PATCH`/`DELETE /api/cohorts/[id]` (`mentorship`; the cohort gate runs before the programme lookup). A MARKETING caller gets 403 `capability_unavailable`; INTERNSHIP is unchanged. `/api/mentor/mentees/[id]` stays open (the MARKETING lead page's activation panel).
+
+## [0.656.4-beta] - 2026-11-13
+
+_Shipped 2026-11-13 12:42 UTC · commit [23313aa](https://github.com/21072026/Internship/commit/23313aad1b4aac25c97d9ab87af45b4a483befca)_
+
+Account lookups by e-mail address now span the whole product (world) even inside a tenant-scoped request or job, so with `MT_ENFORCE_ISOLATION` on an import or invite can no longer create a second account for an address another organization of the same product already holds (#3588).
+
+## [0.656.3-beta] - 2026-11-13
+
+_Shipped 2026-11-13 12:34 UTC · commit [dd64aa5](https://github.com/21072026/Internship/commit/dd64aa5f1b36afb3b9b9833b933f4162e1bbb29e)_
+
+**Fixed:** in a vertical without the `mentorship` module (MARKETING) the admin dashboard's reps card now opens `/admin/users` and its deals card, the recent-deals "view all" and the onboarding checklist's pairing steps open `/admin/board` — they led to `/admin/mentors` and `/admin/mentorship`, which that vertical closes, so a MARKETING admin got a 404. The checklist drops the evaluation-framework step where there is no `evaluations` module, and the accounts card, its quick action and the add-an-account step read in sales language (#2348, #2578).
+
+## [0.656.2-beta] - 2026-11-13
+
+_Shipped 2026-11-13 12:33 UTC · commit [604e3f6](https://github.com/21072026/Internship/commit/604e3f615da15610a74281db1bbb337d5b425c40)_
+
+**Vertical gates, P3 part 1 (MKT-6, #2348):** the mentorship-relation side routes — `POST /api/mentorship/[id]/certificate`, `/extend`, `/agreement/accept` and `GET /cadence` — and the programme journey builder (`/api/admin/programs/[id]/journey`, `/[stepId]`, `/preview`) now ask `requireCapability(…, 'mentorship')` right after the session, before the relation or programme lookup, so a MARKETING caller gets 403 `capability_unavailable` (never a 404 that confirms nothing). `/next-step` stays open (the MARKETING account page's follow-up panel uses it). INTERNSHIP is unchanged.
+
+## [0.656.1-beta] - 2026-11-13
+
+_Shipped 2026-11-13 12:27 UTC · commit [bc34c2a](https://github.com/21072026/Internship/commit/bc34c2a5ea0bfcf1ee72eaa30d4e8eb7ddd07072)_
+
+**Board follow-ups to the column colours (#3675, after #3666):**
+- The drop-target ring (`ring-blue-500`) now follows the org accent: `html[data-accent] .ring-blue-500` in `globals.css`. The few other non-focus `ring-blue-500` highlights (command palette, global search, the highlighted pricing plan) follow the accent too, like every other blue.
+- A collapsed empty-stage strip takes its stage tone, dashed, and gains the same ring as a drop target. It used to keep the old gray / blue-50 look.
+- `boardColumnTone()` has a unit test (`scripts/test/board-column-tone.test.mjs`).
+- The admin board's drop-target comments are updated.
+
+## [0.656.0-beta] - 2026-11-13
+
+_Shipped 2026-11-13 12:26 UTC · commit [7e37efa](https://github.com/21072026/Internship/commit/7e37efa16e670b8fb9fd7a804dc3246251e5223a)_
+
+**Prospect retention (MARKETING):** `/admin/retention` lists the accounts past the 24 months every postal letter promises (`PROSPECT_RETENTION_MONTHS`) — no customer history (the shared ever-won check, now `recordsEverWon()` / `relationsEverWon()`), no live contact permission, no contact since (funnel last contact, last letter, last enquiry). `GET /api/admin/retention/prospects` (≤ 50 rows, name + date) and `POST /api/admin/retention/prospects/[id]/erase` (org-scoped, 404 for another org, 409 when not due, AuditLog row) erase the contact columns, enquiry details, address-book entries and letter snapshots by hand; the Company row and the block list stay. A report-only `prospectContact` retention entry counts the backlog — no scheduled erasure (MKT-4).
+
+## [0.655.0-beta] - 2026-11-13
+
+_Shipped 2026-11-13 12:23 UTC · commit [8c52a7b](https://github.com/21072026/Internship/commit/8c52a7b39538536870fa896b93b30a6d487c6aab)_
+
+**API keys follow the product (MKT-6b):** every API key scope and every top-level `/api/v1` segment maps to a vertical capability (`SCOPE_CAPABILITY`, `V1_PREFIX_CAPABILITY` in `src/lib/apiScopes.ts`). A MARKETING org is no longer offered `hiring:read`, creating a key with it answers `400 scope_unavailable`, and a key that already stores it keeps the row but gets `403 capability_unavailable` on `/requisitions`, `/offers` and `/interview-requests` (the scope is ignored, not deleted). INTERNSHIP is unchanged. New CI check `check:api-scope-capabilities` fails an unmapped scope or prefix.
+
+## [0.654.2-beta] - 2026-11-13
+
+_Shipped 2026-11-13 12:22 UTC · commit [8dd915b](https://github.com/21072026/Internship/commit/8dd915b45a5a7677a818c5f8630ea49cd812ef04)_
+
+**Security:** `GET /api/company/interests` and `GET /api/company/outreach` require `placements` like their POSTs, so a vertical without the company portal (MARKETING) reads nothing from them either (#2348).
+
+## [0.654.1-beta] - 2026-11-13
+
+_Shipped 2026-11-13 12:13 UTC · commit [b1730ec](https://github.com/21072026/Internship/commit/b1730ec7c8ec270dc3d827cf2e950675a63a75ef)_
+
+**Vertical gates, part 3 (MKT-6a, epic #2348):** the admin APIs behind destinations the nav already hides for a MARKETING org — and whose pages already 404 — now ask `requireCapability()` too: `/api/admin/billing/entitlements`, `/api/admin/forms` (+`/[id]`, `/publish`), `/api/admin/matching/custom-fields` and `/api/admin/nudges` (+`/[id]`, `/sends`, `/preview`) for `mentorship`, `/api/admin/offers/benchmark` for `placements`, `/api/admin/source-users` for `sourcing`. `/api/admin/sources` stays open on purpose: `Source` carries marketing lead attribution and a MARKETING admin reads it. INTERNSHIP is unchanged.
+
+## [0.654.0-beta] - 2026-11-13
+
+_Shipped 2026-11-13 12:05 UTC · commit [4338a00](https://github.com/21072026/Internship/commit/4338a00aa58a05f70fafcd26aa2709752f6ba5b2)_
+
+**Sales board:** a colleague strip above `/sales/board` and the MARKETING `/admin/board` — drop a lead card on a teammate (or use the card's *Hand over* button) and a dialog asks what they should do next (call / e-mail / appointment / app demo / free text) and by when. The owner moves through `transferMentorship()` (new `quietMentee` option, reason code `sales_handoff`), the instruction lands in the record's follow-up (`nextActionAt`/`nextActionNote`, so the due-day reminder and attention queue apply), and the recipient gets an in-app `lead.handedOff` notice. The lead is told nothing. `GET /api/sales/team`, `POST /api/sales/leads/[id]/handoff`; rule in `src/lib/leadHandoffRule.ts`.
+
+## [0.653.2-beta] - 2026-11-13
+
+_Shipped 2026-11-13 12:02 UTC · commit [907da9a](https://github.com/21072026/Internship/commit/907da9a3c939b82f01ce1dca6d86d92f6756ea6a)_
+
+**Security:** a vertical without the company portal (`placements` — the MARKETING product) has no company logins. `POST /api/admin/company-users` answers 403 `capability_missing` and the admin companies page no longer offers the card; an existing COMPANY login is sent from `/company` to `/account` (an ADMIN to `/admin`); `GET /api/mentorship` answers such a login an empty list and `GET /api/companies/<own>` carries no relations, so the funnel (lead, owner, stage) never reaches a customer; and the company-portal API routes that had no capability gate (analytics, benchmark, candidate detail, talent pool, integrations, onboarding, outreach decisions) now require `placements` (#2348).
+
+## [0.653.1-beta] - 2026-11-13
+
+_Shipped 2026-11-13 11:59 UTC · commit [228a05f](https://github.com/21072026/Internship/commit/228a05f02c3d2a68075be9cfd96210c7fdb32910)_
+
+**Vertical gates, part 2 (MKT-6a, epic #2348):** the mentorship and placement APIs that only the mentor and portal shells call now ask `requireCapability()` — `/api/relation-notes` (+`/[id]`) and `/api/meeting-requests` (+`/[id]`) for `mentorship`, `/api/interview-prep` (+`/session`, `/session/[id]/turn`) for `placements` — so a MARKETING org's rep or admin gets 403 `capability_unavailable` instead of a mentorship write path. Left open on purpose because MARKETING screens call them: `/api/interactions` (the sales rep's activity log), `/api/status-changes` and `/api/cv` (the account page). INTERNSHIP is unchanged.
+
+## [0.653.0-beta] - 2026-11-13
+
+_Shipped 2026-11-13 11:51 UTC · commit [3c94969](https://github.com/21072026/Internship/commit/3c949692f45c49ed2216f91465af5b7617e26965)_
+
+**Go-live week numbers on the MARKETING funnel (#2578):**
+- **Two new boxes on `/admin/analytics`, for a MARKETING org only.** The funnel API (`GET /api/admin/analytics/funnel`) returns `medianFirstContactHours`, `firstContact` (contacted / waiting / contacted before the request) and `trialEndCoverage` (live `TRIAL_ACTIVE` records with a `trialEndsAt`, as a rate). An INTERNSHIP payload does not carry the keys. The rule is pure in `src/lib/firstContactRule.ts`: first contact runs from the demo request (else the record's start) to the first `InteractionLog`. Unlike last contact, DIRECT and group messages do not count. The definition is one sentence, `FIRST_CONTACT_DEFINITION`, and the unit test checks that `go-live-checklist.md` quotes it verbatim.
+- **The referrer is now a lead source** (`src/lib/leadSourceName.ts`). The order is affiliate > `utm_source` > `ref:<host>` > vendor > `acquisition_source` > unknown. The host comes from the stored referrer, lower-cased, with no port, path or query. A referrer on any served host is not a source. Leads stored earlier are not backfilled.
+- The funnel route's `?program=` handling is unchanged.
+
+## [0.652.3-beta] - 2026-11-13
+
+_Shipped 2026-11-13 11:50 UTC · commit [3cb5986](https://github.com/21072026/Internship/commit/3cb5986badec860dbcfbdd8d68ea45f461da79ca)_
+
+**Security:** the strict nonce CSP can be enforced (#1552, step 3). `CSP_ENFORCE=1` makes it the page's `Content-Security-Policy`: `script-src 'self' 'nonce-…' 'strict-dynamic'` with no `'unsafe-inline'`, and no `'unsafe-eval'` in a production build. The middleware's header replaces next.config.js's, so a page carries one enforced policy, and `/embed` follows the same mode. Off by default on deployments; the e2e servers enforce it. The GA4/PostHog init no longer inserts an inline `<script>`, which `'strict-dynamic'` never trusts: it runs as a function after the loader. (zod's eval probe, the stream's only other violation, was closed by #3642.) `style-src 'unsafe-inline'` stays, see `docs/security-exceptions.md`.
+
+## [0.652.2-beta] - 2026-11-13
+
+_Shipped 2026-11-13 11:45 UTC · commit [081cd52](https://github.com/21072026/Internship/commit/081cd525dd99bc0a24c87f962345c2129d34c2e7)_
+
+**Vertical gates, part 1 (MKT-6a, epic #2348):** `/interviews` (interview panels, the `placements` module) now carries the same one-line `gatePage('/interviews')` as a gated admin segment — the nav-route ratchet claimed a shell-level gate that its layout did not have — and the mentor sidebar tags its `/interviews` link `placements` too. `/onboarding` (mentor/mentee profile step) and `/onboarding/contributor-terms` (projects) answer 404 for a vertical without `mentorship` / `projects` through the new `gateCapability()` (`src/lib/pageCapabilityGate.ts`); `PATCH /api/interview-requests/[id]` and `/api/mentee-onboarding` ask `requireCapability()` like their siblings. INTERNSHIP is unchanged.
+
+## [0.652.1-beta] - 2026-11-13
+
+_Shipped 2026-11-13 11:28 UTC · commit [403e23a](https://github.com/21072026/Internship/commit/403e23a132f91bcf03fef7f319f911224f39e007)_
+
+**Postal campaigns refuse a marketing sender that is not configured (#2578):** a MARKETING org's campaign is neither printed nor posted unless `MARKETING_OPERATOR_NAME`, `_EMAIL` and `_ADDRESS` are all set (`marketingOperatorConfigured()`, `src/lib/imprint.ts`) — the imprint may still fall back to `OPERATOR_*`, a letter may not (outreach-compliance § 6). `/print/post-campaign/[id]` shows a blocking notice instead of the letters, `POST /api/admin/post-campaigns/[id]/send` answers 409 `operator_missing` and leaves the campaign a draft; INTERNSHIP orgs are never asked. `prisma/check-marketing-orgs.mjs` prints a deploy-log WARNING when `MARKETING_HOSTS` is set and the set is incomplete. The e2e app server gets a synthetic `MARKETING_OPERATOR_*` set.
+
+## [0.652.0-beta] - 2026-11-13
+
+_Shipped 2026-11-13 11:19 UTC · commit [9269906](https://github.com/21072026/Internship/commit/9269906a2b027be74a1efdb92f91e2583b574e2c)_
+
+**Every board column its own color:** the admin board and the mentor/sales board (`MentorBoard`, also `/sales/board`) tint each column's whole surface by the stage's place in the pipeline — first sky blue, then orange, purple, yellow, red, green (teal, pink, indigo, lime past six), and the last stage always slate gray — so two neighbouring stages can never be mistaken for one another; cards stay white. The sales funnel reads New lead blue → Contacted orange → Qualified purple → Trial running yellow → Trial expired red → Won green → Lost gray. `src/lib/boardColumnTone.ts` keys the color by the stage's position among ALL stages, so hiding empty stages never repaints a column, and avoids the two utilities `globals.css` repaints (blue is the org accent, gray is remapped in dark mode). Each tone has an explicit dark-mode shade. A drop target keeps its color and gains a blue ring instead of turning blue.
+
+## [0.651.0-beta] - 2026-11-13
+
+_Shipped 2026-11-13 11:19 UTC · commit [223093d](https://github.com/21072026/Internship/commit/223093df8cfc34e31a25e3298b01107d4bbba845)_
+
+Affiliate: export a programme's settings (page content and theme with its media, contract, customer status, window notice, referral address, commission plan) as one JSON file and import it in another environment — preview first, every section through its own writer, the plan only with an explicit confirmation (#3622).
+
+## [0.650.1-beta] - 2026-11-13
+
+_Shipped 2026-11-13 11:19 UTC · commit [2f05c42](https://github.com/21072026/Internship/commit/2f05c4231d9ce641fbc7650136a21845bf4f5ff8)_
+
+**Security:** the executive and ROI analytics reports answer `404` for another tenant's `cohortId`, and withdrawing a destination answer (`DELETE /api/admin/analytics/outcomes?userId=`) answers `404` for a person outside the caller's tenant — both used to return a 200 that echoed the foreign id back. The leak matrix now covers nine analytics sub-routes (aging, funnel, cohorts, programs, executive, ROI, forecast, benchmark, sources) and the id-taking ones (#1577).
+
+## [0.650.0-beta] - 2026-11-13
+
+_Shipped 2026-11-13 11:18 UTC · commit [0f05fc5](https://github.com/21072026/Internship/commit/0f05fc52dc41dfc9d4597e024f46000da949548e)_
+
+Affiliate portal: the customer list shows until when each customer's percent commission runs (the engine's window end — the date the notice mail names; "No end" for an unlimited plan, an "Ended" badge once passed), and the home page warns how many customers' commission ends within the programme's notice lead time (#3557).
+
+## [0.649.0-beta] - 2026-11-13
+
+_Shipped 2026-11-13 11:18 UTC · commit [cc853cd](https://github.com/21072026/Internship/commit/cc853cd456f6363c19e7b62fb370d7e4f227214c)_
+
+Sales lead page: the last interaction now sits right under the follow-up, the trial-end, contract-end, win-back and estimated-value panels share a grid instead of each taking a full-width row, the follow-up and the interaction log each say what they are for (what comes next vs. what already happened, with a visible label on the interaction date), and "On your book since" reads "Assigned to you on" with a hint that it is not the trial start (#3652, #3653, #3654).
+
+## [0.648.6-beta] - 2026-11-13
+
+_Shipped 2026-11-13 11:18 UTC · commit [0e5efbe](https://github.com/21072026/Internship/commit/0e5efbed918cb3ec5e737e40c3e5c98c024df2a0)_
+
+**Download file names: three edge cases of the #3623 fallback fixed.** A fullwidth quote or backslash in a name no longer breaks the `filename="…"` header (NFKD folded them back to `"`/`\` after they had been stripped). A name over 100 characters is cut by code point, so an emoji at the cut no longer turns the download into a 500. The Turkish dotless `ı` transliterates to `i` (through `transliterate()`) instead of becoming `_`.
+
+## [0.648.5-beta] - 2026-11-13
+
+_Shipped 2026-11-13 11:18 UTC · commit [b789bdc](https://github.com/21072026/Internship/commit/b789bdc85d16d33a3573e1b2f55e90602f93e322)_
+
+**Fixed:** a programme's own vocabulary (#3400) shows on its admin pages again (`/admin/programs/[id]/…`). Since the admin dictionary was split per section (#3599), the programme layer re-provided the chrome-only `admin` scope and the journey page fell back to the org's words; it now re-provides `admin/programs`.
+
+## [0.648.4-beta] - 2026-11-13
+
+_Shipped 2026-11-13 11:16 UTC · commit [c655b6e](https://github.com/21072026/Internship/commit/c655b6e0294be91c5faeb0cc681896afbb0a92fb)_
+
+**CSP: zod no longer probes `eval` in the browser (#3642).** Zod 4's one-off `new Function` probe was reported by the strict report-only CSP on every page that validates anything (the sign-in page above all); in CI those reports filled `/api/csp-report`'s per-IP limit and the 429s failed the smoke gate. The browser now runs zod `jitless` (`src/lib/zodBrowserConfig.ts`); the server keeps the JIT.
+
+## [0.648.3-beta] - 2026-11-13
+
+_Shipped 2026-11-13 10:43 UTC · commit [77c8c81](https://github.com/21072026/Internship/commit/77c8c81076ed864fde46136ef53f6c741d9a84e6)_
+
+**zod 4 deprecations, part 4 (#3568):** the `{ message }` parameter is `{ error }` on the 25 `.refine()` calls that used it (found with the type checker, so a schema field named `message` and the many non-zod `{ message }` objects were left alone); the four `.superRefine(fn)` calls are `.check(z.superRefine(fn))` — the same callback and ctx, which is how zod 4 implements the deprecated method — and `z.ZodIssueCode.custom` is the literal `'custom'`. `scripts/test/zod-error-param.test.mjs` pins that both produce the same issues.
+
+## [0.648.2-beta] - 2026-11-11
+
+_Shipped 2026-11-11 11:10 UTC · commit [90cbb2d](https://github.com/21072026/Internship/commit/90cbb2d41f859cef278695fb58bc4d9aed8e3092)_
+
+**zod 4 deprecations, part 3 (#3568):** 70 `z.string().email()` / `.url()` / `.datetime()` checks that come first in their chain are now `z.email()` / `z.url()` / `z.iso.datetime()` — the same check, accepting and refusing the same inputs with the same issues (`scripts/test/zod-format-constructors.test.mjs`, a corpus per format). Deliberately left as they are: a check after `.trim()` / `.min()` (the constructor checks first, so `z.email().trim()` would refuse ' a@b.co ') and a check with its own message (the constructor also applies it to a non-string input); the test pins both differences. `zodToJsonSchema` (`src/lib/events/payloadSchema.ts`) now also reads the format off `z.iso.datetime()` itself, so the published webhook contracts keep `format: date-time`.
+
+## [0.648.1-beta] - 2026-11-11
+
+_Shipped 2026-11-11 11:08 UTC · commit [d5c0ded](https://github.com/21072026/Internship/commit/d5c0dede01ceb2dd06b92ec667ddbc9fe114f17f)_
+
+**The programme/cohort comparison measures time to hire from funnel entry (#1502):** `comparisonRow()` in `src/lib/analyticsReports.ts` still counted "average days to hired" from the pairing date (`startDate`). #1505 had moved the funnel, forecast, deal-value and mentor numbers to `funnelStartedAt()`, but not this one. A coaching pair converted to PLACEMENT therefore carried its coaching months into `/api/admin/analytics/programs`, `/api/admin/analytics/cohorts` and the registry's cohort report. It now selects `funnelEnteredAt` and uses `funnelStartedAt()`. A row with no stamp still reads from `startDate`, so existing numbers do not move. Found while checking #1502's acceptance criteria and pinned in `e2e/time-to-hire-funnel-entry.spec.ts` (red at 140 days before the change, 85 after).
+
+## [0.648.0-beta] - 2026-11-11
+
+_Shipped 2026-11-11 10:54 UTC · commit [b08bab1](https://github.com/21072026/Internship/commit/b08bab1fc1f2b38c87f379c4a25c636aba233d00)_
+
+**Language of user-written text (#3283, WCAG 3.1.2):** messages, support chat, interaction notes, bios, the employer page text and announcements now carry a `lang` attribute when their language is known or can be told with confidence. `src/lib/contentLanguage.ts` (`detectContentLanguage()` / `contentLang()`, pure and unit-tested) answers only EN/TR/DE, only for text of at least three words, and only when one language clearly outweighs the others; anything shorter or mixed stays unmarked, because a wrong `lang` is read in the wrong voice. An announcement declares the locale of the translation shown (`resolveAnnouncementLang()`). VPAT row 3.1.2 updated.
+
+## [0.647.4-beta] - 2026-11-11
+
+_Shipped 2026-11-11 10:53 UTC · commit [c8d7f62](https://github.com/21072026/Internship/commit/c8d7f627d909580af1df661c2e4d50ccaf79cc77)_
+
+**Security:** an admin who is not in a message thread can open it only inside their own organization: `getThreadIfAllowed()` checks the relation's org and `getConversationIfAllowed()` requires every participant of a DIRECT conversation to be in the caller's tenant — both used to let any admin of any org read and post into the thread (#3602).
+
+## [0.647.3-beta] - 2026-11-11
+
+_Shipped 2026-11-11 10:53 UTC · commit [0b48b2e](https://github.com/21072026/Internship/commit/0b48b2ef132e6032d0a655126e830d947472fd7d)_
+
+**`next build` no longer depends on the `@napi-rs/canvas` native binding (#3590):** `src/lib/cvParse.ts` imported `pdf-parse` at module top. Importing it runs pdfjs-dist, which polyfills `DOMMatrix` from the native binding as a side effect and throws when the binding does not load. Because `next build` imports every route module to collect page data, a binding that failed to load on a runner broke "Collecting page data" for the three CV routes. `pdf-parse` is now imported inside `extractCvText()` when a PDF is actually read. Reproduced deterministically with `NAPI_RS_NATIVE_LIBRARY_PATH=/nonexistent`: the build failed before the change and passes after it. The CV e2e specs pass.
+
+## [0.647.2-beta] - 2026-11-11
+
+_Shipped 2026-11-11 10:52 UTC · commit [0f71353](https://github.com/21072026/Internship/commit/0f71353cf9dfc559b2f692dd53897b17e0023b82)_
+
+**Security:** the strict report-only CSP and its per-request nonce now cover the `/auth/*` pages too (sign-in, register, reset, magic link, SSO, 2FA). `src/middleware.ts` matches them; none of its redirects applies there — `wantsResume()` returns false for `/auth/*`, the `/en` 308 and the language rewrite cover public pages only, and the write gates refuse only writes, which nothing sends to a page (no server actions) (#1552, step 2).
+
+## [0.647.1-beta] - 2026-11-11
+
+_Shipped 2026-11-11 10:50 UTC · commit [73de14d](https://github.com/21072026/Internship/commit/73de14d0896d29da049169a3e12eee4dc84e8aed)_
+
+**zod 4 deprecations, part 2 (#3568):** 201 `z.object({…}).strict()` schemas are now `z.strictObject({…})`, the zod 4 form of the same schema (same `unrecognized_keys` refusal); one redundant trailing `.strict()` after `.partial().extend()` is dropped. `scripts/test/zod-strict-object.test.mjs` pins the equivalence and that `.partial()` / `.extend()` keep an object strict.
+
+## [0.647.0-beta] - 2026-11-11
+
+_Shipped 2026-11-11 10:49 UTC · commit [28c83cf](https://github.com/21072026/Internship/commit/28c83cf3877decd13b65a98b57a7143e62952214)_
+
+**Relation timeline, completed (#1700):** mentor questions (`question_asked` / `question_answered`, dated by the answer once there is one) and the pairing's own submitted INTERIM/FINAL evaluations (`evaluation_interim` / `evaluation_final`) join `GET /api/mentorship/[id]/timeline` in the same descending order and cursor. A mentee sees an evaluation as the fact and the date only — no comment, no author, and scores are never selected; an interview panel's scorecard and an unsubmitted record are never listed. Someone who is neither a participant nor an admin reaching the relation now gets **404** instead of 403, and the admin check asks `program.read` with the relation as its subject, so a PROGRAM_ADMIN reads the timeline of a pairing its grant covers. Pinned by `e2e/relation-timeline-access.spec.ts` (@smoke).
+
+## [0.646.5-beta] - 2026-11-11
+
+_Shipped 2026-11-11 10:44 UTC · commit [3616222](https://github.com/21072026/Internship/commit/3616222b6f41d920ccd1c6bf6d9b0ffc03e929e6)_
+
+**zod 4 deprecations, part 1 (#3568):** every `parsed.error.flatten()` (91 sites) is now `z.flattenError(parsed.error)` and `ZodTypeAny` is `ZodType` — the zod 4 forms of the same calls (`flatten()` delegates to `flattenError()`, and `ZodTypeAny` is a plain alias). No response shape changes.
+
+## [0.646.4-beta] - 2026-11-11
+
+_Shipped 2026-11-11 10:37 UTC · commit [12a042e](https://github.com/21072026/Internship/commit/12a042e39e32b7a9f0c1214174c57876879bd3e6)_
+
+**Partner application keeps its confirmation on a language switch:** the switcher reloads the page, which dropped a sent `/partner/apply` form back to an empty one. The tab now remembers that it sent (a `sessionStorage` flag, never the typed values) and shows the confirmation in the new language.
+
+## [0.646.3-beta] - 2026-11-11
+
+_Shipped 2026-11-11 10:37 UTC · commit [d6916e0](https://github.com/21072026/Internship/commit/d6916e0e63405f5f51659d9a4b1961fdf2eaa142)_
+
+**A download whose file name has Turkish or other non-Latin-1 characters no longer fails (500):** `Content-Disposition` now carries an ASCII fallback in `filename=` and the real name only in `filename*=UTF-8''…` (RFC 6266). Node/undici refuse header characters above U+00FF, and Next 15.5.29 stopped smoothing that over, so CV, document, message and support attachment downloads named e.g. `özgeçmiş.pdf` broke. The two support attachment routes now use the same `contentDisposition()` helper.
+
+## [0.646.2-beta] - 2026-11-11
+
+_Shipped 2026-11-11 01:50 UTC · commit [41192fa](https://github.com/21072026/Internship/commit/41192fa8ae1c3d62974040a2c4852fc4e42d02b1)_
+
+**Security:** a session without an organization (a token minted before the org backfill) is read as the default organization's on the tag routes (`/api/tags/[id]`, `/api/tags/[id]/merge`, `/api/tags/assign`) and the document review routes, instead of dropping the tenant filter — `orgId ?? undefined` and `orgId && row.orgId !== orgId` let such a session act on every org's rows (#3603).
+
+## [0.646.1-beta] - 2026-11-11
+
+_Shipped 2026-11-11 01:46 UTC · commit [88f073f](https://github.com/21072026/Internship/commit/88f073fbd81d1a183d77ab939da4593cbff88e2b)_
+
+**Security:** `assertSameOrg()` (`src/lib/orgScope.ts`) now guards whatever `MT_ENFORCE_ISOLATION` says — it used to be a no-op with the flag off, which is every deployment. It takes the default org's id and reads NULL on either side as the default org's (the `sameTenant()` rule), so not-yet-backfilled rows and org-less sessions are not locked out (#3588).
+
 ## [0.646.0-beta] - 2026-11-11
 
 _Shipped 2026-11-11 01:37 UTC · commit [e6f3510](https://github.com/21072026/Internship/commit/e6f351054a4ded84f443e67de1e429934fd0124f)_
