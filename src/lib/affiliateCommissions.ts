@@ -22,7 +22,7 @@ export interface CommissionRow {
   customerRef: string;
   /** The admin-written label the partner sees (#3352); null when none. */
   customerLabel: string | null;
-  payment: { amountMinor: number; externalPaymentRef: string };
+  payment: { amountMinor: number; transactionCount: number | null; unitPriceMinor: number | null; externalPaymentRef: string };
   paidAt: string | null;
 }
 
@@ -72,7 +72,7 @@ export async function listCommissions(
         paidAt: true,
         partner: { select: { id: true, code: true, displayName: true } },
         customer: { select: { externalRef: true, partnerLabel: true } },
-        payment: { select: { amountMinor: true, externalPaymentRef: true } },
+        payment: { select: { amountMinor: true, transactionCount: true, unitPriceMinor: true, externalPaymentRef: true } },
       },
     }),
     prisma.affiliateCommission.count({ where }),

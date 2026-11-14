@@ -240,6 +240,9 @@ export async function partnerCommissions(partner: GatedPartner, opts: { status?:
       customerRef: r.customerRef,
       customerLabel: r.customerLabel,
       paymentAmountMinor: r.payment.amountMinor,
+      // The breakdown of the commission base when it was entered as one (#3554); both or neither.
+      paymentTransactionCount: r.payment.transactionCount,
+      paymentUnitPriceMinor: r.payment.unitPriceMinor,
     })),
   };
 }

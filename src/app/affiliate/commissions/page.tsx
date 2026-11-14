@@ -81,7 +81,17 @@ export default async function AffiliateCommissionsPage({ searchParams }: { searc
                         <span className="ml-1 text-gray-500">({interpolate(L.planVersionShort, { n: String(r.planVersion) })})</span>
                       )}
                     </td>
-                    <td className="px-4 py-2 text-right whitespace-nowrap">{formatMinorAmount(r.paymentAmountMinor, r.currency, locale)}</td>
+                    <td className="px-4 py-2 text-right whitespace-nowrap">
+                      {formatMinorAmount(r.paymentAmountMinor, r.currency, locale)}
+                      {r.paymentTransactionCount !== null && r.paymentUnitPriceMinor !== null && (
+                        <div className="text-xs text-gray-500" data-testid="affiliate-commission-breakdown">
+                          {interpolate(L.paymentBreakdown, {
+                            count: new Intl.NumberFormat(locale).format(r.paymentTransactionCount),
+                            price: formatMinorAmount(r.paymentUnitPriceMinor, r.currency, locale),
+                          })}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-right whitespace-nowrap font-medium">{formatMinorAmount(r.amountMinor, r.currency, locale)}</td>
                     <td className="px-4 py-2 whitespace-nowrap">{date(r.dueAt)}</td>
                     <td className="px-4 py-2">
