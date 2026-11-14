@@ -9537,7 +9537,13 @@ model AffiliatePayment {
   org                Organization           @relation(fields: [orgId], references: [id])
   customerId         String
   customer           AffiliateCustomer      @relation(fields: [customerId], references: [id])
+  // The commission base (#3551): undiscounted, gross, VAT included — not the
+  // amount actually paid. Always the resolved base (resolvePaymentBase()).
   amountMinor        Int
+  // The breakdown, when the payment arrived as count × unit price (#3552):
+  // both set or both null. Null on every payment recorded as a bare amount.
+  transactionCount   Int?
+  unitPriceMinor     Int?
   currency           String                 @db.VarChar(3)
   // Never in the future (the writer refuses it).
   receivedAt         DateTime

@@ -41,6 +41,7 @@ import {
   type PaymentInputIssue,
   type StoredCommission,
 } from '@/lib/affiliateCommissionSync';
+import { resolvePaymentBase, type PaymentBaseIssue } from '@/lib/affiliatePaymentBaseRule';
 
 export type AffiliateWriteErrorCode =
   | 'invalid_input'
@@ -62,8 +63,8 @@ export type AffiliateWriteErrorCode =
 
 export class AffiliateWriteError extends Error {
   readonly code: AffiliateWriteErrorCode;
-  readonly issues: PaymentInputIssue[];
-  constructor(code: AffiliateWriteErrorCode, issues: PaymentInputIssue[] = []) {
+  readonly issues: (PaymentInputIssue | PaymentBaseIssue)[];
+  constructor(code: AffiliateWriteErrorCode, issues: (PaymentInputIssue | PaymentBaseIssue)[] = []) {
     super(code);
     this.name = 'AffiliateWriteError';
     this.code = code;
@@ -76,7 +77,16 @@ export interface RecordPaymentInput {
   /** Required when the customer is new; checked against the stored link otherwise. */
   partnerId?: string | null;
   customerExternalRef: string;
-  amountMinor: number;
+  /**
+   * The commission base (undiscounted, gross, VAT included), or leave it out and
+   * give the breakdown below; both may come together only when they agree.
+   * resolvePaymentBase() (src/lib/affiliatePaymentBaseRule.ts) decides (#3552).
+   */
+  amountMinor?: number | null;
+  /** Transactions in the period; with `unitPriceMinor`, the base is their product. */
+  transactionCount?: number | null;
+  /** Undiscounted gross price per transaction, minor units. */
+  unitPriceMinor?: number | null;
   currency: string;
   receivedAt: Date;
   externalPaymentRef: string;
@@ -224,10 +234,15 @@ function mapPrismaError(e: unknown): unknown {
  */
 export async function recordAffiliatePayment(raw: RecordPaymentInput, tx?: Tx): Promise<RecordPaymentResult> {
   const now = raw.now ?? new Date();
-  const issues = checkPaymentInput(raw, now);
+  const base = resolvePaymentBase(raw);
+  if (!base.ok) throw new AffiliateWriteError('invalid_input', [base.issue]);
+  const issues = checkPaymentInput({ ...raw, amountMinor: base.amountMinor }, now);
   if (issues.length > 0) throw new AffiliateWriteError('invalid_input', issues);
-  const input = {
+  const input: ResolvedPaymentInput = {
     ...raw,
+    amountMinor: base.amountMinor,
+    transactionCount: base.transactionCount,
+    unitPriceMinor: base.unitPriceMinor,
     customerExternalRef: normalizeRef(raw.customerExternalRef),
     externalPaymentRef: normalizeRef(raw.externalPaymentRef),
   };
@@ -249,8 +264,11 @@ export async function recordAffiliatePayment(raw: RecordPaymentInput, tx?: Tx): 
   }
 }
 
+/** The input once the base is resolved: `amountMinor` is always the base. */
+type ResolvedPaymentInput = RecordPaymentInput & { amountMinor: number; transactionCount: number | null; unitPriceMinor: number | null };
+
 /** The payment write itself, under the partner lock, inside `tx`. */
-async function writePayment(tx: Tx, input: RecordPaymentInput, partnerId: string): Promise<RecordPaymentResult> {
+async function writePayment(tx: Tx, input: ResolvedPaymentInput, partnerId: string): Promise<RecordPaymentResult> {
   const partner = await lockPartner(tx, input.orgId, partnerId);
   if (partner.status === 'SUSPENDED') throw new AffiliateWriteError('partner_suspended');
   const loaded = await loadPlan(tx, input.orgId);
@@ -301,6 +319,8 @@ async function writePayment(tx: Tx, input: RecordPaymentInput, partnerId: string
       orgId: input.orgId,
       customerId,
       amountMinor: input.amountMinor,
+      transactionCount: input.transactionCount,
+      unitPriceMinor: input.unitPriceMinor,
       currency: input.currency,
       receivedAt: input.receivedAt,
       source: input.source,
@@ -321,6 +341,8 @@ async function writePayment(tx: Tx, input: RecordPaymentInput, partnerId: string
         partnerId: partner.id,
         customerId,
         amountMinor: input.amountMinor,
+        transactionCount: input.transactionCount,
+        unitPriceMinor: input.unitPriceMinor,
         currency: input.currency,
         source: input.source,
         ...sync,

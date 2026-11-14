@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "Affiliate payments: the payment writer accepts the commission base either as an amount or as a breakdown (transaction count × undiscounted gross unit price); `resolvePaymentBase()` is the one rule, and the breakdown is stored in the new optional `AffiliatePayment.transactionCount` / `unitPriceMinor` columns (#3552)."
+}
