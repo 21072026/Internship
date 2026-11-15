@@ -38,8 +38,11 @@ export default async function AdminHubPage({ params }: { params: Promise<{ group
   const descriptions = { ...(t.navHub as Record<string, string>), ...(t.navHubInternship as Record<string, string>) };
   const title = (t.navGroups as Record<string, string>)[group] ?? group;
 
+  // pb-24: room below the last row for the floating feedback button
+  // (FeedbackWidget), which otherwise sits on top of the end of a long full-width
+  // list on a phone — the settings hub's last row (e2e/mobile-layout-coverage.spec.ts).
   return (
-    <div className="max-w-2xl" data-testid={`nav-hub-page-${group}`}>
+    <div className="max-w-2xl pb-24" data-testid={`nav-hub-page-${group}`}>
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{title}</h1>
       <p className="mt-1 mb-6 text-sm text-gray-500 dark:text-gray-400">{t.navGroups.hubLead}</p>
       {rows.length === 0 ? (

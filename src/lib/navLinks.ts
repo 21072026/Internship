@@ -355,6 +355,8 @@ export const PORTAL_NAV_LINKS: NavLink[] = [
 export const SALES_NAV_LINKS: NavLink[] = [
   { href: '/sales', icon: LayoutDashboard, key: 'dashboard', exact: true, capability: 'pipeline' },
   { href: '/sales/board', icon: Columns3, key: 'board', capability: 'pipeline' },
+  // The rep's own meetings, follow-ups and trial ends (#3778).
+  { href: '/sales/calendar', icon: CalendarDays, key: 'calendar', capability: 'pipeline' },
   // The team page (#3779): team totals, per-rep counts and the leaderboard — MARKETING only.
   { href: '/sales/team', icon: Trophy, key: 'salesTeam', capability: 'pipeline', withoutCapability: 'mentorship' },
   { href: '/sales/accounts', icon: Building2, key: 'myCompanies', capability: 'companies' },

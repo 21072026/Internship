@@ -8,6 +8,8 @@ import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { orgWhere, withinTenant } from '@/lib/tenantFilter';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import { productNameForOrg } from '@/lib/orgBrand';
+import { shellCapabilities } from '@/lib/shellCapabilities';
+import { hasSalesSurface } from '@/lib/salesSurface';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Overall event cap, kept from #915 and applied to the whole fan-out, not per query. */
@@ -60,7 +62,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
         : { menteeId: user.id };
   const relWhere = withinTenant<Prisma.MentorshipRelationWhereInput>(roleRelWhere, tenant);
 
-  const [meetings, teamMeetings, series, relations] = await Promise.all([
+  // A sales rep's follow-up days (#3778): the day each of their own open records
+  // is due a next step, the same items the sales calendar shows. Only where the
+  // sales surface exists — an internship mentor's feed is unchanged.
+  const salesFeed = hasSalesSurface(user.role, await shellCapabilities(orgId));
+
+  const [meetings, teamMeetings, series, relations, followUps] = await Promise.all([
     // The user's own meetings, on either side of a relation. `seriesId: null`
     // drops the rows the old materialising generator left behind — the
     // occurrence is rendered from the rule below, and listing both double-books
@@ -141,6 +148,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
       orderBy: { stageDeadline: 'asc' },
       take: MAX_EVENTS,
     }),
+    // Follow-ups: the rep's OWN records (`mentorId`), the day only — no lead
+    // name, no note, the title-and-time rule above.
+    salesFeed
+      ? prisma.mentorshipRelation.findMany({
+          where: withinTenant<Prisma.MentorshipRelationWhereInput>({ mentorId: user.id, status: 'ACTIVE', nextActionAt: { not: null, gte: since } }, tenant),
+          select: { id: true, nextActionAt: true },
+          orderBy: { nextActionAt: 'asc' },
+          take: MAX_EVENTS,
+        })
+      : Promise.resolve([]),
   ]);
   // The tenant's own stage names — a MARKETING org's funnel stages, not the
   // internship catalogue's.
@@ -167,6 +184,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ toke
       start: r.stageDeadline!,
       // A deadline is a moment, not a meeting: it keeps the half-hour marker it
       // always had rather than inheriting the meeting default (#1984).
+      durationMinutes: DEADLINE_EVENT_MINUTES,
+    })),
+    // The same synthetic id the sales calendar gives the item, and the deadline's
+    // half-hour marker: a follow-up is a day's reminder, not a meeting.
+    ...followUps.map((r) => ({
+      uid: `followup-${r.id}`,
+      title: 'Follow-up',
+      start: r.nextActionAt!,
       durationMinutes: DEADLINE_EVENT_MINUTES,
     })),
   ]

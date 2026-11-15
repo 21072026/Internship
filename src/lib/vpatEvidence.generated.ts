@@ -7,9 +7,9 @@
 import type { VpatEvidence } from './vpatRender';
 
 export const VPAT_EVIDENCE: VpatEvidence = {
-  "baselineCommit": "fadf09097999b2b384dca4dc03cefac408258993",
-  "baselineDate": "2026-10-22T20:07:09+00:00",
-  "generatedFrom": "41192fa8",
+  "baselineCommit": "cfb9802b6be3b9fc6dc2c9731ffb7f4f64e08c35",
+  "baselineDate": "2026-11-06T00:22:56+00:00",
+  "generatedFrom": "cf5c491",
   "tags": [
     "wcag2a",
     "wcag2aa",

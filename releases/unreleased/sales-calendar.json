@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Sales reps get a calendar at `/sales/calendar` (#3778): their meetings, their records' follow-up days (red when overdue) and trial ends, week view by default with day, month and a phone agenda, colour-coded with a legend, each item opening the lead. \"New meeting\" (and \"Plan meeting\" on the lead page) schedules with one of the rep's own leads through the existing `POST /api/meetings`; that route now lets a sales dispatcher schedule on records `relation.write` allows, and answers `404 relation_not_found` when none of the requested relations is within reach (it used to answer `200 { created: 0 }`). The calendar subscription feed carries a sales rep's follow-up days. New `GET /api/sales/calendar`, gated like the lead pool.",
+  "notes": {
+    "en": ["Sales reps have a calendar: meetings, follow-ups and trial ends in one place, with \"New meeting\" to schedule a meeting with a lead."],
+    "tr": ["Satış temsilcilerinin artık bir takvimi var: toplantılar, takipler ve deneme bitişleri tek yerde; \"Yeni toplantı\" ile bir lead'le toplantı planlanabiliyor."],
+    "de": ["Vertriebler haben einen Kalender: Termine, Wiedervorlagen und Testenden an einem Ort, mit „Neuer Termin“ für einen Termin mit einem Lead."]
+  }
+}

@@ -6,9 +6,10 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
  * (only ~1.2 fit at 390px) and drag-and-drop was the only way to change a stage,
  * which touch does not fire at all.
  *
- * Below `lg:` both boards now render a stage filter plus a single-column list, and
- * every card carries a "Move to stage" select (touch *and* keyboard). Drag-and-drop
- * is untouched on desktop.
+ * Below `lg:` both boards now render a stage filter plus a single-column list.
+ * Drag-and-drop is untouched on desktop. The per-card "Move to stage" select that
+ * came with it was removed on 2026-11-15 (it crowded the card): on a phone a stage
+ * is changed on the record the card opens.
  */
 
 const PHONE = { width: 390, height: 800 };
@@ -69,26 +70,25 @@ test('mentor board on a phone: stage list, no sideways scrolling, stage change w
     await expect(page.getByTestId('board-stage-filter')).toHaveValue('APPLICATION_100');
     await expect(page.getByText('bm Mentee')).toBeVisible();
 
-    // Stage change by touch: the per-card select, no drag involved.
+    // Stage change by touch: no drag involved and no control on the card — the
+    // card opens the record, and the stage select there makes the move.
     const card = page.getByTestId('board-card').filter({ hasText: 'bm Mentee' });
-    await card.getByLabel('Move to stage').selectOption('INTERNSHIP_IN_PROGRESS_450');
+    await expect(card.locator('select')).toHaveCount(0);
+    await card.getByRole('link', { name: 'bm Mentee' }).click();
+    await page.waitForURL((u) => u.pathname === `/mentor/mentees/${relation.id}`, { timeout: 15_000 });
+    await page.getByTestId('stage-select').selectOption('INTERNSHIP_IN_PROGRESS_450');
     await expect.poll(() => stageOf(relation.id), { timeout: 10_000 }).toBe('INTERNSHIP_IN_PROGRESS_450');
 
-    // The filter stays put, so the card visibly leaves the stage you were looking at.
-    await expect(card).toHaveCount(0);
-    await expect(page.getByTestId('board-stage-filter')).toHaveValue('APPLICATION_100');
-    await expect(page.getByText('Nothing at this stage')).toBeVisible();
-
-    // …and the move can be taken back from the toast.
-    await page.getByRole('button', { name: 'Undo' }).click();
-    await expect.poll(() => stageOf(relation.id), { timeout: 10_000 }).toBe('APPLICATION_100');
+    // Back on the board the filter follows the card to the stage it now sits in.
+    await page.goto('/mentor/board');
+    await expect(page.getByTestId('board-stage-filter')).toHaveValue('INTERNSHIP_IN_PROGRESS_450');
     await expect(page.getByText('bm Mentee')).toBeVisible();
   } finally {
     await cleanup();
   }
 });
 
-test('mentor board keeps its columns and per-card stage select on desktop', async ({ page }) => {
+test('mentor board keeps its columns and drag-and-drop on desktop', async ({ page }) => {
   const { ownerEmail, password, relation, cleanup } = await seedRelation('bd', 'MENTOR');
 
   try {
@@ -119,9 +119,11 @@ test('mentor board keeps its columns and per-card stage select on desktop', asyn
     await expect(page.getByTestId('board-columns-left-hint')).toHaveCount(0);
     await expect(page.getByTestId('board-columns-right-hint')).toHaveCount(0);
 
-    // Same keyboard-accessible stage select the admin board already had.
+    // The card carries no stage control of its own; it moves by being dragged.
+    await page.setViewportSize(DESKTOP);
     const card = page.getByTestId('board-card').filter({ hasText: 'bd Mentee' });
-    await card.getByLabel('Move to stage').selectOption('INTERVIEW_PENDING_250');
+    await expect(card.locator('select')).toHaveCount(0);
+    await card.dragTo(page.getByTestId('board-column-INTERVIEW_PENDING_250'));
     await expect.poll(() => stageOf(relation.id), { timeout: 10_000 }).toBe('INTERVIEW_PENDING_250');
   } finally {
     await cleanup();
@@ -141,13 +143,19 @@ test('admin board on a phone: stage list at 390px and no overflow at 320px', asy
     await expect(page.getByTestId('board-columns')).toHaveCount(0);
     expect(await overflowX(page)).toBe(0);
 
-    const card = page.getByTestId('board-card').filter({ hasText: 'ba-m Mentee' });
-    await card.getByLabel('Move to stage').selectOption('HIRED_660');
-    await expect.poll(() => stageOf(relation.id), { timeout: 10_000 }).toBe('HIRED_660');
-
     // The narrowest phone we support.
     await page.setViewportSize({ width: 320, height: 800 });
     expect(await overflowX(page)).toBe(0);
+
+    // Stage change on a phone: the card opens the candidate, whose stage select
+    // makes the move.
+    await page.setViewportSize(PHONE);
+    const card = page.getByTestId('board-card').filter({ hasText: 'ba-m Mentee' });
+    await expect(card.locator('select')).toHaveCount(0);
+    await card.getByRole('link', { name: 'ba-m Mentee' }).click();
+    await page.waitForURL((u) => u.pathname === `/admin/candidates/${relation.menteeId}`, { timeout: 15_000 });
+    await page.getByTestId('stage-select').selectOption('INTERVIEW_PENDING_250');
+    await expect.poll(() => stageOf(relation.id), { timeout: 10_000 }).toBe('INTERVIEW_PENDING_250');
   } finally {
     await cleanup();
   }
@@ -216,10 +224,7 @@ for (const stageCount of [3, 13]) {
       // failed: iterating PIPELINE_GROUPS, none of these keys matched, so the
       // board rendered three empty group shells and no columns at all.
       //
-      // Target the column and its heading by testid, never by their text: the
-      // cards inside a column each carry a "Move to stage" <select> whose
-      // <option>s hold every stage label, so any text locator — even one scoped
-      // to the column — resolves to 2 and trips strict mode.
+      // Target the column and its heading by testid, never by their text.
       for (const [i, key] of keys.entries()) {
         await expect(page.getByTestId(`board-column-${key}`)).toBeVisible();
         await expect(page.getByTestId(`board-column-title-${key}`)).toHaveText(

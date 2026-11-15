@@ -34,6 +34,7 @@ import { isValidWonTargetInput, SALES_TARGET_MAX } from '@/lib/salesTargetRule';
 import { TwoFactorCoverageCard } from '@/components/admin/TwoFactorCoverageCard';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { coverageFor, isStricterMode, newlyHeldAtGate, parseRequire2faMode, rolesCoveredBy, type RoleCoverage } from '@/lib/twoFactorPolicyRule';
+import { parseOutboundApprovalMode, type OutboundApprovalMode } from '@/lib/outboundApprovalRule';
 
 // The delivery log answers "did our mail actually go out, and when?", and a
 // newsletter or announcement send writes one EmailLog row per recipient — 50
@@ -138,8 +139,8 @@ export default function AdminSettingsPage() {
   const [salesLeaderboardForReps, setSalesLeaderboardForReps] = useState(false);
   const [loadedSalesLeaderboardForReps, setLoadedSalesLeaderboardForReps] = useState(false);
   // Outbound approval (#2960) — MARKETING only, same load/post dance.
-  const [outboundApproval, setOutboundApproval] = useState<'off' | 'lead_mail'>('off');
-  const [loadedOutboundApproval, setLoadedOutboundApproval] = useState<'off' | 'lead_mail'>('off');
+  const [outboundApproval, setOutboundApproval] = useState<OutboundApprovalMode>('off');
+  const [loadedOutboundApproval, setLoadedOutboundApproval] = useState<OutboundApprovalMode>('off');
   // Set when the box holds something the API's `\d{1,6}` would reject (empty is
   // the common one — clearing the box is how anybody retypes a number). Without
   // this the whole PUT 400s and every other change on the form is discarded.
@@ -319,7 +320,7 @@ export default function AdminSettingsPage() {
     setLoadedSalesWonTarget(settings.salesMonthlyWonTarget ?? '');
     setSalesLeaderboardForReps(settings.salesLeaderboardForReps === 'true');
     setLoadedSalesLeaderboardForReps(settings.salesLeaderboardForReps === 'true');
-    const approval = settings.outboundApproval && settings.outboundApproval !== 'off' ? 'lead_mail' : 'off';
+    const approval = parseOutboundApprovalMode(settings.outboundApproval);
     setOutboundApproval(approval);
     setLoadedOutboundApproval(approval);
     setLoadState('ready');
@@ -727,15 +728,18 @@ export default function AdminSettingsPage() {
                 <select
                   id="outbound-approval"
                   value={outboundApproval}
-                  onChange={(e) => setOutboundApproval(e.target.value === 'lead_mail' ? 'lead_mail' : 'off')}
+                  onChange={(e) => setOutboundApproval(parseOutboundApprovalMode(e.target.value))}
                   aria-describedby="outbound-approval-hint"
                   className="block w-full rounded-lg border border-gray-300 dark:border-gray-700 dark:bg-gray-800 px-3 py-2 text-sm"
                   data-testid="outbound-approval-select"
                 >
                   <option value="off">{t.settings.outboundApprovalOff}</option>
                   <option value="lead_mail">{t.settings.outboundApprovalLeadMail}</option>
+                  <option value="lead_mail_blocked">{t.settings.outboundApprovalLeadMailBlocked}</option>
                 </select>
-                <p id="outbound-approval-hint" className="text-xs text-gray-500 mt-1">{t.settings.outboundApprovalHint}</p>
+                <p id="outbound-approval-hint" className="text-xs text-gray-500 mt-1">
+                  {outboundApproval === 'lead_mail_blocked' ? t.settings.outboundApprovalBlockedHint : t.settings.outboundApprovalHint}
+                </p>
               </div>
             )}
             <Button type="submit" loading={savingSettings}>{t.settings.save}</Button>
