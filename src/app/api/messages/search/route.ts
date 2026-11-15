@@ -8,6 +8,7 @@ import { conversationForRelation, getConversationIfAllowed } from '@/lib/convers
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { likeLiteral, searchSnippet } from '@/lib/messagePage';
+import { getServerDictionary } from '@/i18n/server';
 
 // GET ?q= — search the caller's own message threads (#1609).
 //
@@ -97,7 +98,9 @@ async function handleGet(request: Request) {
         if (!conversation) { verdicts.set(key, null); continue; }
         for (const p of conversation.participants) names.set(p.user.id, p.user.fullName);
         let name: string;
-        if (conversation.type === 'GROUP' && conversation.projectId) {
+        if (conversation.type === 'GROUP' && conversation.teamKey) {
+          name = (await getServerDictionary()).t.messages.salesTeamRoom;
+        } else if (conversation.type === 'GROUP' && conversation.projectId) {
           name = (await prisma.project.findUnique({ where: { id: conversation.projectId }, select: { name: true } }))?.name ?? '';
         } else {
           name = conversation.participants.filter((p) => p.userId !== me).map((p) => p.user.fullName).join(', ');

@@ -63,12 +63,22 @@ test('the sales queue keeps the sales reasons and none of the mentorship ones', 
   }
 });
 
-test('MARKETING keeps every sales link, and every one stays inside /sales', () => {
+// The shared pages a rep reaches from the sales menu. RoleShell wears the SALES
+// menu on them for a rep (no palette, no global search), so none of them leads
+// into a /mentor page that would only bounce back to /sales.
+const SHARED_SALES_PAGES = ['/messages', '/todos'];
+
+test('MARKETING keeps every sales link, and every one stays inside /sales or a shared page in the sales menu', () => {
   const shown = visibleNavLinks(SALES_NAV_LINKS, MARKETING);
   assert.equal(shown.length, SALES_NAV_LINKS.length);
   for (const link of SALES_NAV_LINKS) {
+    if (SHARED_SALES_PAGES.includes(link.href)) continue;
     assert.ok(link.href === '/sales' || link.href.startsWith('/sales/'), link.href);
     assert.ok(link.capability && MARKETING.includes(link.capability), `${link.href} is tagged with a MARKETING capability`);
+  }
+  for (const page of SHARED_SALES_PAGES) {
+    assert.ok(SALES_NAV_LINKS.some((l) => l.href === page), `${page} is in the sales menu`);
+    assert.ok(!page.startsWith('/mentor'), page);
   }
 });
 

@@ -28,8 +28,10 @@ export default async function MessagesInboxPage({ searchParams }: { searchParams
   const filter = parseInboxFilter((await searchParams).filter);
 
   // One read of the inbox for the page and the native app (src/lib/inbox.ts).
-  const { threads: rows, candidates, supportUnread } = await loadInbox(me, (name) =>
-    t.messages.projectGroup.replace('{name}', name),
+  const { threads: rows, candidates, supportUnread } = await loadInbox(
+    me,
+    (name) => t.messages.projectGroup.replace('{name}', name),
+    { orgId: session.user.orgId, roomName: t.messages.salesTeamRoom },
   );
   const threads = filterInbox(rows, filter).map((th) => ({
     key: `conv-${th.conversationId}`,
