@@ -11,6 +11,7 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { ConditionRow } from '@/components/automation/ConditionRow';
+import { FirstContactAdvanceNote } from '@/components/automation/FirstContactAdvanceNote';
 import { useT } from '@/i18n/client';
 import {
   AUTOMATION_ACTION_TYPES,
@@ -362,6 +363,7 @@ export default function AdminAutomationsPage() {
         <CardHeader>
           <CardTitle>{A.title}</CardTitle>
           <CardDescription>{A.subtitle}</CardDescription>
+          <FirstContactAdvanceNote />
         </CardHeader>
         <div className="flex gap-2" role="tablist">
           {(['rules', 'runs'] as const).map((k) => (

@@ -316,6 +316,17 @@ export const SETTING_DEFAULTS = {
   // MARKETING only: the settings API refuses it for any other vertical, and the
   // rule reads it as 'off' there whatever a row says.
   outboundApproval: 'off',
+  // First-contact auto-advance (#3746, docs/automation-rules.md § A fixed rule
+  // outside the engine): 'off' (default) | 'on'. When on, logging a call,
+  // meeting or e-mail on a lead still in the pipeline's FIRST stage moves it
+  // forward to `firstContactTargetStage`. MARKETING only: the settings API
+  // refuses it elsewhere and the rule reads it as 'off' there whatever a row
+  // says (src/lib/firstContactAdvanceRule.ts).
+  firstContactAutoAdvance: 'off',
+  // The stage it moves to: a key of the org's own pipeline. '' = the marketing
+  // preset's LEAD_CONTACTED where the pipeline has it; a key the pipeline does
+  // not have means the rule never runs.
+  firstContactTargetStage: '',
   // Meeting attendance (#2014): a cancellation this many hours or fewer before
   // the start is recorded as LATE_CANCEL for whoever cancelled.
   lateCancelHours: '24',
@@ -483,6 +494,8 @@ export const SETTING_SCHEMA = {
   salesMonthlyWonTarget: { type: 'number', nullable: true, scopes: O },
   salesLeaderboardForReps: { type: 'boolean', scopes: O },
   outboundApproval: { type: 'enum', values: ['off', 'lead_mail'], scopes: O },
+  firstContactAutoAdvance: { type: 'enum', values: ['off', 'on'], scopes: O },
+  firstContactTargetStage: { type: 'string', scopes: O },
   lateCancelHours: { type: 'number', scopes: P },
   meetingReminderLeadsMinutes: { type: 'string', scopes: P },
   relationDefaultDurationMonths: { type: 'number', nullable: true, scopes: P },

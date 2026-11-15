@@ -18,6 +18,7 @@ import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { isStorableMinLength } from '@/lib/passwordPolicyRule';
 import { REQUIRE_2FA_MODES } from '@/lib/twoFactorPolicyRule';
 import { OUTBOUND_APPROVAL_MODES, outboundApprovalApplies } from '@/lib/outboundApprovalRule';
+import { FIRST_CONTACT_MODES, firstContactAdvanceApplies } from '@/lib/firstContactAdvanceRule';
 
 // GET — the EFFECTIVE settings of the caller's tenant: its own row → the global
 // row → the code default (see src/lib/settings.ts). The org is passed
@@ -164,6 +165,12 @@ const schema = z.object({
   // an operator. The sales vertical only — refused below anywhere else, and
   // the rule reads it as 'off' there regardless.
   outboundApproval: z.enum(OUTBOUND_APPROVAL_MODES).optional(),
+  // First-contact auto-advance (#3746): the switch and its target stage. The
+  // sales vertical only — refused below anywhere else, and the rule reads the
+  // switch as 'off' there regardless. The target is checked below against the
+  // tenant's own stages; '' = the marketing preset's LEAD_CONTACTED.
+  firstContactAutoAdvance: z.enum(FIRST_CONTACT_MODES).optional(),
+  firstContactTargetStage: z.string().max(64).regex(/^[A-Za-z0-9_]*$/).optional(),
   // Extra `external_id` header spellings for the marketing import (comma- or
   // newline-separated; parseHeaderAliases() in src/lib/marketingImport.ts).
   importExternalIdAliases: z.string().max(700).optional(),
@@ -251,6 +258,16 @@ export async function PUT(request: Request) {
 
   if (parsed.data.outboundApproval !== undefined && !outboundApprovalApplies(await shellCapabilities(orgId))) {
     return NextResponse.json({ error: 'vertical_mismatch', field: 'outboundApproval' }, { status: 400 });
+  }
+
+  for (const field of ['firstContactAutoAdvance', 'firstContactTargetStage'] as const) {
+    if (parsed.data[field] !== undefined && !firstContactAdvanceApplies(await shellCapabilities(orgId))) {
+      return NextResponse.json({ error: 'vertical_mismatch', field }, { status: 400 });
+    }
+  }
+  const firstContactTarget = parsed.data.firstContactTargetStage;
+  if (firstContactTarget && !(await resolvePipelineStages(orgId)).some((stage) => stage.key === firstContactTarget)) {
+    return NextResponse.json({ error: 'unknown_stage', field: 'firstContactTargetStage' }, { status: 400 });
   }
 
   return withTenantScope(session, async () => {
