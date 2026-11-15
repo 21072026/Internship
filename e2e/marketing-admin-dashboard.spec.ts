@@ -67,6 +67,32 @@ test('every link on the MARKETING admin dashboard opens a page', { tag: '@smoke'
   await expect(page.getByTestId('onboarding-checklist')).toContainText('Create the first deal');
 });
 
+/** Open the hover card of the rep/mentor on the recent-deals row and return its profile link. */
+async function mentorCardProfile(page: Page, mentorName: string) {
+  await gotoSettled(page, '/admin');
+  await page.getByRole('button', { name: mentorName }).first().hover();
+  const card = page.getByTestId('person-card');
+  await expect(card).toBeVisible();
+  await expect(card.getByTestId('person-card-message')).toBeVisible(); // the record has loaded
+  return card.getByTestId('person-card-profile');
+}
+
+test('the rep hover card on the MARKETING dashboard offers no dead profile link', { tag: '@smoke' }, async ({ page }) => {
+  await signInAsTenantActor(page, tenants.orgA.admin);
+  // /admin/mentors/<id> is closed in this vertical and there is no per-user
+  // admin page, so the card offers no profile link at all (#2348).
+  await expect(await mentorCardProfile(page, tenants.orgA.mentor.fullName)).toHaveCount(0);
+  for (const href of await page.locator('[data-testid="person-card"] a[href]').evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? ''))) {
+    if (!href.startsWith('/')) continue;
+    expect((await page.request.get(href)).status(), `${href} from the hover card`).toBeLessThan(400);
+  }
+});
+
+test('control: the INTERNSHIP mentor hover card still opens the mentor page', { tag: '@smoke' }, async ({ page }) => {
+  await signInAsTenantActor(page, tenants.orgB.admin);
+  await expect(await mentorCardProfile(page, tenants.orgB.mentor.fullName)).toHaveAttribute('href', `/admin/mentors/${tenants.orgB.mentor.id}`);
+});
+
 test('control: the INTERNSHIP dashboard and checklist are unchanged', { tag: '@smoke' }, async ({ page }) => {
   await signInAsTenantActor(page, tenants.orgB.admin);
   const links = await dashboardLinks(page);

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { retintedUtilities, lightSurfacesWithoutDark, scanSource } from '../check-dark-mode.mjs';
+import { retintedUtilities, lightSurfacesWithoutDark, scanSource, unguardedAccentRemaps } from '../check-dark-mode.mjs';
 
 const covered = retintedUtilities(readFileSync('src/app/globals.css', 'utf8'));
 
@@ -41,4 +41,19 @@ test('one className attribute is one element, across cn() pieces and templates',
   assert.deepEqual(scanSource('a.tsx', ok, covered), []);
   const bad = 'export const B = ({ x }: { x: boolean }) => <div className={`p-2 ${x ? "bg-zinc-200" : ""}`} />;';
   assert.deepEqual(scanSource('b.tsx', bad, covered), [{ line: 1, utility: 'bg-zinc-200' }]);
+});
+
+test('every accent remap in globals.css steps aside for an element\'s own dark: colour (#3745)', () => {
+  assert.deepEqual(unguardedAccentRemaps(readFileSync('src/app/globals.css', 'utf8')), []);
+  // An unguarded rule is named; a guarded one passes.
+  assert.deepEqual(unguardedAccentRemaps('html[data-accent] .bg-blue-100 { background-color: var(--accent-100); }'), ['bg-blue-100']);
+  assert.deepEqual(
+    unguardedAccentRemaps('html[data-accent] .text-blue-700:not(:where(.dark [class*="dark:text-"])) { color: var(--accent-700); }'),
+    [],
+  );
+  // The guard must name the SAME property: a text guard on a background rule does not count.
+  assert.deepEqual(
+    unguardedAccentRemaps('html[data-accent] .bg-blue-100:not(:where(.dark [class*="dark:text-"])) { background-color: var(--accent-100); }'),
+    ['bg-blue-100'],
+  );
 });
