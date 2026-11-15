@@ -13,6 +13,7 @@ import { requireCapability } from '@/lib/capabilityGate';
 import { notificationCategoryAllowed } from '@/lib/notificationPrefs';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { normalizeEmailVariants, canonicalEmail, resolveEmail } from '@/lib/localizedEmail';
+import { advanceOnFirstContact } from '@/lib/firstContactAdvance';
 
 const schema = z.object({
   relationIds: z.array(z.string().min(1)).min(1),
@@ -125,9 +126,11 @@ export async function POST(request: Request) {
           ...(replyTo ? { replyTo } : {}),
         },
       });
-      await prisma.interactionLog.create({
+      const logged = await prisma.interactionLog.create({
         data: { relationId: rel.id, date: new Date(), type: 'Email', notes: `${personalSubject} — ${personalBody}` },
       });
+      // The e-mail is a first contact like a logged one (#3746).
+      await advanceOnFirstContact({ relationId: rel.id, interactionId: logged.id, type: 'Email' });
       // Mirror the email into the pair's one chat thread (#1156) + notify the
       // mentee in-app. Stamped with both links: the conversation is where it is
       // read, the relation is what the digest and reply tokens work off.

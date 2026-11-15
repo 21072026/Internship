@@ -352,8 +352,9 @@ test('the action strip: quick dates, complete a follow-up, call or mail the cont
   expect(await prisma.interactionLog.count({ where: { relationId: ids.ownRelationId } })).toBe(0);
   await form.getByRole('button', { name: /Cancel/i }).click();
 
-  // The phone and e-mail are the device's own tel:/mailto: links, and a click opens a draft of that type (#3741).
-  // The browser's navigation to the scheme is stopped here; the page's own handler still runs.
+  // The phone and e-mail are the device's own tel:/mailto: links (#3741). The e-mail opens a draft of that
+  // type; the phone asks "Did you reach them?" first (#3748), and "Add a note" opens the call draft — nothing
+  // is logged on the way. The browser's navigation to the scheme is stopped here; the page's own handler still runs.
   await page.evaluate(() =>
     document.addEventListener('click', (e) => {
       if ((e.target as HTMLElement).closest('a[href^="tel:"], a[href^="mailto:"]')) e.preventDefault();
@@ -362,7 +363,9 @@ test('the action strip: quick dates, complete a follow-up, call or mail the cont
   await expect(page.getByTestId('sales-lead-phone-link')).toHaveAttribute('href', 'tel:+49301234567');
   await expect(page.getByTestId('sales-lead-email-link')).toHaveAttribute('href', `mailto:buyer-${STAMP}@shop.example`);
   await page.getByTestId('sales-lead-phone-link').click();
+  await page.getByTestId('contact-reached-note').click();
   await expect(type).toHaveValue('Call');
+  expect(await prisma.interactionLog.count({ where: { relationId: ids.ownRelationId } })).toBe(0);
   await page.getByTestId('sales-lead-email-link').click();
   await expect(type).toHaveValue('Email');
   await form.getByRole('button', { name: /Cancel/i }).click();

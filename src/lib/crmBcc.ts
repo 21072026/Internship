@@ -24,6 +24,7 @@ import {
   pickRelation,
   stripForwardPrefix,
 } from '@/lib/crmBccRule';
+import { advanceOnFirstContact } from '@/lib/firstContactAdvance';
 
 // BCC-to-CRM (#2809): the Prisma-aware half. The rule is src/lib/crmBccRule.ts,
 // the decision docs/marketing-vertical/sales-email-capture.md.
@@ -181,10 +182,13 @@ export async function routeCrmBcc(input: InboundEmail): Promise<CrmBccResult> {
       );
       if (!relationId) continue;
       try {
-        await prisma.interactionLog.create({
+        const row = await prisma.interactionLog.create({
           data: { relationId, date, subject, notes: notesFor([...emails]), type: 'Email', autoLogged: true, sourceRef },
         });
         logged++;
+        // A mail the rep sent to the account is a first contact too (#3746).
+        // After the unique sourceRef claim, so a re-delivered mail never runs it twice.
+        await advanceOnFirstContact({ relationId, interactionId: row.id, type: 'Email' });
       } catch (e) {
         // Unique (relationId, sourceRef): this mail was logged here already.
         if ((e as { code?: string }).code === 'P2002') { duplicates++; continue; }

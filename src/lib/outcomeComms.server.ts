@@ -14,6 +14,7 @@ import {
   outcomeForStage,
   type OutcomeKind,
 } from '@/lib/outcomeComms';
+import { advanceOnFirstContact } from '@/lib/firstContactAdvance';
 
 // Server half of negative-outcome communication (#830).
 //
@@ -135,7 +136,7 @@ export async function emitOutcomeComms(opts: {
     if (sent.queued + sent.sent === 0) return;
     // Logged on the relation like every other mentor→mentee email, so the
     // history shows what the candidate was actually told.
-    await prisma.interactionLog.create({
+    const logged = await prisma.interactionLog.create({
       data: {
         relationId,
         type: 'Email',
@@ -144,6 +145,9 @@ export async function emitOutcomeComms(opts: {
         date: new Date(),
       },
     });
+    // The one writer of first-contact moves sees every logged e-mail (#3746);
+    // an outcome mail is sent at an ending stage, so the rule finds nothing to do.
+    await advanceOnFirstContact({ relationId, interactionId: logged.id, type: 'Email' });
   } catch (e) {
     logger.error('Outcome communication failed', { relationId, kind, error: String(e) });
   }
