@@ -304,12 +304,10 @@ export const SETTING_DEFAULTS = {
   // src/lib/salesTargetRule.ts; on the settings form for MARKETING tenants only,
   // and the API refuses it for any other vertical.
   salesMonthlyWonTarget: '',
-  // Show the team leaderboard (names + wins this week and this month) to reps
-  // (MARKETING only — read only where salesTargetApplies(), so this default is
-  // the MARKETING default). On by default since the team page (#3779): the
-  // sales team asked for the numbers to be visible to everyone, for
-  // motivation. An admin can switch it off; the org's admins see it either way.
-  salesLeaderboardForReps: 'true',
+  // Show the team leaderboard (names + wins this month) to reps (MARKETING
+  // only). Off by default: a leaderboard is something a team opts into. The
+  // org's admins see it either way.
+  salesLeaderboardForReps: 'false',
   // Outbound approval (#2960, docs/outbound-approval.md): 'off' (default) =
   // automated mail leaves as it always has; 'lead_mail' = every automated mail
   // to one of the org's leads or customers becomes a draft in the outbox

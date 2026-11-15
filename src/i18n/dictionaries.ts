@@ -2229,6 +2229,8 @@ const en = {
       leaderboardTitle: 'Leaderboard',
       leaderboardHint: 'Ranked by deals won. Equal counts share a rank.',
       viewAll: 'See the team',
+      cardTitle: 'Team totals',
+      cardHint: 'How many records the whole team follows, and who won what this week and this month.',
     },
     stats: { open: 'Open records', accounts: 'Companies', attention: 'Need attention' },
     records: {
@@ -14798,6 +14800,8 @@ const tr: Dict = {
       leaderboardTitle: 'Liderlik tablosu',
       leaderboardHint: 'Kazanılan anlaşma sayısına göre sıralı. Eşit sayılar aynı sırayı paylaşır.',
       viewAll: 'Ekibi gör',
+      cardTitle: 'Ekip toplamları',
+      cardHint: 'Tüm ekibin kaç kaydı takip ettiği ve bu hafta ile bu ay kimin ne kazandığı.',
     },
     stats: { open: 'Açık kayıtlar', accounts: 'Firmalar', attention: 'İlgi bekleyen' },
     records: {
@@ -27158,6 +27162,8 @@ const de: Dict = {
       leaderboardTitle: 'Rangliste',
       leaderboardHint: 'Sortiert nach gewonnenen Deals. Gleiche Zahlen teilen sich einen Rang.',
       viewAll: 'Team ansehen',
+      cardTitle: 'Team-Summen',
+      cardHint: 'Wie viele Datensätze das ganze Team betreut und wer diese Woche und diesen Monat was gewonnen hat.',
     },
     stats: { open: 'Offene Datensätze', accounts: 'Unternehmen', attention: 'Brauchen Aufmerksamkeit' },
     records: {

@@ -110,17 +110,10 @@ export async function loadSalesTeamView(session: Session, locale: Locale = 'en',
   const outcome = outcomeStageKeysFrom(ordered);
   const month = periodRange(currentPeriod(now));
   const week = weekRange(now);
-  const active = withinTenant({ status: 'ACTIVE' as const }, tenant);
   const closedKeys = [...outcome.finished, ...outcome.offPath];
 
-  const [byStage, byRepStage, overdueByRep, newMonth, newWeek, values, people, wins, lostDeals] = await Promise.all([
-    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: active, _count: { _all: true } }),
-    prisma.mentorshipRelation.groupBy({ by: ['mentorId', 'pipelineStatus'], where: active, _count: { _all: true } }),
-    prisma.mentorshipRelation.groupBy({
-      by: ['mentorId'],
-      where: withinTenant({ status: 'ACTIVE' as const, nextActionAt: { lt: startOfUtcDay(now) } }, tenant),
-      _count: { _all: true },
-    }),
+  const [book, newMonth, newWeek, values, wins, lostDeals] = await Promise.all([
+    loadTeamBookCounts(tenant, now),
     // A new lead is a new record — a transfer successor is the same deal, so
     // it carries a `previousRelationId` and is not counted again.
     prisma.mentorshipRelation.count({
@@ -135,12 +128,6 @@ export async function loadSalesTeamView(session: Session, locale: Locale = 'en',
       where: { relation: withinTenant({ status: 'ACTIVE' as const, pipelineStatus: { notIn: closedKeys } }, tenant) },
       _sum: { valueMinor: true },
       _count: { _all: true },
-    }),
-    prisma.user.findMany({
-      where: withinTenant({ role: { in: ['MENTOR', 'ADMIN'] as ('MENTOR' | 'ADMIN')[] }, isActive: true }, tenant),
-      select: { id: true, fullName: true },
-      orderBy: { fullName: 'asc' },
-      take: REP_LIMIT,
     }),
     loadWinCounts(tenant, outcome.finished, { month, week }),
     outcome.offPath.length === 0
@@ -168,7 +155,7 @@ export async function loadSalesTeamView(session: Session, locale: Locale = 'en',
     const s = ordered.find((x) => x.key === key);
     return { key, label: s?.label ?? key, color: s?.color ?? null, count };
   };
-  const stageCount = new Map(byStage.map((g) => [g.pipelineStatus as string, g._count._all]));
+  const stageCount = book.byStage;
   // Every configured stage, in order; a key no stage carries any more (a
   // deleted custom stage) still counts, at the end, so the total adds up.
   const stages: StageCount[] = [
@@ -177,16 +164,8 @@ export async function loadSalesTeamView(session: Session, locale: Locale = 'en',
   ];
   const activeTotal = stages.reduce((n, s) => n + s.count, 0);
 
-  const repStages = new Map<string, Map<string, number>>();
-  for (const g of byRepStage) {
-    const m = repStages.get(g.mentorId) ?? new Map<string, number>();
-    m.set(g.pipelineStatus as string, g._count._all);
-    repStages.set(g.mentorId, m);
-  }
-  const overdue = new Map(overdueByRep.map((g) => [g.mentorId, g._count._all]));
-
-  const reps: RepRow[] = people.map((p) => {
-    const mine = repStages.get(p.id) ?? new Map<string, number>();
+  const reps: RepRow[] = book.people.map((p) => {
+    const mine = p.byStage;
     const repStageList = stages.map((s) => ({ ...s, count: mine.get(s.key) ?? 0 })).filter((s) => s.count > 0);
     return {
       userId: p.id,
@@ -195,7 +174,7 @@ export async function loadSalesTeamView(session: Session, locale: Locale = 'en',
       stages: repStageList,
       wonWeek: wins.week.get(p.id) ?? 0,
       wonMonth: wins.month.get(p.id) ?? 0,
-      overdue: overdue.get(p.id) ?? 0,
+      overdue: p.overdue,
     };
   });
 
@@ -217,5 +196,50 @@ export async function loadSalesTeamView(session: Session, locale: Locale = 'en',
     reps,
     leaderboard,
     leaderboardForReps: forReps,
+  };
+}
+
+/**
+ * The team's open book in counts: active records per stage, and per seller
+ * (every active MENTOR/ADMIN of the tenant) their records per stage and how
+ * many of their follow-ups are overdue. Names and counts only.
+ *
+ * TEMPORARY — the team book loader (`src/lib/salesTeamBook.ts`, WP2a) is the
+ * one reader of this data; when it lands this function becomes a thin adapter
+ * over it and its queries go away. Kept to this one function so that swap
+ * touches nothing else.
+ */
+export interface TeamBookCounts {
+  byStage: Map<string, number>;
+  people: Array<{ id: string; fullName: string; byStage: Map<string, number>; overdue: number }>;
+}
+
+async function loadTeamBookCounts(tenant: Awaited<ReturnType<typeof tenantWhere>>, now: Date): Promise<TeamBookCounts> {
+  const active = withinTenant({ status: 'ACTIVE' as const }, tenant);
+  const [byStage, byRepStage, overdueByRep, people] = await Promise.all([
+    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: active, _count: { _all: true } }),
+    prisma.mentorshipRelation.groupBy({ by: ['mentorId', 'pipelineStatus'], where: active, _count: { _all: true } }),
+    prisma.mentorshipRelation.groupBy({
+      by: ['mentorId'],
+      where: withinTenant({ status: 'ACTIVE' as const, nextActionAt: { lt: startOfUtcDay(now) } }, tenant),
+      _count: { _all: true },
+    }),
+    prisma.user.findMany({
+      where: withinTenant({ role: { in: ['MENTOR', 'ADMIN'] as ('MENTOR' | 'ADMIN')[] }, isActive: true }, tenant),
+      select: { id: true, fullName: true },
+      orderBy: { fullName: 'asc' },
+      take: REP_LIMIT,
+    }),
+  ]);
+  const repStages = new Map<string, Map<string, number>>();
+  for (const g of byRepStage) {
+    const m = repStages.get(g.mentorId) ?? new Map<string, number>();
+    m.set(g.pipelineStatus as string, g._count._all);
+    repStages.set(g.mentorId, m);
+  }
+  const overdue = new Map(overdueByRep.map((g) => [g.mentorId, g._count._all]));
+  return {
+    byStage: new Map(byStage.map((g) => [g.pipelineStatus as string, g._count._all])),
+    people: people.map((p) => ({ id: p.id, fullName: p.fullName, byStage: repStages.get(p.id) ?? new Map(), overdue: overdue.get(p.id) ?? 0 })),
   };
 }

@@ -80,6 +80,8 @@ test.beforeAll(async () => {
   const orgA = await seedOrg('a');
   const orgB = await seedOrg('b');
   ids.orgA = orgA;
+  // The ranked leaderboard follows the existing switch (default off for reps).
+  await prisma.setting.create({ data: { orgId: orgA, key: 'salesLeaderboardForReps', value: 'true' } });
   const stages = await prisma.pipelineStage.findMany({ where: { orgId: orgA } });
   const outcome = outcomeStageKeysFrom(stages);
   K.WON = outcome.finished[0];
@@ -154,7 +156,9 @@ async function boardCounts(page: Page): Promise<Record<string, number>> {
 test('a rep sees the team totals, the stages, both windows, the value and the per-person rows', async ({ page }) => {
   test.slow();
   await signInMarketing(page, E.rep1, '/sales');
-  // Reached from the sales menu.
+  // One card on the dashboard leads here …
+  await expect(page.getByTestId('sales-team-card')).toHaveAttribute('href', '/sales/team');
+  // … and so does the sales menu.
   await page.getByTestId('sales-nav').getByRole('link', { name: 'Team', exact: true }).click();
   await page.waitForURL('**/sales/team');
   await gotoSettled(page, '/sales/team');
@@ -190,7 +194,7 @@ test('a rep sees the team totals, the stages, both windows, the value and the pe
   await expect(r2.getByTestId('rep-overdue')).toHaveText('0');
   await expect(page.getByTestId(`sales-team-rep-${ids.admin}`).getByTestId('rep-open')).toHaveText('0');
 
-  // The leaderboard is on for reps by default, ranked by wins.
+  // The leaderboard (switched on for this org), ranked by wins.
   const month = page.getByTestId('sales-team-rank-month');
   await expect(month.locator('tbody tr').first()).toContainText(NAMES.rep1);
   await expect(month.locator('tbody tr').first().locator('td').last()).toHaveText(String(wonMonth));

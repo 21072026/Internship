@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { Target, Users } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
@@ -108,9 +107,6 @@ export function SalesTargetCards({ view, t, viewerId }: { view: SalesTargetView;
           <p className="mt-3 text-xs text-gray-500" data-testid="sales-leaderboard-visibility">
             {view.leaderboardForReps ? s.leaderboard.sharedWithTeam : s.leaderboard.adminOnly}
           </p>
-          <Link href="/sales/team" className="mt-2 inline-block text-sm font-medium text-blue-600 hover:underline" data-testid="sales-team-link">
-            {s.team.viewAll}
-          </Link>
         </Card>
       )}
     </div>
