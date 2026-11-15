@@ -4,6 +4,7 @@ import { signInAsFreshUser } from './helpers/auth';
 import {
   COMPANY_ID_PARAM,
   CROSS_TENANT,
+  CROSS_TENANT_WRITES,
   FOREIGN_COMPANY_ID_PARAM,
   FOREIGN_USER_ID_PARAM,
   MAIL_JOB_ID_PARAM,
@@ -17,6 +18,7 @@ import {
   type MatrixUser,
   type Role,
 } from './fixtures/authz-matrix';
+import { freshIp } from './helpers/rateLimit';
 
 /**
  * Executable role × endpoint read matrix (#899).
@@ -335,6 +337,21 @@ for (const role of Object.keys(LANDING) as Role[]) {
         expect(res.status(), `ADMIN ${path}`).toBe(200);
       }
     }
+
+    // Cross-tenant writes: a chat with another tenant's user is a 404 for every
+    // role, the ADMIN's included, and nothing is created.
+    for (const probe of CROSS_TENANT_WRITES) {
+      const body = Object.fromEntries(
+        Object.entries(probe.body).map(([k, v]) => [k, v === FOREIGN_USER_ID_PARAM ? foreignIds[0] : v]),
+      );
+      // Its own address (#2159): the route's per-IP bucket is shared by the shard.
+      const res = await page.request.fetch(probe.path, { method: probe.method, data: body, headers: freshIp('authz-xorg-chat') });
+      expect(res.status(), `${role} ${probe.method} ${probe.path} (${probe.why})`).toBe(404);
+    }
+    expect(
+      await prisma.conversation.count({ where: { participants: { some: { userId: { in: foreignIds } } } } }),
+      `${role}: no conversation with another tenant's user`,
+    ).toBe(0);
 
     // Super-admin-only writes: nobody in this matrix is a super admin — the
     // ADMIN here is a plain tenant admin — so every role is refused, and no

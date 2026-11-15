@@ -1,6 +1,8 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { inCallerTenant } from '@/lib/tenantFilter';
+import { defaultOrgId } from '@/lib/defaultOrg';
+import { adminDoorOpens } from '@/lib/messageAdminRule';
 import { getThreadIfAllowed } from '@/lib/messaging';
 import { projectInCallerTenant } from '@/lib/projectAccess';
 import { shellCapabilities } from '@/lib/shellCapabilities';
@@ -89,8 +91,9 @@ export async function hasMentorship(userAId: string, userBId: string): Promise<b
 // May user A and user B exchange messages?
 //   true  — they are members of the same project, OR a mentorship links them,
 //           OR an approved company outreach links them (#1840),
-//           OR either of them is an ADMIN (admins can reach anyone, mirroring
-//           the admin bypass in getThreadIfAllowed),
+//           OR either of them is an ADMIN of the OTHER one's tenant (an admin
+//           reaches anyone in their own org — never across orgs, a super
+//           admin's included; src/lib/messageAdminRule.ts),
 //           OR they are sales colleagues: active sales staff of the SAME org in
 //           a vertical with the sales surface (src/lib/salesTeamMessagingRule.ts).
 //           Never a lead or a customer login, never across orgs, and never in
@@ -109,7 +112,9 @@ export async function canMessage(userAId: string, userBId: string): Promise<bool
   const a = users.find((u) => u.id === userAId);
   const b = users.find((u) => u.id === userBId);
   if (!a || !b) return false;
-  if (users.some((u) => u.role === 'ADMIN')) return true;
+  // The admin door, inside the admin's own tenant only. Answered here and not
+  // fallen through: a pair with an admin in it is decided by this door alone.
+  if (a.role === 'ADMIN' || b.role === 'ADMIN') return adminDoorOpens(a, b, await defaultOrgId());
 
   // Sales colleagues (two MENTORs here: an ADMIN returned above). The vertical
   // is read only for a same-org pair, so other pairs cost nothing extra.

@@ -275,6 +275,17 @@ export const CROSS_TENANT: CrossTenantEntry[] = [
 ];
 
 /**
+ * Cross-TENANT writes: opening a 1:1 chat with another tenant's user. The
+ * admin door of canMessage() used to cross orgs (src/lib/messageAdminRule.ts):
+ * org A's admin opened a chat with org B's user, wrote into it and was read.
+ * Every role now gets the same 404 a non-existent id gets — never a 403 that
+ * would confirm the id — and no conversation is created.
+ */
+export const CROSS_TENANT_WRITES: Array<{ method: 'POST'; path: string; body: Record<string, unknown>; why: string }> = [
+  { method: 'POST', path: '/api/conversations', body: { userId: FOREIGN_USER_ID_PARAM }, why: "open a chat with another tenant's user" },
+];
+
+/**
  * Instance-level writes only a SUPER ADMIN may make (#1535). Every role in the
  * matrix — the plain tenant ADMIN included, which is exactly the case this list
  * exists for — must be refused (401/403), and the refusal must happen before
@@ -472,7 +483,8 @@ export const MARKETING_MENTOR_ROWS: SalesProbe[] = [
   // e2e/sales-team-messaging.spec.ts.
   { method: 'POST', path: '/api/conversations', body: { userId: ':colleagueRepId' }, expect: 'ok', why: 'message a colleague' },
   { method: 'POST', path: '/api/conversations', body: { userId: ':colleagueLeadId' }, expect: 'forbidden', why: "message a colleague's lead" },
-  { method: 'POST', path: '/api/conversations', body: { userId: ':foreignRepId' }, expect: 'forbidden', why: "message another org's rep" },
+  // Another org's user answers like a missing id (the admin door no longer crosses orgs either).
+  { method: 'POST', path: '/api/conversations', body: { userId: ':foreignRepId' }, expect: 'notFound', why: "message another org's rep" },
 ];
 
 /** The sales surface pages: own record 200, anything else a real 404. */
