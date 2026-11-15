@@ -75,7 +75,7 @@
 //
 // Run: node scripts/check-route-auth.mjs        (npm run check:route-auth)
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { routeFiles } from './lib/route-files.mjs';
 
@@ -106,6 +106,51 @@ const EXEMPT = {
     'where sessions are issued. It also exports by re-export (`export { handler as GET }`), so ' +
     'there is no handler body to read.',
 };
+
+// The Pages Router is a second door into the server that this guard does not
+// read (it understands App Router handler exports only), and neither does
+// scripts/check-tenant-queries.mjs (it walks src/app). So every file under
+// src/pages must be named here with its reason, and a name whose file is gone
+// fails too: a new Pages route cannot slip past both guards in silence.
+export const PAGES_ROUTER_ALLOWED = {
+  'src/pages/api/public/partner-media/[id].ts':
+    "A picture or video of a public partner page's theme (#3535), moved to the Pages Router " +
+    "because the App Router drops a 206's Content-Length, which Safari needs (#3732). Public by " +
+    'design: the signed-out /partner page shows it and the editor previews an upload before the ' +
+    'landing is saved. GET/HEAD only, one findUnique keyed on an unguessable cuid (ASSET_ID_RE), ' +
+    'bytes signature-checked on upload (raster images and mp4/webm, no SVG), served with nosniff, ' +
+    'an inline disposition and a sandboxing CSP; nothing private is stored in that table.',
+};
+const PAGES_DIR = 'src/pages';
+
+/** Problems with the Pages Router allowlist: unlisted files and stale names. */
+export function pagesRouterProblems(files, allowed = PAGES_ROUTER_ALLOWED) {
+  const problems = [];
+  for (const file of files) {
+    if (!(file in allowed)) {
+      problems.push(
+        `${file} is a Pages Router file. This guard and check:tenant-queries do not read src/pages, so a ` +
+          'route there is checked by nobody: write it as an App Router handler under src/app/api, or, when ' +
+          `the App Router cannot do the job, name it in PAGES_ROUTER_ALLOWED (${'scripts/check-route-auth.mjs'}) with the reason.`,
+      );
+    }
+  }
+  for (const file of Object.keys(allowed)) {
+    if (!files.includes(file)) problems.push(`PAGES_ROUTER_ALLOWED names ${file}, which no longer exists — delete the entry.`);
+  }
+  return problems;
+}
+
+function allFiles(dir) {
+  if (!existsSync(dir)) return [];
+  const out = [];
+  for (const entry of readdirSync(dir)) {
+    const path = `${dir}/${entry}`;
+    if (statSync(path).isDirectory()) out.push(...allFiles(path));
+    else out.push(path);
+  }
+  return out.sort();
+}
 
 // ---------------------------------------------------------------------------
 // Reading TypeScript without a TypeScript parser.
@@ -525,6 +570,7 @@ function main() {
     read: (file) => readFileSync(file, 'utf8'),
     baseline,
   });
+  problems.push(...pagesRouterProblems(allFiles(PAGES_DIR)));
 
   if (problems.length > 0) {
     console.error('route auth FAILED — an API handler must authenticate its caller (#2444):\n');
@@ -540,7 +586,8 @@ function main() {
   console.log(
     `route auth OK — ${examined} route file(s) examined, every exported handler reaches ` +
       `getServerSession() or withApiKey() except the ${anonymous} recorded in ${BASELINE_FILE}, ` +
-      `plus ${Object.keys(EXEMPT).length} exempt path pattern(s).`,
+      `plus ${Object.keys(EXEMPT).length} exempt path pattern(s) and ` +
+      `${Object.keys(PAGES_ROUTER_ALLOWED).length} named Pages Router file(s).`,
   );
 }
 

@@ -569,10 +569,6 @@
       "count": 5,
       "reason": "projectInCallerTenant(session, id) gates the handler; Project.findUnique and the legacy-member MentorshipRelation.findFirst key on that id, the useCount updateMany keys on ids from a template list scoped to projectId: id or the caller's tenant pool (withinTenant), the template findUnique keys on created[0].templateId from that list, and the User.findUnique reads only preferredLanguage of an assignee verified as a member of this project."
     },
-    "src/app/api/public/partner-media/[id]/route.ts": {
-      "count": 1,
-      "reason": "Public by design: serves the bytes of one partner-page theme asset keyed only on its unguessable cuid (ASSET_ID_RE-checked); returns the media and nothing else about the owning org."
-    },
     "src/app/api/re-engagement/leave/route.ts": {
       "count": 1,
       "reason": "Sessionless token route: userId comes only from verifyLeaveToken() (signed token), so the lookup reaches only the token holder's own row."

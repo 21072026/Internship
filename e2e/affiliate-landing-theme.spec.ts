@@ -125,6 +125,13 @@ test('uploads: our own storage, checked bytes, served with nosniff and byte rang
   expect(ranged.status()).toBe(206);
   expect(Buffer.from(await ranged.body()).toString()).toBe('ftypisom');
   expect(ranged.headers()['content-range']).toBe(`bytes 4-11/${MP4.length}`);
+  // Safari reads a 206's Content-Length to size the range it asked for (#3732).
+  expect(ranged.headers()['content-length']).toBe('8');
+  expect(ranged.headers()['transfer-encoding']).toBeUndefined();
+  expect(served.headers()['content-length']).toBe(String(PNG.length));
+  // The route's own sandboxing policy, not the page-wide one next.config.js sets.
+  expect(served.headers()['content-security-policy']).toBe("default-src 'none'; sandbox");
+  expect((await request.get(`/api/public/partner-media/${videoId}`, { headers: { range: 'bytes=999-' } })).status()).toBe(416);
   expect((await request.get('/api/public/partner-media/nope')).status()).toBe(404);
 });
 

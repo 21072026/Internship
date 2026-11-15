@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "Partner page media: `/api/public/partner-media/[id]` now answers with `Content-Length` (200 and 206), which Safari needs to play a ranged video. Next 15's App Router response writer strips that header from every handler response, so the route moved to the Pages Router (`src/pages/api/public/partner-media/[id].ts`) — the one Pages route in the tree, named with its reason in the new `PAGES_ROUTER_ALLOWED` door of `check:route-auth`. Side effect: the route's own sandboxing CSP now reaches the browser instead of the page-wide one (#3732).",
+  "notes": {
+    "en": ["Partner page: theme videos can now play in Safari."],
+    "tr": ["Partner sayfası: tema videoları artık Safari'de de oynatılabiliyor."],
+    "de": ["Partnerseite: Design-Videos lassen sich jetzt auch in Safari abspielen."]
+  }
+}

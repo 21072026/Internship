@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { analyzeRoute, checkTree, codeOnly, exemptionFor, HTTP_METHODS } from '../check-route-auth.mjs';
+import { analyzeRoute, checkTree, codeOnly, exemptionFor, HTTP_METHODS, pagesRouterProblems } from '../check-route-auth.mjs';
 
 // scripts/check-route-auth.mjs reads TypeScript with a scanner rather than a
 // parser, and its two failure modes are both silent on the tree it ships with.
@@ -432,4 +432,15 @@ test('the shipped baseline is well formed, in both sections', () => {
     assert.equal(typeof entry.why, 'string', `${file}: why`);
     assert.ok(entry.why.trim().length >= 20, `${file}: why is too short to be a reason`);
   }
+});
+
+// The Pages Router door (#3732): neither this guard nor check:tenant-queries
+// reads src/pages, so a file there must be named with its reason.
+test('a Pages Router file must be named, and a stale name fails', () => {
+  const allowed = { 'src/pages/api/a.ts': 'reason' };
+  assert.deepEqual(pagesRouterProblems(['src/pages/api/a.ts'], allowed), []);
+  const [unlisted] = pagesRouterProblems(['src/pages/api/a.ts', 'src/pages/api/b.ts'], allowed);
+  assert.match(unlisted, /src\/pages\/api\/b\.ts is a Pages Router file/);
+  const [stale] = pagesRouterProblems([], allowed);
+  assert.match(stale, /names src\/pages\/api\/a\.ts, which no longer exists/);
 });
