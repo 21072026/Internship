@@ -75,7 +75,14 @@ export default async function PartnerApplyPage() {
         />
       </main>
       <div className="mt-10">
-        <PartnerFooter landing={landing} hasContract={programme.contract !== null} labels={t.affiliateLanding} />
+        {/* Themed (#3730): the page's own text colour, whose contrast on the page background the
+            theme is refused without (themeContrastIssues) — the fixed grey was never checked against it. */}
+        <PartnerFooter
+          landing={landing}
+          hasContract={programme.contract !== null}
+          labels={t.affiliateLanding}
+          {...(p ? { className: 'py-8 text-sm dark:text-gray-400', style: { borderTop: `1px solid ${p.text}26` } } : {})}
+        />
       </div>
     </div>
   );

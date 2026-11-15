@@ -45,6 +45,17 @@ export function hasSalesSurface(role: string | null | undefined, capabilities: r
 }
 
 /**
+ * Whether a person lands on `/sales` right after signing in: a sales rep (a
+ * MENTOR of a vertical with the sales surface) goes straight there rather than
+ * through `/mentor`, which only bounces them on — and whose first-run wizard
+ * does not exist in that vertical (#3647). Everyone else keeps `roleHome()`
+ * exactly (the sign-in form composes the two); an ADMIN keeps the admin shell.
+ */
+export function landsOnSalesAfterSignIn(role: string | null | undefined, capabilities: readonly VerticalCapability[]): boolean {
+  return role === 'MENTOR' && hasSalesSurface(role, capabilities);
+}
+
+/**
  * Where the mentor shell sends a user whose vertical has no `mentorship`
  * module: the sales surface for a MENTOR that has one, the neutral page for
  * everyone else (an ADMIN in mentor mode, a dual-role MENTEE).

@@ -182,12 +182,13 @@ for (const [label, pick] of DIRECTIONS) {
     });
     expect(guests.status()).toBe(404);
 
-    // Scheduling on another tenant's relation id creates nothing.
+    // Scheduling on another tenant's relation id creates nothing, and says so
+    // like a missing id (#3778) — no "200, created 0".
     const schedule = await page.request.post('/api/meetings', {
       data: { relationIds: [other.relation.id], title: 'scheduled across tenants' },
     });
-    expect(schedule.status()).toBe(200);
-    expect((await schedule.json()).created).toBe(0);
+    expect(schedule.status()).toBe(404);
+    expect((await schedule.json()).code).toBe('relation_not_found');
 
     // Handing another tenant's mentee to one of ours.
     const transfer = await page.request.post(`/api/mentorship/${other.relation.id}/transfer`, {

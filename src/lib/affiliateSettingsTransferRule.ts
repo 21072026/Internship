@@ -19,6 +19,7 @@
 // and the server refuses an import that selects it without `confirmPlan`.
 
 import { ASSET_ID_RE, THEME_MEDIA_MAX_BYTES, THEME_MEDIA_SLOTS, themeMediaKind } from '@/lib/affiliateLandingRule';
+import { DEFAULT_ADMIN_JSON_BODY_MAX_BYTES } from '@/lib/bodyLimitRule';
 
 export const SETTINGS_TRANSFER_FORMAT = 'affiliate-settings';
 export const SETTINGS_TRANSFER_VERSION = 1;
@@ -28,10 +29,15 @@ export const TRANSFER_SECTIONS = ['landing', 'contract', 'customerStatus', 'wind
 export type TransferSection = (typeof TRANSFER_SECTIONS)[number];
 
 /**
- * The largest file accepted: three media slots at their limits (5 + 15 + 15 MB),
- * base64's third on top, and room for the texts.
+ * The largest file accepted (#3728): the admin JSON ceiling every write under
+ * /api/admin/ already gets from the middleware (bodyLimitRule.ts), so the number
+ * the screen promises is the number that works. It used to be 50 MB — three
+ * media slots at their limits, base64 on top — but the middleware refused past
+ * 32 MiB and Next cut the body at 10 MB before that, so no file over 10 MB ever
+ * imported. A theme whose media together exceed ~23 MB (base64 adds a third)
+ * does not fit in one file; the screen says so before uploading.
  */
-export const SETTINGS_TRANSFER_MAX_BYTES = 50 * 1024 * 1024;
+export const SETTINGS_TRANSFER_MAX_BYTES = DEFAULT_ADMIN_JSON_BODY_MAX_BYTES;
 
 export interface TransferAsset {
   /** The asset's id in the exporting environment; the theme names it. */

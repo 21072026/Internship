@@ -128,6 +128,11 @@ export function planHasPercent(plan: Pick<CommissionPlan, 'percentBps'>): boolea
   return plan.percentBps > 0;
 }
 
+/** A payment the engine refused as a payment at all: it says nothing about the customer's window. */
+function isInvalidPayment(p: PartnerEvaluation['payments'][number]): boolean {
+  return p.outcome.kind === 'NONE' && (p.outcome.reason === 'NOT_A_PAYMENT' || p.outcome.reason === 'CURRENCY_MISMATCH');
+}
+
 /** Each of the partner's customers' window, by customer id (a customer missing from the map has none). */
 export function customerWindows(input: {
   plan: CommissionPlan;
@@ -140,9 +145,11 @@ export function customerWindows(input: {
   if (!planHasPercent(plan)) return out;
   const stopsAt = plan.afterNotice === 'STOP_ALL' ? (partner.noticeEffectiveAt ?? null) : null;
   for (const p of evaluation.payments) {
-    // Only an eligible customer (it has an ordinal) has a window; every payment of
-    // it carries the same end, so the first one seen decides.
-    if (p.customerOrdinal === null || out.has(p.customerId)) continue;
+    // Only an eligible customer (it has an ordinal) has a window; every VALID
+    // payment of it carries the same end, so the first one seen decides. An
+    // invalid payment (zero, wrong currency) keeps the customer's ordinal but
+    // carries no window end — read as "unlimited" it hid a real end (#3729).
+    if (p.customerOrdinal === null || out.has(p.customerId) || isInvalidPayment(p)) continue;
     const windowEnd = p.windowEndsAt;
     const byNotice = stopsAt !== null && (windowEnd === null || stopsAt.getTime() < windowEnd.getTime());
     const endsAt = byNotice ? stopsAt : windowEnd;
