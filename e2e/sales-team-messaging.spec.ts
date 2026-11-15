@@ -16,6 +16,7 @@ import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/pro
  *     customer login and another org's rep are refused (a rep's OWN lead is
  *     reachable through the record, as before — that is not this rule); an INTERNSHIP mentor ↔ mentor pair is refused
  *     exactly as before.
+ *   - /messages?to=<id> opens (or creates) the 1:1 chat under the same rule.
  *   - /messages wears the sales menu for a rep: no /mentor link, no global search.
  *
  * SYNTHETIC ONLY: throwaway orgs, example addresses.
@@ -139,6 +140,28 @@ test('rep A starts a chat with rep B from the inbox picker, and B reads it', asy
     .toContain(text);
 });
 
+test('/messages?to= opens the chat with a colleague, and refuses anyone the rule does not allow', async ({ page, baseURL }) => {
+  await page.context().setExtraHTTPHeaders(host);
+  await page.context().addCookies([{ name: 'locale', value: 'en', url: baseURL! }]);
+  await signInAndSettle(page, mail.repB, PW, '/sales');
+  // A colleague: straight into the 1:1 chat (created on first use).
+  await page.goto(`/messages?to=${ids.admin}`);
+  await page.waitForURL((u) => u.pathname.startsWith('/messages/c/'), { timeout: 20_000 });
+  const conversationId = new URL(page.url()).pathname.split('/').pop()!;
+  const pair = await prisma.conversation.findUnique({ where: { id: conversationId }, include: { participants: true } });
+  expect(pair?.type).toBe('DIRECT');
+  expect(pair!.participants.map((p) => p.userId).sort()).toEqual([ids.admin, ids.repB].sort());
+  // Another org's rep and a lead the rep does not own: the inbox, with a notice, and no chat.
+  for (const target of [ids.foreignRep, ids.lead]) {
+    await gotoSettled(page, `/messages?to=${target}`);
+    expect(new URL(page.url()).pathname).toBe('/messages');
+    await expect(page.getByTestId('messages-to-refused')).toBeVisible();
+  }
+  expect(
+    await prisma.conversation.count({ where: { type: 'DIRECT', participants: { some: { userId: { in: [ids.foreignRep, ids.lead] } } } } }),
+  ).toBe(0);
+});
+
 test('the team room: two reps write, the admin reads both; a deactivated rep loses it', async ({ page, browser, baseURL }) => {
   await page.context().setExtraHTTPHeaders(host);
   await page.context().addCookies([{ name: 'locale', value: 'en', url: baseURL! }]);
@@ -185,7 +208,7 @@ test('the team room: two reps write, the admin reads both; a deactivated rep los
   }
 });
 
-test('/messages wears the sales menu for a rep: messages and to-dos, no /mentor link, no global search', async ({ page, baseURL }) => {
+test('/messages wears the sales menu for a rep: messages, to-dos and notifications, no /mentor link, no global search', async ({ page, baseURL }) => {
   await page.context().setExtraHTTPHeaders(host);
   await page.context().addCookies([{ name: 'locale', value: 'en', url: baseURL! }]);
   await signInAndSettle(page, mail.repA, PW, '/sales');
@@ -195,6 +218,7 @@ test('/messages wears the sales menu for a rep: messages and to-dos, no /mentor 
   await expect(nav).toBeVisible();
   await expect(nav.locator('a[href="/messages"]')).toBeVisible();
   await expect(nav.locator('a[href="/todos"]')).toBeVisible();
+  await expect(nav.locator('a[href="/notifications"]')).toBeVisible();
   await expect(nav.locator('a[href="/sales"]')).toBeVisible();
   await expect(page.locator('a[href^="/mentor"]')).toHaveCount(0);
   await expect(page.getByTestId('global-search-input')).toHaveCount(0);

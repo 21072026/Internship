@@ -64,9 +64,10 @@ test('the sales queue keeps the sales reasons and none of the mentorship ones', 
 });
 
 // The shared pages a rep reaches from the sales menu. RoleShell wears the SALES
-// menu on them for a rep (no palette, no global search), so none of them leads
-// into a /mentor page that would only bounce back to /sales.
-const SHARED_SALES_PAGES = ['/messages', '/todos'];
+// menu on /messages and /todos for a rep (no palette, no global search), and
+// /notifications' back link goes to /sales, so none of them leads into a
+// /mentor page that would only bounce back to /sales.
+const SHARED_SALES_PAGES = ['/messages', '/todos', '/notifications'];
 
 test('MARKETING keeps every sales link, and every one stays inside /sales or a shared page in the sales menu', () => {
   const shown = visibleNavLinks(SALES_NAV_LINKS, MARKETING);

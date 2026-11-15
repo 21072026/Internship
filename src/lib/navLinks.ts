@@ -361,6 +361,7 @@ export const SALES_NAV_LINKS: NavLink[] = [
   // — and the personal to-do list, both worn in this menu by RoleShell.
   { href: '/messages', icon: MessageSquare, key: 'messages' },
   { href: '/todos', icon: ListChecks, key: 'todos' },
+  { href: '/notifications', icon: BellRing, key: 'notifications' },
 ];
 
 /**
