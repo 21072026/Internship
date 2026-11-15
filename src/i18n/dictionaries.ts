@@ -7966,6 +7966,13 @@ const en = {
     edit: 'Edit',
     editLabel: 'Edit trial end',
     cancel: 'Cancel',
+    // Why the trial end cannot be changed (#3647): a short line where Edit would be,
+    // the full reason behind the info button. One source: trialEndLockReason().
+    lockedShortNotInTrial: 'Can be changed in a trial stage only',
+    lockedShortClosed: 'The record is closed',
+    lockedInfoLabel: 'Why can\'t this be changed?',
+    lockedNotInTrial: 'The trial end can only be changed while the lead is in a trial stage (Trial active / Trial expired). This record is currently in the \'{stage}\' stage.',
+    lockedClosed: 'The trial end cannot be changed because the record is closed.',
   },
   // The estimated monthly value of a funnel record (#2422). ALWAYS "estimated":
   // pricing is usage-based, so the real monthly revenue moves every month and
@@ -20358,6 +20365,13 @@ const tr: Dict = {
     edit: 'Düzenle',
     editLabel: 'Deneme bitişini düzenle',
     cancel: 'Vazgeç',
+    // Why the trial end cannot be changed (#3647): a short line where Edit would be,
+    // the full reason behind the info button. One source: trialEndLockReason().
+    lockedShortNotInTrial: 'Yalnızca deneme aşamasında değiştirilebilir',
+    lockedShortClosed: 'Kayıt kapalı',
+    lockedInfoLabel: 'Neden değiştirilemiyor?',
+    lockedNotInTrial: 'Deneme bitişi yalnızca lead deneme aşamasındayken (Deneme aktif / Deneme bitti) değiştirilebilir. Bu kayıt şu an \'{stage}\' aşamasında.',
+    lockedClosed: 'Kayıt kapalı olduğu için deneme bitişi değiştirilemez.',
   },
   dealValue: {
     title: 'Tahmini aylık değer',
@@ -32684,6 +32698,13 @@ const de: Dict = {
     edit: 'Bearbeiten',
     editLabel: 'Testende bearbeiten',
     cancel: 'Abbrechen',
+    // Why the trial end cannot be changed (#3647): a short line where Edit would be,
+    // the full reason behind the info button. One source: trialEndLockReason().
+    lockedShortNotInTrial: 'Nur in einer Testphase änderbar',
+    lockedShortClosed: 'Datensatz geschlossen',
+    lockedInfoLabel: 'Warum lässt sich das nicht ändern?',
+    lockedNotInTrial: 'Das Testende lässt sich nur ändern, solange der Lead in einer Testphase ist (Test aktiv / Test abgelaufen). Dieser Datensatz ist derzeit in der Phase „{stage}“.',
+    lockedClosed: 'Das Testende lässt sich nicht ändern, weil der Datensatz geschlossen ist.',
   },
   dealValue: {
     title: 'Geschätzter Monatswert',

@@ -33,6 +33,7 @@ export function SalesRecordPanels({
   trialEndsAt,
   contractEndsAt,
   canEditTrial,
+  stageName,
   dealValue,
   interactions,
   contact,
@@ -47,6 +48,8 @@ export function SalesRecordPanels({
   contractEndsAt: string | null;
   /** Who may move the trial end, decided on the server (owner, dispatcher, admin — the trial route's rule). */
   canEditTrial: boolean;
+  /** The current stage as the tenant labels it (the trial end's lock reason). */
+  stageName: string;
   dealValue: DealValueState;
   /** The interactions card, beside the follow-up. */
   interactions: ReactNode;
@@ -79,6 +82,8 @@ export function SalesRecordPanels({
             trialEndsAt={trialEndsAt}
             canEdit={canEditTrial}
             readFirst
+            status={status}
+            stageName={stageName}
             onSaved={refresh}
           />
         </div>

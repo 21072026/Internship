@@ -23,6 +23,7 @@ import {
   TRIAL_ACTIVE_STAGE_KEY,
   TRIAL_EXPIRED_STAGE_KEY,
   isTrialEndEditableStage,
+  trialEndLockReason,
   isTrialMissingEndDate,
   parseTrialEndDate,
   planTrialEndChange,
@@ -113,6 +114,17 @@ test('a past day is refused', () => {
     planTrialEndChange({ pipelineStatus: TRIAL_ACTIVE_STAGE_KEY, currentEndsAt: null, newEndsAt: day('2026-03-09'), now: NOW }),
     { ok: false, error: 'in_the_past' },
   );
+});
+
+test('the lock reason: closed first, then a stage outside the trial, else none (#3647)', () => {
+  assert.equal(trialEndLockReason({ status: 'ACTIVE', pipelineStatus: TRIAL_ACTIVE_STAGE_KEY }), null);
+  assert.equal(trialEndLockReason({ status: 'ACTIVE', pipelineStatus: TRIAL_EXPIRED_STAGE_KEY }), null);
+  assert.equal(trialEndLockReason({ status: 'ACTIVE', pipelineStatus: 'PROPOSAL' }), 'not_in_trial');
+  assert.equal(trialEndLockReason({ status: 'ACTIVE', pipelineStatus: null }), 'not_in_trial');
+  // A closed record is "closed" whatever its stage — the route answers relation_closed before not_in_trial.
+  assert.equal(trialEndLockReason({ status: 'COMPLETED', pipelineStatus: TRIAL_ACTIVE_STAGE_KEY }), 'closed');
+  assert.equal(trialEndLockReason({ status: 'COMPLETED', pipelineStatus: 'PROPOSAL' }), 'closed');
+  assert.equal(trialEndLockReason({ status: undefined, pipelineStatus: TRIAL_ACTIVE_STAGE_KEY }), 'closed');
 });
 
 test('outside a trial stage the date is refused', () => {

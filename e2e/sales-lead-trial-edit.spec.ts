@@ -21,6 +21,8 @@ const utcDay = (offset: number) => new Date(Date.now() + offset * DAY).toISOStri
 const emails: string[] = [];
 const ids: Record<string, string> = {};
 let orgId = '';
+// A stage outside the trial, and the label the tenant gave it.
+let otherStage = { key: '', label: '' };
 
 async function person(label: string, role: 'MENTOR' | 'MENTEE') {
   const email = uniqueEmail(`lte-${label}-${STAMP}`).toLowerCase();
@@ -37,8 +39,12 @@ test.beforeAll(async () => {
   orgId = org.id;
   const preset = defaultTemplateForVertical('MARKETING');
   if (!preset) throw new Error('MARKETING must provision a stage preset');
+  const presetStages = templateStagePayload(preset, 'en').stages;
+  const other = presetStages.find((st) => st.key !== TRIAL_ACTIVE_STAGE_KEY && st.key !== TRIAL_EXPIRED_STAGE_KEY && !st.isTerminal);
+  if (!other) throw new Error('MARKETING preset needs a non-trial stage');
+  otherStage = { key: other.key, label: other.label };
   await prisma.pipelineStage.createMany({
-    data: templateStagePayload(preset, 'en').stages.map((st) => ({
+    data: presetStages.map((st) => ({
       orgId,
       key: st.key,
       label: st.label,
@@ -52,6 +58,7 @@ test.beforeAll(async () => {
   const colleague = await person('colleague', 'MENTOR');
   const lead = await person('lead', 'MENTEE');
   const closedLead = await person('closed-lead', 'MENTEE');
+  const laterLead = await person('later-lead', 'MENTEE');
   ids.rep = rep.id;
   ids.colleague = colleague.id;
   // An expired trial: "Ended" on the page.
@@ -64,6 +71,18 @@ test.beforeAll(async () => {
         pipelineStatus: TRIAL_EXPIRED_STAGE_KEY,
         trialStartedAt: new Date(`${utcDay(-40)}T00:00:00.000Z`),
         trialEndsAt: new Date(`${utcDay(-8)}T00:00:00.000Z`),
+      },
+    })
+  ).id;
+  // An open record that has moved on past its trial, still carrying the date.
+  ids.later = (
+    await prisma.mentorshipRelation.create({
+      data: {
+        orgId,
+        mentorId: rep.id,
+        menteeId: laterLead.id,
+        pipelineStatus: otherStage.key,
+        trialEndsAt: new Date(`${utcDay(-3)}T00:00:00.000Z`),
       },
     })
   ).id;
@@ -129,10 +148,38 @@ test('the owner edits the trial end from the read view; Cancel keeps it, Save mo
   await gotoSettled(page, `/sales/leads/${ids.expired}`);
   await expect(page.getByTestId('trial-end-panel').getByTestId('trial-end-status')).toHaveText('7 days left');
 
-  // A closed record shows its trial end and offers no Edit.
+  // A closed record shows its trial end, no Edit — and says why (trialEndLockReason: 'closed').
   await gotoSettled(page, `/sales/leads/${ids.closed}`);
-  await expect(page.getByTestId('trial-end-panel').getByTestId('trial-end-status')).toBeVisible();
-  await expect(page.getByTestId('trial-end-edit')).toHaveCount(0);
+  const closedPanel = page.getByTestId('trial-end-panel');
+  await expect(closedPanel.getByTestId('trial-end-status')).toBeVisible();
+  await expect(closedPanel.getByTestId('trial-end-edit')).toHaveCount(0);
+  await expect(closedPanel.getByTestId('trial-end-lock')).toContainText('The record is closed');
+  await expect(closedPanel.getByTestId('trial-end-lock-reason')).toHaveCount(0);
+  await closedPanel.getByRole('button', { name: "Why can't this be changed?" }).click();
+  await expect(closedPanel.getByTestId('trial-end-lock-reason')).toHaveText('The trial end cannot be changed because the record is closed.');
+});
+
+test('outside a trial stage the owner sees why the date cannot change, with the stage as the tenant names it', async ({ page }) => {
+  test.slow();
+  await page.context().setExtraHTTPHeaders(H);
+  await signInAndSettle(page, emails[0], PW, '/sales');
+  await gotoSettled(page, `/sales/leads/${ids.later}`);
+  const panel = page.getByTestId('trial-end-panel');
+  await expect(panel.getByTestId('trial-end-status')).toHaveText('Ended');
+  await expect(panel.getByTestId('trial-end-edit')).toHaveCount(0);
+  // Readable on the screen, not only on hover: the short line, then the full reason on the info button.
+  await expect(panel.getByTestId('trial-end-lock')).toContainText('Can be changed in a trial stage only');
+  const info = panel.getByTestId('trial-end-lock-info');
+  await expect(info).toHaveAttribute('aria-expanded', 'false');
+  await info.click();
+  await expect(info).toHaveAttribute('aria-expanded', 'true');
+  await expect(panel.getByTestId('trial-end-lock-reason')).toHaveText(
+    `The trial end can only be changed while the lead is in a trial stage (Trial active / Trial expired). This record is currently in the '${otherStage.label}' stage.`,
+  );
+  // The server agrees: the same record is refused with not_in_trial.
+  const res = await page.request.patch(`/api/mentorship/${ids.later}/trial`, { data: { trialEndsAt: utcDay(9) } });
+  expect(res.status()).toBe(409);
+  expect((await res.json()).code).toBe('not_in_trial');
 });
 
 test('a colleague neither opens the lead page nor moves the trial end through the API', { tag: '@smoke' }, async ({ page }) => {
