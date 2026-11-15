@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { roleHome } from '@/lib/roleHome';
 import { I18nScope } from '@/i18n/scope';
+import { shellCapabilities } from '@/lib/shellCapabilities';
+import { hasSalesSurface, SALES_HOME } from '@/lib/salesSurface';
 
 // Notification history is available to any authenticated role.
 async function NotificationsLayout({ children }: { children: React.ReactNode }) {
@@ -12,6 +14,9 @@ async function NotificationsLayout({ children }: { children: React.ReactNode }) 
   // callbackUrl: the manifest's "Notifications" shortcut (#2084) must survive
   // the sign-in redirect and land back here.
   if (!session) redirect('/auth/signin?callbackUrl=/notifications');
+  // A sales rep goes back to /sales, not to the mentor shell that bounces there.
+  const salesRep =
+    session.user.role === 'MENTOR' && hasSalesSurface(session.user.role, await shellCapabilities(session.user.orgId));
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -20,7 +25,7 @@ async function NotificationsLayout({ children }: { children: React.ReactNode }) 
           full-width row at the end of the list on a phone (#3059). */}
       <div className="max-w-3xl mx-auto p-4 pb-24 lg:p-8 lg:pb-24">
         <Link
-          href={roleHome(session.user.role)}
+          href={salesRep ? SALES_HOME : roleHome(session.user.role)}
           className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700 mb-6"
         >
           <ArrowLeft className="h-4 w-4" />

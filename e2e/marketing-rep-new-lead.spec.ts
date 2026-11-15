@@ -221,7 +221,8 @@ test("duplicates are refused with the admin path's rules, without pointing at a 
     const sameVat = await rep.post(SALES_LEAD_CREATE_PATH, { data: lead({ vatId: theirs.vatId }) });
     expect(sameVat.status()).toBe(409);
     const sameVatBody = await sameVat.json();
-    expect(sameVatBody).toEqual({ code: 'account_exists', mine: false });
+    // Whose it is (#3647): the colleague's name, never an id or the lead's details.
+    expect(sameVatBody).toEqual({ code: 'account_exists', mine: false, ownerName: `Rep Lead colleague ${STAMP}` });
     expect(JSON.stringify(sameVatBody)).not.toContain(theirCompany.id);
 
     // Same contact on another account: already on the board, again no id.
@@ -283,7 +284,7 @@ test("a colleague's closed lead is not picked up, and a stale record of the rep'
       data: lead({ contactEmail: theirs.contactEmail, contactName: 'Rep Typed', contactPhone: '+49 2' }),
     });
     expect(takeover.status()).toBe(409);
-    expect(await takeover.json()).toEqual({ code: 'contact_in_funnel', mine: false });
+    expect(await takeover.json()).toEqual({ code: 'contact_in_funnel', mine: false, ownerName: `Rep Lead colleague ${STAMP}` });
     // Nothing written: no record of the rep's on that person, its data untouched.
     expect(await prisma.mentorshipRelation.count({ where: { menteeId: theirRelation.menteeId, mentorId: ids.rep } })).toBe(0);
     const leadPerson = await prisma.user.findUniqueOrThrow({ where: { id: theirRelation.menteeId }, select: { fullName: true } });

@@ -182,11 +182,14 @@ test('outside a trial stage the owner sees why the date cannot change, with the 
   expect((await res.json()).code).toBe('not_in_trial');
 });
 
-test('a colleague neither opens the lead page nor moves the trial end through the API', { tag: '@smoke' }, async ({ page }) => {
+test('a colleague reads the lead page without the editor and cannot move the trial end through the API', { tag: '@smoke' }, async ({ page }) => {
   await page.context().setExtraHTTPHeaders(H);
   await signInAndSettle(page, emails[1], PW, '/sales');
+  // The team view opens it read-only (src/lib/salesBookRule.ts).
   const res = await page.goto(`/sales/leads/${ids.expired}`);
-  expect(res?.status()).toBe(404);
+  expect(res?.status()).toBe(200);
+  await expect(page.getByTestId('sales-lead-readonly')).toBeVisible({ timeout: 20_000 });
+  await page.waitForLoadState('networkidle');
   await expect(page.getByTestId('trial-end-edit')).toHaveCount(0);
 
   const before = (await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: ids.expired } })).trialEndsAt?.toISOString();

@@ -16,7 +16,9 @@ import {
   directKeyFor,
   latestMentorshipFor,
   mutedParticipants,
+  salesTeamStaffIds,
 } from '@/lib/conversations';
+import { orgOfSalesTeamKey } from '@/lib/salesTeamMessagingRule';
 import { markThreadRead } from '@/lib/threadRead';
 import { publishRealtime } from '@/lib/realtimeBus';
 import { notifyEvent } from '@/lib/notifications/router';
@@ -140,7 +142,7 @@ async function handleGet(request: Request) {
     // A group chat is a room, so it has to say who is in it (#51): the roster is
     // the project's team, annotated onto the participant list so the chat header
     // can show "6 people · who they are" instead of an anonymous thread.
-    let group: { type: string; projectId: string | null; projectName: string | null } | null = null;
+    let group: { type: string; projectId: string | null; projectName: string | null; teamRoom: boolean } | null = null;
     let participants: {
       id: string;
       fullName: string;
@@ -157,8 +159,17 @@ async function handleGet(request: Request) {
         conversation.type === 'GROUP' && conversation.projectId
           ? await prisma.project.findUnique({ where: { id: conversation.projectId }, select: { name: true } })
           : null;
-      group = { type: conversation.type, projectId: conversation.projectId, projectName: project?.name ?? null };
-      participants = conversation.participants.map((p) => {
+      group = {
+        type: conversation.type,
+        projectId: conversation.projectId,
+        projectName: project?.name ?? null,
+        // The sales team room (src/lib/salesTeamMessagingRule.ts): named by the
+        // client, and its roster is the team as it is now.
+        teamRoom: Boolean(conversation.teamKey),
+      };
+      const teamOrgId = orgOfSalesTeamKey(conversation.teamKey);
+      const liveTeam = teamOrgId ? new Set(await salesTeamStaffIds(teamOrgId)) : null;
+      participants = conversation.participants.filter((p) => !liveTeam || liveTeam.has(p.userId)).map((p) => {
         const member = team.find((m) => m.id === p.user.id);
         return {
           id: p.user.id,
@@ -407,6 +418,9 @@ async function handlePost(request: Request) {
     // push, no e-mail mirror, no bell. The realtime publish above still went to
     // them — it only refreshes a tab that already has the thread open.
     const muted = await mutedParticipants(threadConversationId, recipients);
+    // The sales team room is a room, not a mailing list: the bell and the push
+    // reach the team, the e-mail mirror does not.
+    const mirrorByEmail = !conversation?.teamKey;
     // The same thread link the bell row carries (`link` above), built by the router.
     const threadIds = threadConversationId ? { conversationId: threadConversationId } : { relationId: rel!.id };
     const pushOpts = { channels: ['push'] as const, preview: body, dedupeKey: `message:${message.id}` };
@@ -443,7 +457,7 @@ async function handlePost(request: Request) {
       // this mail, while the group check is the e-mail-only switch. The bell
       // deliberately does NOT consult the group — turning off `direct_messages`
       // e-mail is not a request to go silent inside the app.
-      if (rcpt?.email && emailAllowed(rcpt, 'messages') && emailGroupAllowedForCategory(rcpt, 'message')) {
+      if (mirrorByEmail && rcpt?.email && emailAllowed(rcpt, 'messages') && emailGroupAllowedForCategory(rcpt, 'message')) {
         // The mail belongs to the RECIPIENT's world (docs/worlds.md): its sender
         // name and every one-click link. Per recipient, because a group thread
         // can span organizations.

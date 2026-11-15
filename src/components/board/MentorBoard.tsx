@@ -28,6 +28,9 @@ import { FollowUpChip } from '@/components/FollowUpPanel';
 import { TrialEndChip } from '@/components/TrialEndPanel';
 import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
 import { HandoffCardButton, useLeadHandoff } from '@/components/board/LeadHandoff';
+import { BoardOwnerFilter, type OwnerOption } from '@/components/board/BoardOwnerFilter';
+import { SalesViewToggle, salesBoardView, type SalesBoardView } from '@/components/sales/SalesViewToggle';
+import type { SalesTeamBook } from '@/lib/salesTeamBook';
 
 interface Mentee {
   id: string;
@@ -60,7 +63,33 @@ interface Relation {
   // The trial end (#2553): a chip on a trial-stage card, or the "date missing" badge.
   trialEndsAt?: string | null;
   mentee: Mentee;
-  _count: { interactions: number };
+  // Not on a team-view row (GET /api/sales/team-book carries no counts).
+  _count?: { interactions: number };
+}
+
+/** Who looks at a sales board, decided on the server (src/app/sales/board/page.tsx). */
+export interface SalesBoardViewer {
+  id: string;
+  /** May move any record of the org: the dispatcher (not under impersonation) or an admin with relation.write. */
+  writeAll: boolean;
+  /** May read the team's book (salesTeamReadAllowed) — the "Team" toggle shows only then. */
+  teamRead: boolean;
+}
+
+/** A team-book row as a board card: what the card shows, nothing more. */
+function teamRowToRelation(row: SalesTeamBook['rows'][number]): Relation {
+  return {
+    id: row.id,
+    status: row.status,
+    mentor: { id: row.ownerId, fullName: row.ownerName },
+    pipelineStatus: row.pipelineStatus,
+    daysInStage: row.daysInStage,
+    mentee: { id: row.id, fullName: row.leadName, university: row.companyName ?? undefined },
+  };
+}
+
+function initials(name: string): string {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join('');
 }
 
 // The owner's stage board: the mentor shell's /mentor/board and, for a MARKETING
@@ -74,14 +103,21 @@ interface Relation {
 // `surface="sales"` (the /sales board): the list is the viewer's own sales book
 // (src/lib/salesBookRule.ts) — the same set /sales/leads/<id> opens — so every
 // card it shows is a card its viewer can open.
+// The team view (`?view=team`, sales only, for a `viewer` the team read
+// allows): the org's book from GET /api/sales/team-book, READ-ONLY — a card
+// moves (drag, hand-off) only when it is the viewer's own or the viewer may
+// write every record (dispatcher, admin); any other card is not draggable and
+// a drop of it does nothing. Each card names its owner. `?owners=` narrows it.
 export function MentorBoard({
   detailBase = '/mentor/mentees',
   handoff = false,
   surface,
+  viewer,
 }: {
   detailBase?: string;
   handoff?: boolean;
   surface?: 'sales';
+  viewer?: SalesBoardViewer;
 }) {
   const t = useT();
   const label = useStageLabel();
@@ -118,21 +154,74 @@ export function MentorBoard({
   const columnRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const scrolledToFirst = useRef(false);
 
+  // "Mine / Team" and the owner filter, kept in the URL (`?view=team`,
+  // `?owners=a,b`) so a reload or a shared link shows the same board. Read once
+  // on mount (no useSearchParams: it would need a Suspense boundary); nothing
+  // loads before it is read, so the first fetch is already the right one.
+  const teamAllowed = surface === 'sales' && !!viewer?.teamRead;
+  const [urlRead, setUrlRead] = useState(false);
+  const [view, setViewState] = useState<SalesBoardView>('mine');
+  const [owners, setOwnersState] = useState<string[]>([]);
+  const [ownerOptions, setOwnerOptions] = useState<OwnerOption[]>([]);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setViewState(teamAllowed ? salesBoardView(params.get('view')) : 'mine');
+    setOwnersState((params.get('owners') ?? '').split(',').filter(Boolean));
+    setUrlRead(true);
+  }, [teamAllowed]);
+  const writeUrl = (next: { view?: SalesBoardView; owners?: string[] }) => {
+    const url = new URL(window.location.href);
+    if (next.view !== undefined) {
+      if (next.view === 'team') url.searchParams.set('view', 'team');
+      else url.searchParams.delete('view');
+    }
+    if (next.owners !== undefined) {
+      if (next.owners.length) url.searchParams.set('owners', next.owners.join(','));
+      else url.searchParams.delete('owners');
+    }
+    window.history.replaceState(null, '', url.toString());
+  };
+  const setView = (next: SalesBoardView) => {
+    setLoading(true);
+    setViewState(next);
+    writeUrl({ view: next });
+  };
+  const setOwners = (ids: string[]) => {
+    setOwnersState(ids);
+    writeUrl({ owners: ids });
+  };
+  const teamView = teamAllowed && view === 'team';
+
   // A failed load is its own state, not an empty board (#1374).
   const [loadError, setLoadError] = useState(false);
   const fetchRelations = useCallback(async () => {
+    if (surface === 'sales' && !urlRead) return;
     setLoadError(false);
     try {
-      const res = await fetch(surface === 'sales' ? '/api/mentorship?surface=sales' : '/api/mentorship');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      setRelations(data.relations ?? []);
+      if (surface === 'sales' && teamAllowed && view === 'team') {
+        const params = new URLSearchParams({ status: 'active' });
+        if (owners.length) params.set('owners', owners.join(','));
+        const res = await fetch(`/api/sales/team-book?${params}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const book = (await res.json()) as SalesTeamBook;
+        setRelations(book.rows.map(teamRowToRelation));
+        setOwnerOptions(book.byOwner.map((o) => ({ id: o.ownerId, fullName: o.ownerName })));
+      } else {
+        const res = await fetch(surface === 'sales' ? '/api/mentorship?surface=sales' : '/api/mentorship');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        setRelations(data.relations ?? []);
+      }
     } catch {
       setLoadError(true);
     } finally {
       setLoading(false);
     }
-  }, [surface]);
+  }, [surface, urlRead, teamAllowed, view, owners]);
+
+  // Only the viewer's own card moves on the team view, or any for whom may write
+  // them all; outside the sales surface (no viewer) the board is the owner's own.
+  const movable = (r: Relation) => !viewer || !r.mentor || r.mentor.id === viewer.id || viewer.writeAll;
 
   useEffect(() => {
     relationsRef.current = relations;
@@ -281,18 +370,27 @@ export function MentorBoard({
       e.preventDefault();
       setDragOver(null);
       const id = e.dataTransfer.getData('relationId');
-      if (id) requestMove(id, status);
+      const card = id ? relationsRef.current.find((r) => r.id === id) : undefined;
+      // A colleague's card on the team view never moves, however it got here.
+      if (card && movable(card)) requestMove(id, status);
     },
   });
 
   const renderCard = (r: Relation) => (
     <div
       key={r.id}
-      draggable
-      onDragStart={(e) => e.dataTransfer.setData('relationId', r.id)}
+      draggable={movable(r)}
+      onDragStart={(e) => {
+        if (!movable(r)) {
+          e.preventDefault();
+          return;
+        }
+        e.dataTransfer.setData('relationId', r.id);
+      }}
       onClick={() => router.push(`${detailBase}/${r.id}`)}
       data-testid="board-card"
-      className="bg-white border border-gray-200 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-blue-300 hover:shadow-sm transition"
+      data-writable={movable(r) ? 'true' : 'false'}
+      className={`bg-white border border-gray-200 rounded-lg p-3 hover:border-blue-300 hover:shadow-sm transition ${movable(r) ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
     >
       <div className="flex items-start justify-between gap-2">
         {/* The name is a real link so the card is reachable (and openable) by keyboard. */}
@@ -315,17 +413,28 @@ export function MentorBoard({
       {r.mentee.university && (
         <p className="text-xs text-gray-500 truncate mt-0.5">{r.mentee.university}</p>
       )}
-      {manyOwners && r.mentor && (
-        <p className="mt-1 truncate text-xs text-gray-500" data-testid="board-card-owner">{r.mentor.fullName}</p>
+      {(manyOwners || teamView) && r.mentor && (
+        <p className="mt-1 flex items-center gap-1 truncate text-xs text-gray-500" data-testid="board-card-owner">
+          <span
+            aria-hidden="true"
+            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[10px] font-semibold text-gray-700 dark:bg-gray-800 dark:text-gray-200"
+            data-testid="board-card-owner-initials"
+          >
+            {initials(r.mentor.fullName)}
+          </span>
+          <span className="truncate">{r.mentor.fullName}</span>
+        </p>
       )}
       <AffiliateSourceBadge partnerName={r.affiliatePartner} className="mt-1 text-[10px]" />
-      <div className="flex items-center gap-1 text-xs text-gray-400 mt-2">
-        <GraduationCap className="h-3 w-3" />
-        {r._count.interactions} {t.mentor.interactions}
-      </div>
+      {r._count && (
+        <div className="flex items-center gap-1 text-xs text-gray-400 mt-2">
+          <GraduationCap className="h-3 w-3" />
+          {r._count.interactions} {t.mentor.interactions}
+        </div>
+      )}
       {r.nextActionAt && <div className="mt-1"><FollowUpChip at={r.nextActionAt} /></div>}
       <div className="mt-1 empty:hidden"><TrialEndChip pipelineStatus={r.pipelineStatus} trialEndsAt={r.trialEndsAt} /></div>
-      {showHandoff && <HandoffCardButton onClick={() => leadHandoff.openFor(r.id)} />}
+      {showHandoff && movable(r) && <HandoffCardButton onClick={() => leadHandoff.openFor(r.id)} />}
     </div>
   );
 
@@ -354,6 +463,13 @@ export function MentorBoard({
           {t.mentor.boardSubtitle}
         </p>
       </div>
+
+      {teamAllowed && (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <SalesViewToggle view={view} onChange={setView} />
+          {teamView && <BoardOwnerFilter options={ownerOptions} selected={owners} onChange={setOwners} />}
+        </div>
+      )}
 
       {showHandoff && relations.length > 0 && leadHandoff.strip}
 

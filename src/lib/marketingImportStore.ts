@@ -65,6 +65,7 @@ import {
   diffMarketingAccounts,
   funnelRelationCreateData,
   funnelRelationUpdateData,
+  leadContactKey,
   leadStandInEmail,
   makeMarketingValidator,
   parseHeaderAliases,
@@ -722,6 +723,8 @@ interface MarketingRunCore {
   createdBySource?: string | null;
   /** See `WriterContext.leadOnly`. */
   leadOnly?: boolean;
+  /** See `MarketingDiffContext.phoneLeadKey`: a phone-only hand-typed lead (#3647). */
+  phoneLeadKey?: boolean;
   /** The moment the written rows are dated (WriterContext.now); omitted = the wall clock. */
   now?: Date;
   /** The handle reads and writes go through (WriterContext.db); omitted = the root client. */
@@ -769,7 +772,7 @@ async function runMarketingRows(core: MarketingRunCore) {
       validate,
       resolve: async (rows) => {
         const contactKeys = [
-          ...new Set(rows.map((r) => normalizeEmailKey(r.value.contactEmail)).filter(Boolean)),
+          ...new Set(rows.map((r) => leadContactKey(r.value, core.phoneLeadKey === true)).filter(Boolean)),
         ];
         // Both addresses a lead of this file could be stored under: the real
         // one (an applicant, or a mentor-entered mentee) and the stand-in a
@@ -795,6 +798,7 @@ async function runMarketingRows(core: MarketingRunCore) {
           orgKey: orgId ?? '',
           authoritative: core.authoritative === true,
           trialLengthDays,
+          ...(core.phoneLeadKey ? { phoneLeadKey: true } : {}),
           ...(core.leadSource?.kind === 'fixed' ? { leadSourceName: core.leadSource.name } : {}),
         });
       },
@@ -915,6 +919,11 @@ export async function createMarketingAccount(input: {
    */
   now?: Date;
   /**
+   * Key a lead without a contact e-mail on its phone (`leadContactKey`) — the
+   * sales rep's hand-typed lead (#3647). Off for every other caller.
+   */
+  phoneLeadKey?: boolean;
+  /**
    * Write no `marketing.account.created` line: a historic replay folds its
    * activity into one aggregated entry per request instead of one per account.
    */
@@ -962,6 +971,7 @@ export async function createMarketingAccount(input: {
     mode: 'createOnly',
     leadSource: input.leadSourceName === undefined ? { kind: 'typed' } : { kind: 'fixed', name: input.leadSourceName },
     createdBySource: input.createdBySource ?? null,
+    ...(input.phoneLeadKey ? { phoneLeadKey: true } : {}),
     ...(input.now ? { now: input.now } : {}),
     ...(input.db ? { db: input.db } : {}),
   });

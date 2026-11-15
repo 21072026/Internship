@@ -64,6 +64,7 @@ const en = {
     board: 'Board',
     interactionLogs: 'Interaction Logs',
     messages: 'Messages',
+    notifications: 'Notifications',
     email: 'Email',
     meetings: 'Meetings',
     availability: 'Availability',
@@ -2190,6 +2191,9 @@ const en = {
   // mentorship module shows it, so the base copy is vertical-neutral; the
   // MARKETING overlay (verticalOverlays.ts) says "lead" and "account".
   sales: {
+    // The team view (the user's rule, 2026-11-15): "Mine" is the default; "Team"
+    // shows every seller's records of the org, read-only unless they are yours.
+    view: { label: 'Show', mine: 'Mine', team: 'Team' },
     pool: {
       title: 'Unassigned leads',
       hint: '{count} leads nobody has taken yet. Take one and it lands on your board at the first stage.',
@@ -2246,6 +2250,10 @@ const en = {
       back: 'My companies',
     },
     lead: {
+      readOnlyBanner: 'This record belongs to {owner}. You are only viewing it.',
+      owner: 'Owner',
+      messageOwner: 'Message the owner',
+      lastContact: 'Last contact',
       back: 'My records',
       contact: 'Contact',
       email: 'E-mail',
@@ -2284,6 +2292,12 @@ const en = {
       existsElsewhere: 'This account already exists on a colleague’s board — nothing was created. Ask an admin if it should be yours.',
       contactInFunnelElsewhere: 'This contact is already on a colleague’s board — nothing was created. Ask an admin if it should be yours.',
       alreadyMentored: 'This contact already belongs to another owner — nothing was created. An admin can transfer the lead to you.',
+      // E-mail OR phone, and whose it is (#3647).
+      contactHint: 'E-mail or phone — at least one. A lead with only a number is fine.',
+      contactRequired: 'Enter an e-mail address or a phone number.',
+      phoneInvalid: 'That phone number is not valid — check the digits.',
+      existsOwner: 'This account is already on {owner}’s board — nothing was created. Ask an admin if it should be yours.',
+      contactInFunnelOwner: 'This contact is already on {owner}’s board — nothing was created. Ask an admin if it should be yours.',
     },
   },
   companiesPage: {
@@ -7799,6 +7813,18 @@ const en = {
   },
   // The link button on a chat card (#1942).
   chatCard: { join: 'Join the meeting', accept: 'Accept', decline: 'Decline', book: 'Book a session', rsvpYes: 'Yes, I’ll be there', rsvpNo: 'I can’t make it', approve: 'Approve', answerSurvey: 'Answer now', addNotes: 'Add notes' },
+  // "Today" on the sales dashboard (#3778).
+  salesToday: {
+    title: 'Today',
+    followUps: 'Follow-ups',
+    meetings: 'Meetings',
+    todos: 'To-dos',
+    overdue: 'Overdue',
+    noStep: 'No next step written',
+    none: 'Nothing here.',
+    empty: 'Nothing due today — no follow-ups, meetings or open to-dos.',
+    allTodos: 'All {n} to-dos',
+  },
   // The sales rep's calendar (#3778): /sales/calendar and the lead page's "Plan meeting".
   salesCalendar: {
     title: 'Calendar',
@@ -8634,6 +8660,7 @@ const en = {
     pasteHint: 'Tip: you can paste an image, and ↑ edits your last message',
     newChat: 'New chat',
     projectGroup: '{name} · Project group',
+    salesTeamRoom: 'Team',
     newChatHint: 'People you share a project with',
     newChatSearch: 'Search people…',
     newChatNoMatch: 'Nobody matches that search',
@@ -9589,7 +9616,9 @@ const en = {
     salesWonTargetHint: 'How many deals each sales rep aims to win in a calendar month. Shown on every rep’s dashboard as “N of target” with a progress bar. Leave empty or 0 for no target — the dashboard then shows the plain count.',
     salesWonTargetInvalid: 'Enter a whole number between 0 and 9999, or leave the box empty.',
     salesLeaderboardForReps: 'Show the team leaderboard to reps',
-    salesLeaderboardForRepsHint: 'Off by default. When on, every rep sees the team’s names and deals won this month on their dashboard. Admins always see it. Deal values are never shown.',
+    salesTeamBookForReps: 'Let reps see the whole team’s records',
+    salesTeamBookForRepsHint: 'On by default. Every rep can open every record of the team read-only — the team board, the team page and a colleague’s lead. Only the owner, the dispatcher and admins can change a record. When off, a colleague’s record is not found.',
+    salesLeaderboardForRepsHint: 'On by default. When on, every rep sees the team’s names and deals won this month on their dashboard. Admins always see it. Deal values are never shown.',
     outboundApproval: 'Approve automated mail to leads and customers',
     outboundApprovalOff: 'Off — automated mail leaves when it is due',
     outboundApprovalLeadMail: 'On — automated mail to leads and customers waits in the outbox',
@@ -12704,6 +12733,7 @@ const tr: Dict = {
     board: 'Pano',
     interactionLogs: 'Etkileşim Kayıtları',
     messages: 'Mesajlar',
+    notifications: 'Bildirimler',
     email: 'E-posta',
     meetings: 'Toplantılar',
     availability: 'Müsaitlik',
@@ -14781,6 +14811,7 @@ const tr: Dict = {
     },
   },
   sales: {
+    view: { label: 'Göster', mine: 'Benim', team: 'Ekip' },
     pool: {
       title: 'Atanmamış lead\'ler',
       hint: 'Henüz kimsenin almadığı {count} lead. Birini alırsan ilk aşamada senin panona düşer.',
@@ -14837,6 +14868,10 @@ const tr: Dict = {
       back: 'Firmalarım',
     },
     lead: {
+      readOnlyBanner: 'Bu kayıt {owner} adına. Yalnızca görüntülüyorsun.',
+      owner: 'Sahibi',
+      messageOwner: 'Sahibine yaz',
+      lastContact: 'Son temas',
       back: 'Kayıtlarım',
       contact: 'İletişim',
       email: 'E-posta',
@@ -14875,6 +14910,12 @@ const tr: Dict = {
       existsElsewhere: 'Bu hesap bir ekip arkadaşının panosunda zaten var — hiçbir şey oluşturulmadı. Senin olması gerekiyorsa bir yöneticiye sor.',
       contactInFunnelElsewhere: 'Bu kişi bir ekip arkadaşının panosunda zaten var — hiçbir şey oluşturulmadı. Senin olması gerekiyorsa bir yöneticiye sor.',
       alreadyMentored: 'Bu kişinin zaten başka bir sahibi var — hiçbir şey oluşturulmadı. Bir yönetici lead\'i sana devredebilir.',
+      // E-mail OR phone, and whose it is (#3647).
+      contactHint: 'E-posta ya da telefon — en az biri. Yalnızca numarası olan lead de olur.',
+      contactRequired: 'Bir e-posta adresi ya da telefon numarası gir.',
+      phoneInvalid: 'Bu telefon numarası geçerli değil — rakamları kontrol et.',
+      existsOwner: 'Bu hesap zaten {owner} adlı kişinin panosunda — hiçbir şey oluşturulmadı. Sende olması gerekiyorsa bir yöneticiye sor.',
+      contactInFunnelOwner: 'Bu kişi zaten {owner} adlı kişinin panosunda — hiçbir şey oluşturulmadı. Sende olması gerekiyorsa bir yöneticiye sor.',
     },
   },
   companiesPage: {
@@ -20265,6 +20306,17 @@ const tr: Dict = {
     requestHandled: 'Bu istek zaten yanıtlandı.',
   },
   chatCard: { join: 'Toplantıya katıl', accept: 'Kabul et', decline: 'Reddet', book: 'Randevu al', rsvpYes: 'Evet, katılacağım', rsvpNo: 'Katılamıyorum', approve: 'Onayla', answerSurvey: 'Şimdi yanıtla', addNotes: 'Not ekle' },
+  salesToday: {
+    title: 'Bugün',
+    followUps: 'Takipler',
+    meetings: 'Toplantılar',
+    todos: 'Yapılacaklar',
+    overdue: 'Gecikmiş',
+    noStep: 'Sonraki adım yazılmadı',
+    none: 'Burada bir şey yok.',
+    empty: 'Bugün için bir şey yok — takip, toplantı ya da açık yapılacak yok.',
+    allTodos: 'Tüm {n} yapılacak',
+  },
   salesCalendar: {
     title: 'Takvim',
     subtitle: 'Toplantıların, takiplerin ve deneme bitişlerin tek yerde.',
@@ -21073,6 +21125,7 @@ const tr: Dict = {
     pasteHint: 'İpucu: resim yapıştırabilirsin, ↑ ile son mesajını düzenlersin',
     newChat: 'Yeni sohbet',
     projectGroup: '{name} · Proje grubu',
+    salesTeamRoom: 'Ekip',
     newChatHint: 'Aynı projede olduğun kişiler',
     newChatSearch: 'Kişi ara…',
     newChatNoMatch: 'Bu aramaya uyan kimse yok',
@@ -22014,7 +22067,9 @@ const tr: Dict = {
     salesWonTargetHint: 'Her satış temsilcisinin bir takvim ayında kazanmayı hedeflediği anlaşma sayısı. Her temsilcinin panosunda ilerleme çubuğuyla “N / hedef” olarak gösterilir. Hedef olmaması için boş bırak ya da 0 yaz — pano o zaman yalnızca sayıyı gösterir.',
     salesWonTargetInvalid: '0 ile 9999 arasında bir tam sayı gir ya da kutuyu boş bırak.',
     salesLeaderboardForReps: 'Ekip sıralamasını temsilcilere göster',
-    salesLeaderboardForRepsHint: 'Varsayılan olarak kapalı. Açıkken her temsilci panosunda ekibin isimlerini ve bu ay kazanılan anlaşma sayılarını görür. Yöneticiler her zaman görür. Anlaşma değerleri hiçbir zaman gösterilmez.',
+    salesTeamBookForReps: 'Temsilciler tüm ekibin kayıtlarını görsün',
+    salesTeamBookForRepsHint: 'Varsayılan olarak açık. Her temsilci ekibin her kaydını salt-okunur açabilir — ekip panosu, ekip sayfası ve bir meslektaşın lead’i. Kaydı yalnızca sahibi, dağıtıcı ve yöneticiler değiştirebilir. Kapalıyken meslektaşın kaydı bulunamaz.',
+    salesLeaderboardForRepsHint: 'Varsayılan olarak açık. Açıkken her temsilci panosunda ekibin isimlerini ve bu ay kazanılan anlaşma sayılarını görür. Yöneticiler her zaman görür. Anlaşma değerleri hiçbir zaman gösterilmez.',
     outboundApproval: 'Müşteri adaylarına ve müşterilere giden otomatik e-postaları onayla',
     outboundApprovalOff: 'Kapalı — otomatik e-postalar zamanı gelince gider',
     outboundApprovalLeadMail: 'Açık — müşteri adaylarına ve müşterilere giden otomatik e-postalar giden kutusunda bekler',
@@ -25084,6 +25139,7 @@ const de: Dict = {
     board: 'Board',
     interactionLogs: 'Interaktionsprotokolle',
     messages: 'Nachrichten',
+    notifications: 'Benachrichtigungen',
     email: 'E-Mail',
     meetings: 'Meetings',
     availability: 'Verfügbarkeit',
@@ -27161,6 +27217,7 @@ const de: Dict = {
     },
   },
   sales: {
+    view: { label: 'Anzeigen', mine: 'Meine', team: 'Team' },
     pool: {
       title: 'Nicht zugewiesene Leads',
       hint: '{count} Leads, die noch niemand übernommen hat. Übernimm einen, und er landet in der ersten Stufe auf deinem Board.',
@@ -27217,6 +27274,10 @@ const de: Dict = {
       back: 'Meine Unternehmen',
     },
     lead: {
+      readOnlyBanner: 'Dieser Datensatz gehört {owner}. Sie sehen ihn nur an.',
+      owner: 'Zuständig',
+      messageOwner: 'Der zuständigen Person schreiben',
+      lastContact: 'Letzter Kontakt',
       back: 'Meine Datensätze',
       contact: 'Kontakt',
       email: 'E-Mail',
@@ -27255,6 +27316,12 @@ const de: Dict = {
       existsElsewhere: 'Dieser Account existiert bereits auf dem Board einer Kollegin oder eines Kollegen — es wurde nichts angelegt. Frag einen Admin, wenn er dir gehören soll.',
       contactInFunnelElsewhere: 'Dieser Kontakt ist bereits auf dem Board einer Kollegin oder eines Kollegen — es wurde nichts angelegt. Frag einen Admin, wenn er dir gehören soll.',
       alreadyMentored: 'Dieser Kontakt gehört bereits zu einem anderen Owner — es wurde nichts angelegt. Ein Admin kann dir den Lead übertragen.',
+      // E-mail OR phone, and whose it is (#3647).
+      contactHint: 'E-Mail oder Telefon — mindestens eines. Ein Lead nur mit Nummer ist in Ordnung.',
+      contactRequired: 'Gib eine E-Mail-Adresse oder eine Telefonnummer ein.',
+      phoneInvalid: 'Diese Telefonnummer ist ungültig — bitte die Ziffern prüfen.',
+      existsOwner: 'Dieser Account liegt bereits auf dem Board von {owner} — es wurde nichts angelegt. Frag einen Admin, falls er dir gehören soll.',
+      contactInFunnelOwner: 'Dieser Kontakt liegt bereits auf dem Board von {owner} — es wurde nichts angelegt. Frag einen Admin, falls er dir gehören soll.',
     },
   },
   companiesPage: {
@@ -32647,6 +32714,17 @@ const de: Dict = {
     requestHandled: 'Diese Anfrage wurde bereits beantwortet.',
   },
   chatCard: { join: 'Am Meeting teilnehmen', accept: 'Annehmen', decline: 'Ablehnen', book: 'Termin buchen', rsvpYes: 'Ja, ich bin dabei', rsvpNo: 'Ich kann nicht', approve: 'Freigeben', answerSurvey: 'Jetzt antworten', addNotes: 'Notizen hinzufügen' },
+  salesToday: {
+    title: 'Heute',
+    followUps: 'Wiedervorlagen',
+    meetings: 'Termine',
+    todos: 'Aufgaben',
+    overdue: 'Überfällig',
+    noStep: 'Kein nächster Schritt notiert',
+    none: 'Nichts.',
+    empty: 'Heute steht nichts an — keine Wiedervorlagen, Termine oder offenen Aufgaben.',
+    allTodos: 'Alle {n} Aufgaben',
+  },
   salesCalendar: {
     title: 'Kalender',
     subtitle: 'Deine Termine, Wiedervorlagen und Testenden an einem Ort.',
@@ -33455,6 +33533,7 @@ const de: Dict = {
     pasteHint: 'Tipp: Du kannst ein Bild einfügen, ↑ bearbeitet deine letzte Nachricht',
     newChat: 'Neuer Chat',
     projectGroup: '{name} · Projektgruppe',
+    salesTeamRoom: 'Team',
     newChatHint: 'Personen, mit denen du ein Projekt teilst',
     newChatSearch: 'Personen suchen…',
     newChatNoMatch: 'Niemand passt zu dieser Suche',
@@ -34396,7 +34475,9 @@ const de: Dict = {
     salesWonTargetHint: 'Wie viele Deals jede Vertriebsperson in einem Kalendermonat gewinnen soll. Erscheint im Dashboard jeder Vertriebsperson als „N von Ziel“ mit Fortschrittsbalken. Leer lassen oder 0 für kein Ziel — das Dashboard zeigt dann nur die Anzahl.',
     salesWonTargetInvalid: 'Gib eine ganze Zahl zwischen 0 und 9999 ein oder lass das Feld leer.',
     salesLeaderboardForReps: 'Team-Rangliste für Vertriebspersonen anzeigen',
-    salesLeaderboardForRepsHint: 'Standardmäßig aus. Eingeschaltet sieht jede Vertriebsperson im Dashboard die Namen des Teams und die diesen Monat gewonnenen Deals. Admins sehen sie immer. Deal-Werte werden nie gezeigt.',
+    salesTeamBookForReps: 'Vertriebspersonen sehen alle Datensätze des Teams',
+    salesTeamBookForRepsHint: 'Standardmäßig an. Jede Vertriebsperson kann jeden Datensatz des Teams schreibgeschützt öffnen — Team-Board, Teamseite und den Lead einer Kollegin oder eines Kollegen. Ändern können ihn nur die zuständige Person, die Disposition und Admins. Ausgeschaltet ist ein fremder Datensatz nicht auffindbar.',
+    salesLeaderboardForRepsHint: 'Standardmäßig an. Eingeschaltet sieht jede Vertriebsperson im Dashboard die Namen des Teams und die diesen Monat gewonnenen Deals. Admins sehen sie immer. Deal-Werte werden nie gezeigt.',
     outboundApproval: 'Automatische E-Mails an Leads und Kunden freigeben',
     outboundApprovalOff: 'Aus — automatische E-Mails gehen raus, sobald sie fällig sind',
     outboundApprovalLeadMail: 'An — automatische E-Mails an Leads und Kunden warten im Postausgang',
