@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "The sales dashboard (`/sales`) opens with a \"Today\" card (#3778): follow-ups due today and overdue ones (red), today's meetings at their time on the rep's own clock, and the rep's open to-dos — each line a link to the lead page or `/todos`. Follow-ups and meetings come from the sales calendar's loader (`src/lib/salesCalendar.ts`, now shared with `GET /api/sales/calendar`), so the card and the calendar never disagree. The role × endpoint matrix pins `POST /api/meetings` on a colleague's or another org's lead as a 404.",
+  "notes": {
+    "en": ["The sales dashboard starts with \"Today\": follow-ups due and overdue, today's meetings and your open to-dos, each one click away."],
+    "tr": ["Satış panosu artık \"Bugün\" kartıyla açılıyor: bugünkü ve gecikmiş takipler, bugünün toplantıları ve açık yapılacakların — her biri tek tıkla."],
+    "de": ["Das Vertriebs-Dashboard beginnt mit „Heute“: fällige und überfällige Wiedervorlagen, die heutigen Termine und deine offenen Aufgaben – jeweils einen Klick entfernt."]
+  }
+}
