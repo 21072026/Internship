@@ -160,6 +160,7 @@ const LEAK_EXEMPT: Record<string, string> = {
   relationLifecycle: 'Read only by RelationLifecycleControls (#1770), mounted on /admin/mentorship (gatePage, `mentorship`) and /mentor/mentees/[id] — the mentor layout sends a MARKETING MENTOR to /sales.',
   relationNotes: 'Read only by RelationNotesPanel, mounted only on /mentor/mentees/[id] — the mentor layout sends a MARKETING MENTOR to /sales.',
   rematchRequest: 'Read only by /admin/mentorship and its MentorshipRequestQueue (gatePage) and by MentorshipRequestPanel (/portal only, whose layout redirects an org without `mentorship`); /api/mentorship/[id]/rematch refuses (requireCapability).',
+  navHubInternship: 'Admin hub-page row descriptions (#3752) for links tagged `mentorship` or `projects` only — scripts/test/nav-groups.test.mjs pins every key here to such a link. The hub page renders a row only for a link that passed visibleNavLinks(), which drops those links for MARKETING, so MARKETING never renders a word of it.',
   sources: '/admin/sources — gatePage closes it for an org without the `sourcing` capability (MARKETING lacks it); the other files only read `d.sources` from API JSON, never the namespace.',
 };
 
