@@ -396,9 +396,11 @@ export const ORG_SETUP_WRITES: OrgSetupWriteProbe[] = [
  *                 routes is kept; what matters is that no admin work happens);
  * - `notFound`  — 404, the answer for an id that does not exist;
  * - `forbidden` — 403 exactly;
+ * - `refused`   — 403 or 404: a write on a record the caller may read but not
+ *                 work (the team view), whichever its route answers — never 2xx;
  * - `ok`        — 200.
  */
-export type SalesExpectation = 'deny' | 'notFound' | 'forbidden' | 'ok';
+export type SalesExpectation = 'deny' | 'notFound' | 'forbidden' | 'refused' | 'ok';
 
 export interface SalesProbe {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -443,6 +445,15 @@ export const MARKETING_MENTOR_ROWS: SalesProbe[] = [
   // Which records it holds per role (rep, dispatcher, ORG_ADMIN, OBSERVER), and
   // that each one opens, is pinned by e2e/sales-book-scope.spec.ts.
   { method: 'GET', path: '/api/mentorship?surface=sales', expect: 'ok', why: 'own sales book' },
+  // The team's book, read-only (src/lib/salesTeamBook.ts) — the org setting is on by default.
+  { method: 'GET', path: '/api/sales/team-book', expect: 'ok', why: "the team's sales book (read-only)" },
+  // Every write on a colleague's record stays refused, whatever the team read
+  // shows (salesBookWriteAllowed; each route checks ownership itself).
+  { method: 'PATCH', path: '/api/mentorship/:colleagueRelationId/trial', body: { trialEndsAt: '2027-01-31' }, expect: 'refused', why: "move a colleague's trial end" },
+  { method: 'PATCH', path: '/api/mentorship/:colleagueRelationId/contract-end', body: { contractEndsAt: '2027-06-30' }, expect: 'refused', why: "set a colleague's notice period" },
+  { method: 'PUT', path: '/api/mentorship/:colleagueRelationId/value', body: { valueMinor: 1000, currency: 'EUR' }, expect: 'refused', why: "set a colleague's deal value" },
+  { method: 'POST', path: '/api/interactions', body: { relationId: ':colleagueRelationId', date: '2026-11-15T10:00:00.000Z', type: 'Call', notes: 'x' }, expect: 'refused', why: "log on a colleague's record" },
+  { method: 'PATCH', path: '/api/sales/leads/:colleagueRelationId/contact', body: { name: 'x' }, expect: 'notFound', why: "edit a colleague's contact" },
   { method: 'GET', path: '/api/mentorship/:colleagueRelationId', expect: 'forbidden', why: "a colleague's record" },
   // Resolved inside the caller's tenant first (#2613): another org's record
   // answers like a missing one, not with a 403 that confirms it exists.
@@ -475,15 +486,19 @@ export const MARKETING_MENTOR_ROWS: SalesProbe[] = [
   { method: 'POST', path: '/api/conversations', body: { userId: ':foreignRepId' }, expect: 'forbidden', why: "message another org's rep" },
 ];
 
-/** The sales surface pages: own record 200, anything else a real 404. */
+/**
+ * The sales surface pages: every record and account of the rep's org opens
+ * while the team read is on (the default; a colleague's read-only, its writes
+ * refused by the routes above); another org's is a real 404.
+ */
 export const MARKETING_MENTOR_PAGES: Array<{ path: string; expect: 200 | 404; why: string }> = [
   { path: '/sales', expect: 200, why: 'dashboard' },
   { path: '/sales/board', expect: 200, why: 'board' },
   { path: '/sales/accounts', expect: 200, why: 'own accounts' },
   { path: '/sales/accounts/:ownCompanyId', expect: 200, why: 'own account' },
   { path: '/sales/leads/:ownRelationId', expect: 200, why: 'own record' },
-  { path: '/sales/accounts/:colleagueCompanyId', expect: 404, why: "a colleague's account" },
-  { path: '/sales/leads/:colleagueRelationId', expect: 404, why: "a colleague's record" },
+  { path: '/sales/accounts/:colleagueCompanyId', expect: 200, why: "a colleague's account (team read, read-only)" },
+  { path: '/sales/leads/:colleagueRelationId', expect: 200, why: "a colleague's record (team read, read-only)" },
   { path: '/sales/accounts/:foreignCompanyId', expect: 404, why: "another org's account" },
   { path: '/sales/leads/:foreignRelationId', expect: 404, why: "another org's record" },
 ];

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Sales team view (read-only): `/sales/board` gets a \"Mine / Team\" toggle (`?view=team`, read from `GET /api/sales/team-book`; `?owners=` filters it) with owner initials on every card — only your own card moves (drag, hand-off) unless you are the dispatcher or an admin with `relation.write`. `/sales/leads/[id]` and `/sales/accounts/[id]` open a colleague's record/account read-only while the team read is on (`salesTeamReadAllowed`): owner banner with \"Message the owner\" (`/messages?to=`), no editor, and no contact e-mail/phone, follow-up, notice period or deal value. Write rule `salesBookWriteAllowed` / `canWriteSalesRecord`; the hand-off uses it too. Off, a colleague's record is a 404 as before.",
+  "notes": {
+    "en": ["Team view: see the whole team’s records read-only — switch between Mine and Team on the board, open a colleague’s lead and message its owner."],
+    "tr": ["Ekip görünümü: tüm ekip kayıtları salt-okunur görülebilir — panoda Benim / Ekip arasında geçin, bir meslektaşın lead’ini açın ve sahibine yazın."],
+    "de": ["Teamansicht: alle Datensätze des Teams schreibgeschützt einsehen — auf dem Board zwischen Meine und Team wechseln, den Lead einer Kollegin oder eines Kollegen öffnen und der zuständigen Person schreiben."]
+  }
+}

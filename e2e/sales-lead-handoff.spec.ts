@@ -341,14 +341,14 @@ test('the lead page hands the record over too (#3657): same dialog, then back to
 });
 
 // #3657 follow-up: the button is offered only to whom the hand-off route lets
-// through — asked of the data on the server (canHandOffLead, src/lib/leadHandoff.ts).
-test('a colleague opening another rep’s lead page gets a 404, not the page', async ({ page }) => {
+// through — asked of the data on the server (canWriteSalesRecord, src/lib/salesBook.ts).
+// The team view opens a colleague's lead page read-only: the page, never the button.
+test('a colleague opening another rep’s lead page reads it, without the hand-off', async ({ page }) => {
   await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
   await signInAndSettle(page, mail.rep2, PW, '/sales');
-  const path = `/sales/leads/${ids['rel-refusals']}`;
-  const nav = page.waitForResponse((r) => new URL(r.url()).pathname === path && r.request().isNavigationRequest());
-  await gotoSettled(page, path);
-  expect((await nav).status()).toBe(404);
+  await gotoSettled(page, `/sales/leads/${ids['rel-refusals']}`);
+  await expect(page.getByTestId('sales-lead-readonly')).toBeVisible({ timeout: 20_000 });
+  await page.waitForLoadState('networkidle');
   await expect(page.getByTestId('sales-lead-handoff')).toHaveCount(0);
 });
 
