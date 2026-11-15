@@ -590,7 +590,10 @@ marketing names redirect there, and their apex now serves **mail only**.
   (`src/lib/outboundDrafts.ts`, the one writer: guarded `updateMany` from `DRAFT` + AuditLog in one
   transaction), which hands the sealed mail to `enqueueMail()` with key `draft:<id>`. A new mail
   category gets an entry in `OUTBOUND_CATEGORIES` (the unit test fails otherwise); never add a
-  "skip approval" flag to `sendEmail()`.
+  "skip approval" flag to `sendEmail()`. The third mode `'lead_mail_blocked'` (#3771) runs the same
+  rule and blocks instead of holding: `sendEmail()` answers `'BLOCKED'` (handled, like `'HELD'`),
+  records `SKIPPED` / `Blocked: outbound_blocked (…)`, writes no draft and no job — a caller that
+  tallies what reached a person counts it with the skipped.
 - **Nudges are one evaluator with two hard limits** ([`docs/nudges.md`](docs/nudges.md), #1684):
   an admin-authored `NudgeRule` fires on an allowlisted NON-stage event or the daily
   `nudge.evaluate` scan; stage-change rules are `AutomationRule` (#1703) and are refused at

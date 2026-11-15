@@ -527,7 +527,12 @@ export async function dispatchNewsletter(newsletterId: string): Promise<Newslett
       // temporary refusal being retried. Counted as reached (like SENT) and
       // recorded as QUEUED; the drain's settle hook moves the row to SENT,
       // FAILED or SKIPPED, and corrects the issue's tally if it did not arrive.
-      status = result;
+      // BLOCKED (#3771): the reader's org blocks automated mail to leads —
+      // recorded as a skipped send with the reason, never as reached.
+      if (result === 'BLOCKED') {
+        status = 'SKIPPED';
+        error = 'outbound_blocked';
+      } else status = result;
     } catch (e) {
       status = 'FAILED';
       error = e instanceof Error ? e.message : String(e);

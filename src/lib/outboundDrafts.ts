@@ -25,6 +25,7 @@ import {
   triggerFor,
   type ActionRefusal,
   type OutboundAction,
+  type OutboundApprovalMode,
   type OutboundDecisionCode,
   type OutboundDraftStatus,
   type RecipientKind,
@@ -69,11 +70,16 @@ async function approvalAppliesTo(orgId: string): Promise<boolean> {
   return applies;
 }
 
-/** Is approval switched on for this org right now? (The screens' banner reads it.) */
+/** The org's mode right now, 'off' outside the sales vertical. (The outbox's banner reads it.) */
+export async function outboundApprovalModeFor(orgId: string | null | undefined): Promise<OutboundApprovalMode> {
+  if (!orgId) return 'off';
+  if (!(await approvalAppliesTo(orgId))) return 'off';
+  return parseOutboundApprovalMode(await resolveSettingRaw('outboundApproval', { orgId }));
+}
+
+/** Is approval (the holding mode) switched on for this org right now? */
 export async function outboundApprovalOn(orgId: string | null | undefined): Promise<boolean> {
-  if (!orgId) return false;
-  if (!(await approvalAppliesTo(orgId))) return false;
-  return parseOutboundApprovalMode(await resolveSettingRaw('outboundApproval', { orgId })) === 'lead_mail';
+  return (await outboundApprovalModeFor(orgId)) === 'lead_mail';
 }
 
 // ── The hook ─────────────────────────────────────────────────────────────────
@@ -143,8 +149,11 @@ export interface HoldOptions {
 }
 
 export type HoldResult =
-  | { held: false; code: OutboundDecisionCode }
-  | { held: true; code: OutboundDecisionCode; draftId: string; created: boolean };
+  | { held: false; blocked?: false; code: OutboundDecisionCode }
+  // #3771 'lead_mail_blocked': the mail must not leave at all — no draft, no
+  // queue. The caller records it SKIPPED and reports it handled.
+  | { held: false; blocked: true; code: OutboundDecisionCode }
+  | { held: true; blocked?: false; code: OutboundDecisionCode; draftId: string; created: boolean };
 
 /**
  * The draft's identity when the sender named none: one per recipient, subject,
@@ -175,7 +184,9 @@ export function fallbackDraftKey(prepared: PreparedEmail, now: Date): string {
 }
 
 /**
- * Hold this mail if its org asks for approval and the rule says so. Called by
+ * Hold this mail if its org asks for approval and the rule says so — or, in
+ * 'lead_mail_blocked' (#3771), answer `blocked` without writing anything (no
+ * draft: the caller records the mail SKIPPED and drops it). Called by
  * `sendEmail()` between `prepareEmail()` and the dispatch, so every sender is
  * covered. Throws when the decision cannot be made (the database is down):
  * a mail to a lead must never leave because the check failed — the caller
@@ -200,6 +211,10 @@ export async function holdIfRequired(prepared: PreparedEmail, opts: HoldOptions 
   const facts = await recipientFacts({ ...prepared, orgId: prepared.orgId ?? orgId });
   const draftOrg = facts.orgId ?? orgId;
   const decision = outboundDecision({ mode, applies: true, hasOrg: true, category: prepared.category, recipient: facts.kind });
+  if (decision.block) {
+    logger.info('outbound_mail.blocked', { orgId: draftOrg, category: prepared.category, reason: decision.code });
+    return { held: false, blocked: true, code: decision.code };
+  }
   if (!decision.hold) return { held: false, code: decision.code };
 
   const now = opts.now ?? new Date();
@@ -420,7 +435,7 @@ export async function draftDetail(actor: OutboxActor, id: string): Promise<Draft
 
 export type DraftActionResult =
   | { ok: true; status: OutboundDraftStatus; jobId: string | null }
-  | { ok: false; httpStatus: 404 | 409 | 500; code: 'not_found' | 'conflict' | 'unreadable' | 'not_queueable' | 'unmailable' | 'enqueue_failed' | 'send_failed' | ActionRefusal };
+  | { ok: false; httpStatus: 404 | 409 | 500; code: 'not_found' | 'conflict' | 'unreadable' | 'not_queueable' | 'unmailable' | 'outbound_blocked' | 'enqueue_failed' | 'send_failed' | ActionRefusal };
 
 const AUDIT_ACTION: Record<OutboundAction, string> = {
   send: 'outbound_draft.send',
@@ -457,6 +472,10 @@ export async function applyDraftAction(
 
   let prepared: PreparedEmail | null = null;
   if (action !== 'discard') {
+    // #3771: once the org blocks lead mail, a draft held before the switch
+    // cannot leave either — "no mail to leads" has no back door through the
+    // outbox. It can still be discarded.
+    if ((await outboundApprovalModeFor(row.orgId)) === 'lead_mail_blocked') return { ok: false, httpStatus: 409, code: 'outbound_blocked' };
     const env = row.box ? decodeEnvelope(open(row.box, SEAL_PURPOSE)) : null;
     if (!env) return { ok: false, httpStatus: 409, code: 'unreadable' };
     prepared = env as unknown as PreparedEmail;

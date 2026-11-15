@@ -131,7 +131,8 @@ export async function mailAnnouncement(input: AnnouncementMailInput): Promise<An
         orgId: u.orgId,
       });
       if (delivery === 'HELD') result.held++;
-      else if (delivery !== 'SKIPPED') result.emailed++;
+      // BLOCKED (#3771) reached nobody: neither emailed nor held.
+      else if (delivery !== 'SKIPPED' && delivery !== 'BLOCKED') result.emailed++;
       if (delivery === 'QUEUED') result.queued++;
     } catch (e) {
       result.failed++;
