@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
-import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST, signInViaApi } from './helpers/auth';
+import { signInAndSettle, asHost, MARKETING_HOST, signInViaApi } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
 /**
@@ -148,16 +148,21 @@ test('the dispatcher is an owner, not an admin: the admin-only fields stay close
   await prisma.company.delete({ where: { id: account.id } });
 });
 
-test('the dispatcher opens a colleague’s lead page; a plain rep gets a 404', async ({ page }) => {
+// The team view (src/lib/salesBookRule.ts): a plain rep opens it too, read-only —
+// the dispatcher's page carries the editors and no read-only banner.
+test('the dispatcher works a colleague’s lead page; a plain rep only reads it', async ({ page }) => {
   test.slow();
   await page.context().setExtraHTTPHeaders(host);
   await signInAndSettle(page, mail.disp, PW, '/sales');
   const ok = await page.goto(`/sales/leads/${ids.recB}`);
   expect(ok?.status()).toBe(200);
   await expect(page.getByTestId('sales-lead-name')).toHaveText(`Lead recB ${STAMP}`);
+  await expect(page.getByTestId('follow-up-panel')).toBeVisible();
+  await expect(page.getByTestId('sales-lead-readonly')).toHaveCount(0);
 
   const res = await api.repC.get(`/sales/leads/${ids.recB}`, { headers: host });
-  expect(res.status()).toBe(404);
+  expect(res.status()).toBe(200);
+  expect(await res.text()).toContain('data-testid="sales-lead-readonly"');
 });
 
 test('the dispatcher corrects a colleague’s lead contact; a plain rep gets a 404', async () => {

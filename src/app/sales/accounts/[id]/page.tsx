@@ -6,6 +6,7 @@ import { tenantWhere } from '@/lib/tenantFilter';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { hasSalesSurface } from '@/lib/salesSurface';
 import { loadCompanyDetail } from '@/lib/companyDetail';
+import { salesTeamReadAllowed } from '@/lib/salesBook';
 import { resolvePipelineStages } from '@/lib/pipelineStages';
 import { getServerDictionary } from '@/i18n/server';
 import { CompanyDetailView } from '@/components/CompanyDetailView';
@@ -22,6 +23,13 @@ import { CompanyDetailView } from '@/components/CompanyDetailView';
 //   - the funnel and interaction lists hold the rep's own records only;
 //   - the ADMIN-only columns (VAT id, contact name, contact phone) are stripped
 //     by src/lib/companyVisibility.ts exactly as on GET /api/companies/[id].
+//
+// The team read (src/lib/salesBookRule.ts — an admin, the dispatcher, a rep
+// while the org's `salesTeamBookForReps` is on) widens only the READ: any
+// account of the org opens, with all its records, and the page renders no
+// editor either way (`showAdminEditors={false}`); the records open the sales
+// lead page, which is read-only unless the viewer may work them. With the team
+// read off, the account still opens only through one of the rep's own records.
 // No loading.tsx above this page, so notFound() is a real HTTP 404.
 export default async function SalesAccountPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -37,7 +45,7 @@ export default async function SalesAccountPage({ params }: { params: Promise<{ i
     id,
     tenant,
     headers: await headers(),
-    ownerId: session.user.id,
+    ownerId: (await salesTeamReadAllowed(session)) ? undefined : session.user.id,
   });
   if (!data) notFound();
 
