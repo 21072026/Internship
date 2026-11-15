@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "Affiliate settings import: files over 10 MB no longer fail as \"not a settings file\". Next silently truncated every request body past `experimental.middlewareClientMaxBodySize` (default 10 MB); it is now 40 MB, the reverse proxy's cap, which also unblocks the 32 MiB admin JSON importers and 15 MB theme videos. `SETTINGS_TRANSFER_MAX_BYTES` is now the admin JSON ceiling (32 MiB) instead of an unreachable 50 MB, and a `409 busy` import is shown with its own message (EN/TR/DE) (#3728).",
+  "notes": {
+    "en": ["Affiliate settings: larger settings files (up to 32 MB) can be imported, and a busy import says so clearly."],
+    "tr": ["Affiliate ayarları: daha büyük ayar dosyaları (32 MB'a kadar) içe aktarılabiliyor; devam eden bir yükleme varsa bu açıkça söyleniyor."],
+    "de": ["Affiliate-Einstellungen: Größere Einstellungsdateien (bis 32 MB) lassen sich einspielen, und ein laufender Import wird klar gemeldet."]
+  }
+}

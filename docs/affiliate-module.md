@@ -1055,8 +1055,21 @@ section of the target alone — an empty address in the file would otherwise
 *clear* the target's and break every partner's link. The theme's media travel inside the file,
 base64, with their SHA-256: they are compressed already, so a zip would save
 nothing and would put an archive parser (paths, decompression bombs) in front of
-the import. At most one asset per media slot; 50 MB per file
+the import. At most one asset per media slot; 32 MiB per file
 (`SETTINGS_TRANSFER_MAX_BYTES`), counted while the body is read.
+
+The limit is the admin JSON ceiling the middleware already enforces under
+`/api/admin/` (`src/lib/bodyLimitRule.ts`), so the number the screen names is the
+one that works (#3728). It was 50 MB on paper, but no file over 10 MB ever
+imported: Next hands middleware a clone of the body and silently truncates what
+the route reads past `experimental.middlewareClientMaxBodySize` (default 10 MB),
+so a large file failed as "not a settings file". That setting is now 40 MB, the
+reverse proxy's cap (`infra/README.md` § Request body limit); raising the file
+limit past 32 MiB instead would have meant loosening the global admin ceiling
+for one screen. The cost: a theme whose media together exceed ~23 MB (base64
+adds a third) does not fit in one file, and the screen refuses it by size before
+uploading. A second import of the same programme while one runs answers
+`409 busy`, which the screen shows as its own message.
 
 **Never in it:** partners, customers, payments, commissions, payouts,
 applications, contract acceptances — no person and no money that happened — and
