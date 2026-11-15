@@ -187,6 +187,27 @@ test('the page and the application form draw the theme', async ({ page }) => {
   await expect(page.getByTestId('affiliate-apply-submit')).toHaveCSS('background-color', 'rgb(194, 65, 12)');
 });
 
+// #3730: the legal footer on the themed pages — the organisation's own links, this
+// host's fallbacks and the contract's public page — and, on the application form,
+// the theme's text colour instead of a grey nobody checked against the theme.
+test('the themed footer carries the legal and contract links, in the theme’s own text colour', async ({ page }) => {
+  const theme = { ...THEME, media: { logo: logoId, hero: heroId, showcase: videoId } };
+  expect((await putLanding(admin as APIRequestContext, { copy: COPY, theme, imprintUrl: 'https://acme.example/imprint' })).status()).toBe(200);
+  // A published contract: the footer links its public page (the later tests do not mind it).
+  await prisma.affiliateProgramSettings.update({ where: { orgId }, data: { contract: { en: 'Synthetic partner terms.' }, contractVersion: 1 } });
+  await page.context().setExtraHTTPHeaders({ ...host, 'accept-language': 'en' });
+  for (const path of ['/partner', '/partner/apply']) {
+    expect((await page.goto(path))?.status(), path).toBe(200);
+    const footer = page.locator('footer').filter({ has: page.getByTestId('partner-legal-imprintUrl') });
+    await expect(footer.getByTestId('partner-legal-imprintUrl'), path).toHaveAttribute('href', 'https://acme.example/imprint');
+    await expect(footer.getByTestId('partner-legal-privacyUrl'), path).toHaveAttribute('href', '/privacy');
+    await expect(footer.getByTestId('partner-legal-termsUrl'), path).toHaveAttribute('href', '/terms');
+    await expect(footer.getByTestId('partner-legal-contract'), path).toHaveAttribute('href', '/partner/terms');
+    // THEME.colors.text (#3f3f46) — its contrast on the background is checked on save.
+    await expect(footer, path).toHaveCSS('color', 'rgb(63, 63, 70)');
+  }
+});
+
 test('the entrance effect: armed with motion, never under reduced motion', async ({ page }) => {
   await page.context().setExtraHTTPHeaders({ ...host, 'accept-language': 'en' });
   await page.emulateMedia({ reducedMotion: 'no-preference' });
