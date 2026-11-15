@@ -585,7 +585,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // stage keys renders them, and those two read "Pre-internship"/"Internship".
       board: { emptyStage: 'No leads in this stage' },
       adminBoard: {
-        subtitle: 'Every lead across every rep — drag a card, or use the stage menu on it, to change its stage',
+        subtitle: 'Every lead across every rep — drag a card to change its stage, or open it to change the stage there',
         searchPlaceholder: 'Find a lead or rep...',
         wipSaturated: 'Every column on this board is over its work-in-progress limit, so the amber warning no longer points anywhere and is hidden. Set a limit that matches how this pipeline actually runs — one number for the board, or one per stage.',
         groups: { pre: 'Leads', internship: 'Deals', custom: 'Funnel' },
@@ -627,7 +627,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         lead: { back: 'My leads', company: 'Account' },
       },
       mentor: {
-        boardSubtitle: 'Your leads by stage — drag a card, or use its stage menu, to move it',
+        boardSubtitle: 'Your leads by stage — drag a card to move it, or open it to change the stage there',
         menteeBoardSearchPlaceholder: 'Find a lead...',
         noMatchingMentees: 'No leads match this filter',
         dashSubtitle: 'Here\'s an overview of your leads and interactions',
@@ -954,7 +954,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         intro: 'We build {product} so that a sales rep, a manager or an administrator can use it with a keyboard, a screen reader, a magnifier, or a phone held at arm’s length. This statement says which standard we measure ourselves against, how we check, what does not work yet, and who to write to when you hit a barrier.',
         scopeBody: 'The {product} web application served from this deployment: the public pages, the sign-in flow, and the rep and admin areas behind it. It does not cover files that users upload, e-mail as rendered by someone else’s mail client, or the third-party services named further down.',
         evidence: {
-          dragAlternative: 'The pipeline board can be operated without drag-and-drop: every card carries a stage select that moves the deal with the keyboard alone.',
+          dragAlternative: 'A stage can be changed without drag-and-drop: every card on the pipeline board links to the deal, and the stage select there works with the keyboard alone.',
         },
         limitations: {
           thinFixture: 'The automated scan runs against the shared codebase in its default product configuration, so the screens and wording only {product} shows are not yet under the automated gate.',
@@ -1671,7 +1671,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       board: { emptyStage: 'Bu aşamada müşteri adayı yok' },
       adminBoard: {
-        subtitle: 'Tüm temsilcilerin tüm müşteri adayları — aşamayı kartı sürükleyerek ya da kartın aşama menüsünden değiştir',
+        subtitle: 'Tüm temsilcilerin tüm müşteri adayları — aşamayı kartı sürükleyerek ya da kartı açıp oradan değiştir',
         searchPlaceholder: 'Müşteri adayı veya temsilci bul...',
         wipSaturated: 'Panodaki her sütun kendi iş limitinin üzerinde; bu yüzden turuncu uyarı artık bir yeri işaret etmiyor ve gizlendi. Bu hattın gerçekten nasıl yürüdüğüne uyan bir limit belirle — pano için tek sayı ya da aşama başına birer tane.',
         groups: { pre: 'Müşteri Adayları', internship: 'Fırsatlar', custom: 'Satış hunisi' },
@@ -1702,7 +1702,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         lead: { back: 'Müşteri adaylarım', company: 'Hesap' },
       },
       mentor: {
-        boardSubtitle: 'Müşteri adayların aşamaya göre — taşımak için kartı sürükle ya da aşama menüsünü kullan',
+        boardSubtitle: 'Müşteri adayların aşamaya göre — taşımak için kartı sürükle ya da açıp aşamayı oradan değiştir',
         menteeBoardSearchPlaceholder: 'Müşteri adayı bul...',
         noMatchingMentees: 'Bu filtreye uyan müşteri adayı yok',
         dashSubtitle: 'Müşteri adaylarına ve etkileşimlerine genel bakış',
@@ -1993,7 +1993,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         intro: '{product} uygulamasını bir satış temsilcisinin, bir yöneticinin ya da bir sistem yöneticisinin klavyeyle, ekran okuyucuyla, büyüteçle ya da kol mesafesindeki bir telefonla kullanabileceği şekilde geliştiriyoruz. Bu beyan hangi standardı ölçüt aldığımızı, bunu nasıl denetlediğimizi, henüz neyin çalışmadığını ve bir engelle karşılaştığınızda kime yazacağınızı anlatır.',
         scopeBody: 'Bu kurulumdan sunulan {product} web uygulaması: herkese açık sayfalar, giriş akışı ve arkasındaki temsilci ve yönetici alanları. Kullanıcıların yüklediği dosyaları, başkasının posta istemcisinde görüntülenen e-postaları ve aşağıda adı geçen üçüncü taraf hizmetleri kapsamaz.',
         evidence: {
-          dragAlternative: 'Pipeline panosu sürükle-bırak olmadan da kullanılabiliyor: her kartta, fırsatı yalnızca klavyeyle taşıyan bir aşama seçici var.',
+          dragAlternative: 'Aşama sürükle-bırak olmadan da değiştirilebiliyor: pipeline panosundaki her kart fırsatın sayfasına bağlanıyor ve oradaki aşama seçici yalnızca klavyeyle çalışıyor.',
         },
         limitations: {
           thinFixture: 'Otomatik tarama, ortak kod tabanını varsayılan ürün yapılandırmasıyla çalıştırıyor; dolayısıyla yalnızca {product} uygulamasının gösterdiği ekranlar ve metinler henüz otomatik denetimin kapsamında değil.',
@@ -2705,7 +2705,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
       board: { emptyStage: 'Keine Leads in dieser Phase' },
       adminBoard: {
-        subtitle: 'Alle Leads aller Vertriebsmitarbeiter — ziehe eine Karte oder nutze ihr Phasenmenü, um die Phase zu ändern',
+        subtitle: 'Alle Leads aller Vertriebsmitarbeiter — ziehe eine Karte, um die Phase zu ändern, oder öffne sie und ändere die Phase dort',
         searchPlaceholder: 'Lead oder Vertriebsmitarbeiter finden...',
         wipSaturated: 'Jede Spalte dieses Boards liegt über ihrem Arbeitslimit, damit zeigt die bernsteinfarbene Warnung nirgendwo mehr hin und wird ausgeblendet. Lege ein Limit fest, das zu dieser Pipeline passt — eine Zahl für das ganze Board oder eine je Phase.',
         groups: { pre: 'Leads', internship: 'Deals', custom: 'Funnel' },
@@ -2736,7 +2736,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         lead: { back: 'Meine Leads', company: 'Account' },
       },
       mentor: {
-        boardSubtitle: 'Deine Leads nach Phase — ziehe eine Karte oder nutze ihr Phasenmenü, um sie zu verschieben',
+        boardSubtitle: 'Deine Leads nach Phase — ziehe eine Karte, um sie zu verschieben, oder öffne sie und ändere die Phase dort',
         menteeBoardSearchPlaceholder: 'Lead suchen...',
         noMatchingMentees: 'Keine Leads passen zu diesem Filter',
         dashSubtitle: 'Hier ist ein Überblick über deine Leads und Interaktionen',
@@ -3027,7 +3027,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         intro: 'Wir entwickeln {product} so, dass Vertriebsmitarbeiter, Vertriebsleitung oder Administration es mit Tastatur, Screenreader, Bildschirmlupe oder einem Handy auf Armlänge bedienen können. Diese Erklärung sagt, an welchem Standard wir uns messen, wie wir das prüfen, was noch nicht funktioniert und an wen du dich wendest, wenn du auf eine Barriere stößt.',
         scopeBody: 'Für die aus dieser Installation ausgelieferte {product}-Webanwendung: die öffentlichen Seiten, den Anmeldeweg und die dahinterliegenden Bereiche für Vertrieb und Verwaltung. Nicht abgedeckt sind hochgeladene Dateien, E-Mails in der Darstellung fremder Mail-Programme sowie die weiter unten genannten Dienste Dritter.',
         evidence: {
-          dragAlternative: 'Das Pipeline-Board lässt sich ohne Drag-and-drop bedienen: jede Karte hat ein Phasen-Auswahlfeld, das den Deal allein mit der Tastatur verschiebt.',
+          dragAlternative: 'Eine Phase lässt sich ohne Drag-and-drop ändern: Jede Karte im Pipeline-Board führt zum Deal, und das Phasen-Auswahlfeld dort funktioniert allein mit der Tastatur.',
         },
         limitations: {
           thinFixture: 'Der automatische Scan läuft gegen die gemeinsame Codebasis in ihrer Standard-Produktkonfiguration. Ansichten und Texte, die nur {product} zeigt, stehen daher noch nicht unter der automatischen Prüfung.',

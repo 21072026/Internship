@@ -5,7 +5,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-test('board card has a keyboard-accessible stage select that moves the relation', async ({ page }) => {
+test('a board card links to the record, whose stage select moves the relation without a drag', async ({ page }) => {
   const adminEmail = uniqueEmail('ba-admin');
   const mentorEmail = uniqueEmail('ba-mentor');
   await seedUser(adminEmail, 'AdminPass123', 'ADMIN', 'BA Admin');
@@ -23,11 +23,16 @@ test('board card has a keyboard-accessible stage select that moves the relation'
     await page.goto('/admin/board');
     await expect(page.getByText('BA Mentee')).toBeVisible({ timeout: 10_000 });
 
-    // Scope to this test's own card: the admin board lists every relation in the
-    // database, so an unscoped label match breaks as soon as another spec's
-    // relation shares the stage.
+    // The board's only stage control is drag-and-drop; its single-pointer and
+    // keyboard alternative is the record the card's name links to. Scope to this
+    // test's own card: the admin board lists every relation in the database.
     const card = page.getByTestId('board-card').filter({ hasText: 'BA Mentee' });
-    await card.getByLabel('Move to stage').selectOption('INTERVIEW_PENDING_250');
+    await expect(card.locator('select')).toHaveCount(0);
+    const link = card.getByRole('link', { name: 'BA Mentee' });
+    await link.focus();
+    await page.keyboard.press('Enter');
+    await page.waitForURL((u) => u.pathname === `/admin/candidates/${mentee.id}`, { timeout: 15_000 });
+    await page.getByTestId('stage-select').selectOption('INTERVIEW_PENDING_250');
 
     await expect.poll(async () => {
       const r = await prisma.mentorshipRelation.findUnique({ where: { id: rel.id } });
