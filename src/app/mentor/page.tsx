@@ -20,6 +20,8 @@ import Link from 'next/link';
 import { formatDate } from '@/lib/relativeTime';
 import { interactionTypeStyle } from '@/lib/interactionTypes';
 import { settingsOrgOf } from '@/lib/settingsOrg';
+import { shellCapabilities } from '@/lib/shellCapabilities';
+import { mentorlessShellTarget } from '@/lib/salesSurface';
 import { getMentorImpact } from '@/lib/mentorImpact';
 import { DocumentReviewQueue } from '@/components/DocumentReviewQueue';
 import { RelationLifecycleBadge } from '@/components/ui/RelationLifecycleBadge';
@@ -87,6 +89,14 @@ export default async function MentorDashboard() {
   // visit after becoming a mentor triggers it. Scoped to an actual MENTOR
   // (not an ADMIN using the mentor-mode switch, who never has this field
   // meaningfully set and must never be bounced into the mentor wizard).
+  //
+  // A vertical without mentorship has no mentor shell and no wizard: the layout
+  // sends such a mentor on (a sales rep to /sales), but the page renders in
+  // parallel with it, and this redirect used to win — a freshly invited sales
+  // rep's first sign-in ended on /onboarding, a 404 there (#3647). Said here
+  // too, so the outcome never depends on which of the two redirects lands first.
+  const capabilities = await shellCapabilities(session.user.orgId);
+  if (!capabilities.includes('mentorship')) redirect(mentorlessShellTarget(session.user.role, capabilities));
   if (session.user.role === 'MENTOR') {
     const seen = await prisma.user.findUnique({
       where: { id: session.user.id },
