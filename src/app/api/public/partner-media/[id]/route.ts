@@ -9,6 +9,15 @@ import { ASSET_ID_RE } from '@/lib/affiliateLandingRule';
 //
 // Videos need byte ranges: Safari will not play a <video> whose server ignores
 // `Range`. One range is honoured; anything else gets the whole file.
+//
+// Two headers this handler cannot send (#3732), both checked, neither a gap:
+//   - Content-Length: Next's App Router drops it from every handler response and
+//     streams the body chunked. A 206 still carries Content-Range with the total
+//     size, which is what WebKit reads — it played a ranged mp4 from this route
+//     and seeked to the end (2026-11-15). Moving the route to the Pages Router
+//     would send the header but retypes useSearchParams()/useParams() as nullable
+//     across the whole app, so it is not worth it.
+//   - Content-Security-Policy: next.config.js's headers() owns it for this path.
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!ASSET_ID_RE.test(id)) return NextResponse.json({ error: 'Not found' }, { status: 404 });
@@ -21,7 +30,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // Type-checked on upload; nosniff + inline keep the bytes from being read as anything else.
     'X-Content-Type-Options': 'nosniff',
     'Content-Disposition': 'inline',
-    'Content-Security-Policy': "default-src 'none'; sandbox",
     'Cache-Control': 'public, max-age=31536000, immutable',
     'Accept-Ranges': 'bytes',
   };
@@ -37,8 +45,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     }
     return new NextResponse(bytes.subarray(start, end + 1), {
       status: 206,
-      headers: { ...headers, 'Content-Range': `bytes ${start}-${end}/${size}`, 'Content-Length': String(end - start + 1) },
+      headers: { ...headers, 'Content-Range': `bytes ${start}-${end}/${size}` },
     });
   }
-  return new NextResponse(bytes, { headers: { ...headers, 'Content-Length': String(bytes.length) } });
+  return new NextResponse(bytes, { headers });
 }

@@ -120,11 +120,14 @@ test('uploads: our own storage, checked bytes, served with nosniff and byte rang
   expect(served.status()).toBe(200);
   expect(served.headers()['content-type']).toBe('image/png');
   expect(served.headers()['x-content-type-options']).toBe('nosniff');
+  // The file's own policy, not the page-wide one (#3732): opened on its own it loads nothing.
+  expect(served.headers()['content-security-policy']).toBe("default-src 'none'; sandbox");
   expect(Buffer.from(await served.body()).equals(PNG)).toBe(true);
   const ranged = await request.get(`/api/public/partner-media/${videoId}`, { headers: { range: 'bytes=4-11' } });
   expect(ranged.status()).toBe(206);
   expect(Buffer.from(await ranged.body()).toString()).toBe('ftypisom');
   expect(ranged.headers()['content-range']).toBe(`bytes 4-11/${MP4.length}`);
+  expect(ranged.headers()['content-security-policy']).toBe("default-src 'none'; sandbox");
   expect((await request.get('/api/public/partner-media/nope')).status()).toBe(404);
 });
 

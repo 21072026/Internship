@@ -33,6 +33,9 @@ const securityHeaders = [
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
 ];
 
+// Owned here rather than by the route: see the partner-media entry in headers().
+const PARTNER_MEDIA_CSP = "default-src 'none'; sandbox";
+
 const embedSecurityHeaders = securityHeaders.filter((h) => h.key !== 'Content-Security-Policy' && h.key !== 'X-Frame-Options');
 
 // Release fragments (#1275): the version shown to users is BASE (package.json)
@@ -106,6 +109,12 @@ const nextConfig = {
       // e2e/teams-embed-headers.spec.ts for both kinds of path.
       { source: '/embed', headers: embedSecurityHeaders },
       { source: '/embed/:path*', headers: embedSecurityHeaders },
+      // A partner page's uploaded picture or video (#3535, #3732). The route sets
+      // this policy itself, but Next applies these entries before a handler's own
+      // headers and keeps the first value, so it only ever arrived from here: a
+      // file opened on its own is a sandboxed document that may load nothing.
+      // Listed after the catch-all above — for the same key the later entry wins.
+      { source: '/api/public/partner-media/:id', headers: [{ key: 'Content-Security-Policy', value: PARTNER_MEDIA_CSP }] },
     ];
   },
 };
