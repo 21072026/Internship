@@ -8,9 +8,10 @@ import { currentPeriod, periodRange, previousPeriod } from '../src/lib/meteringR
 
 // Monthly won-deal target + team leaderboard on /sales (MARKETING only).
 //
-//   1. a rep sees their own "won this month" count; the leaderboard is OFF by
-//      default for reps;
-//   2. an admin of the org sets the target and switches the board on from the
+//   1. a rep sees their own "won this month" count; the leaderboard is ON by
+//      default for reps (2026-11-15, the team view: the org sees each other's
+//      work) — and OFF once an admin switches it off;
+//   2. an admin of the org sets the target and switches the board off from the
 //      settings screen, and always sees the board on /sales;
 //   3. the rep then sees "N of target" with a progressbar and the board — their
 //      own org's reps only, never another org's (the negative tenant test: the
@@ -152,7 +153,7 @@ async function signInMarketing(page: Page, email: string, landing: string) {
   await signInAndSettle(page, email, PASSWORD, landing);
 }
 
-test('a rep sees their own wins this month; the leaderboard is off for reps by default', async ({ page }) => {
+test('a rep sees their own wins this month; the leaderboard is on for reps by default', async ({ page }) => {
   test.slow();
   await signInMarketing(page, E.rep1, '/sales');
   const card = page.getByTestId('sales-target-card');
@@ -160,17 +161,30 @@ test('a rep sees their own wins this month; the leaderboard is off for reps by d
   // 2, not 3 (last month) and not 4 (the deal that started won).
   await expect(page.getByTestId('sales-target-headline')).toHaveText('Deals won this month: 2');
   await expect(page.getByTestId('sales-target-progress')).toHaveCount(0);
-  await expect(page.getByTestId('sales-leaderboard')).toHaveCount(0);
-  await expect(page.getByText(NAMES.rep2)).toHaveCount(0);
+  await expect(page.getByTestId('sales-leaderboard')).toContainText(NAMES.rep2);
 });
 
-test('the admin sets a target, switches the board on, and always sees it', async ({ page }) => {
+test('the admin sets a target, switches the board off for reps, and always sees it', async ({ page }) => {
   test.slow();
   await signInMarketing(page, E.adminA, '/admin');
   await gotoSettled(page, '/admin/settings');
   const target = page.getByTestId('sales-won-target');
   await expect(target).toBeEnabled({ timeout: 20_000 });
-  await expect(page.getByTestId('sales-leaderboard-for-reps')).not.toBeChecked();
+  await expect(page.getByTestId('sales-leaderboard-for-reps')).toBeChecked();
+
+  await target.fill('4');
+  await page.getByTestId('sales-leaderboard-for-reps').uncheck();
+  await page.locator('form').filter({ has: target }).locator('button[type="submit"]').click();
+  await expect
+    .poll(async () =>
+      Object.fromEntries(
+        (await prisma.setting.findMany({ where: { orgId: ids.orgA, key: { in: ['salesMonthlyWonTarget', 'salesLeaderboardForReps'] } } })).map((s) => [s.key, s.value]),
+      ),
+    )
+    .toEqual({ salesMonthlyWonTarget: '4', salesLeaderboardForReps: 'false' });
+  // Written to org A only — never the global row, never org B.
+  expect(await prisma.setting.count({ where: { orgId: null, key: { in: ['salesMonthlyWonTarget', 'salesLeaderboardForReps'] } } })).toBe(0);
+  expect(await prisma.setting.count({ where: { orgId: ids.orgB } })).toBe(0);
 
   // The admin sees the board on /sales even while it is off for reps.
   await gotoSettled(page, '/sales');
@@ -179,22 +193,14 @@ test('the admin sets a target, switches the board on, and always sees it', async
   await expect(page.getByTestId('sales-leaderboard-visibility')).toHaveText(/Only admins see this list/);
   await expect(board).toContainText(NAMES.rep1);
   await expect(board).not.toContainText(NAMES.foreignRep);
+});
 
-  await gotoSettled(page, '/admin/settings');
-  await expect(target).toBeEnabled({ timeout: 20_000 });
-  await target.fill('4');
-  await page.getByTestId('sales-leaderboard-for-reps').check();
-  await page.locator('form').filter({ has: target }).locator('button[type="submit"]').click();
-  await expect
-    .poll(async () =>
-      Object.fromEntries(
-        (await prisma.setting.findMany({ where: { orgId: ids.orgA, key: { in: ['salesMonthlyWonTarget', 'salesLeaderboardForReps'] } } })).map((s) => [s.key, s.value]),
-      ),
-    )
-    .toEqual({ salesMonthlyWonTarget: '4', salesLeaderboardForReps: 'true' });
-  // Written to org A only — never the global row, never org B.
-  expect(await prisma.setting.count({ where: { orgId: null, key: { in: ['salesMonthlyWonTarget', 'salesLeaderboardForReps'] } } })).toBe(0);
-  expect(await prisma.setting.count({ where: { orgId: ids.orgB } })).toBe(0);
+test('switched off, a rep no longer sees the leaderboard', async ({ page }) => {
+  await writeSetting('salesLeaderboardForReps', 'false', ids.orgA);
+  await signInMarketing(page, E.rep1, '/sales');
+  await expect(page.getByTestId('sales-target-headline')).toBeVisible();
+  await expect(page.getByTestId('sales-leaderboard')).toHaveCount(0);
+  await expect(page.getByText(NAMES.rep2)).toHaveCount(0);
 });
 
 test('the rep sees "N of target" with a progressbar and their own org\'s board only', async ({ page }) => {

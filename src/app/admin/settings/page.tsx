@@ -136,6 +136,8 @@ export default function AdminSettingsPage() {
   const [loadedSalesWonTarget, setLoadedSalesWonTarget] = useState('');
   const [salesWonTargetError, setSalesWonTargetError] = useState<string | null>(null);
   const [salesLeaderboardForReps, setSalesLeaderboardForReps] = useState(false);
+  const [salesTeamBookForReps, setSalesTeamBookForReps] = useState(true);
+  const [loadedSalesTeamBookForReps, setLoadedSalesTeamBookForReps] = useState(true);
   const [loadedSalesLeaderboardForReps, setLoadedSalesLeaderboardForReps] = useState(false);
   // Outbound approval (#2960) — MARKETING only, same load/post dance.
   const [outboundApproval, setOutboundApproval] = useState<'off' | 'lead_mail'>('off');
@@ -319,6 +321,8 @@ export default function AdminSettingsPage() {
     setLoadedSalesWonTarget(settings.salesMonthlyWonTarget ?? '');
     setSalesLeaderboardForReps(settings.salesLeaderboardForReps === 'true');
     setLoadedSalesLeaderboardForReps(settings.salesLeaderboardForReps === 'true');
+    setSalesTeamBookForReps(settings.salesTeamBookForReps !== 'false');
+    setLoadedSalesTeamBookForReps(settings.salesTeamBookForReps !== 'false');
     const approval = settings.outboundApproval && settings.outboundApproval !== 'off' ? 'lead_mail' : 'off';
     setOutboundApproval(approval);
     setLoadedOutboundApproval(approval);
@@ -397,10 +401,11 @@ export default function AdminSettingsPage() {
       return;
     }
     const boardChanged = hasTrialStage && salesLeaderboardForReps !== loadedSalesLeaderboardForReps;
+    const teamBookChanged = hasTrialStage && salesTeamBookForReps !== loadedSalesTeamBookForReps;
     const approvalChanged = hasTrialStage && outboundApproval !== loadedOutboundApproval;
     setSavingSettings(true);
     try {
-      const payload: Record<string, string> = { reminderDays, meetingReminderLeadsMinutes: meetingLeads, relationDefaultDurationMonths: defaultDuration.trim(), relationDefaultCadenceWeeks: defaultCadence.trim(), relationEndingLeadDays: endingLead.trim(), retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', notificationBlackoutDates: blackoutDates.trim(), notificationBlackoutWeekends: blackoutWeekends ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(windowChanged ? { decisionWindowDays: windowDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}), ...(approvalChanged ? { outboundApproval } : {}) };
+      const payload: Record<string, string> = { reminderDays, meetingReminderLeadsMinutes: meetingLeads, relationDefaultDurationMonths: defaultDuration.trim(), relationDefaultCadenceWeeks: defaultCadence.trim(), relationEndingLeadDays: endingLead.trim(), retentionMonths, notificationRetentionDays, supportEmail, weeklyDigest: weeklyDigest ? 'true' : 'false', notificationBlackoutDates: blackoutDates.trim(), notificationBlackoutWeekends: blackoutWeekends ? 'true' : 'false', require2fa, selfRegistration, passwordMinLength, passwordRequireUpper: passwordRequireUpper ? 'true' : 'false', passwordRequireLower: passwordRequireLower ? 'true' : 'false', passwordRequireDigit: passwordRequireDigit ? 'true' : 'false', passwordRequireSymbol: passwordRequireSymbol ? 'true' : 'false', breachedPasswordCheck: breachedPasswordCheck ? 'true' : 'false', earlyAccessWindowDays, outcomeAutoSend: outcomeAutoSend ? 'true' : 'false', blindReview: blindReview ? 'true' : 'false', autoAdvanceOnOfferAccept: autoAdvanceOnOfferAccept ? 'true' : 'false', ...(quotaChanged ? { aiMonthlyQuota: quota } : {}), ...(wipChanged ? { boardWipLimit: wip } : {}), ...(broadcastChanged ? { broadcastMonthlyRecipients: broadcast } : {}), ...(trialChanged ? { trialLengthDays: trialDays } : {}), ...(windowChanged ? { decisionWindowDays: windowDays } : {}), ...(ownerChanged ? { defaultLeadOwnerId } : {}), ...(wonTargetChanged ? { salesMonthlyWonTarget: wonTarget } : {}), ...(boardChanged ? { salesLeaderboardForReps: salesLeaderboardForReps ? 'true' : 'false' } : {}), ...(teamBookChanged ? { salesTeamBookForReps: salesTeamBookForReps ? 'true' : 'false' } : {}), ...(approvalChanged ? { outboundApproval } : {}) };
       const changed = Object.fromEntries(Object.entries(payload).filter(([k, v]) => v !== loadedRaw[k]));
       const res = await fetch('/api/admin/settings', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -414,7 +419,7 @@ export default function AdminSettingsPage() {
         if (saved?.settings) setLoadedRaw(saved.settings);
         if (saved?.sources) setSources(saved.sources);
       }
-      if (res.ok) { setFlash(t.settings.saved); setLoadedRequire2fa(require2fa); setCoverageReload((n) => n + 1); setLoadedQuota(quota); setLoadedWipLimit(wip); setLoadedBroadcastQuota(broadcast); if (trialChanged) setLoadedTrialLengthDays(trialDays); if (windowChanged) setLoadedDecisionWindowDays(windowDays); if (ownerChanged) setLoadedDefaultLeadOwnerId(defaultLeadOwnerId); if (wonTargetChanged) setLoadedSalesWonTarget(wonTarget); if (boardChanged) setLoadedSalesLeaderboardForReps(salesLeaderboardForReps); if (approvalChanged) setLoadedOutboundApproval(outboundApproval); }
+      if (res.ok) { setFlash(t.settings.saved); setLoadedRequire2fa(require2fa); setCoverageReload((n) => n + 1); setLoadedQuota(quota); setLoadedWipLimit(wip); setLoadedBroadcastQuota(broadcast); if (trialChanged) setLoadedTrialLengthDays(trialDays); if (windowChanged) setLoadedDecisionWindowDays(windowDays); if (ownerChanged) setLoadedDefaultLeadOwnerId(defaultLeadOwnerId); if (wonTargetChanged) setLoadedSalesWonTarget(wonTarget); if (boardChanged) setLoadedSalesLeaderboardForReps(salesLeaderboardForReps); if (teamBookChanged) setLoadedSalesTeamBookForReps(salesTeamBookForReps); if (approvalChanged) setLoadedOutboundApproval(outboundApproval); }
       else setSaveError(t.settings.saveFailed);
     } catch {
       setSaveError(t.settings.saveFailed);
@@ -719,6 +724,21 @@ export default function AdminSettingsPage() {
                   {t.settings.salesLeaderboardForReps}
                 </label>
                 <p id="sales-leaderboard-for-reps-hint" className="text-xs text-gray-500 mt-1">{t.settings.salesLeaderboardForRepsHint}</p>
+              </div>
+            )}
+            {hasTrialStage && (
+              <div>
+                <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={salesTeamBookForReps}
+                    onChange={(e) => setSalesTeamBookForReps(e.target.checked)}
+                    aria-describedby="sales-team-book-for-reps-hint"
+                    data-testid="sales-team-book-for-reps"
+                  />
+                  {t.settings.salesTeamBookForReps}
+                </label>
+                <p id="sales-team-book-for-reps-hint" className="text-xs text-gray-500 mt-1">{t.settings.salesTeamBookForRepsHint}</p>
               </div>
             )}
             {hasTrialStage && (

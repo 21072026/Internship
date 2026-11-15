@@ -305,9 +305,16 @@ export const SETTING_DEFAULTS = {
   // and the API refuses it for any other vertical.
   salesMonthlyWonTarget: '',
   // Show the team leaderboard (names + wins this month) to reps (MARKETING
-  // only). Off by default: a leaderboard is something a team opts into. The
-  // org's admins see it either way.
-  salesLeaderboardForReps: 'false',
+  // only). On by default since the team view (2026-11-15, the user's decision:
+  // the org is closed in on itself, the team sees each other's work); an admin
+  // can switch it off. The org's admins see it either way.
+  salesLeaderboardForReps: 'true',
+  // The team's sales book for reps (MARKETING only; src/lib/salesBookRule.ts):
+  // when 'true' (default) every rep READS every record of the org — the team
+  // view of the board, /sales/team, a colleague's lead page read-only. Writing
+  // never follows it (owner, dispatcher, admin). 'false' = a colleague's record
+  // is a 404 again. The org's admins and the dispatcher read the book either way.
+  salesTeamBookForReps: 'true',
   // Outbound approval (#2960, docs/outbound-approval.md): 'off' (default) =
   // automated mail leaves as it always has; 'lead_mail' = every automated mail
   // to one of the org's leads or customers becomes a draft in the outbox
@@ -493,6 +500,7 @@ export const SETTING_SCHEMA = {
   defaultLeadOwnerId: { type: 'string', scopes: O },
   salesMonthlyWonTarget: { type: 'number', nullable: true, scopes: O },
   salesLeaderboardForReps: { type: 'boolean', scopes: O },
+  salesTeamBookForReps: { type: 'boolean', scopes: O },
   outboundApproval: { type: 'enum', values: ['off', 'lead_mail'], scopes: O },
   firstContactAutoAdvance: { type: 'enum', values: ['off', 'on'], scopes: O },
   firstContactTargetStage: { type: 'string', scopes: O },
