@@ -311,7 +311,9 @@ export const SETTING_DEFAULTS = {
   // Outbound approval (#2960, docs/outbound-approval.md): 'off' (default) =
   // automated mail leaves as it always has; 'lead_mail' = every automated mail
   // to one of the org's leads or customers becomes a draft in the outbox
-  // (/admin/outbox) until an operator sends, schedules or discards it. The
+  // (/admin/outbox) until an operator sends, schedules or discards it;
+  // 'lead_mail_blocked' (#3771) = the same mail is blocked outright — never
+  // sent, never drafted, recorded SKIPPED. The
   // vocabulary and which mails are held: src/lib/outboundApprovalRule.ts.
   // MARKETING only: the settings API refuses it for any other vertical, and the
   // rule reads it as 'off' there whatever a row says.
@@ -493,7 +495,7 @@ export const SETTING_SCHEMA = {
   defaultLeadOwnerId: { type: 'string', scopes: O },
   salesMonthlyWonTarget: { type: 'number', nullable: true, scopes: O },
   salesLeaderboardForReps: { type: 'boolean', scopes: O },
-  outboundApproval: { type: 'enum', values: ['off', 'lead_mail'], scopes: O },
+  outboundApproval: { type: 'enum', values: ['off', 'lead_mail', 'lead_mail_blocked'], scopes: O },
   firstContactAutoAdvance: { type: 'enum', values: ['off', 'on'], scopes: O },
   firstContactTargetStage: { type: 'string', scopes: O },
   lateCancelHours: { type: 'number', scopes: P },

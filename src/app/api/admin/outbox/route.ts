@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withRequestScope } from '@/lib/requestContext';
 import { outboxActorFor } from '@/lib/outboxRoute';
-import { listDrafts, outboundApprovalOn, pendingDraftCount } from '@/lib/outboundDrafts';
+import { listDrafts, outboundApprovalModeFor, pendingDraftCount } from '@/lib/outboundDrafts';
 import { OUTBOUND_DRAFT_STATUSES, OUTBOUND_TRIGGERS, type OutboundDraftStatus } from '@/lib/outboundApprovalRule';
 import { requireRoleOrPermission } from '@/lib/authz';
 
@@ -27,7 +27,9 @@ export async function GET(request: Request) {
       rawStatus === 'ALL' || (OUTBOUND_DRAFT_STATUSES as readonly string[]).includes(rawStatus) ? (rawStatus as OutboundDraftStatus | 'ALL') : 'DRAFT';
     const rawTrigger = url.searchParams.get('trigger');
     const trigger = rawTrigger && (OUTBOUND_TRIGGERS as readonly string[]).includes(rawTrigger) ? rawTrigger : null;
-    const [list, approvalOn] = await Promise.all([listDrafts(actor, { status, trigger }), outboundApprovalOn(actor.orgId)]);
-    return NextResponse.json({ ...list, approvalOn, scope: actor.role === 'ADMIN' ? 'org' : 'own' });
+    const [list, mode] = await Promise.all([listDrafts(actor, { status, trigger }), outboundApprovalModeFor(actor.orgId)]);
+    // `approvalOn` = mail is being held here; `mode` also tells the screen when
+    // lead mail is blocked outright (#3771), so no drafts will appear.
+    return NextResponse.json({ ...list, approvalOn: mode === 'lead_mail', mode, scope: actor.role === 'ADMIN' ? 'org' : 'own' });
   });
 }
