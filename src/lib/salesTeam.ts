@@ -32,7 +32,8 @@ import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { resolvePipelineStages, outcomeStageKeysFrom, type ResolvedStage } from '@/lib/pipelineStages';
 import { currentPeriod, periodRange } from '@/lib/meteringRules';
 import { loadWinCounts } from '@/lib/salesTarget';
-import { teamBookCounts, type TeamBookCounts, type TeamBookSlice } from '@/lib/salesTeamRule';
+import { canSeeRepOverdue, teamBookCounts, type TeamBookCounts, type TeamBookSlice } from '@/lib/salesTeamRule';
+import { isSalesDispatcher } from '@/lib/salesDispatcher';
 import { loadSalesTeamBook } from '@/lib/salesTeamBook';
 import {
   canSeeLeaderboard,
@@ -75,7 +76,8 @@ export interface RepRow {
   stages: StageCount[];
   wonWeek: number;
   wonMonth: number;
-  overdue: number;
+  /** null when the viewer may not see per-person overdue counts (canSeeRepOverdue). */
+  overdue: number | null;
 }
 
 export interface SalesTeamView {
@@ -87,6 +89,10 @@ export interface SalesTeamView {
   /** One entry per currency — never converted, never summed across currencies. */
   pipelineValue: PipelineValue[];
   reps: RepRow[];
+  /** Overdue follow-ups across the whole team — shown to everyone. */
+  overdueTotal: number;
+  /** Whether the per-person overdue column is shown (and filled) for this viewer. */
+  repOverdueVisible: boolean;
   /** null when the viewer may not see the ranked leaderboard. */
   leaderboard: { week: RankedEntry[]; month: RankedEntry[] } | null;
   leaderboardForReps: boolean;
@@ -107,7 +113,8 @@ export async function loadSalesTeamView(session: Session, locale: Locale = 'en',
   // null means not this session — the page answers 404.
   const book = await loadSalesTeamBook(session, { status: 'active' }, now);
   if (!book) return null;
-  const [tenant, settingsOrg] = await Promise.all([tenantWhere(session), settingsOrgOf(session)]);
+  const [tenant, settingsOrg, dispatcher] = await Promise.all([tenantWhere(session), settingsOrgOf(session), isSalesDispatcher(session.user.id)]);
+  const repOverdueVisible = canSeeRepOverdue({ role: session.user.role, dispatcher });
   const [rawForReps, resolved] = await Promise.all([
     resolveSettingRaw('salesLeaderboardForReps', { orgId: settingsOrg }),
     resolvePipelineStages(session.user.orgId, locale),
@@ -183,7 +190,8 @@ export async function loadSalesTeamView(session: Session, locale: Locale = 'en',
       stages: repStageList,
       wonWeek: wins.week.get(p.id) ?? 0,
       wonMonth: wins.month.get(p.id) ?? 0,
-      overdue: p.overdue,
+      // Per-person overdue counts never reach a viewer who may not see them.
+      overdue: repOverdueVisible ? p.overdue : null,
     };
   });
 
@@ -203,6 +211,8 @@ export async function loadSalesTeamView(session: Session, locale: Locale = 'en',
       .map((v) => ({ currency: v.currency, totalMinor: v._sum.valueMinor ?? 0, deals: v._count._all }))
       .sort((a, b) => a.currency.localeCompare(b.currency)),
     reps,
+    overdueTotal: counts.overdueTotal,
+    repOverdueVisible,
     leaderboard,
     leaderboardForReps: forReps,
   };

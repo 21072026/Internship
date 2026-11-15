@@ -52,6 +52,9 @@ export default async function SalesTeamPage() {
             <div>
               <p className="text-2xl font-bold text-gray-900 tabular-nums" data-testid="sales-team-active">{view.activeTotal}</p>
               <p className="text-sm text-gray-500">{s.active}</p>
+              <p className="mt-1 text-xs text-gray-500" data-testid="sales-team-overdue-total">
+                {fill(s.overdueTeam, { n: view.overdueTotal })}
+              </p>
             </div>
           </div>
         </Card>
@@ -113,7 +116,8 @@ export default async function SalesTeamPage() {
                   <th scope="col" className="py-2 pr-3 font-medium min-w-[8rem]">{s.distribution}</th>
                   <th scope="col" className="py-2 pr-3 font-medium text-right">{lb.wonWeek}</th>
                   <th scope="col" className="py-2 pr-3 font-medium text-right">{lb.wonMonth}</th>
-                  <th scope="col" className="py-2 font-medium text-right">{s.overdue}</th>
+                  {/* Per-person overdue counts: admins and the dispatcher only (canSeeRepOverdue). */}
+                  {view.repOverdueVisible && <th scope="col" className="py-2 font-medium text-right">{s.overdue}</th>}
                 </tr>
               </thead>
               <tbody>
@@ -136,7 +140,9 @@ export default async function SalesTeamPage() {
                       </td>
                       <td className="py-2 pr-3 text-right tabular-nums text-gray-900" data-testid="rep-won-week">{r.wonWeek}</td>
                       <td className="py-2 pr-3 text-right tabular-nums text-gray-900" data-testid="rep-won-month">{r.wonMonth}</td>
-                      <td className="py-2 text-right tabular-nums text-gray-900" data-testid="rep-overdue">{r.overdue}</td>
+                      {view.repOverdueVisible && (
+                        <td className="py-2 text-right tabular-nums text-gray-900" data-testid="rep-overdue">{r.overdue}</td>
+                      )}
                     </tr>
                   );
                 })}

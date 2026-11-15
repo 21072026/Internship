@@ -186,12 +186,14 @@ test('a rep sees the team totals, the stages, both windows, the value and the pe
   await expect(r1.getByTestId('rep-open')).toHaveText('5');
   await expect(r1.getByTestId('rep-won-week')).toHaveText(String(wonWeek));
   await expect(r1.getByTestId('rep-won-month')).toHaveText(String(wonMonth));
-  await expect(r1.getByTestId('rep-overdue')).toHaveText('1');
   await expect(r1).toHaveAttribute('aria-current', 'true');
   const r2 = page.getByTestId(`sales-team-rep-${ids.rep2}`);
   await expect(r2.getByTestId('rep-open')).toHaveText('2');
   await expect(r2.getByTestId('rep-won-month')).toHaveText('0');
-  await expect(r2.getByTestId('rep-overdue')).toHaveText('0');
+  // A rep sees the team's overdue total only — no per-person overdue column.
+  await expect(page.getByTestId('sales-team-overdue-total')).toHaveText('1 follow-ups overdue across the team');
+  await expect(page.getByTestId('sales-team-reps').getByTestId('rep-overdue')).toHaveCount(0);
+  await expect(page.getByTestId('sales-team-reps').getByRole('columnheader', { name: 'Follow-ups overdue' })).toHaveCount(0);
   await expect(page.getByTestId(`sales-team-rep-${ids.admin}`).getByTestId('rep-open')).toHaveText('0');
 
   // The leaderboard (switched on for this org), ranked by wins.
@@ -207,6 +209,16 @@ test('a rep sees the team totals, the stages, both windows, the value and the pe
   // number is text beside its label).
   const axe = await new AxeBuilder({ page }).include('[data-testid="sales-team"]').withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
   expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
+});
+
+test('an admin sees the per-person overdue counts', async ({ page }) => {
+  test.slow();
+  await signInMarketing(page, E.admin, '/admin');
+  await gotoSettled(page, '/sales/team');
+  await expect(page.getByTestId('sales-team-overdue-total')).toHaveText('1 follow-ups overdue across the team');
+  await expect(page.getByTestId('sales-team-reps').getByRole('columnheader', { name: 'Follow-ups overdue' })).toBeVisible();
+  await expect(page.getByTestId(`sales-team-rep-${ids.rep1}`).getByTestId('rep-overdue')).toHaveText('1');
+  await expect(page.getByTestId(`sales-team-rep-${ids.rep2}`).getByTestId('rep-overdue')).toHaveText('0');
 });
 
 test("the stage counts are the reps' boards added up", async ({ browser }) => {

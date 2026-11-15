@@ -13,6 +13,8 @@ export interface TeamBookCounts {
   people: Array<{ id: string; fullName: string; byStage: Map<string, number>; overdue: number }>;
   /** The per-seller stage split is only known when the book was not truncated. */
   splitKnown: boolean;
+  /** Overdue follow-ups of every owner, listed seller or not (a deactivated one too). */
+  overdueTotal: number;
 }
 
 /** The shape of the team book loader's answer that this page reads (src/lib/salesTeamBook.ts, WP2a). */
@@ -51,6 +53,7 @@ export function teamBookCounts(
   return {
     byStage: new Map(book.byStage.map((g) => [g.stage, g.count])),
     splitKnown: !book.truncated,
+    overdueTotal: [...overdue.values()].reduce((n, v) => n + v, 0),
     people: [...names.entries()]
       .map(([id, fullName]) => ({
         id,
@@ -63,3 +66,15 @@ export function teamBookCounts(
   };
 }
 
+
+/**
+ * Who sees each seller's OVERDUE follow-up count on the team page: the org's
+ * admins and the sales dispatcher — the people who act on it. A rep sees only
+ * the team total (orchestrator decision 2026-11-15): the page is there for
+ * motivation, and a per-person overdue column in front of the whole team
+ * would read as a list of who is behind. Wins and open records stay visible
+ * to everyone.
+ */
+export function canSeeRepOverdue(viewer: { role: string | null | undefined; dispatcher: boolean }): boolean {
+  return viewer.role === 'ADMIN' || viewer.dispatcher;
+}
