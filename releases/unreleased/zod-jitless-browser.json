@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**CSP: zod no longer probes `eval` in the browser (#3642).** Zod 4's one-off `new Function` probe was reported by the strict report-only CSP on every page that validates anything (the sign-in page above all); in CI those reports filled `/api/csp-report`'s per-IP limit and the 429s failed the smoke gate. The browser now runs zod `jitless` (`src/lib/zodBrowserConfig.ts`); the server keeps the JIT."
-}

@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "Sales lead page: the last interaction now sits right under the follow-up, the trial-end, contract-end, win-back and estimated-value panels share a grid instead of each taking a full-width row, the follow-up and the interaction log each say what they are for (what comes next vs. what already happened, with a visible label on the interaction date), and \"On your book since\" reads \"Assigned to you on\" with a hint that it is not the trial start (#3652, #3653, #3654).",
-  "notes": {
-    "en": ["Lead page: the last interaction is shown right under the follow-up, the date and value panels sit side by side, and every section says what it is for."],
-    "tr": ["Müşteri adayı sayfası: son etkileşim takibin hemen altında, tarih ve değer kutuları yan yana; her bölüm ne için olduğunu söylüyor."],
-    "de": ["Lead-Seite: Die letzte Interaktion steht direkt unter dem Follow-up, Datums- und Wertfelder stehen nebeneinander, und jeder Bereich sagt, wofür er da ist."]
-  }
-}
