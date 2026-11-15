@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Sales lead page: the follow-up and the interactions sit side by side at the top (the separate \"last interaction\" box is gone); the follow-up offers quick dates and \"Complete follow-up\", which opens the interaction form pre-filled; the contact's phone and e-mail are `tel:`/`mailto:` links that also open an interaction draft; `N` opens the interaction form (#3737–#3742).",
+  "notes": {
+    "en": ["Lead page: follow-up and interactions now sit side by side at the top. Pick a follow-up date in one click, complete a follow-up straight into the interaction log, call or e-mail the contact with one click, and press N to log an interaction."],
+    "tr": ["Lead sayfası: takip ve etkileşimler artık en üstte yan yana. Takip tarihini tek tıkla seç, takibi tamamlayıp doğrudan etkileşim olarak kaydet, kişiyi tek tıkla ara ya da e-posta yaz, etkileşim eklemek için N'ye bas."],
+    "de": ["Lead-Seite: Wiedervorlage und Interaktionen stehen jetzt oben nebeneinander. Termin mit einem Klick wählen, eine Wiedervorlage direkt als Interaktion erfassen, den Kontakt mit einem Klick anrufen oder anschreiben, und mit N eine Interaktion erfassen."]
+  }
+}

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import { ArrowLeft, MessageSquare } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -13,19 +13,17 @@ import { formatDate } from '@/lib/relativeTime';
 import { getServerDictionary } from '@/i18n/server';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { SalesRecordPanels } from '@/components/sales/SalesRecordPanels';
-import { SalesLogInteraction } from '@/components/sales/SalesLogInteraction';
+import { SalesInteractionsCard } from '@/components/sales/SalesInteractionsCard';
 import { LeadContactEditor } from '@/components/sales/LeadContactEditor';
 import { shownEmail } from '@/lib/leadEmail';
 import { LeadPageHandoff } from '@/components/sales/LeadPageHandoff';
 import { canHandOffLead } from '@/lib/leadHandoff';
-import { contentLang } from '@/lib/contentLanguage';
 
 // One of the rep's own records (#2580): who the lead is, the account behind it,
 // its stage, the follow-up, trial-end and estimated-value (#2422) editors, what happened last and a
 // form to log the next call or meeting. The follow-up (what comes next) and the
-// last interaction (what happened last) sit together at the top (#3653).
+// interactions (what already happened) sit side by side at the top (#3737).
 //
 // Found only as `id AND mentorId = self AND the rep's tenant` (any owner for a
 // sales dispatcher, #3656, still inside the tenant) — someone else's
@@ -110,37 +108,6 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
     phone: company?.contactPhone ?? relation.mentee.phone,
     position: company?.contactPosition ?? null,
   };
-  const last = interactions[0] ?? null;
-
-  // The newest interaction, right under the follow-up (#3653); the full list stays below.
-  const lastInteraction = (
-    // Same frame as the follow-up panel above it, so the two read as one block.
-    <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="sales-lead-last-interaction">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
-          <MessageSquare className="h-4 w-4 text-gray-500 dark:text-gray-400" aria-hidden="true" />
-          {s.lastInteraction}
-        </p>
-        {interactions.length > 0 && (
-          <a href="#sales-lead-interactions-card" className="text-xs text-blue-600 hover:underline dark:text-blue-400">
-            {s.allInteractions}
-          </a>
-        )}
-      </div>
-      {last ? (
-        <div className="mt-2 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <InteractionTypeBadge type={last.type} />
-            <span className="text-gray-500">{date(last.date)}</span>
-          </div>
-          {last.subject && <p className="mt-1 font-medium text-gray-900 dark:text-gray-100">{last.subject}</p>}
-          <p lang={contentLang(last.notes)} className="mt-0.5 line-clamp-3 text-gray-600 dark:text-gray-300">{last.notes}</p>
-        </div>
-      ) : (
-        <p className="mt-2 text-sm text-gray-500" data-testid="sales-lead-last-interaction-empty">{s.lastInteractionEmpty}</p>
-      )}
-    </div>
-  );
 
   return (
     <div data-testid="sales-lead">
@@ -186,53 +153,32 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
           currency: relation.value?.currency ?? null,
           source: relation.value?.source ?? null,
         }}
-        lastInteraction={lastInteraction}
+        interactions={
+          <SalesInteractionsCard
+            relationId={relation.id}
+            canLog={relation.status === 'ACTIVE'}
+            interactions={interactions.map((i) => ({ id: i.id, date: i.date.toISOString(), type: i.type, subject: i.subject, notes: i.notes }))}
+          />
+        }
+        contact={
+          <Card>
+            <CardHeader>
+              <CardTitle>{s.contact}</CardTitle>
+            </CardHeader>
+            {/* The person — editable by the record's rep (#3655); the account and the date below are not.
+                The phone and e-mail are tel:/mailto: links that also open an interaction draft (#3741). */}
+            <LeadContactEditor relationId={relation.id} initial={contact} canEdit={!!company} logOnContact={relation.status === 'ACTIVE'} />
+            <dl className="mt-4 grid grid-cols-1 gap-4 border-t border-gray-100 pt-4 dark:border-gray-800" data-testid="sales-lead-contact">
+              <Field label={s.company} value={company?.name} />
+              <Field label={s.since} value={date(relation.startDate)} hint={s.sinceHint} testId="sales-lead-since" />
+            </dl>
+            <p className="mt-4 text-sm">
+              <Link href="/sales/board" className="text-blue-600 hover:underline">{s.openBoard}</Link>
+            </p>
+          </Card>
+        }
       />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>{s.contact}</CardTitle>
-          </CardHeader>
-          {/* The person — editable by the record's rep (#3655); the account and the date below are not. */}
-          <LeadContactEditor relationId={relation.id} initial={contact} canEdit={!!company} />
-          <dl className="mt-4 grid grid-cols-1 gap-4 border-t border-gray-100 pt-4 dark:border-gray-800" data-testid="sales-lead-contact">
-            <Field label={s.company} value={company?.name} />
-            <Field label={s.since} value={date(relation.startDate)} hint={s.sinceHint} testId="sales-lead-since" />
-          </dl>
-          <p className="mt-4 text-sm">
-            <Link href="/sales/board" className="text-blue-600 hover:underline">{s.openBoard}</Link>
-          </p>
-        </Card>
-
-        <Card id="sales-lead-interactions-card" className="scroll-mt-20">
-          <CardHeader>
-            <CardTitle>{s.interactions}</CardTitle>
-            <p className="text-sm text-gray-600 dark:text-gray-400">{s.interactionsHint}</p>
-          </CardHeader>
-          {relation.status === 'ACTIVE' && (
-            <div className="mb-3">
-              <SalesLogInteraction relationId={relation.id} />
-            </div>
-          )}
-          {interactions.length === 0 ? (
-            <p className="text-sm text-gray-500">{s.interactionsEmpty}</p>
-          ) : (
-            <ul className="space-y-3" data-testid="sales-lead-interactions">
-              {interactions.map((i) => (
-                <li key={i.id} className="text-sm">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <InteractionTypeBadge type={i.type} />
-                    <span className="text-gray-500">{date(i.date)}</span>
-                  </div>
-                  {i.subject && <p className="mt-1 font-medium text-gray-900 dark:text-gray-100">{i.subject}</p>}
-                  <p lang={contentLang(i.notes)} className="mt-0.5 line-clamp-2 text-gray-600">{i.notes}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
     </div>
   );
 }
