@@ -230,7 +230,7 @@ const en = {
       focusRing: 'Keyboard focus is always visible: a ring on links, buttons, inputs and selects, thickened when the operating system asks for more contrast.',
       dialogs: 'Dialogs take focus when they open, keep Tab inside while they are open, close on Escape, and hand focus back to the control that opened them.',
       targetSize: 'Interactive controls are at least 44×44 CSS pixels on touch viewports (WCAG 2.2 Target Size), while pointer-driven desktop layouts keep their density.',
-      dragAlternative: 'The pipeline board can be operated without drag-and-drop: every card carries a stage select that moves the mentorship with the keyboard alone.',
+      dragAlternative: 'A stage can be changed without drag-and-drop: every card on the pipeline board links to the mentorship, and the stage select there works with the keyboard alone.',
       textSize: 'Text size is a setting inside the app, on top of whatever browser zoom already does.',
       osPreferences: 'The app honours what the operating system says about the person using it — reduced motion, increased contrast and forced-colours (high-contrast) modes each have their own rules, asserted by an end-to-end test.',
       languages: 'The interface exists in English, Turkish and German with key parity enforced in CI, and each page declares its language so a screen reader picks the right voice.',
@@ -3704,7 +3704,7 @@ const en = {
     noMenteesAssigned: 'No mentees assigned yet',
     noMenteesHint: 'Add your first mentee or share your application link to start.',
     interactionLogsSubtitle: 'All your logged interactions with mentees',
-    boardSubtitle: 'Track your mentees by stage — drag a card, or use the stage menu on it, to change its stage',
+    boardSubtitle: 'Track your mentees by stage — drag a card to change its stage, or open it to change the stage there',
     // #1366: empty stages collapse to a strip; the toggle widens them again.
     boardShowEmpty: 'Show empty stages',
     boardTotal: '{n} on the board',
@@ -3781,7 +3781,7 @@ const en = {
     menteeD: 'Their stage, what to do now, how long they have been waiting, and every step still ahead.',
     menteeAlt: 'The mentee journey screen: the current stage with a progress bar, a “what to do now” tip, the time spent at this stage, and the list of all stages with the completed ones ticked.',
     mentorT: 'Mentors see everyone on one board',
-    mentorD: 'Each mentee is a card in their stage’s column — drag it, or use its stage menu, to move it on.',
+    mentorD: 'Each mentee is a card in their stage’s column — drag it to move it on, or open it to change the stage there.',
     mentorAlt: 'The mentor board: mentee cards sorted into stage columns, each card showing the university, days in the stage and the number of interactions.',
     companyT: 'Companies review candidates, not CVs in an inbox',
     companyD: 'A partner company sees the candidate’s profile and stage, and tells the mentor what it thinks in one click.',
@@ -3832,7 +3832,7 @@ const en = {
       },
     },
     help: {
-      board: 'Each column is a pipeline stage. Drag a card, or use its stage menu, to move it on; the change is recorded and the people involved are notified.',
+      board: 'Each column is a pipeline stage. Drag a card to move it on, or open it to change the stage there; the change is recorded and the people involved are notified.',
     },
   },
   tenantWelcome: {
@@ -4354,7 +4354,6 @@ const en = {
   board: {
     loadMore: 'Show more ({shown} of {total})',
     loadMoreFailed: 'Could not load more cards',
-    moveTo: 'Move to stage',
     stageFilter: 'Stage',
     stageChanged: 'Stage updated',
     stageChangeFailed: 'Could not change the stage',
@@ -4398,7 +4397,7 @@ const en = {
     },
   },
   adminBoard: {
-    subtitle: 'All mentees across every mentor — drag a card, or use the stage menu on it, to change its stage',
+    subtitle: 'All mentees across every mentor — drag a card to change its stage, or open it to change the stage there',
     searchPlaceholder: 'Find a mentee or mentor...',
     hideEmpty: 'Hide empty stages',
     ownerFilter: 'Owner',
@@ -12811,7 +12810,7 @@ const tr: Dict = {
       focusRing: 'Klavye odağı her zaman görünür: bağlantılarda, düğmelerde, giriş alanlarında ve açılır menülerde bir halka — işletim sistemi daha yüksek kontrast istediğinde kalınlaşıyor.',
       dialogs: 'Diyaloglar açıldığında odağı alıyor, açık kaldıkları sürece Tab’i içeride tutuyor, Escape ile kapanıyor ve odağı kendilerini açan denetime geri veriyor.',
       targetSize: 'Etkileşimli denetimler dokunmatik ekranlarda en az 44×44 CSS pikseli (WCAG 2.2 Hedef Boyutu); imleçle kullanılan masaüstü düzenleri ise yoğunluğunu koruyor.',
-      dragAlternative: 'Pipeline panosu sürükle-bırak olmadan da kullanılabiliyor: her kartta, ilişkiyi yalnızca klavyeyle taşıyan bir aşama seçici var.',
+      dragAlternative: 'Aşama sürükle-bırak olmadan da değiştirilebiliyor: pipeline panosundaki her kart ilişkinin sayfasına bağlanıyor ve oradaki aşama seçici yalnızca klavyeyle çalışıyor.',
       textSize: 'Yazı boyutu, tarayıcı yakınlaştırmasının üstüne ek olarak uygulama içinde bir ayar.',
       osPreferences: 'Uygulama, işletim sisteminin kullanıcı hakkında söylediklerine uyuyor — azaltılmış hareket, artırılmış kontrast ve zorunlu renkler (yüksek kontrast) kiplerinin her birinin kendi kuralları var ve bir uçtan uca test bunları doğruluyor.',
       languages: 'Arayüz İngilizce, Türkçe ve Almanca olarak var; anahtar eşliği CI’da denetleniyor ve her sayfa kendi dilini bildiriyor, böylece ekran okuyucu doğru sesi seçiyor.',
@@ -16209,7 +16208,7 @@ const tr: Dict = {
     noMenteesAssigned: 'Henüz atanmış mentee yok',
     noMenteesHint: 'Başlamak için ilk mentee’ni ekle veya başvuru linkini paylaş.',
     interactionLogsSubtitle: 'Mentee’lerinle tüm etkileşim kayıtların',
-    boardSubtitle: 'Mentee’lerini aşamalara göre takip et — aşamayı kartı sürükleyerek ya da kartın aşama menüsünden değiştir',
+    boardSubtitle: 'Mentee’lerini aşamalara göre takip et — aşamayı kartı sürükleyerek ya da kartı açıp oradan değiştir',
     boardShowEmpty: 'Boş aşamaları göster',
     boardTotal: 'Panoda {n} kişi',
     boardEmptyStage: '{stage} — boş, kartı buraya bırak',
@@ -16276,7 +16275,7 @@ const tr: Dict = {
     menteeD: 'Bulunduğu aşama, şimdi ne yapması gerektiği, ne kadar süredir beklediği ve önündeki tüm adımlar.',
     menteeAlt: 'Mentee yolculuk ekranı: ilerleme çubuğuyla mevcut aşama, bir “şimdi ne yapmalı” ipucu, bu aşamada geçen süre ve tamamlananları işaretli tüm aşamaların listesi.',
     mentorT: 'Mentor herkesi tek panoda görür',
-    mentorD: 'Her mentee kendi aşamasının sütununda bir kart — ilerletmek için sürükleyin ya da kartın aşama menüsünü kullanın.',
+    mentorD: 'Her mentee kendi aşamasının sütununda bir kart — ilerletmek için sürükleyin ya da kartı açıp aşamayı oradan değiştirin.',
     mentorAlt: 'Mentor panosu: aşama sütunlarına dizilmiş mentee kartları; her kartta üniversite, aşamada geçen gün ve etkileşim sayısı.',
     companyT: 'Şirketler gelen kutusundaki CV’leri değil, adayları değerlendirir',
     companyD: 'Partner şirket adayın profilini ve aşamasını görür, görüşünü mentora tek tıkla iletir.',
@@ -16320,7 +16319,7 @@ const tr: Dict = {
       },
     },
     help: {
-      board: 'Her sütun bir süreç aşaması. Bir kartı ilerletmek için onu sürükle ya da aşama menüsünü kullan; değişiklik kaydedilir ve ilgili kişilere bildirilir.',
+      board: 'Her sütun bir süreç aşaması. Bir kartı ilerletmek için onu sürükle ya da açıp aşamayı oradan değiştir; değişiklik kaydedilir ve ilgili kişilere bildirilir.',
     },
   },
   tenantWelcome: {
@@ -16842,7 +16841,6 @@ const tr: Dict = {
   board: {
     loadMore: 'Daha fazla göster ({total} kartın {shown} tanesi)',
     loadMoreFailed: 'Daha fazla kart yüklenemedi',
-    moveTo: 'Aşamaya taşı',
     stageFilter: 'Aşama',
     stageChanged: 'Aşama güncellendi',
     stageChangeFailed: 'Aşama değiştirilemedi',
@@ -16884,7 +16882,7 @@ const tr: Dict = {
     },
   },
   adminBoard: {
-    subtitle: 'Tüm mentorların tüm mentee’leri — aşamayı kartı sürükleyerek ya da kartın aşama menüsünden değiştir',
+    subtitle: 'Tüm mentorların tüm mentee’leri — aşamayı kartı sürükleyerek ya da kartı açıp oradan değiştir',
     searchPlaceholder: 'Mentee veya mentor bul...',
     hideEmpty: 'Boş aşamaları gizle',
     ownerFilter: 'Sorumlu',
@@ -25148,7 +25146,7 @@ const de: Dict = {
       focusRing: 'Der Tastaturfokus ist immer sichtbar: ein Ring an Links, Schaltflächen, Eingabefeldern und Auswahlfeldern, dicker, wenn das Betriebssystem mehr Kontrast verlangt.',
       dialogs: 'Dialoge übernehmen beim Öffnen den Fokus, halten Tab im Dialog, schließen mit Escape und geben den Fokus an das Element zurück, das sie geöffnet hat.',
       targetSize: 'Bedienelemente sind auf Touch-Viewports mindestens 44×44 CSS-Pixel groß (WCAG 2.2 Zielgröße), während zeigergesteuerte Desktop-Layouts ihre Dichte behalten.',
-      dragAlternative: 'Das Pipeline-Board lässt sich ohne Drag-and-drop bedienen: jede Karte hat ein Phasen-Auswahlfeld, das die Mentorenschaft allein mit der Tastatur verschiebt.',
+      dragAlternative: 'Eine Phase lässt sich ohne Drag-and-drop ändern: Jede Karte im Pipeline-Board führt zur Mentorenschaft, und das Phasen-Auswahlfeld dort funktioniert allein mit der Tastatur.',
       textSize: 'Die Schriftgröße ist eine Einstellung in der App — zusätzlich zu dem, was der Browser-Zoom ohnehin leistet.',
       osPreferences: 'Die App richtet sich danach, was das Betriebssystem über die Person davor sagt: reduzierte Bewegung, erhöhter Kontrast und erzwungene Farben (Hochkontrastmodus) haben je eigene Regeln, abgesichert durch einen End-to-End-Test.',
       languages: 'Die Oberfläche gibt es auf Englisch, Türkisch und Deutsch, mit in der CI erzwungener Schlüsselgleichheit, und jede Seite deklariert ihre Sprache, damit ein Screenreader die richtige Stimme wählt.',
@@ -28547,7 +28545,7 @@ const de: Dict = {
     noMenteesAssigned: 'Noch keine Mentees zugewiesen',
     noMenteesHint: 'Füge deinen ersten Mentee hinzu oder teile deinen Bewerbungslink.',
     interactionLogsSubtitle: 'Alle deine protokollierten Interaktionen mit Mentees',
-    boardSubtitle: 'Verfolge deine Mentees nach Phase — ziehe eine Karte oder nutze ihr Phasenmenü, um die Phase zu ändern',
+    boardSubtitle: 'Verfolge deine Mentees nach Phase — ziehe eine Karte, um die Phase zu ändern, oder öffne sie und ändere die Phase dort',
     boardShowEmpty: 'Leere Phasen anzeigen',
     boardTotal: '{n} auf dem Board',
     boardEmptyStage: '{stage} — leer, Karte hier ablegen',
@@ -28614,7 +28612,7 @@ const de: Dict = {
     menteeD: 'Ihre Phase, was jetzt zu tun ist, wie lange sie schon warten – und jeder Schritt, der noch vor ihnen liegt.',
     menteeAlt: 'Die Mentee-Ansicht der eigenen Reise: die aktuelle Phase mit Fortschrittsbalken, ein Hinweis „Was jetzt zu tun ist“, die Zeit in dieser Phase und die Liste aller Phasen, die abgeschlossenen abgehakt.',
     mentorT: 'Mentoren sehen alle auf einem Board',
-    mentorD: 'Jeder Mentee ist eine Karte in der Spalte seiner Phase – per Ziehen oder über das Phasenmenü der Karte geht es weiter.',
+    mentorD: 'Jeder Mentee ist eine Karte in der Spalte seiner Phase – per Ziehen geht es weiter, oder du öffnest die Karte und änderst die Phase dort.',
     mentorAlt: 'Das Mentor-Board: Mentee-Karten in Phasenspalten, jede mit Hochschule, Tagen in der Phase und Anzahl der Interaktionen.',
     companyT: 'Unternehmen sichten Kandidaten statt Lebensläufe im Postfach',
     companyD: 'Ein Partnerunternehmen sieht Profil und Phase des Kandidaten und gibt dem Mentor mit einem Klick seine Einschätzung.',
@@ -28658,7 +28656,7 @@ const de: Dict = {
       },
     },
     help: {
-      board: 'Jede Spalte ist eine Pipeline-Phase. Zieh eine Karte oder nutze ihr Phasenmenü, um sie voranzubringen; die Änderung wird gespeichert und die Beteiligten werden benachrichtigt.',
+      board: 'Jede Spalte ist eine Pipeline-Phase. Zieh eine Karte, um sie voranzubringen, oder öffne sie und ändere die Phase dort; die Änderung wird gespeichert und die Beteiligten werden benachrichtigt.',
     },
   },
   tenantWelcome: {
@@ -29180,7 +29178,6 @@ const de: Dict = {
   board: {
     loadMore: 'Mehr anzeigen ({shown} von {total})',
     loadMoreFailed: 'Weitere Karten konnten nicht geladen werden',
-    moveTo: 'In Phase verschieben',
     stageFilter: 'Phase',
     stageChanged: 'Phase aktualisiert',
     stageChangeFailed: 'Phase konnte nicht geändert werden',
@@ -29222,7 +29219,7 @@ const de: Dict = {
     },
   },
   adminBoard: {
-    subtitle: 'Alle Mentees aller Mentoren — ziehe eine Karte oder nutze ihr Phasenmenü, um die Phase zu ändern',
+    subtitle: 'Alle Mentees aller Mentoren — ziehe eine Karte, um die Phase zu ändern, oder öffne sie und ändere die Phase dort',
     searchPlaceholder: 'Mentee oder Mentor finden...',
     hideEmpty: 'Leere Phasen ausblenden',
     ownerFilter: 'Zuständig',

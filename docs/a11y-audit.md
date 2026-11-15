@@ -199,8 +199,9 @@ the results can be compared.
 
 1. Reach the board's first card using only the keyboard, and read out its
    mentee, its stage and its interaction count.
-2. Move that card to another stage without a mouse (the per-card stage select is
-   the drag-and-drop alternative) and say what, if anything, is announced.
+2. Move that card to another stage without a mouse (open the card; the stage
+   select on the record is the drag-and-drop alternative) and say what, if
+   anything, is announced.
 3. Reach a stage column that is off-screen to the right — including an **empty**
    one, which holds nothing focusable.
 4. Type in the board search and report whether the number of matches is spoken,
@@ -238,11 +239,12 @@ column means the finding comes from reading the markup, not from a screen reader
 Recorded deliberately: these are the parts a re-audit should not re-litigate,
 and breaking one is a regression.
 
-- **Drag-and-drop has a real keyboard alternative.** Every board card carries a
-  native `<select>` with an `aria-label` (`CardStageSelect`), which is also the
-  touch path on a phone. It is drawn as an icon — the select is transparent and
-  stretched over it — so it is still the native control, not a custom widget.
-  Asserted end-to-end in `e2e/board-a11y.spec.ts`.
+- **Drag-and-drop has a real keyboard alternative.** A board card's name is a
+  link to the record, and the stage select there (`data-testid="stage-select"`)
+  makes the same move; it is also the touch path on a phone. The per-card select
+  the boards used to carry was removed on 2026-11-15 by the maintainer's decision
+  (it crowded the card), so the alternative is one navigation away, not on the
+  card. Asserted end-to-end in `e2e/board-a11y.spec.ts`.
 - **The board renders either the mobile list or the desktop columns, never
   both** (`useIsNarrow`). Nothing is duplicated in the accessibility tree — the
   usual `lg:hidden` trick would have every card announced twice.

@@ -14,7 +14,6 @@ import { stageGateFrom, useStageGateDialog } from '@/components/StageGateDialog'
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
 import { BoardStageFilter } from '@/components/board/BoardStageFilter';
-import { CardStageSelect } from '@/components/board/CardStageSelect';
 import { BoardPhaseGroups } from '@/components/board/BoardPhaseGroups';
 import { BoardColumnHeader } from '@/components/board/BoardColumnHeader';
 import { boardColumnTone } from '@/lib/boardColumnTone';
@@ -217,7 +216,7 @@ export default function AdminBoardPage() {
     }
   };
 
-  // Gate for drag-and-drop and the per-card stage select: a move into a
+  // Gate for drag-and-drop: a move into a
   // negative/off-path stage collects a reason first (#810); everything else
   // goes straight to moveTo as before.
   // The colleague strip (LeadHandoff.tsx): a MARKETING board only — the team
@@ -334,12 +333,6 @@ export default function AdminBoardPage() {
             <GraduationCap className="h-3 w-3" />
             {r._count.interactions}
           </span>
-          {/* Keyboard/touch-accessible alternative to drag-and-drop. */}
-          <CardStageSelect
-            stages={stages}
-            value={r.pipelineStatus}
-            onChange={(next) => requestMove(r.id, next)}
-          />
         </div>
         {r.nextActionAt && <div className="mt-1"><FollowUpChip at={r.nextActionAt} /></div>}
         <div className="mt-1 empty:hidden"><TrialEndChip pipelineStatus={r.pipelineStatus} trialEndsAt={r.trialEndsAt} /></div>
