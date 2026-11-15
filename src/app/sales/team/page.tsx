@@ -231,7 +231,7 @@ function MiniDistribution({
   fill: (text: string, values: Record<string, string | number>) => string;
   barText: string;
 }) {
-  if (total === 0) return <span className="text-gray-400">–</span>;
+  if (total === 0 || stages.length === 0) return <span className="text-gray-500">–</span>;
   const text = stages.map((st) => fill(barText, { label: st.label, n: st.count, total })).join(', ');
   return (
     <>

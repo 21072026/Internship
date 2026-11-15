@@ -32,6 +32,7 @@ import { resolveSettingRaw } from '@/lib/settingsResolver';
 import { resolvePipelineStages, outcomeStageKeysFrom, type ResolvedStage } from '@/lib/pipelineStages';
 import { currentPeriod, periodRange } from '@/lib/meteringRules';
 import { loadWinCounts } from '@/lib/salesTarget';
+import { teamBookCounts, type TeamBookCounts, type TeamBookSlice } from '@/lib/salesTeamRule';
 import {
   canSeeLeaderboard,
   earliestStart,
@@ -166,11 +167,13 @@ export async function loadSalesTeamView(session: Session, locale: Locale = 'en',
 
   const reps: RepRow[] = book.people.map((p) => {
     const mine = p.byStage;
-    const repStageList = stages.map((s) => ({ ...s, count: mine.get(s.key) ?? 0 })).filter((s) => s.count > 0);
+    const repStageList = book.splitKnown ? stages.map((s) => ({ ...s, count: mine.get(s.key) ?? 0 })).filter((s) => s.count > 0) : [];
+    let open = 0;
+    for (const n of mine.values()) open += n;
     return {
       userId: p.id,
       name: p.fullName,
-      open: repStageList.reduce((n, s) => n + s.count, 0),
+      open,
       stages: repStageList,
       wonWeek: wins.week.get(p.id) ?? 0,
       wonMonth: wins.month.get(p.id) ?? 0,
@@ -200,25 +203,31 @@ export async function loadSalesTeamView(session: Session, locale: Locale = 'en',
 }
 
 /**
- * The team's open book in counts: active records per stage, and per seller
- * (every active MENTOR/ADMIN of the tenant) their records per stage and how
- * many of their follow-ups are overdue. Names and counts only.
- *
- * TEMPORARY — the team book loader (`src/lib/salesTeamBook.ts`, WP2a) is the
- * one reader of this data; when it lands this function becomes a thin adapter
- * over it and its queries go away. Kept to this one function so that swap
- * touches nothing else.
+ * TEMPORARY until WP2a: stands in for `loadSalesTeamBook(session, { status: 'active' })`
+ * with the same answer shape (TeamBookSlice) and the same counting rule, so
+ * the swap is one call. Not merged in this form.
  */
-export interface TeamBookCounts {
-  byStage: Map<string, number>;
-  people: Array<{ id: string; fullName: string; byStage: Map<string, number>; overdue: number }>;
+async function loadTeamBookSlice(tenant: Awaited<ReturnType<typeof tenantWhere>>): Promise<TeamBookSlice> {
+  const active = withinTenant({ status: 'ACTIVE' as const }, tenant);
+  const [byStage, byOwner, rows] = await Promise.all([
+    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: active, _count: { _all: true } }),
+    prisma.mentorshipRelation.groupBy({ by: ['mentorId'], where: active, _count: { _all: true } }),
+    prisma.mentorshipRelation.findMany({ where: active, select: { mentorId: true, pipelineStatus: true }, orderBy: { startDate: 'desc' }, take: 500 }),
+  ]);
+  const total = byStage.reduce((n, g) => n + g._count._all, 0);
+  return {
+    rows: rows.map((r) => ({ ownerId: r.mentorId, pipelineStatus: r.pipelineStatus as string })),
+    byStage: byStage.map((g) => ({ stage: g.pipelineStatus as string, count: g._count._all })),
+    byOwner: byOwner.map((g) => ({ ownerId: g.mentorId, ownerName: '', count: g._count._all })),
+    truncated: total > rows.length,
+  };
 }
 
 async function loadTeamBookCounts(tenant: Awaited<ReturnType<typeof tenantWhere>>, now: Date): Promise<TeamBookCounts> {
-  const active = withinTenant({ status: 'ACTIVE' as const }, tenant);
-  const [byStage, byRepStage, overdueByRep, people] = await Promise.all([
-    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: active, _count: { _all: true } }),
-    prisma.mentorshipRelation.groupBy({ by: ['mentorId', 'pipelineStatus'], where: active, _count: { _all: true } }),
+  const [book, overdueByRep, people] = await Promise.all([
+    loadTeamBookSlice(tenant),
+    // Overdue follow-ups: a COUNT per owner only — the team book deliberately
+    // carries no next-action field, and nothing about the follow-up leaves here.
     prisma.mentorshipRelation.groupBy({
       by: ['mentorId'],
       where: withinTenant({ status: 'ACTIVE' as const, nextActionAt: { lt: startOfUtcDay(now) } }, tenant),
@@ -231,15 +240,5 @@ async function loadTeamBookCounts(tenant: Awaited<ReturnType<typeof tenantWhere>
       take: REP_LIMIT,
     }),
   ]);
-  const repStages = new Map<string, Map<string, number>>();
-  for (const g of byRepStage) {
-    const m = repStages.get(g.mentorId) ?? new Map<string, number>();
-    m.set(g.pipelineStatus as string, g._count._all);
-    repStages.set(g.mentorId, m);
-  }
-  const overdue = new Map(overdueByRep.map((g) => [g.mentorId, g._count._all]));
-  return {
-    byStage: new Map(byStage.map((g) => [g.pipelineStatus as string, g._count._all])),
-    people: people.map((p) => ({ id: p.id, fullName: p.fullName, byStage: repStages.get(p.id) ?? new Map(), overdue: overdue.get(p.id) ?? 0 })),
-  };
+  return teamBookCounts(book, people, new Map(overdueByRep.map((g) => [g.mentorId, g._count._all])));
 }
