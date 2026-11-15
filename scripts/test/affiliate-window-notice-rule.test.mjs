@@ -163,6 +163,17 @@ test('portal: a passed end reads as ended; no valid payment or no percent phase 
   assert.equal(customerWindows({ plan: plan({ percentBps: 0 }), partner: ACTIVE, evaluation: ev, now }).size, 0);
 });
 
+test('portal: an invalid payment before the first valid one does not read as "unlimited" (#3729)', () => {
+  const now = new Date('2026-03-01T00:00:00Z');
+  for (const invalid of [pay('p0', 'c1', '2026-01-02T10:00:00Z', 0), pay('p0', 'c1', '2026-01-02T10:00:00Z', 500, 'XXX')]) {
+    const ev = evaluatePartner(plan(), ACTIVE, [invalid, pay('p1', 'c1', '2026-01-05T10:00:00Z')]);
+    assert.notEqual(ev.payments[0].customerOrdinal, null, 'the invalid payment keeps the customer’s ordinal — the trap');
+    const w = customerWindows({ plan: plan(), partner: ACTIVE, evaluation: ev, now }).get('c1');
+    // The window runs from the first VALID payment, as the engine says.
+    assert.deepEqual(w, { kind: 'ends', endsAt: customerWindowEndsAt(plan(), new Date('2026-01-05T10:00:00Z')), ended: false, byNotice: false });
+  }
+});
+
 test('portal: no window limit is "unlimited"; a STOP_ALL termination ends it first', () => {
   const now = new Date('2026-03-01T00:00:00Z');
   const payments = [pay('p1', 'c1', '2026-01-05T10:00:00Z')];
