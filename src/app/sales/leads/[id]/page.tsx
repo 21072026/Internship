@@ -16,6 +16,7 @@ import { getServerDictionary } from '@/i18n/server';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { SalesRecordPanels } from '@/components/sales/SalesRecordPanels';
+import { PlanMeetingButton } from '@/app/sales/calendar/PlanMeetingDialog';
 import { SalesInteractionsCard } from '@/components/sales/SalesInteractionsCard';
 import { LeadContactEditor } from '@/components/sales/LeadContactEditor';
 import { shownEmail } from '@/lib/leadEmail';
@@ -157,6 +158,8 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
         <div className="flex flex-wrap items-center gap-2">
           {/* Hand the record to a colleague from here too (#3657); only an open record moves. */}
           {canHandOff && <LeadPageHandoff relationId={relation.id} leadName={relation.mentee.fullName} />}
+          {/* Plan a meeting with this lead (#3778): the calendar's dialog, prefilled; the server decides who may. */}
+          {relation.status === 'ACTIVE' && <PlanMeetingButton relationId={relation.id} leadName={relation.mentee.fullName} variant="outline" />}
           <Badge variant="info" data-testid="sales-lead-stage">{stageLabel(stages, relation.pipelineStatus, locale)}</Badge>
           <Badge variant={relation.status === 'ACTIVE' ? 'success' : 'default'}>
             {relation.status === 'ACTIVE' ? s.statusActive : s.statusCompleted}
