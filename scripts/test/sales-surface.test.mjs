@@ -14,6 +14,7 @@ import assert from 'node:assert/strict';
 import {
   hasSalesSurface,
   mentorlessShellTarget,
+  landsOnSalesAfterSignIn,
   SALES_ATTENTION_REASONS,
   SALES_HOME,
   NEUTRAL_HOME,
@@ -63,12 +64,23 @@ test('the sales queue keeps the sales reasons and none of the mentorship ones', 
   }
 });
 
-test('MARKETING keeps every sales link, and every one stays inside /sales', () => {
+// The shared pages a rep reaches from the sales menu. RoleShell wears the SALES
+// menu on /messages and /todos for a rep (no palette, no global search), and
+// /notifications' back link goes to /sales, so none of them leads into a
+// /mentor page that would only bounce back to /sales.
+const SHARED_SALES_PAGES = ['/messages', '/todos', '/notifications'];
+
+test('MARKETING keeps every sales link, and every one stays inside /sales or a shared page in the sales menu', () => {
   const shown = visibleNavLinks(SALES_NAV_LINKS, MARKETING);
   assert.equal(shown.length, SALES_NAV_LINKS.length);
   for (const link of SALES_NAV_LINKS) {
+    if (SHARED_SALES_PAGES.includes(link.href)) continue;
     assert.ok(link.href === '/sales' || link.href.startsWith('/sales/'), link.href);
     assert.ok(link.capability && MARKETING.includes(link.capability), `${link.href} is tagged with a MARKETING capability`);
+  }
+  for (const page of SHARED_SALES_PAGES) {
+    assert.ok(SALES_NAV_LINKS.some((l) => l.href === page), `${page} is in the sales menu`);
+    assert.ok(!page.startsWith('/mentor'), page);
   }
 });
 
@@ -98,4 +110,15 @@ test('the dormant check-in is an internship mail — a MARKETING lead never gets
     const caps = verticalCapabilities(v);
     assert.equal(dormantCheckInApplies(caps), caps.includes('mentorship'), v);
   }
+});
+
+test('after sign-in only a sales rep lands on /sales; everyone else keeps roleHome (#3647)', () => {
+  const marketing = verticalCapabilities('MARKETING');
+  const internship = verticalCapabilities('INTERNSHIP');
+  assert.equal(landsOnSalesAfterSignIn('MENTOR', marketing), true);
+  // An ADMIN keeps the admin shell as home; INTERNSHIP is untouched.
+  assert.equal(landsOnSalesAfterSignIn('ADMIN', marketing), false);
+  assert.equal(landsOnSalesAfterSignIn('MENTOR', internship), false);
+  // A lead, a customer login and a partner are not operators.
+  for (const role of ['MENTEE', 'COMPANY', 'AFFILIATE', undefined]) assert.equal(landsOnSalesAfterSignIn(role, marketing), false);
 });

@@ -17,10 +17,11 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { roleHome } from '@/lib/roleHome';
+import { landsOnSalesAfterSignIn, SALES_HOME } from '@/lib/salesSurface';
 import type { DemoAccount } from '@/lib/demoMode';
 import { sameOriginPath } from '@/lib/safeRedirect';
 import { useVertical } from '@/lib/verticalClient';
-import { verticalHasCapability } from '@/lib/verticals';
+import { verticalCapabilities, verticalHasCapability } from '@/lib/verticals';
 import { useProductName } from '@/lib/brandClient';
 
 // Whether the "keep me signed in" box was ticked last time, per browser. A UI
@@ -74,12 +75,18 @@ export function SignInClient({ demo, tenantSso = null, social = [] }: { demo: De
   const rememberRef = useRef<HTMLInputElement>(null);
   const rememberTouched = useRef(false);
 
+  // The role's home — a sales rep's is /sales, not /mentor (#3647).
+  const homeAfterSignIn = (role?: string) =>
+    landsOnSalesAfterSignIn(role, verticalCapabilities(vertical)) ? SALES_HOME : roleHome(role);
+
   // Already signed in → go straight to the role dashboard.
   useEffect(() => {
     if (status === 'authenticated') {
-      router.replace(roleHome(session?.user?.role));
+      router.replace(
+        landsOnSalesAfterSignIn(session?.user?.role, verticalCapabilities(vertical)) ? SALES_HOME : roleHome(session?.user?.role),
+      );
     }
-  }, [status, session, router]);
+  }, [status, session, router, vertical]);
 
   // Applied after mount, not during render: reading localStorage while
   // rendering would disagree with the server-rendered HTML. Skipped if the
@@ -237,7 +244,8 @@ export function SignInClient({ demo, tenantSso = null, social = [] }: { demo: De
   // parameter from turning this into an open redirect.
   const destination = (role?: string) => {
     const target = new URLSearchParams(window.location.search).get('callbackUrl');
-    const home = roleHome(role);
+    // The host's world picks the account (docs/worlds.md), so its vertical is the account's.
+    const home = homeAfterSignIn(role);
     return target ? sameOriginPath(target, home) : home;
   };
 

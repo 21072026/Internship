@@ -417,6 +417,19 @@ test('an unchanged theme in another key order is not a change; the audit names f
   for (const f of changedLandingFields(a, c)) assert.doesNotMatch(f, /#|B|1234/);
 });
 
+// #3730: the figures sit at index 5 of the canonical landing; a save that only
+// changes a figure's number is audited as `stats` — and as nothing else, with no value.
+test('a save that only changes a figure is audited as "stats", never with the number', () => {
+  const before = parseLanding({ copy: { en: { heroTitle: 'A' } }, stats: { customers: { mode: 'manual', value: '120+' } } }).landing;
+  const after = parseLanding({ copy: { en: { heroTitle: 'A' } }, stats: { customers: { mode: 'manual', value: '150+' } } }).landing;
+  assert.deepEqual(changedLandingFields(before, after), ['stats']);
+  assert.deepEqual(changedLandingFields(before, before), []);
+  // Switching a figure off (hidden) is a change of the same part.
+  const hidden = parseLanding({ copy: { en: { heroTitle: 'A' } }, stats: { customers: { mode: 'hidden' } } }).landing;
+  assert.deepEqual(changedLandingFields(before, hidden), ['stats']);
+  for (const f of changedLandingFields(before, after)) assert.doesNotMatch(f, /120|150/);
+});
+
 test('legal links (#3363): https only, and an empty one falls back to this host\'s own page', () => {
   const ok = parseLanding({ imprintUrl: ' https://acme.example/imprint ', privacyUrl: '', termsUrl: null });
   assert.equal(ok.ok, true);

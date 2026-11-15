@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Sales team book (read-only): `GET /api/sales/team-book` (`src/lib/salesTeamBook.ts`) lists every record of the org — lead, account, owner, stage, days in stage, last contact; never e-mail, phone, value or follow-up — with counts per stage and owner. Gate `salesTeamReadAllowed()` / pure `canReadSalesTeamBook()` + `salesTeamReadWhere()` (`src/lib/salesBookRule.ts`): admins and the dispatcher always, reps while the new org setting `salesTeamBookForReps` (default on, MARKETING) is on; otherwise 404. The write scope `salesBookWhere` is unchanged. `salesLeaderboardForReps` now defaults to on.",
+  "notes": {
+    "en": ["Team view groundwork: reps can read the whole team’s sales book, and the leaderboard is on by default. Admins can switch either off in the settings."],
+    "tr": ["Ekip görünümü altyapısı: temsilciler tüm ekibin satış kayıtlarını okuyabilir, ekip sıralaması varsayılan olarak açık. Yöneticiler ikisini de ayarlardan kapatabilir."],
+    "de": ["Grundlage der Teamansicht: Vertriebspersonen können alle Vertriebsdatensätze des Teams lesen, die Rangliste ist standardmäßig an. Admins können beides in den Einstellungen ausschalten."]
+  }
+}

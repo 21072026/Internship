@@ -465,6 +465,14 @@ export const MARKETING_MENTOR_ROWS: SalesProbe[] = [
   // The rest of the hand-off's answers are pinned by e2e/sales-lead-handoff.spec.ts.
   { method: 'POST', path: '/api/sales/leads/:colleagueRelationId/handoff', body: { toUserId: ':colleagueRepId', action: 'call' }, expect: 'notFound', why: "hand off a colleague's lead" },
   { method: 'POST', path: '/api/sales/leads/:foreignRelationId/handoff', body: { toUserId: ':colleagueRepId', action: 'call' }, expect: 'notFound', why: "hand off another org's lead" },
+  // Team messaging (src/lib/salesTeamMessagingRule.ts): a colleague of the same
+  // org yes; a lead the rep does not own and another org's rep never. (The
+  // rep's OWN lead stays messageable through the record, as before.) The rest —
+  // the team room, a deactivated rep, INTERNSHIP unchanged — is
+  // e2e/sales-team-messaging.spec.ts.
+  { method: 'POST', path: '/api/conversations', body: { userId: ':colleagueRepId' }, expect: 'ok', why: 'message a colleague' },
+  { method: 'POST', path: '/api/conversations', body: { userId: ':colleagueLeadId' }, expect: 'forbidden', why: "message a colleague's lead" },
+  { method: 'POST', path: '/api/conversations', body: { userId: ':foreignRepId' }, expect: 'forbidden', why: "message another org's rep" },
 ];
 
 /** The sales surface pages: own record 200, anything else a real 404. */

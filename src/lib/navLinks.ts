@@ -362,6 +362,11 @@ export const SALES_NAV_LINKS: NavLink[] = [
   { href: '/sales/accounts', icon: Building2, key: 'myCompanies', capability: 'companies' },
   // The rep's share of the outbox (#2960): drafts for their own leads only.
   { href: '/sales/outbox', icon: MailCheck, key: 'outbox', capability: 'pipeline', withoutCapability: 'mentorship' },
+  // The shared inbox — colleagues and the team room (src/lib/salesTeamMessagingRule.ts)
+  // — and the personal to-do list, both worn in this menu by RoleShell.
+  { href: '/messages', icon: MessageSquare, key: 'messages' },
+  { href: '/todos', icon: ListChecks, key: 'todos' },
+  { href: '/notifications', icon: BellRing, key: 'notifications' },
 ];
 
 /**

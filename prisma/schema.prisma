@@ -1425,6 +1425,12 @@ model Conversation {
   // pair). Null for GROUP conversations — MySQL permits many NULLs in a unique
   // index, so groups are unconstrained.
   directKey String?          @unique
+  // The identity of an organisation's sales team room ("sales-team:<orgId>",
+  // src/lib/salesTeamMessagingRule.ts): a GROUP with no project, one per org.
+  // Unique, for the same reason as directKey — two first visits at once must
+  // not open two rooms. Null for every other conversation (MySQL allows many
+  // NULLs in a unique index), so the column is purely additive.
+  teamKey   String?          @unique
   createdAt DateTime         @default(now())
   // @default(now()) as well as @updatedAt: without a default, adding this
   // required column to the already-deployed table would fail `db push` on any

@@ -29,7 +29,10 @@ async function handleGet() {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { t } = await getServerDictionary();
   return withTenantScope(session, async () => {
-    const inbox = await loadInbox(session.user.id, (name) => t.messages.projectGroup.replace('{name}', name));
+    const inbox = await loadInbox(session.user.id, (name) => t.messages.projectGroup.replace('{name}', name), {
+      orgId: session.user.orgId,
+      roomName: t.messages.salesTeamRoom,
+    });
     return NextResponse.json(inbox);
   });
 }
