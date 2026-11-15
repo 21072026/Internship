@@ -938,6 +938,30 @@ export interface MarketingDiffContext {
    * demo form's UTM parameters), null being "unknown", i.e. no Source.
    */
   leadSourceName?: string | null;
+  /**
+   * Let a row without a contact e-mail key its lead on the contact PHONE
+   * (`leadContactKey`) — a rep's hand-typed lead from a call or a trade fair
+   * (#3647). Off for the file import, whose contract places no funnel record
+   * without an address; on only for the one-row create a person typed.
+   */
+  phoneLeadKey?: boolean;
+}
+
+/**
+ * The key a lead person is found and created under: the contact e-mail's key,
+ * else — only when the caller allows it — `tel.<normalized phone>` (the same
+ * `normalizePhoneKey` duplicate detection uses, so `+49 30 1234567` and
+ * `030 1234567` are one lead). '' = no key, no funnel record. The stand-in
+ * address (`leadStandInEmail`) is derived from it exactly like from an e-mail.
+ */
+export function leadContactKey(
+  value: { contactEmail?: string | null; contactPhone?: string | null },
+  phoneFallback: boolean,
+): string {
+  const emailKey = normalizeEmailKey(value.contactEmail ?? '');
+  if (emailKey || !phoneFallback) return emailKey;
+  const phoneKey = normalizePhoneKey(value.contactPhone ?? '');
+  return phoneKey ? `tel.${phoneKey}` : '';
 }
 
 function blankToUndefined(value: string): string | undefined {
@@ -1419,7 +1443,7 @@ function planFunnel(
   // The relation's `menteeId` is a required FK, so a funnel record needs a
   // person. A row with a stage and no contact keeps its Company and loses only
   // the stage — the account is the thing that must not be dropped.
-  const emailKey = normalizeEmailKey(value.contactEmail);
+  const emailKey = leadContactKey(value, context.phoneLeadKey === true);
   if (!emailKey) {
     warnings.push(`stage "${value.stage}" not placed: the row has no primary contact e-mail`);
     return null;
