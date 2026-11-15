@@ -502,7 +502,7 @@
       "reason": "RelationValue.deleteMany/findUnique key on relation.id from loadForEditor(), which fetches the relation with withinTenant({ id }, await tenantWhere(session)) and checks admin/owner."
     },
     "src/app/api/mentorship/route.ts": {
-      "count": 6,
+      "count": 3,
       "reason": "The list/count sites use `where` = andScope(scope, ...) with scope from scopeForRole(session.user, 'relation'), which ANDs the caller's org in (scopeInTenant + orgWhere); the count at 442 keys on mentorId verified with withinTenant(..., tenantWhere(session))."
     },
     "src/app/api/messages/route.ts": {
