@@ -1184,6 +1184,7 @@ const en = {
     transferTooLarge: 'The file is larger than {mb} MB.',
     transferFileInvalid: 'This is not a settings file this version can read.',
     transferConflict: 'Loading stopped: someone changed these settings at the same time. Load the file again.',
+    transferBusy: 'Another settings file is being loaded for this programme right now. Wait a moment and try again.',
     referralErrors: {
       invalid: 'Enter a full address, such as https://www.example.com/.',
       not_https: 'The address must start with https://.',
@@ -13730,6 +13731,7 @@ const tr: Dict = {
     transferTooLarge: 'Dosya {mb} MB\'tan büyük.',
     transferFileInvalid: 'Bu, bu sürümün okuyabildiği bir ayar dosyası değil.',
     transferConflict: 'Yükleme durdu: bu ayarlar aynı anda başka biri tarafından değiştirildi. Dosyayı yeniden yükleyin.',
+    transferBusy: 'Bu program için şu anda başka bir ayar dosyası yükleniyor. Biraz bekleyip yeniden deneyin.',
     referralErrors: {
       invalid: 'Tam bir adres gir, örneğin https://www.example.com/.',
       not_https: 'Adres https:// ile başlamalı.',
@@ -26054,6 +26056,7 @@ const de: Dict = {
     transferTooLarge: 'Die Datei ist größer als {mb} MB.',
     transferFileInvalid: 'Das ist keine Einstellungsdatei, die diese Version lesen kann.',
     transferConflict: 'Einspielen abgebrochen: Jemand hat diese Einstellungen gleichzeitig geändert. Spielen Sie die Datei erneut ein.',
+    transferBusy: 'Für dieses Programm wird gerade eine andere Einstellungsdatei eingespielt. Warten Sie kurz und versuchen Sie es erneut.',
     referralErrors: {
       invalid: 'Geben Sie eine vollständige Adresse ein, z. B. https://www.example.com/.',
       not_https: 'Die Adresse muss mit https:// beginnen.',

@@ -72,7 +72,9 @@ export function SettingsTransfer({ readOnly }: { readOnly: boolean }) {
   }
 
   function refusal(code: unknown): string {
-    if (code === 'too_large') return interpolate(L.transferTooLarge, { mb: String(SETTINGS_TRANSFER_MAX_BYTES / 1024 / 1024) });
+    // The middleware's 413 (`payload_too_large`) and the route's own (`too_large`) are one refusal to the admin.
+    if (code === 'busy') return L.transferBusy;
+    if (code === 'too_large' || code === 'payload_too_large') return interpolate(L.transferTooLarge, { mb: String(SETTINGS_TRANSFER_MAX_BYTES / 1024 / 1024) });
     if (code === 'conflict' || code === 'asset_refused') return L.transferConflict;
     return L.transferFileInvalid;
   }

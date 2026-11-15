@@ -89,6 +89,20 @@ const nextConfig = {
   // inbound mail bridge started from instrumentation.ts.
   // web-push is Node-only too (node:crypto, node:https) and does its own
   // dynamic requires, so it stays out of the webpack server bundle (#1464).
+  experimental: {
+    // Next hands middleware a CLONE of every request body and, past this size,
+    // silently TRUNCATES the copy the route reads (a warning in the log, no
+    // error): the route then parses half a body. Its default, 10 MB, sat below
+    // limits the app already promised — the admin JSON importers' 32 MiB
+    // (src/lib/bodyLimitRule.ts), the 15 MB theme video upload — and the
+    // affiliate settings file failed past 10 MB as "not a settings file"
+    // (#3728, pinned on a production build by
+    // e2e/affiliate-settings-transfer.spec.ts; `next dev` does not show it as
+    // plainly). 40 MB is the
+    // reverse proxy's cap (infra/README.md § Request body limit); the app's own
+    // per-route limits stay the binding ones below it.
+    middlewareClientMaxBodySize: '40mb',
+  },
   serverExternalPackages: ['@prisma/client', 'bcryptjs', 'pdf-parse', 'mammoth', 'imapflow', 'mailparser', 'web-push'],
   // The E2E workflows build only to have something to test; ci.yml runs
   // `npm run lint` and `npx tsc --noEmit` on the same commit, so repeating both
