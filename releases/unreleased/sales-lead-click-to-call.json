@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Click-to-call with a \"Did you reach them?\" auto-log on a MARKETING lead (#3748):** the internship mentor page's flow, reused on the lead page at the maintainer's request.\n- **The lead page.** The contact card's `tel:` link (#3741) stays the one way in for the number. After the device dials, `ContactActions` asks \"Did you reach them?\":\n  - Yes logs a Call through `POST /api/interactions`, so its owner check, the first-contact rule and the meter all apply, and refreshes the interactions card.\n  - \"Add a note\" opens #3741's call draft and logs nothing, so there are never two rows.\n  - No logs nothing.\n  - The e-mail link still opens its draft.\n- **`ContactActions` gains two optional props:** `trigger` (the page's own link replaces the buttons) and `onAddNote`. The only write stays its POST.\n- **The admin's lead view** `/admin/candidates/[id]` gets the Call and WhatsApp buttons in a MARKETING org.\n- **Who sees it.** The question and the buttons appear only for someone that route accepts: the record's owner, the org's sales dispatcher, or an admin holding `relation.write`. The lead page computes this on the server; `GET /api/users/[id]` carries `canLogInteraction`, so an OBSERVER admin gets none.\n- The \"yes\" link keeps a readable colour in dark mode.",
+  "notes": {
+    "en": ["Call a lead from its page and say whether you reached them: the call is logged for you, or add a note instead."],
+    "tr": ["Lead'i sayfasından arayın ve ulaşıp ulaşmadığınızı seçin: görüşme sizin için kaydedilir, isterseniz not ekleyerek kaydedin."],
+    "de": ["Rufen Sie einen Lead direkt von seiner Seite an und geben Sie an, ob Sie ihn erreicht haben: Der Anruf wird für Sie protokolliert, oder Sie fügen eine Notiz hinzu."]
+  }
+}

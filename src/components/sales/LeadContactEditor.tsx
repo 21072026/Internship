@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -8,6 +8,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useT } from '@/i18n/client';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { openInteractionDraft } from './interactionDraft';
+import { ContactActions } from '@/components/ContactActions';
 
 // The lead's contact on its record page (#3655): the account's primary contact
 // — name, position, e-mail, phone — shown and, for the record's rep (or an
@@ -22,13 +23,15 @@ export interface LeadContact {
   position: string | null;
 }
 
-function Row({ label, value, testId, href, onOpen }: { label: string; value: string | null; testId: string; href?: string; onOpen?: () => void }) {
+function Row({ label, value, testId, href, onOpen, custom }: { label: string; value: string | null; testId: string; href?: string; onOpen?: () => void; custom?: ReactNode }) {
   if (!value) return null;
   return (
     <div data-testid={testId}>
       <dt className="text-xs text-gray-500">{label}</dt>
       <dd className="break-words text-sm text-gray-900 dark:text-gray-100">
-        {href ? (
+        {custom ? (
+          custom
+        ) : href ? (
           // The device's own phone or mail program does the calling/sending —
           // the CRM sends nothing to a lead (#3741). The click also opens an
           // interaction draft on the page, so the contact is logged.
@@ -58,7 +61,12 @@ export function LeadContactEditor({
   relationId: string;
   initial: LeadContact;
   canEdit: boolean;
-  /** A click on the phone/e-mail link also opens an interaction draft of that type (#3741). */
+  /**
+   * The phone/e-mail links also log the contact (#3741). The e-mail link opens an
+   * interaction draft; the phone link asks "Did you reach them?" (#3748, the
+   * internship mentor page's flow, which the maintainer asked for here too): Yes
+   * logs the call at once, "Add a note" opens the draft instead, No logs nothing.
+   */
   logOnContact?: boolean;
 }) {
   const onContact = logOnContact ? (type: 'Call' | 'Email') => openInteractionDraft({ type }) : undefined;
@@ -163,7 +171,28 @@ export function LeadContactEditor({
             value={initial.phone}
             testId="sales-lead-phone"
             href={initial.phone ? telHref(initial.phone) : undefined}
-            onOpen={onContact ? () => onContact('Call') : undefined}
+            custom={
+              logOnContact && initial.phone && telHref(initial.phone) ? (
+                // One way in for one number: the tel: link dials, then the question
+                // follows. The only write is ContactActions' POST /api/interactions.
+                <ContactActions
+                  relationId={relationId}
+                  phone={initial.phone}
+                  onLogged={() => router.refresh()}
+                  onAddNote={(type) => openInteractionDraft({ type })}
+                  trigger={(prompt) => (
+                    <a
+                      href={telHref(initial.phone!)}
+                      onClick={() => prompt('Call')}
+                      className="text-blue-600 hover:underline dark:text-blue-400"
+                      data-testid="sales-lead-phone-link"
+                    >
+                      {initial.phone}
+                    </a>
+                  )}
+                />
+              ) : undefined
+            }
           />
         </dl>
       )}
