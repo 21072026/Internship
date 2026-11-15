@@ -7826,6 +7826,11 @@ const en = {
     conflict: 'This time collides with another meeting.',
     refused: 'This lead is not on your book.',
     error: 'Could not schedule the meeting',
+    // The Me / Team toggle (#3778): the team view is read-only, a colleague's item shows whose it is.
+    scopeLabel: 'Whose calendar',
+    scopeMe: 'Me',
+    scopeTeam: 'Team',
+    teamHint: 'Your colleagues’ meetings appear read-only, with their initials. Their notes stay theirs.',
   },
   calendar: {
     title: 'Calendar',
@@ -20296,6 +20301,10 @@ const tr: Dict = {
     conflict: 'Bu saat başka bir toplantıyla çakışıyor.',
     refused: 'Bu lead senin listende değil.',
     error: 'Toplantı planlanamadı',
+    scopeLabel: 'Kimin takvimi',
+    scopeMe: 'Ben',
+    scopeTeam: 'Ekip',
+    teamHint: 'Ekip arkadaşlarının toplantıları baş harfleriyle, salt okunur görünür. Notları kendilerine kalır.',
   },
   calendar: {
     title: 'Takvim',
@@ -32683,6 +32692,10 @@ const de: Dict = {
     conflict: 'Diese Zeit überschneidet sich mit einem anderen Termin.',
     refused: 'Dieser Lead gehört nicht zu deinen Leads.',
     error: 'Der Termin konnte nicht geplant werden',
+    scopeLabel: 'Wessen Kalender',
+    scopeMe: 'Ich',
+    scopeTeam: 'Team',
+    teamHint: 'Die Termine deiner Kolleg:innen erscheinen schreibgeschützt mit ihren Initialen. Ihre Notizen bleiben ihre.',
   },
   calendar: {
     title: 'Kalender',

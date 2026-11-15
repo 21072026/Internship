@@ -42,6 +42,9 @@ interface Ev {
   durationMinutes?: number | null;
   overdue?: boolean;
   link?: string | null;
+  /** A teammate's item in the sales team view (#3778): the owner's initials, and their name. */
+  owner?: string | null;
+  ownerName?: string | null;
 }
 
 type CalendarDict = ReturnType<typeof useT>['calendar'];
@@ -112,6 +115,21 @@ function EventIcon({ type }: { type: Ev['type'] }) {
   if (type === 'followup') return <CalendarClock className={cls} />;
   if (type === 'trial') return <Hourglass className={cls} />;
   return <Video className={cls} />;
+}
+
+/** Whose item it is, on a team calendar: initials, the full name for a screen reader and the tooltip. */
+function OwnerBadge({ e }: { e: Ev }) {
+  if (!e.owner) return null;
+  return (
+    <span
+      className="inline-flex h-4 min-w-4 flex-shrink-0 items-center justify-center rounded-full bg-gray-100 px-1 text-[9px] font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-200"
+      title={e.ownerName ?? undefined}
+      data-testid="calendar-event-owner"
+    >
+      <span aria-hidden="true">{e.owner}</span>
+      <span className="sr-only">{e.ownerName}</span>
+    </span>
+  );
 }
 
 /**
@@ -340,6 +358,7 @@ export function CalendarView({
     const inner = (
       <span className="flex items-center gap-1 truncate">
         <EventIcon type={e.type} />
+        <OwnerBadge e={e} />
         {withTime && !e.allDay && <span className="tabular-nums opacity-70">{time(e)}</span>}
         <span className="truncate">{primaryLabel(e)}</span>
       </span>
@@ -370,8 +389,9 @@ export function CalendarView({
           <EventIcon type={e.type} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium text-gray-800 dark:text-gray-200">
-            {primaryLabel(e)}
+          <span className="flex items-center gap-1 truncate text-sm font-medium text-gray-800 dark:text-gray-200">
+            <OwnerBadge e={e} />
+            <span className="truncate">{primaryLabel(e)}</span>
           </span>
           <span className="block truncate text-xs text-gray-500">
             <span className="tabular-nums">{time(e)}</span>
@@ -386,6 +406,7 @@ export function CalendarView({
       <div className={`rounded px-1.5 py-1 ${cls}`}>
         <span className="flex items-center gap-1 text-[10px] tabular-nums opacity-80">
           <EventIcon type={e.type} />
+          <OwnerBadge e={e} />
           {time(e)}
         </span>
         <span className="mt-0.5 block break-words text-[11px] font-medium leading-tight">{primaryLabel(e)}</span>
