@@ -6,6 +6,7 @@ import { freshIp } from './helpers/rateLimit';
 // Static import, not `await import()`: Playwright resolves the `@/…` alias when
 // it transforms the spec's import graph, Node at runtime does not.
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
+import { writeSetting } from '../src/lib/settingsWrite';
 
 // The sales rep's calendar (#3778): /sales/calendar, GET /api/sales/calendar,
 // the "New meeting" / "Plan meeting" dialog on POST /api/meetings, and the
@@ -51,7 +52,7 @@ async function marketingOrg(label: string) {
   return org.id;
 }
 
-async function person(label: string, role: 'MENTOR' | 'MENTEE', orgId: string) {
+async function person(label: string, role: 'ADMIN' | 'MENTOR' | 'MENTEE', orgId: string) {
   const email = uniqueEmail(`sales-cal-${label}-${STAMP}`);
   emails.push(email);
   const user = await seedUser(email, PW, role, `Cal ${label} ${STAMP}`, orgId);
@@ -89,6 +90,8 @@ test.beforeAll(async () => {
 
   await person('rep', 'MENTOR', orgA);
   await person('colleague', 'MENTOR', orgA);
+  await person('admin', 'ADMIN', orgA);
+  ids.orgA = orgA;
   await person('intMentor', 'MENTOR', internship.id);
 
   // Today: a meeting with lead A, lead B's follow-up, lead C's trial end.
@@ -108,9 +111,9 @@ test.beforeAll(async () => {
     data: { relationId: ids['rel-meet'], title: `Discovery call ${STAMP}`, scheduledAt: at, durationMinutes: 30, status: 'SCHEDULED', createdById: ids.rep, rsvpToken: `rsvp-${STAMP}-a` },
   });
   ids.meeting = meeting.id;
-  await prisma.meeting.create({
+  ids.colleagueMeeting = (await prisma.meeting.create({
     data: { relationId: ids['rel-colleague'], title: `Colleague call ${STAMP}`, scheduledAt: at, status: 'SCHEDULED', createdById: ids.colleague, rsvpToken: `rsvp-${STAMP}-b` },
-  });
+  })).id;
 });
 
 test.afterAll(async () => {
@@ -265,4 +268,63 @@ test('"Today" on /sales lists the follow-ups due and overdue, today\'s meetings 
   await page.getByTestId(`sales-today-todo-${ids.todo}`).click();
   await page.waitForURL('**/todos');
   await expect(page.getByText(`Prepare the demo deck ${STAMP}`).first()).toBeVisible({ timeout: 20_000 });
+});
+
+test('the Team view shows colleagues\' meetings with their initials, opening the lead read-only — never a title or a note', async ({ page, playwright, baseURL }) => {
+  test.slow();
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mail.rep, PW, '/sales');
+  await gotoSettled(page, '/sales/calendar');
+  await page.getByTestId('sales-calendar-scope-team').click();
+  await expect(page.getByTestId('sales-calendar-scope-team')).toHaveAttribute('aria-pressed', 'true');
+
+  const day = page.getByTestId(`calendar-day-${todayKey}`);
+  const theirs = day.getByTestId(`calendar-event-team-meeting-${ids.colleagueMeeting}`);
+  await expect(theirs).toBeVisible({ timeout: 20_000 });
+  await expect(theirs).toContainText(`Cal lead-colleague ${STAMP}`);
+  // The week column renders a phone and a desktop form of each row; both name the owner.
+  await expect(theirs.getByTestId('calendar-event-owner').first()).toContainText(`Cal colleague ${STAMP}`);
+  // It opens the colleague's lead page, which the team-read rule opens read-only (WP2b).
+  await expect(theirs.locator('a').first()).toHaveAttribute('href', `/sales/leads/${ids['rel-colleague']}`);
+  // The rep's own items are still there, in full.
+  await expect(day.getByTestId(`calendar-event-meeting-${ids.meeting}`)).toBeVisible();
+  // Never the colleague's meeting title or follow-up note; a rep does not get a colleague's follow-up day at all.
+  await expect(page.getByText(`Colleague call ${STAMP}`)).toHaveCount(0);
+  await expect(page.getByText('Colleague step')).toHaveCount(0);
+  await expect(day.getByTestId(`calendar-event-team-followup-${ids['rel-colleague']}`)).toHaveCount(0);
+
+  // The API says the same; an ADMIN of the org gets the colleague's follow-up DAY, never its note.
+  const rep = await repJar(playwright, baseURL, 'rep');
+  const repBody = await (await rep.get(`/api/sales/calendar/team?from=${todayKey}&to=${todayKey}`)).text();
+  expect(repBody).toContain(`team-meeting-${ids.colleagueMeeting}`);
+  expect(repBody).not.toContain(`Colleague call ${STAMP}`);
+  expect(repBody).not.toContain('Colleague step');
+  expect(repBody).not.toContain(`team-followup-${ids['rel-colleague']}`);
+  await rep.dispose();
+  const admin = await repJar(playwright, baseURL, 'admin');
+  const adminRes = await admin.get(`/api/sales/calendar/team?from=${todayKey}&to=${todayKey}`);
+  expect(adminRes.status()).toBe(200);
+  const adminEvents = (await adminRes.json()).events as Array<{ id: string; title: string; owner?: string }>;
+  const followUp = adminEvents.find((e) => e.id === `team-followup-${ids['rel-colleague']}`);
+  expect(followUp, 'the admin sees the colleague follow-up day').toBeTruthy();
+  expect(followUp!.title).toBe('');
+  expect(JSON.stringify(adminEvents)).not.toContain('Colleague step');
+  await admin.dispose();
+});
+
+test('with the team book switched off for reps, the Team view is not offered and its API is a 404', async ({ page, playwright, baseURL }) => {
+  test.slow();
+  await writeSetting('salesTeamBookForReps', 'false', ids.orgA);
+  try {
+    const rep = await repJar(playwright, baseURL, 'rep');
+    expect((await rep.get(`/api/sales/calendar/team?from=${todayKey}&to=${todayKey}`)).status()).toBe(404);
+    await rep.dispose();
+    await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+    await signInAndSettle(page, mail.rep, PW, '/sales');
+    await gotoSettled(page, '/sales/calendar');
+    await expect(page.getByTestId(`calendar-event-meeting-${ids.meeting}`)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('sales-calendar-scope')).toHaveCount(0);
+  } finally {
+    await writeSetting('salesTeamBookForReps', 'true', ids.orgA);
+  }
 });

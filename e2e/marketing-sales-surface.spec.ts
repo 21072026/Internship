@@ -7,6 +7,7 @@ import {
   MARKETING_MENTOR_ROWS,
   type SalesExpectation,
 } from './fixtures/authz-matrix';
+import { freshIp } from './helpers/rateLimit';
 // Static imports, not `await import()`: Playwright resolves the `@/…` alias when
 // it transforms the spec's import graph, Node at runtime does not.
 import {
@@ -429,6 +430,8 @@ test('admin-only endpoints refuse the rep', { tag: '@smoke' }, async ({ page }) 
     const res = await page.request.fetch(fill(probe.path), {
       method: probe.method,
       ...(probe.body ? { data: fillBody(probe.body) } : {}),
+      // A rate-limited create gets its own address (#2159): its per-IP bucket is shared by the shard.
+      ...(probe.path === '/api/conversations' ? { headers: freshIp('sales-surface-chat') } : {}),
     });
     expect(statusMatches(res.status(), probe.expect), `${probe.method} ${probe.path} (${probe.why}) → ${res.status()}`).toBe(true);
   }
@@ -444,6 +447,8 @@ test("another rep's and another org's records are out of reach, by id and by pag
     const res = await page.request.fetch(fill(probe.path), {
       method: probe.method,
       ...(probe.body ? { data: fillBody(probe.body) } : {}),
+      // A rate-limited create gets its own address (#2159): its per-IP bucket is shared by the shard.
+      ...(probe.path === '/api/conversations' ? { headers: freshIp('sales-surface-chat') } : {}),
     });
     expect(statusMatches(res.status(), probe.expect), `${probe.method} ${probe.path} (${probe.why}) → ${res.status()}`).toBe(true);
   }

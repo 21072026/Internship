@@ -3,6 +3,8 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { orgScoped, assertSameOrg, requireOrg, isIsolationEnforced } from '../src/lib/orgScope';
 import { prisma as appPrisma } from '../src/lib/prisma';
 import { runWithOrg } from '../src/lib/orgContext';
+import { signInViaApi } from './helpers/auth';
+import { freshIp } from './helpers/rateLimit';
 
 // Tenant isolation building blocks (#543). These prove that the orgScope
 // helpers genuinely separate two tenants at the DB level — the guarantee the
@@ -152,6 +154,89 @@ test('central middleware auto-scopes Requisition reads and creates', async () =>
     if (prev === undefined) delete process.env.MT_ENFORCE_ISOLATION; else process.env.MT_ENFORCE_ISOLATION = prev;
     await prisma.requisition.deleteMany({ where: { companyId: { in: [companyA.id, companyB.id] } } });
     await prisma.company.deleteMany({ where: { id: { in: [companyA.id, companyB.id] } } });
+    await prisma.organization.deleteMany({ where: { id: { in: [orgA.id, orgB.id] } } });
+  }
+});
+
+// The admin door of canMessage() stays inside the admin's tenant
+// (src/lib/messageAdminRule.ts). It used to read "an admin may message anyone":
+// with MT_ENFORCE_ISOLATION off — every deployment — org A's admin opened a chat
+// with org B's user (200), wrote into it (201) and B read it (200). Now: a 404,
+// the answer a non-existent id gets, in both directions, for a super admin too,
+// and through the inbox's `?to=` as well; a chat that already crossed orgs
+// takes no new message. HTTP, against the default (flag-off) server. Each
+// create-or-get POST carries its own address (freshIp, #2159): the route's
+// 20/15min bucket is per IP and a shard's specs share one.
+test('an admin cannot open, or write into, a chat with another tenant\'s user', { tag: '@smoke' }, async ({ browser }) => {
+  const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const PW = 'XorgChat123!';
+  const orgA = await prisma.organization.create({ data: { name: `Xorg A ${stamp}`, slug: `xorg-a-${stamp}` } });
+  const orgB = await prisma.organization.create({ data: { name: `Xorg B ${stamp}`, slug: `xorg-b-${stamp}` } });
+  const mails = {
+    adminA: uniqueEmail('xorg-admin-a'),
+    superA: uniqueEmail('xorg-super-a'),
+    menteeB: uniqueEmail('xorg-mentee-b'),
+    mentorB: uniqueEmail('xorg-mentor-b'),
+    menteeA: uniqueEmail('xorg-mentee-a'),
+  };
+  const adminA = await seedUser(mails.adminA, PW, 'ADMIN', 'Xorg Admin A', orgA.id);
+  const superA = await seedUser(mails.superA, PW, 'ADMIN', 'Xorg Super A', orgA.id);
+  await prisma.user.update({ where: { id: superA.id }, data: { isSuperAdmin: true } });
+  const menteeB = await seedUser(mails.menteeB, PW, 'MENTEE', 'Xorg Mentee B', orgB.id);
+  const mentorB = await seedUser(mails.mentorB, PW, 'MENTOR', 'Xorg Mentor B', orgB.id);
+  const menteeA = await seedUser(mails.menteeA, PW, 'MENTEE', 'Xorg Mentee A', orgA.id);
+  const people = [adminA.id, superA.id, menteeB.id, mentorB.id, menteeA.id];
+  const contexts: Array<{ close: () => Promise<void> }> = [];
+  const as = async (email: string) => {
+    const context = await browser.newContext();
+    contexts.push(context);
+    expect((await signInViaApi(context.request, email, PW)).ok, email).toBe(true);
+    return context;
+  };
+  try {
+    const admin = await as(mails.adminA);
+    for (const target of [menteeB.id, mentorB.id]) {
+      expect((await admin.request.post('/api/conversations', { data: { userId: target }, headers: freshIp('xorg-chat') })).status()).toBe(404);
+    }
+    // The same answer as an id that does not exist.
+    expect((await admin.request.post('/api/conversations', { data: { userId: 'no-such-user' }, headers: freshIp('xorg-chat') })).status()).toBe(404);
+    // Its own tenant still opens: the door is narrowed, not shut.
+    expect((await admin.request.post('/api/conversations', { data: { userId: menteeA.id }, headers: freshIp('xorg-chat') })).status()).toBe(200);
+    // The inbox's ?to= takes the same rule: the inbox with a notice, no chat.
+    const page = await admin.newPage();
+    await page.goto(`/messages?to=${menteeB.id}`);
+    expect(new URL(page.url()).pathname).toBe('/messages');
+    await expect(page.getByTestId('messages-to-refused')).toBeVisible();
+
+    // A super admin's tenant permission does not cross an org either.
+    const superAdmin = await as(mails.superA);
+    expect((await superAdmin.request.post('/api/conversations', { data: { userId: menteeB.id }, headers: freshIp('xorg-chat') })).status()).toBe(404);
+
+    // The other direction: B's user cannot open a chat with A's admin.
+    const mentee = await as(mails.menteeB);
+    expect((await mentee.request.post('/api/conversations', { data: { userId: adminA.id }, headers: freshIp('xorg-chat') })).status()).toBe(404);
+
+    expect(
+      await prisma.conversation.count({
+        where: { type: 'DIRECT', AND: [{ participants: { some: { userId: { in: [adminA.id, superA.id] } } } }, { participants: { some: { userId: { in: [menteeB.id, mentorB.id] } } } }] },
+      }),
+    ).toBe(0);
+
+    // A chat that crossed orgs before this fix (seeded directly): no new message
+    // goes in, from either side. Reading stays with its participants, as for
+    // every conversation whose permission has lapsed (#770).
+    const stale = await prisma.conversation.create({
+      data: { type: 'DIRECT', directKey: [adminA.id, menteeB.id].sort().join('|'), participants: { create: [{ userId: adminA.id }, { userId: menteeB.id }] } },
+    });
+    expect((await admin.request.post('/api/messages', { data: { conversationId: stale.id, body: 'cross-org' } })).status()).toBe(403);
+    expect((await mentee.request.post('/api/messages', { data: { conversationId: stale.id, body: 'cross-org' } })).status()).toBe(403);
+    expect(await prisma.message.count({ where: { conversationId: stale.id } })).toBe(0);
+  } finally {
+    for (const context of contexts) await context.close();
+    const conversations = await prisma.conversation.findMany({ where: { participants: { some: { userId: { in: people } } } }, select: { id: true } });
+    await prisma.message.deleteMany({ where: { conversationId: { in: conversations.map((c) => c.id) } } });
+    await prisma.conversation.deleteMany({ where: { id: { in: conversations.map((c) => c.id) } } });
+    for (const email of Object.values(mails)) await cleanupByEmail(email);
     await prisma.organization.deleteMany({ where: { id: { in: [orgA.id, orgB.id] } } });
   }
 });

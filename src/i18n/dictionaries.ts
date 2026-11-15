@@ -2314,6 +2314,12 @@ const en = {
       existsElsewhere: 'This account already exists on a colleague’s board — nothing was created. Ask an admin if it should be yours.',
       contactInFunnelElsewhere: 'This contact is already on a colleague’s board — nothing was created. Ask an admin if it should be yours.',
       alreadyMentored: 'This contact already belongs to another owner — nothing was created. An admin can transfer the lead to you.',
+      // E-mail OR phone, and whose it is (#3647).
+      contactHint: 'E-mail or phone — at least one. A lead with only a number is fine.',
+      contactRequired: 'Enter an e-mail address or a phone number.',
+      phoneInvalid: 'That phone number is not valid — check the digits.',
+      existsOwner: 'This account is already on {owner}’s board — nothing was created. Ask an admin if it should be yours.',
+      contactInFunnelOwner: 'This contact is already on {owner}’s board — nothing was created. Ask an admin if it should be yours.',
     },
   },
   companiesPage: {
@@ -7865,6 +7871,11 @@ const en = {
     conflict: 'This time collides with another meeting.',
     refused: 'This lead is not on your book.',
     error: 'Could not schedule the meeting',
+    // The Me / Team toggle (#3778): the team view is read-only, a colleague's item shows whose it is.
+    scopeLabel: 'Whose calendar',
+    scopeMe: 'Me',
+    scopeTeam: 'Team',
+    teamHint: 'Your colleagues’ meetings appear read-only, with their initials. Their notes stay theirs.',
   },
   calendar: {
     title: 'Calendar',
@@ -14948,6 +14959,12 @@ const tr: Dict = {
       existsElsewhere: 'Bu hesap bir ekip arkadaşının panosunda zaten var — hiçbir şey oluşturulmadı. Senin olması gerekiyorsa bir yöneticiye sor.',
       contactInFunnelElsewhere: 'Bu kişi bir ekip arkadaşının panosunda zaten var — hiçbir şey oluşturulmadı. Senin olması gerekiyorsa bir yöneticiye sor.',
       alreadyMentored: 'Bu kişinin zaten başka bir sahibi var — hiçbir şey oluşturulmadı. Bir yönetici lead\'i sana devredebilir.',
+      // E-mail OR phone, and whose it is (#3647).
+      contactHint: 'E-posta ya da telefon — en az biri. Yalnızca numarası olan lead de olur.',
+      contactRequired: 'Bir e-posta adresi ya da telefon numarası gir.',
+      phoneInvalid: 'Bu telefon numarası geçerli değil — rakamları kontrol et.',
+      existsOwner: 'Bu hesap zaten {owner} adlı kişinin panosunda — hiçbir şey oluşturulmadı. Sende olması gerekiyorsa bir yöneticiye sor.',
+      contactInFunnelOwner: 'Bu kişi zaten {owner} adlı kişinin panosunda — hiçbir şey oluşturulmadı. Sende olması gerekiyorsa bir yöneticiye sor.',
     },
   },
   companiesPage: {
@@ -20372,6 +20389,10 @@ const tr: Dict = {
     conflict: 'Bu saat başka bir toplantıyla çakışıyor.',
     refused: 'Bu lead senin listende değil.',
     error: 'Toplantı planlanamadı',
+    scopeLabel: 'Kimin takvimi',
+    scopeMe: 'Ben',
+    scopeTeam: 'Ekip',
+    teamHint: 'Ekip arkadaşlarının toplantıları baş harfleriyle, salt okunur görünür. Notları kendilerine kalır.',
   },
   calendar: {
     title: 'Takvim',
@@ -27370,6 +27391,12 @@ const de: Dict = {
       existsElsewhere: 'Dieser Account existiert bereits auf dem Board einer Kollegin oder eines Kollegen — es wurde nichts angelegt. Frag einen Admin, wenn er dir gehören soll.',
       contactInFunnelElsewhere: 'Dieser Kontakt ist bereits auf dem Board einer Kollegin oder eines Kollegen — es wurde nichts angelegt. Frag einen Admin, wenn er dir gehören soll.',
       alreadyMentored: 'Dieser Kontakt gehört bereits zu einem anderen Owner — es wurde nichts angelegt. Ein Admin kann dir den Lead übertragen.',
+      // E-mail OR phone, and whose it is (#3647).
+      contactHint: 'E-Mail oder Telefon — mindestens eines. Ein Lead nur mit Nummer ist in Ordnung.',
+      contactRequired: 'Gib eine E-Mail-Adresse oder eine Telefonnummer ein.',
+      phoneInvalid: 'Diese Telefonnummer ist ungültig — bitte die Ziffern prüfen.',
+      existsOwner: 'Dieser Account liegt bereits auf dem Board von {owner} — es wurde nichts angelegt. Frag einen Admin, falls er dir gehören soll.',
+      contactInFunnelOwner: 'Dieser Kontakt liegt bereits auf dem Board von {owner} — es wurde nichts angelegt. Frag einen Admin, falls er dir gehören soll.',
     },
   },
   companiesPage: {
@@ -32796,6 +32823,10 @@ const de: Dict = {
     conflict: 'Diese Zeit überschneidet sich mit einem anderen Termin.',
     refused: 'Dieser Lead gehört nicht zu deinen Leads.',
     error: 'Der Termin konnte nicht geplant werden',
+    scopeLabel: 'Wessen Kalender',
+    scopeMe: 'Ich',
+    scopeTeam: 'Team',
+    teamHint: 'Die Termine deiner Kolleg:innen erscheinen schreibgeschützt mit ihren Initialen. Ihre Notizen bleiben ihre.',
   },
   calendar: {
     title: 'Kalender',

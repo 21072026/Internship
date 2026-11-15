@@ -1,0 +1,44 @@
+import { NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { withRequestScope } from '@/lib/requestContext';
+import { withTenantScope } from '@/lib/orgContext';
+import { salesPoolGate } from '@/lib/salesPoolGate';
+import { salesTeamReadAllowed } from '@/lib/salesBook';
+import { rangeEnd, rangeStart } from '@/lib/dateRange';
+import { loadSalesCalendar, loadSalesTeamCalendar } from '@/lib/salesCalendar';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_RANGE_DAYS = 62;
+
+// GET ?from=&to= — the sales calendar's "Team" view (#3778): the caller's own
+// items, as on GET /api/sales/calendar, plus their colleagues' — read-only and
+// minimal (src/lib/salesCalendar.ts says what a teammate's item may carry).
+// Only for a viewer the shared team-read rule lets read the org's book
+// (salesTeamReadAllowed); anyone else gets the 404 the team book answers.
+export async function GET(request: Request) {
+  return withRequestScope(request, async () => {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const g = await salesPoolGate(session);
+    if (!g.ok) return g.response;
+    if (!(await salesTeamReadAllowed(session))) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+    const url = new URL(request.url);
+    const from = rangeStart(url.searchParams.get('from'));
+    let to = rangeEnd(url.searchParams.get('to'));
+    if (!from || !to || to < from) {
+      return NextResponse.json({ error: 'Validation failed', code: 'invalid_range' }, { status: 400 });
+    }
+    if (to.getTime() - from.getTime() > MAX_RANGE_DAYS * DAY_MS) to = new Date(from.getTime() + MAX_RANGE_DAYS * DAY_MS);
+
+    return withTenantScope(session, async () => {
+      const [own, team] = await Promise.all([
+        loadSalesCalendar({ orgId: g.orgId, userId: g.userId, from, to }),
+        loadSalesTeamCalendar({ orgId: g.orgId, viewer: { id: g.userId, role: session.user.role }, from, to }),
+      ]);
+      const events = [...own, ...team].sort((a, b) => a.date.localeCompare(b.date));
+      return NextResponse.json({ events, from: from.toISOString(), to: to.toISOString() });
+    });
+  });
+}
