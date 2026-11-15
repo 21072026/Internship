@@ -23,6 +23,7 @@ import {
   FileSearch,
   ServerCog,
   Presentation,
+  Trophy,
 } from 'lucide-react';
 import type { Permission } from '@/lib/authzRule';
 import type { VerticalCapability } from '@/lib/verticals';
@@ -356,6 +357,8 @@ export const SALES_NAV_LINKS: NavLink[] = [
   { href: '/sales/board', icon: Columns3, key: 'board', capability: 'pipeline' },
   // The rep's own meetings, follow-ups and trial ends (#3778).
   { href: '/sales/calendar', icon: CalendarDays, key: 'calendar', capability: 'pipeline' },
+  // The team page (#3779): team totals, per-rep counts and the leaderboard — MARKETING only.
+  { href: '/sales/team', icon: Trophy, key: 'salesTeam', capability: 'pipeline', withoutCapability: 'mentorship' },
   { href: '/sales/accounts', icon: Building2, key: 'myCompanies', capability: 'companies' },
   // The rep's share of the outbox (#2960): drafts for their own leads only.
   { href: '/sales/outbox', icon: MailCheck, key: 'outbox', capability: 'pipeline', withoutCapability: 'mentorship' },

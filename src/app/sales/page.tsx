@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
-import { Building2, Columns3, AlertTriangle } from 'lucide-react';
+import { Building2, Columns3, AlertTriangle, Trophy } from 'lucide-react';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -98,6 +98,21 @@ export default async function SalesDashboard() {
       <MentorAttentionQueue items={attention.items} usage={attention.usage} t={t} locale={locale} hrefBase="/sales/leads" />
 
       {targetView && <SalesTargetCards view={targetView} t={t} viewerId={session.user.id} />}
+
+      {/* The team page (#3779): one card, the numbers live on /sales/team. */}
+      {targetView && (
+        <Card className="mb-8">
+          <Link href="/sales/team" className="flex items-center gap-4" data-testid="sales-team-card">
+            <div className="w-12 h-12 shrink-0 bg-amber-100 rounded-xl flex items-center justify-center">
+              <Trophy className="h-6 w-6 text-amber-600" aria-hidden="true" />
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-gray-900">{s.team.cardTitle}</p>
+              <p className="text-sm text-gray-500">{s.team.cardHint}</p>
+            </div>
+          </Link>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-8">
         <Card>
