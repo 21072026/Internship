@@ -7906,6 +7906,10 @@ const en = {
     conflict: 'The record changed meanwhile — it has been reloaded, check it and try again',
     notEditable: 'This record is no longer in a trial — it has been reloaded',
     started: 'Started {date}',
+    // Read mode on the lead page (#3647): the date reads as text, the field opens on Edit.
+    edit: 'Edit',
+    editLabel: 'Edit trial end',
+    cancel: 'Cancel',
   },
   // The estimated monthly value of a funnel record (#2422). ALWAYS "estimated":
   // pricing is usage-based, so the real monthly revenue moves every month and
@@ -20224,6 +20228,10 @@ const tr: Dict = {
     conflict: 'Kayıt bu arada değişti — yeniden yüklendi, kontrol edip tekrar deneyin',
     notEditable: 'Bu kayıt artık deneme aşamasında değil — yeniden yüklendi',
     started: 'Başlangıç {date}',
+    // Read mode on the lead page (#3647): the date reads as text, the field opens on Edit.
+    edit: 'Düzenle',
+    editLabel: 'Deneme bitişini düzenle',
+    cancel: 'Vazgeç',
   },
   dealValue: {
     title: 'Tahmini aylık değer',
@@ -32476,6 +32484,10 @@ const de: Dict = {
     conflict: 'Der Datensatz wurde inzwischen geändert — er wurde neu geladen, bitte prüfen und erneut versuchen',
     notEditable: 'Dieser Datensatz ist nicht mehr in der Testphase — er wurde neu geladen',
     started: 'Begonnen {date}',
+    // Read mode on the lead page (#3647): the date reads as text, the field opens on Edit.
+    edit: 'Bearbeiten',
+    editLabel: 'Testende bearbeiten',
+    cancel: 'Abbrechen',
   },
   dealValue: {
     title: 'Geschätzter Monatswert',

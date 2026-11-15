@@ -32,6 +32,7 @@ export function SalesRecordPanels({
   trialStartedAt,
   trialEndsAt,
   contractEndsAt,
+  canEditTrial,
   dealValue,
   interactions,
   contact,
@@ -44,6 +45,8 @@ export function SalesRecordPanels({
   trialStartedAt: string | null;
   trialEndsAt: string | null;
   contractEndsAt: string | null;
+  /** Who may move the trial end, decided on the server (owner, dispatcher, admin — the trial route's rule). */
+  canEditTrial: boolean;
   dealValue: DealValueState;
   /** The interactions card, beside the follow-up. */
   interactions: ReactNode;
@@ -74,7 +77,8 @@ export function SalesRecordPanels({
             pipelineStatus={pipelineStatus}
             trialStartedAt={trialStartedAt}
             trialEndsAt={trialEndsAt}
-            canEdit={status === 'ACTIVE'}
+            canEdit={canEditTrial}
+            readFirst
             onSaved={refresh}
           />
         </div>
