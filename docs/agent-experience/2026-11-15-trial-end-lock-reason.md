@@ -12,3 +12,7 @@
   button with `aria-expanded` and `aria-controls`, not a `title` tooltip: phones have no hover.
   Derive the reason from the same pure function the API's refusals mirror
   (`trialEndLockReason()`), so the text and the 409 cannot disagree.
+- **A shared e2e seed helper can hide a first-run bug.** `seedUser()` pre-stamps
+  `mentorOnboardingSeenAt` for every MENTOR, so no spec ever saw what an invited sales rep's
+  first sign-in did: `/mentor` redirected to `/onboarding`, a 404 in MARKETING. A spec about a
+  first run must clear the stamp, as an invitation leaves it (`e2e/marketing-rep-first-login.spec.ts`).
