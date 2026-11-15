@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Fixed:** a person's hover card offers no profile link where that profile page does not exist in the viewer's vertical. In MARKETING a rep (MENTOR) has no admin page — `/admin/mentors/<id>` is closed and there is no `/admin/users/<id>` — so the card used to link to a 404. `personHref()` stays pure and takes the vertical's `{ mentorship }` from the caller, which reads it through `useCapabilities()` (#2348)."
+}
