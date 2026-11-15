@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { requirePermission } from '@/lib/authz';
+import { actorFromSession, can, requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { logActivity } from '@/lib/activity';
 import { withTenantScope } from '@/lib/orgContext';
@@ -139,6 +139,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           pendingActivation: isPendingActivation({ password }),
           leadRecord,
           contactEmail,
+          // May the caller log an interaction on this person's records (#3748)?
+          // The admin half of POST /api/interactions' own rule, so the
+          // click-to-call buttons are drawn only for whom that route accepts.
+          canLogInteraction: await (async () => {
+            const actor = await actorFromSession(session);
+            return !!actor && (await can(actor, 'relation.write', undefined, session));
+          })(),
         },
       });
     });
