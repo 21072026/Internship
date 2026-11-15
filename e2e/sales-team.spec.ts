@@ -248,6 +248,24 @@ test("another org's records never reach the numbers or the names", { tag: '@smok
   for (const name of [NAMES.rep1, NAMES.rep2, NAMES.admin]) await expect(page.getByTestId('sales-team')).not.toContainText(name);
 });
 
+test('with the team book off for reps, a rep gets a 404 and an admin still sees the page', async ({ page }) => {
+  test.slow();
+  await prisma.setting.create({ data: { orgId: ids.orgA, key: 'salesTeamBookForReps', value: 'false' } });
+  try {
+    await signInMarketing(page, E.rep1, '/sales');
+    const res = await page.goto('/sales/team');
+    expect(res?.status()).toBe(404);
+    await expect(page.getByTestId('sales-team')).toHaveCount(0);
+
+    await page.context().clearCookies();
+    await signInMarketing(page, E.admin, '/admin');
+    await gotoSettled(page, '/sales/team');
+    await expect(page.getByTestId('sales-team-active')).toHaveText('7');
+  } finally {
+    await prisma.setting.deleteMany({ where: { orgId: ids.orgA, key: 'salesTeamBookForReps' } });
+  }
+});
+
 test('INTERNSHIP cannot open the team page', async ({ page }) => {
   test.slow();
   await signInAndSettle(page, E.intern, PASSWORD, '/mentor');

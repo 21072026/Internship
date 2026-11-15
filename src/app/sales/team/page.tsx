@@ -14,9 +14,10 @@ import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Ca
 // The sales team page (#3779, MARKETING only): what the team follows, where it
 // stands and who won what — for every rep of the tenant. Names and counts only;
 // the numbers come from src/lib/salesTeam.ts and its rules from
-// src/lib/salesTargetRule.ts. A person's row is plain text: the team board view
-// that would open their records is not on this surface yet, and the rep's own
-// board (/sales/board) lists only their own book (#3755).
+// src/lib/salesTargetRule.ts; the open records are the team book's
+// (src/lib/salesTeamBook.ts), whose gate is salesTeamReadAllowed(). A person's
+// row is plain text: the team board view that would open their records is not
+// on this surface yet, and the rep's own board lists only their own book (#3755).
 
 export default async function SalesTeamPage() {
   const session = await getServerSession(authOptions);
@@ -29,6 +30,8 @@ export default async function SalesTeamPage() {
   const s = t.sales.team;
   const lb = t.sales.leaderboard;
   const view = await loadSalesTeamView(session, locale);
+  // The team book's gate (salesTeamReadAllowed): the org setting is off for reps.
+  if (!view) notFound();
   const keys = view.stages.map((x) => x.key);
   const fill = (text: string, values: Record<string, string | number>) =>
     text.replace(/\{(\w+)\}/g, (m, k: string) => (k in values ? String(values[k]) : m));

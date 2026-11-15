@@ -33,6 +33,7 @@ import { resolvePipelineStages, outcomeStageKeysFrom, type ResolvedStage } from 
 import { currentPeriod, periodRange } from '@/lib/meteringRules';
 import { loadWinCounts } from '@/lib/salesTarget';
 import { teamBookCounts, type TeamBookCounts, type TeamBookSlice } from '@/lib/salesTeamRule';
+import { loadSalesTeamBook } from '@/lib/salesTeamBook';
 import {
   canSeeLeaderboard,
   earliestStart,
@@ -100,7 +101,12 @@ function startOfUtcDay(now: Date): Date {
  * The team page for `session`'s tenant. The caller has already decided the
  * surface (`hasSalesSurface`) and the vertical (`salesTargetApplies`).
  */
-export async function loadSalesTeamView(session: Session, locale: Locale = 'en', now: Date = new Date()): Promise<SalesTeamView> {
+export async function loadSalesTeamView(session: Session, locale: Locale = 'en', now: Date = new Date()): Promise<SalesTeamView | null> {
+  // The team book is the one reader of the open records (src/lib/salesTeamBook.ts):
+  // its gate (salesTeamReadAllowed) decides who may see the team at all, and
+  // null means not this session — the page answers 404.
+  const book = await loadSalesTeamBook(session, { status: 'active' }, now);
+  if (!book) return null;
   const [tenant, settingsOrg] = await Promise.all([tenantWhere(session), settingsOrgOf(session)]);
   const [rawForReps, resolved] = await Promise.all([
     resolveSettingRaw('salesLeaderboardForReps', { orgId: settingsOrg }),
@@ -113,8 +119,8 @@ export async function loadSalesTeamView(session: Session, locale: Locale = 'en',
   const week = weekRange(now);
   const closedKeys = [...outcome.finished, ...outcome.offPath];
 
-  const [book, newMonth, newWeek, values, wins, lostDeals] = await Promise.all([
-    loadTeamBookCounts(tenant, now),
+  const [counts, newMonth, newWeek, values, wins, lostDeals] = await Promise.all([
+    loadTeamBookCounts(book, tenant, now),
     // A new lead is a new record — a transfer successor is the same deal, so
     // it carries a `previousRelationId` and is not counted again.
     prisma.mentorshipRelation.count({
@@ -156,7 +162,7 @@ export async function loadSalesTeamView(session: Session, locale: Locale = 'en',
     const s = ordered.find((x) => x.key === key);
     return { key, label: s?.label ?? key, color: s?.color ?? null, count };
   };
-  const stageCount = book.byStage;
+  const stageCount = counts.byStage;
   // Every configured stage, in order; a key no stage carries any more (a
   // deleted custom stage) still counts, at the end, so the total adds up.
   const stages: StageCount[] = [
@@ -165,9 +171,9 @@ export async function loadSalesTeamView(session: Session, locale: Locale = 'en',
   ];
   const activeTotal = stages.reduce((n, s) => n + s.count, 0);
 
-  const reps: RepRow[] = book.people.map((p) => {
+  const reps: RepRow[] = counts.people.map((p) => {
     const mine = p.byStage;
-    const repStageList = book.splitKnown ? stages.map((s) => ({ ...s, count: mine.get(s.key) ?? 0 })).filter((s) => s.count > 0) : [];
+    const repStageList = counts.splitKnown ? stages.map((s) => ({ ...s, count: mine.get(s.key) ?? 0 })).filter((s) => s.count > 0) : [];
     let open = 0;
     for (const n of mine.values()) open += n;
     return {
@@ -202,30 +208,12 @@ export async function loadSalesTeamView(session: Session, locale: Locale = 'en',
   };
 }
 
-/**
- * TEMPORARY until WP2a: stands in for `loadSalesTeamBook(session, { status: 'active' })`
- * with the same answer shape (TeamBookSlice) and the same counting rule, so
- * the swap is one call. Not merged in this form.
- */
-async function loadTeamBookSlice(tenant: Awaited<ReturnType<typeof tenantWhere>>): Promise<TeamBookSlice> {
-  const active = withinTenant({ status: 'ACTIVE' as const }, tenant);
-  const [byStage, byOwner, rows] = await Promise.all([
-    prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: active, _count: { _all: true } }),
-    prisma.mentorshipRelation.groupBy({ by: ['mentorId'], where: active, _count: { _all: true } }),
-    prisma.mentorshipRelation.findMany({ where: active, select: { mentorId: true, pipelineStatus: true }, orderBy: { startDate: 'desc' }, take: 500 }),
-  ]);
-  const total = byStage.reduce((n, g) => n + g._count._all, 0);
-  return {
-    rows: rows.map((r) => ({ ownerId: r.mentorId, pipelineStatus: r.pipelineStatus as string })),
-    byStage: byStage.map((g) => ({ stage: g.pipelineStatus as string, count: g._count._all })),
-    byOwner: byOwner.map((g) => ({ ownerId: g.mentorId, ownerName: '', count: g._count._all })),
-    truncated: total > rows.length,
-  };
-}
-
-async function loadTeamBookCounts(tenant: Awaited<ReturnType<typeof tenantWhere>>, now: Date): Promise<TeamBookCounts> {
-  const [book, overdueByRep, people] = await Promise.all([
-    loadTeamBookSlice(tenant),
+async function loadTeamBookCounts(
+  book: TeamBookSlice,
+  tenant: Awaited<ReturnType<typeof tenantWhere>>,
+  now: Date,
+): Promise<TeamBookCounts> {
+  const [overdueByRep, people] = await Promise.all([
     // Overdue follow-ups: a COUNT per owner only — the team book deliberately
     // carries no next-action field, and nothing about the follow-up leaves here.
     prisma.mentorshipRelation.groupBy({
