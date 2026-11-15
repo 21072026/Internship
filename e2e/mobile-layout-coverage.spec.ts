@@ -222,6 +222,21 @@ const COMPANY: Route[] = shell(
 const SOURCE: Route[] = shell('/source');
 
 /**
+ * The admin sidebar's group hub pages (#3752): each group's "More …" row opens
+ * `/admin/hub/<group>`, the list of its rarely used pages. Added to the sidebar
+ * by #3757 without an entry here, which turned this gate red on main.
+ */
+const HUBS: Route[] = shell(
+  '/admin/hub/pipeline',
+  '/admin/hub/mentoring',
+  '/admin/hub/communication',
+  '/admin/hub/reports',
+  '/admin/hub/team',
+  '/admin/hub/integrations',
+  '/admin/hub/settings'
+);
+
+/**
  * Admin sidebar destinations measured by `mobile-layout-audit.spec.ts` at phone
  * width, listed here so the coverage gate below can tell "audited elsewhere"
  * from "not audited at all". Kept as a literal on purpose: if that file drops a
@@ -244,7 +259,7 @@ const AUDITED_ELSEWHERE = [
 
 const AUDITED = new Set<string>([
   ...AUDITED_ELSEWHERE,
-  ...[...FUNNEL, ...SETUP, ...OUTBOUND, ...OPERATIONS, ...PERSONAL, ...COMPANY, ...SOURCE].map(
+  ...[...FUNNEL, ...SETUP, ...OUTBOUND, ...OPERATIONS, ...HUBS, ...PERSONAL, ...COMPANY, ...SOURCE].map(
     (r) => r.path
   ),
 ]);
@@ -436,6 +451,12 @@ test('phone width: the operations and settings admin screens stay inside the vie
   test.slow();
   await asAdmin(page);
   await sweep(page, OPERATIONS, 'the operations and settings admin screens');
+});
+
+test('phone width: the admin group hub pages stay inside the viewport in German', async ({ page }) => {
+  test.slow();
+  await asAdmin(page);
+  await sweep(page, HUBS, 'the admin group hub pages');
 });
 
 /**

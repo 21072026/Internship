@@ -86,7 +86,10 @@ export function marketingOperatorWarning(env = process.env) {
  */
 export function outboundApprovalLabel(stored) {
   const v = stored === undefined || stored === null ? '' : String(stored).trim();
-  return v === '' || v === 'off' ? 'off' : 'lead_mail';
+  if (v === '' || v === 'off') return 'off';
+  // #3771: the blocking mode is read as itself, exactly like the rule.
+  if (v === 'lead_mail_blocked') return 'lead_mail_blocked';
+  return 'lead_mail';
 }
 
 // Plain-ESM mirrors of src/lib/menteeAccount.ts (the deploy runs under Node 20,

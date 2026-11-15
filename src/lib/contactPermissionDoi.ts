@@ -64,7 +64,9 @@ export async function sendDoiConfirmation(input: {
   // demo mode sendEmail returns SKIPPED. Not sent, so not spent — give the
   // day's slot back — and not stamped: `marketingOptInMailSentAt` is evidence
   // that a confirmation mail went out, and must never say so falsely.
-  if (delivered === 'SKIPPED' || delivered === 'FAILED') {
+  // BLOCKED (#3771): the org switched lead mail off entirely — not sent either,
+  // so the same: slot back, no evidence stamp, the request stays at NONE.
+  if (delivered === 'SKIPPED' || delivered === 'BLOCKED' || delivered === 'FAILED') {
     await prisma.contactConfirmationMailCap.delete({ where: { key } }).catch(() => {});
     return 'failed';
   }
