@@ -3,6 +3,9 @@ import { getServerDictionary } from '@/i18n/server';
 import { requirePortalPartner } from '@/lib/affiliatePortal';
 import { maskedPayoutDetails } from '@/lib/affiliatePayoutDetails';
 import { interpolate } from '@/lib/notificationText';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { stepUpMethodFor } from '@/lib/stepUp';
 import { PayoutDetailsForm } from './PayoutDetailsForm';
 
 // The partner's own bank details (#3117). The stored IBAN is shown masked (its
@@ -15,6 +18,9 @@ export default async function AffiliatePayoutDetailsPage() {
   if (!portal) return <p className="text-sm text-gray-600 dark:text-gray-400">{L.noPartner}</p>;
 
   const current = await maskedPayoutDetails(portal.partner.orgId, portal.partner.id);
+  // Which proof a save will ask for (#3734): the signed-in account's own.
+  const session = await getServerSession(authOptions);
+  const stepUp = session ? await stepUpMethodFor(session.user.id) : null;
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{L.detailsTitle}</h1>
@@ -26,7 +32,7 @@ export default async function AffiliatePayoutDetailsPage() {
             {current ? interpolate(L.detailsCurrent, { iban: current.iban, holder: current.holder }) : L.detailsNone}
           </p>
         </CardHeader>
-        <PayoutDetailsForm impersonating={portal.impersonating} suspended={portal.partner.status === 'SUSPENDED'} />
+        <PayoutDetailsForm impersonating={portal.impersonating} suspended={portal.partner.status === 'SUSPENDED'} stepUp={stepUp} />
       </Card>
     </div>
   );
