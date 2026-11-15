@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
 import { useT } from '@/i18n/client';
 import { TEXT_LIMITS } from '@/lib/textLimits';
+import { openInteractionDraft } from './interactionDraft';
 
 // The lead's contact on its record page (#3655): the account's primary contact
 // — name, position, e-mail, phone — shown and, for the record's rep (or an
@@ -21,17 +22,46 @@ export interface LeadContact {
   position: string | null;
 }
 
-function Row({ label, value, testId }: { label: string; value: string | null; testId: string }) {
+function Row({ label, value, testId, href, onOpen }: { label: string; value: string | null; testId: string; href?: string; onOpen?: () => void }) {
   if (!value) return null;
   return (
     <div data-testid={testId}>
       <dt className="text-xs text-gray-500">{label}</dt>
-      <dd className="break-words text-sm text-gray-900 dark:text-gray-100">{value}</dd>
+      <dd className="break-words text-sm text-gray-900 dark:text-gray-100">
+        {href ? (
+          // The device's own phone or mail program does the calling/sending —
+          // the CRM sends nothing to a lead (#3741). The click also opens an
+          // interaction draft on the page, so the contact is logged.
+          <a href={href} onClick={onOpen} className="text-blue-600 hover:underline dark:text-blue-400" data-testid={`${testId}-link`}>
+            {value}
+          </a>
+        ) : (
+          value
+        )}
+      </dd>
     </div>
   );
 }
 
-export function LeadContactEditor({ relationId, initial, canEdit }: { relationId: string; initial: LeadContact; canEdit: boolean }) {
+/** A `tel:` target from a phone as people type it: digits and a leading +, nothing else. */
+export function telHref(phone: string): string | undefined {
+  const digits = phone.trim().replace(/(?!^\+)[^\d]/g, '');
+  return /^\+?\d{3,}$/.test(digits) ? `tel:${digits}` : undefined;
+}
+
+export function LeadContactEditor({
+  relationId,
+  initial,
+  canEdit,
+  logOnContact = false,
+}: {
+  relationId: string;
+  initial: LeadContact;
+  canEdit: boolean;
+  /** A click on the phone/e-mail link also opens an interaction draft of that type (#3741). */
+  logOnContact?: boolean;
+}) {
+  const onContact = logOnContact ? (type: 'Call' | 'Email') => openInteractionDraft({ type }) : undefined;
   const t = useT();
   const s = t.sales.lead;
   const toast = useToast();
@@ -121,8 +151,20 @@ export function LeadContactEditor({ relationId, initial, canEdit }: { relationId
         <dl className="grid grid-cols-1 gap-4" data-testid="sales-lead-contact-person">
           <Row label={s.contactName} value={initial.name} testId="sales-lead-contact-name" />
           <Row label={s.contactPosition} value={initial.position} testId="sales-lead-contact-position" />
-          <Row label={s.email} value={initial.email} testId="sales-lead-email" />
-          <Row label={s.phone} value={initial.phone} testId="sales-lead-phone" />
+          <Row
+            label={s.email}
+            value={initial.email}
+            testId="sales-lead-email"
+            href={initial.email ? `mailto:${initial.email}` : undefined}
+            onOpen={onContact ? () => onContact('Email') : undefined}
+          />
+          <Row
+            label={s.phone}
+            value={initial.phone}
+            testId="sales-lead-phone"
+            href={initial.phone ? telHref(initial.phone) : undefined}
+            onOpen={onContact ? () => onContact('Call') : undefined}
+          />
         </dl>
       )}
       {canEdit && (

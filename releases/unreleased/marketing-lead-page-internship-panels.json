@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "**MARKETING lead page shows no internship panels (#2348):** `/admin/candidates/[id]` gated its offer (`placements`), evaluation (`evaluations`), goals, meeting-cadence, certificate and CV (`mentorship`) panels on nothing, so a MARKETING admin saw an internship certificate generator on every closed sale. The admin layout now hands the capability list it already resolves for the sidebar to a new client `CapabilitiesProvider` (`src/lib/capabilitiesClient.tsx`, `useHasCapability()`), and the page gates the six panels on it. Presentation only; the APIs keep their own gates. The `offers` and `programJourney` LEAK_EXEMPT reasons in `scripts/check-i18n.ts` now say what the code does.",
+  "notes": {
+    "en": [
+      "Marketing leads no longer show internship panels such as offers, evaluations, goals, the CV or the certificate generator."
+    ],
+    "tr": [
+      "Pazarlama lead'lerinde artık teklif, değerlendirme, hedef, CV veya sertifika oluşturucu gibi staj panelleri görünmüyor."
+    ],
+    "de": [
+      "Marketing-Leads zeigen keine Praktikums-Bereiche wie Angebote, Bewertungen, Ziele, den Lebenslauf oder den Zertifikatsgenerator mehr."
+    ]
+  }
+}
