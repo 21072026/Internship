@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Dark mode:** the accent layer (`html[data-accent] .bg|text|border|ring-blue-*`, always on) no longer overrides an element's own `dark:` colour. The remap outranked Tailwind's `dark:` variant (0,2,1 vs 0,2,0), so the active \"My records\" toggle on the lead list kept its light fill under light text (1.16:1), and `text-blue-700 dark:text-blue-300` links stayed dark blue on dark pages. Each remap now carries a zero-specificity `:not(:where(.dark [class*=\"dark:<prop>-\"]))` guard, and `check:dark-mode` fails on a remap without it (#3745).",
+  "notes": {
+    "en": ["In dark mode, active filter buttons and blue links are readable again: their text no longer disappears into a light background."],
+    "tr": ["Dark mode'da aktif filtre butonları ve mavi bağlantılar yeniden okunuyor: yazıları artık açık renkli zeminde kaybolmuyor."],
+    "de": ["Im dunklen Modus sind aktive Filterschaltflächen und blaue Links wieder lesbar: ihr Text verschwindet nicht mehr auf hellem Hintergrund."]
+  }
+}

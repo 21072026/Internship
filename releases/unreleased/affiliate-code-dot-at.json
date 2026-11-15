@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "Affiliate: partner codes may contain `.` and `@` (`ada.lovelace`, `ada@example`), so codes the previous system issued from user names — and the links in circulation — keep working. One rule for every path in `src/lib/affiliateCodeRule.ts` (create, application approval, `?ref=` redirect, `/r/<code>` with or without `%40`, migration); the migration names a code with a space as needing a new code (#3550).",
-  "notes": {
-    "en": ["Partner codes can now contain dots and @, so partners' existing links from the previous system keep working."],
-    "tr": ["Partner kodları artık nokta ve @ içerebiliyor; partnerlerin önceki sistemden kalan linkleri çalışmaya devam ediyor."],
-    "de": ["Partnercodes dürfen jetzt Punkte und @ enthalten, damit die bestehenden Links der Partner aus dem bisherigen System weiter funktionieren."]
-  }
-}

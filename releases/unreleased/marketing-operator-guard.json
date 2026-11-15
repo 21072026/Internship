@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Postal campaigns refuse a marketing sender that is not configured (#2578):** a MARKETING org's campaign is neither printed nor posted unless `MARKETING_OPERATOR_NAME`, `_EMAIL` and `_ADDRESS` are all set (`marketingOperatorConfigured()`, `src/lib/imprint.ts`) — the imprint may still fall back to `OPERATOR_*`, a letter may not (outreach-compliance § 6). `/print/post-campaign/[id]` shows a blocking notice instead of the letters, `POST /api/admin/post-campaigns/[id]/send` answers 409 `operator_missing` and leaves the campaign a draft; INTERNSHIP orgs are never asked. `prisma/check-marketing-orgs.mjs` prints a deploy-log WARNING when `MARKETING_HOSTS` is set and the set is incomplete. The e2e app server gets a synthetic `MARKETING_OPERATOR_*` set.",
-  "notes": {
-    "en": ["Postal campaigns can only be printed and posted once your deployment has named its own marketing sender — a letter never goes out under the wrong company's name."],
-    "tr": ["Posta kampanyaları artık ancak kurulum kendi pazarlama göndericisini tanımladığında basılıp postalanabiliyor; bir mektup asla yanlış şirketin adıyla çıkmıyor."],
-    "de": ["Briefkampagnen lassen sich erst drucken und versenden, wenn die Installation ihren eigenen Marketing-Absender hinterlegt hat — kein Brief geht unter dem Namen des falschen Unternehmens hinaus."]
-  }
-}

@@ -67,6 +67,29 @@ export function retintedUtilities(css) {
   return covered;
 }
 
+/**
+ * The accent layer must step aside for an element's own `dark:` colour (#3745).
+ *
+ * `<html data-accent>` is always set, and its remap rules
+ * (`html[data-accent] .bg-blue-100`, specificity 0,2,1) outrank Tailwind's
+ * `dark:` variant (`.dark\:bg-blue-900\/40:is(.dark *)`, 0,2,0). Without a
+ * guard, an element that wrote its own dark colour lost it in dark mode: the
+ * active "My records" toggle kept its light fill under light text, and a
+ * `text-blue-700 dark:text-blue-300` link stayed dark blue on a dark page.
+ * Every plain bg/text/border/ring remap therefore carries
+ * `:not(:where(.dark [class*="dark:<prop>-"]))` — zero specificity, so it changes
+ * nothing else. Returns the remap selectors that lack it.
+ */
+export function unguardedAccentRemaps(css) {
+  const missing = [];
+  const re = /html\[data-accent\] \.((bg|text|border|ring)-blue-\d+)(?=[\s{,:])([^,{]*)/g;
+  for (const m of css.matchAll(re)) {
+    const [, utility, prop, rest] = m;
+    if (!rest.includes(`:not(:where(.dark [class*="dark:${prop}-"]))`)) missing.push(utility);
+  }
+  return missing;
+}
+
 /** The findings of one className's token list. */
 export function lightSurfacesWithoutDark(tokens, covered) {
   if (tokens.some((t) => DARK_BG.test(t))) return [];
@@ -132,6 +155,13 @@ function main() {
 
   const baseline = JSON.parse(readFileSync(join(ROOT, BASELINE_FILE), 'utf8'));
   const errors = [];
+  const unguarded = unguardedAccentRemaps(readFileSync(join(ROOT, GLOBALS_CSS), 'utf8'));
+  if (unguarded.length) {
+    errors.push(
+      `${GLOBALS_CSS}: accent remap(s) without the dark-mode guard — in dark mode they would override an element's own dark: colour (#3745):\n` +
+        unguarded.map((u) => `    html[data-accent] .${u} needs :not(:where(.dark [class*="dark:${u.split('-')[0]}-"]))`).join('\n')
+    );
+  }
   for (const [file, list] of Object.entries(byFile)) {
     const pinned = baseline[file] ?? 0;
     if (list.length > pinned) {
