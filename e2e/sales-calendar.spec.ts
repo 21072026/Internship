@@ -270,7 +270,7 @@ test('"Today" on /sales lists the follow-ups due and overdue, today\'s meetings 
   await expect(page.getByText(`Prepare the demo deck ${STAMP}`).first()).toBeVisible({ timeout: 20_000 });
 });
 
-test('the Team view shows colleagues\' meetings with their initials, opening the lead read-only — never a title or a note', async ({ page, playwright, baseURL }) => {
+test('the Team view shows colleagues\' meetings and follow-up days with their initials, opening the lead read-only — never a title or a note', async ({ page, playwright, baseURL }) => {
   test.slow();
   await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
   await signInAndSettle(page, mail.rep, PW, '/sales');
@@ -288,18 +288,31 @@ test('the Team view shows colleagues\' meetings with their initials, opening the
   await expect(theirs.locator('a').first()).toHaveAttribute('href', `/sales/leads/${ids['rel-colleague']}`);
   // The rep's own items are still there, in full.
   await expect(day.getByTestId(`calendar-event-meeting-${ids.meeting}`)).toBeVisible();
-  // Never the colleague's meeting title or follow-up note; a rep does not get a colleague's follow-up day at all.
+  // The colleague's follow-up DAY is there too (the team sees each other's work, 2026-11-15):
+  // on the right day, with the lead's name and the owner — never the note.
+  const theirFollowUp = day.getByTestId(`calendar-event-team-followup-${ids['rel-colleague']}`);
+  await expect(theirFollowUp).toBeVisible();
+  await expect(theirFollowUp).toContainText(`Cal lead-colleague ${STAMP}`);
+  await expect(theirFollowUp).toContainText('All day');
+  await expect(theirFollowUp.getByTestId('calendar-event-owner').first()).toContainText(`Cal colleague ${STAMP}`);
+  // Never the colleague's meeting title or follow-up note.
   await expect(page.getByText(`Colleague call ${STAMP}`)).toHaveCount(0);
   await expect(page.getByText('Colleague step')).toHaveCount(0);
-  await expect(day.getByTestId(`calendar-event-team-followup-${ids['rel-colleague']}`)).toHaveCount(0);
 
   // The API says the same; an ADMIN of the org gets the colleague's follow-up DAY, never its note.
   const rep = await repJar(playwright, baseURL, 'rep');
   const repBody = await (await rep.get(`/api/sales/calendar/team?from=${todayKey}&to=${todayKey}`)).text();
   expect(repBody).toContain(`team-meeting-${ids.colleagueMeeting}`);
   expect(repBody).not.toContain(`Colleague call ${STAMP}`);
+  // The rep gets the colleague's follow-up day — the date, the lead, the owner — and no note anywhere in the answer.
+  const repEvents = JSON.parse(repBody).events as Array<{ id: string; title: string; date: string; who: string; owner?: string; ownerName?: string }>;
+  const repFollowUp = repEvents.find((e) => e.id === `team-followup-${ids['rel-colleague']}`);
+  expect(repFollowUp, 'the rep sees the colleague follow-up day').toBeTruthy();
+  expect(repFollowUp!.date).toBe(todayKey);
+  expect(repFollowUp!.who).toBe(`Cal lead-colleague ${STAMP}`);
+  expect(repFollowUp!.ownerName).toBe(`Cal colleague ${STAMP}`);
+  expect(repFollowUp!.title).toBe('');
   expect(repBody).not.toContain('Colleague step');
-  expect(repBody).not.toContain(`team-followup-${ids['rel-colleague']}`);
   await rep.dispose();
   const admin = await repJar(playwright, baseURL, 'admin');
   const adminRes = await admin.get(`/api/sales/calendar/team?from=${todayKey}&to=${todayKey}`);

@@ -152,10 +152,10 @@ export async function loadSalesCalendar(opts: {
 // (salesTeamReadAllowed, src/lib/salesBook.ts — the caller checks it). What a
 // teammate's item carries is the short list the team book allows: the lead's
 // name, when, and whose it is (initials). Never a meeting's title (free text the
-// owner wrote) and never `nextActionNote`. A teammate's follow-up DAY is the
-// owner's working data too (canSeeNextAction: the owner and an ADMIN), so it is
-// listed only for a viewer that rule lets read it; a rep sees colleagues'
-// meetings. An item opens the colleague's lead page, which the same team-read
+// owner wrote) and never `nextActionNote` — neither is selected. A teammate's
+// follow-up DAY is listed when the caller says so: the route decides it with the
+// narrow, date-only rule canSeeTeamFollowUpDate (src/lib/teamFollowUpDateRule.ts,
+// the user's decision of 2026-11-15) — canSeeNextAction is not widened by it. An item opens the colleague's lead page, which the same team-read
 // rule opens read-only (WP2b, #3793) — no write reaches it from here.
 
 export interface SalesTeamCalendarEvent {
@@ -184,16 +184,16 @@ export function initialsOf(name: string): string {
 
 export async function loadSalesTeamCalendar(opts: {
   orgId: string;
-  viewer: { id: string; role: string };
+  viewer: { id: string };
   from: Date;
   to: Date;
+  /** List colleagues' follow-up DAYS (never their note) — canSeeTeamFollowUpDate, decided by the caller. */
+  followUpDays: boolean;
   now?: number;
 }): Promise<SalesTeamCalendarEvent[]> {
-  const { orgId, viewer, from, to } = opts;
+  const { orgId, viewer, from, to, followUpDays } = opts;
   const now = opts.now ?? Date.now();
   const teammates = { orgId, mentorId: { not: viewer.id } };
-  // canSeeNextAction for a record the viewer does not own: an ADMIN only.
-  const followUpDays = viewer.role === 'ADMIN';
 
   const [meetings, followUps] = await Promise.all([
     prisma.meeting.findMany({
