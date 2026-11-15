@@ -150,7 +150,11 @@ Every entry path takes both shapes (#3553) and leaves the decision to the rule:
 - **Migration CSV**: `payment_amount` and/or `transaction_count` + `unit_price`
   (see [Migration](#migration-from-a-previous-system)).
 
-The breakdown is shown in the lists in #3554.
+**Shown** (#3554): a payment with a breakdown carries it under the base as a
+small line — `340 transactions × €0.15` — in the admin's payment list and on the
+partner portal's commissions page (the partner's own customers only, through the
+existing scope; no personal data beyond the customer reference). A payment
+without one shows the amount alone.
 
 ### Re-evaluation after a plan change (#3170)
 

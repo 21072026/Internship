@@ -61,6 +61,8 @@ export async function listPayments(
         id: true,
         receivedAt: true,
         amountMinor: true,
+        transactionCount: true,
+        unitPriceMinor: true,
         currency: true,
         externalPaymentRef: true,
         source: true,
@@ -75,6 +77,9 @@ export async function listPayments(
       id: r.id,
       receivedAt: r.receivedAt.toISOString(),
       amountMinor: r.amountMinor,
+      // The breakdown of the commission base when it was entered as one (#3554); both or neither.
+      transactionCount: r.transactionCount,
+      unitPriceMinor: r.unitPriceMinor,
       currency: r.currency,
       externalPaymentRef: r.externalPaymentRef,
       source: r.source,

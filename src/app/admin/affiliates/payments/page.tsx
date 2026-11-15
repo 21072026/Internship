@@ -34,6 +34,8 @@ interface Row {
   id: string;
   receivedAt: string;
   amountMinor: number;
+  transactionCount: number | null;
+  unitPriceMinor: number | null;
   currency: string;
   externalPaymentRef: string;
   customerId: string;
@@ -308,7 +310,14 @@ function AffiliatePayments() {
                       </div>
                     </td>
                     <td className="px-4 py-2">{r.partner.displayName}</td>
-                    <td className="px-4 py-2 text-right whitespace-nowrap">{money(r.amountMinor, r.currency)}</td>
+                    <td className="px-4 py-2 text-right whitespace-nowrap">
+                      {money(r.amountMinor, r.currency)}
+                      {r.transactionCount !== null && r.unitPriceMinor !== null && (
+                        <div className="text-xs text-gray-500" data-testid="affiliate-payment-breakdown">
+                          {interpolate(L.breakdownLine, { count: new Intl.NumberFormat(locale).format(r.transactionCount), price: money(r.unitPriceMinor, r.currency) })}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-2 font-mono">{r.externalPaymentRef}</td>
                     <td className="px-4 py-2 whitespace-nowrap">
                       {r.commission ? (

@@ -10,6 +10,8 @@ import { signInViaApi, signInAndSettle, gotoSettled, MARKETING_HOST, asHost } fr
  * resolvePaymentBase() decides, so disagreeing shapes are refused with their
  * issue and write nothing. A client that sends only `amountMinor` keeps working.
  * The account event and the migration CSV are pinned in their own specs.
+ * The breakdown is shown beside the base (#3554): in the admin's payment list and
+ * on the partner's own commissions page; a payment without one shows the amount only.
  *
  * SYNTHETIC ONLY: a throwaway MARKETING org, invented references, EUR plan.
  */
@@ -32,6 +34,7 @@ const STAMP = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
 let orgId = '';
 let partnerId = '';
 let email = '';
+let partnerEmail = '';
 let api: APIRequestContext;
 
 const stored = (ref: string) =>
@@ -47,6 +50,9 @@ test.beforeAll(async ({ playwright, baseURL }) => {
   partnerId = (await prisma.affiliatePartner.create({ data: { orgId, code: `base-${STAMP}`, displayName: 'Base Partner' } })).id;
   email = uniqueEmail('aff-base-admin');
   await seedUser(email, PW, 'ADMIN', 'Base Admin', { orgId });
+  partnerEmail = uniqueEmail('aff-base-partner');
+  const partnerUser = await seedUser(partnerEmail, PW, 'AFFILIATE', 'Base Partner', { orgId });
+  await prisma.affiliatePartner.update({ where: { id: partnerId }, data: { userId: partnerUser.id } });
   api = await playwright.request.newContext({ baseURL });
   expect((await signInViaApi(api, email, PW, { host: MARKETING_HOST })).ok).toBe(true);
 });
@@ -63,6 +69,7 @@ test.afterAll(async () => {
     await prisma.auditLog.deleteMany({ where }).catch(() => {});
   }
   if (email) await cleanupByEmail(email);
+  if (partnerEmail) await cleanupByEmail(partnerEmail);
   if (orgId) await prisma.organization.deleteMany({ where: { id: orgId } }).catch(() => {});
   await prisma.$disconnect();
 });
@@ -117,4 +124,27 @@ test('the form records transactions × price with a live product, or the base am
   await page.getByTestId('affiliate-payment-save').click();
   await expect.poll(() => prisma.affiliatePayment.count({ where: { orgId, externalPaymentRef: `F2-${STAMP}` } })).toBe(1);
   expect(await stored(`F2-${STAMP}`)).toEqual({ amountMinor: 4_990, transactionCount: null, unitPriceMinor: null });
+});
+
+test('the breakdown shows beside the base: in the admin list and on the partner’s commissions (#3554)', async ({ browser, baseURL }) => {
+  test.slow();
+  const admin = await browser.newPage({ baseURL, extraHTTPHeaders: host });
+  await signInAndSettle(admin, email, PW, '/admin');
+  await gotoSettled(admin, '/admin/affiliates/payments');
+  const rowOf = (ref: string) => admin.locator('tr', { hasText: ref });
+  await expect(rowOf(`B1-${STAMP}`).getByTestId('affiliate-payment-breakdown')).toHaveText('340 transactions × €0.15');
+  await expect(rowOf(`B3-${STAMP}`)).toContainText('€49.90');
+  await expect(rowOf(`B3-${STAMP}`).getByTestId('affiliate-payment-breakdown')).toHaveCount(0);
+  await admin.close();
+
+  // The partner sees the same line on its own commissions. The plan pays one tier commission per
+  // customer (on B1, entered as a breakdown); a second customer paid as a bare amount shows none.
+  expect((await pay({ customerExternalRef: 'CUST-PLAIN', amountMinor: 2_000, externalPaymentRef: `P1-${STAMP}` })).status()).toBe(201);
+  const partner = await browser.newPage({ baseURL, extraHTTPHeaders: host });
+  await signInAndSettle(partner, partnerEmail, PW, '/affiliate');
+  await gotoSettled(partner, '/affiliate/commissions');
+  await expect(partner.getByTestId('affiliate-commissions-table').locator('tbody tr')).toHaveCount(2);
+  await expect(partner.getByTestId('affiliate-commission-breakdown')).toHaveCount(1);
+  await expect(partner.locator('tbody tr', { hasText: 'CUST-BASE' }).getByTestId('affiliate-commission-breakdown')).toHaveText('340 transactions × €0.15');
+  await partner.close();
 });
