@@ -187,6 +187,11 @@ test('a rep sees the team totals, the stages, both windows, the value and the pe
   await expect(r1.getByTestId('rep-won-week')).toHaveText(String(wonWeek));
   await expect(r1.getByTestId('rep-won-month')).toHaveText(String(wonMonth));
   await expect(r1).toHaveAttribute('aria-current', 'true');
+  // The name opens that person's records on the team board.
+  await expect(page.getByTestId(`sales-team-rep-${ids.rep2}`).getByTestId('rep-board-link')).toHaveAttribute(
+    'href',
+    `/sales/board?view=team&owners=${ids.rep2}`,
+  );
   const r2 = page.getByTestId(`sales-team-rep-${ids.rep2}`);
   await expect(r2.getByTestId('rep-open')).toHaveText('2');
   await expect(r2.getByTestId('rep-won-month')).toHaveText('0');

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { Trophy, Users, CalendarDays, Coins } from 'lucide-react';
@@ -16,8 +17,8 @@ import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Ca
 // the numbers come from src/lib/salesTeam.ts and its rules from
 // src/lib/salesTargetRule.ts; the open records are the team book's
 // (src/lib/salesTeamBook.ts), whose gate is salesTeamReadAllowed(). A person's
-// row is plain text: the team board view that would open their records is not
-// on this surface yet, and the rep's own board lists only their own book (#3755).
+// name opens their records on the team board (`/sales/board?view=team&owners=`,
+// WP2b), which shares that gate.
 
 export default async function SalesTeamPage() {
   const session = await getServerSession(authOptions);
@@ -131,7 +132,14 @@ export default async function SalesTeamPage() {
                       aria-current={me ? 'true' : undefined}
                     >
                       <th scope="row" className="py-2 pr-3 text-gray-900 font-normal break-words">
-                        {r.name}
+                        {/* That person's records on the team board (WP2b, read-only for a colleague). */}
+                        <Link
+                          href={`/sales/board?view=team&owners=${encodeURIComponent(r.userId)}`}
+                          className="text-blue-600 hover:underline"
+                          data-testid="rep-board-link"
+                        >
+                          {r.name}
+                        </Link>
                         {me && <span className="ml-1 text-gray-500">{lb.you}</span>}
                       </th>
                       <td className="py-2 pr-3 text-right tabular-nums text-gray-900" data-testid="rep-open">{r.open}</td>
