@@ -79,7 +79,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   const where = { orgId: { in: orgIds } };
   await prisma.interactionLog.deleteMany({ where: { relation: where } }).catch(() => {});
-  await prisma.meeting.deleteMany({ where: { relation: where } }).catch(() => {});
+  await prisma.meeting.deleteMany({ where: { OR: [{ relation: where }, { title: 'Not mine', createdById: { in: Object.values(ids) } }] } }).catch(() => {});
   await prisma.notification.deleteMany({ where: { userId: { in: Object.values(ids) } } }).catch(() => {});
   await prisma.activityLog.deleteMany({ where }).catch(() => {});
   await prisma.auditLog.deleteMany({ where }).catch(() => {});
@@ -92,7 +92,11 @@ test.afterAll(async () => {
 });
 
 /** Every write a sales record has, aimed at `rel` (the PR body lists the route audit). */
-function writes(label: string): { method: 'POST' | 'PUT' | 'PATCH' | 'DELETE'; path: string; data?: Record<string, unknown> }[] {
+// `dropped`: POST /api/meetings takes a LIST of relation ids and drops one the
+// caller may not schedule on exactly like a missing one (the WHERE carries
+// `mentorId = self`); it answers for what remains, so the proof is the snapshot —
+// no Meeting row lands on the record.
+function writes(label: string): { method: 'POST' | 'PUT' | 'PATCH' | 'DELETE'; path: string; data?: Record<string, unknown>; dropped?: true }[] {
   const id = ids[`rel-${label}`];
   return [
     { method: 'PUT', path: `/api/mentorship/${id}`, data: { pipelineStatus: stages[2] } },
@@ -106,7 +110,7 @@ function writes(label: string): { method: 'POST' | 'PUT' | 'PATCH' | 'DELETE'; p
     { method: 'POST', path: `/api/sales/leads/${id}/handoff`, data: { toUserId: ids.disp, action: 'call' } },
     { method: 'PATCH', path: `/api/sales/leads/${id}/contact`, data: { name: 'Taken Over', email: `taken-${STAMP}@acme.example` } },
     { method: 'POST', path: '/api/interactions', data: { relationId: id, date: new Date().toISOString(), type: 'Call', notes: 'not mine' } },
-    { method: 'POST', path: '/api/meetings', data: { relationIds: [id], title: 'Not mine', scheduledAt: '2027-01-15T10:00:00.000Z', meetLink: '' } },
+    { method: 'POST', path: '/api/meetings', data: { relationIds: [id], title: 'Not mine', scheduledAt: '2027-01-15T10:00:00.000Z', meetLink: '' }, dropped: true },
   ];
 }
 
@@ -156,7 +160,7 @@ test('a rep reads a colleague’s record read-only; every write on it is refused
     const before = await snapshot('r2');
     for (const w of writes('r2')) {
       const res = await ctx.fetch(w.path, { method: w.method, data: w.data });
-      expect([403, 404], `${w.method} ${w.path} ${JSON.stringify(w.data)} → ${res.status()}`).toContain(res.status());
+      expect(w.dropped ? [200, 201, 403, 404] : [403, 404], `${w.method} ${w.path} ${JSON.stringify(w.data)} → ${res.status()}`).toContain(res.status());
     }
     expect(await snapshot('r2')).toEqual(before);
 
@@ -169,7 +173,7 @@ test('a rep reads a colleague’s record read-only; every write on it is refused
     const foreignBefore = await snapshot('f1');
     for (const w of writes('f1')) {
       const res = await ctx.fetch(w.path, { method: w.method, data: w.data });
-      expect([403, 404], `${w.method} ${w.path} → ${res.status()}`).toContain(res.status());
+      expect(w.dropped ? [200, 201, 403, 404] : [403, 404], `${w.method} ${w.path} → ${res.status()}`).toContain(res.status());
     }
     expect(await snapshot('f1')).toEqual(foreignBefore);
   } finally {
