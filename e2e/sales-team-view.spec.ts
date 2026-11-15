@@ -163,7 +163,9 @@ test('a rep reads a colleague’s record read-only; every write on it is refused
   // Their own page: no banner, the editors are there.
   await gotoSettled(page, `/sales/leads/${ids['rel-r1']}`);
   await expect(page.getByTestId('sales-lead-name')).toHaveText(`Team lead-r1 ${STAMP}`);
-  await expect(page.getByTestId('follow-up-add')).toBeVisible();
+  // Their own follow-up, with its editor.
+  await expect(page.getByTestId('follow-up-edit')).toBeVisible();
+  await expect(page.locator('body')).toContainText("owner's note r1");
   await expect(page.getByTestId('sales-lead-readonly')).toHaveCount(0);
 
   // The colleague's account opens too (read-only, no editor on the sales view).
@@ -183,7 +185,7 @@ test('a rep reads a colleague’s record read-only; every write on it is refused
     // Another org's record: 404 for the page, 404 (or 403 before the lookup) for every write.
     expect((await ctx.get(`/sales/leads/${ids['rel-f1']}`, { maxRedirects: 0 })).status()).toBe(404);
     expect((await ctx.get(`/sales/accounts/${ids['co-f1']}`, { maxRedirects: 0 })).status()).toBe(404);
-    const team = ((await (await ctx.get('/api/mentorship?surface=sales&view=team')).json()).relations as { id: string }[]).map((r) => r.id);
+    const team = ((await (await ctx.get('/api/sales/team-book')).json()).rows as { id: string }[]).map((r) => r.id);
     expect(team).toContain(ids['rel-r2']);
     expect(team).not.toContain(ids['rel-f1']);
     const foreignBefore = await snapshot('f1');
@@ -263,7 +265,7 @@ test('the dispatcher works every record: no banner, editors present, every card 
   await signIn(page, 'disp');
   await gotoSettled(page, `/sales/leads/${ids['rel-r2']}`);
   await expect(page.getByTestId('sales-lead-name')).toHaveText(`Team lead-r2 ${STAMP}`);
-  await expect(page.getByTestId('follow-up-add')).toBeVisible();
+  await expect(page.getByTestId('follow-up-edit')).toBeVisible();
   await expect(page.getByTestId('sales-lead-handoff')).toBeVisible();
   await expect(page.getByTestId('sales-lead-readonly')).toHaveCount(0);
 
