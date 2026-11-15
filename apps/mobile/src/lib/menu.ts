@@ -16,6 +16,7 @@ const ICONS: Record<string, string> = {
   automations: 'flash',
   companies: 'business',
   myCompanies: 'business',
+  salesTeam: 'podium',
   hiring: 'file-tray-full',
   requisitions: 'briefcase',
   offers: 'ribbon',

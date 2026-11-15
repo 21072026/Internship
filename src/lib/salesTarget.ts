@@ -20,8 +20,10 @@ import {
   canSeeLeaderboard,
   parseLeaderboardForReps,
   parseWonTarget,
+  earliestStart,
   rankLeaderboard,
   targetProgress,
+  weekRange,
   wonCountsByOwner,
   type RankedEntry,
   type TargetProgress,
@@ -31,8 +33,10 @@ export interface SalesTargetView {
   period: Period;
   /** The viewer's own wins this month against the org's target. */
   own: TargetProgress;
-  /** null when the viewer may not see it. */
+  /** null when the viewer may not see it. Ranked by wins this month. */
   leaderboard: RankedEntry[] | null;
+  /** The same people ranked by wins this week (Monday 00:00 UTC, #3779); null with `leaderboard`. */
+  leaderboardWeek: RankedEntry[] | null;
   /** Whether reps see the leaderboard (an admin is told, so the card can say so). */
   leaderboardForReps: boolean;
 }
@@ -56,54 +60,10 @@ export async function loadSalesTargetView(session: Session, locale = 'en', now: 
   const period = currentPeriod(now);
   const range = periodRange(period);
 
-  // Only deals that moved into a won stage this month can be a win this month;
-  // their WHOLE history is loaded, because "first win" and "started won" are
-  // read from the oldest move. Without the board, only the viewer's own deals.
-  // A transfer successor's predecessors are loaded too (same tenant), because
-  // a chain is one deal — a re-win after a handover is not a second win (see
-  // the rule's header). They only ever SUBTRACT: a predecessor without a won
-  // move this month cannot add a win of its own.
-  const select = {
-    id: true,
-    previousRelationId: true,
-    mentorId: true,
-    statusChanges: { orderBy: { createdAt: 'asc' as const }, select: { fromStatus: true, toStatus: true, createdAt: true } },
-  };
-  const deals =
-    wonKeys.length === 0
-      ? []
-      : await prisma.mentorshipRelation.findMany({
-          where: withinTenant(
-            {
-              ...(showBoard ? {} : { mentorId: userId }),
-              statusChanges: { some: { toStatus: { in: wonKeys }, createdAt: { gte: range.gte, lt: range.lt } } },
-            },
-            tenant,
-          ),
-          select,
-        });
-  const loaded = new Set(deals.map((d) => d.id));
-  // Bounded: chains are a handful of links; a cycle (no write path makes one)
-  // stops at the `loaded` check.
-  for (let depth = 0; depth < 20; depth++) {
-    const missing = [...new Set(deals.map((d) => d.previousRelationId).filter((id): id is string => !!id && !loaded.has(id)))];
-    if (missing.length === 0) break;
-    const prev = await prisma.mentorshipRelation.findMany({ where: withinTenant({ id: { in: missing } }, tenant), select });
-    for (const id of missing) loaded.add(id);
-    deals.push(...prev);
-  }
-  const counts = wonCountsByOwner(
-    deals.map((d) => ({
-      id: d.id,
-      previousId: d.previousRelationId,
-      ownerId: d.mentorId,
-      moves: d.statusChanges.map((c) => ({ fromStatus: c.fromStatus, toStatus: c.toStatus, at: c.createdAt.getTime() })),
-    })),
-    wonKeys,
-    range,
-  );
+  const week = weekRange(now);
+  const { month: counts, week: weekCounts } = await loadWinCounts(tenant, wonKeys, { month: range, week }, showBoard ? null : userId);
   const own = targetProgress(counts.get(userId) ?? 0, target);
-  if (!showBoard) return { period, own, leaderboard: null, leaderboardForReps: forReps };
+  if (!showBoard) return { period, own, leaderboard: null, leaderboardWeek: null, leaderboardForReps: forReps };
 
   // Who is on the board: every active rep AND every active admin of the org (a
   // person with no win yet is on it at 0 — leaving them off would make the
@@ -115,7 +75,7 @@ export async function loadSalesTargetView(session: Session, locale = 'en', now: 
       {
         OR: [
           { role: { in: ['MENTOR', 'ADMIN'] as ('MENTOR' | 'ADMIN')[] }, isActive: true },
-          { id: { in: [...counts.keys()] } },
+          { id: { in: [...new Set([...counts.keys(), ...weekCounts.keys()])] } },
         ],
       },
       tenant,
@@ -126,5 +86,70 @@ export async function loadSalesTargetView(session: Session, locale = 'en', now: 
     people.map((p) => ({ userId: p.id, name: p.fullName, won: counts.get(p.id) ?? 0 })),
     locale,
   );
-  return { period, own, leaderboard, leaderboardForReps: forReps };
+  const leaderboardWeek = rankLeaderboard(
+    people.map((p) => ({ userId: p.id, name: p.fullName, won: weekCounts.get(p.id) ?? 0 })),
+    locale,
+  );
+  return { period, own, leaderboard, leaderboardWeek, leaderboardForReps: forReps };
+}
+
+/**
+ * Wins per owner in each named window, from ONE read: only deals that moved
+ * into a won stage since the earliest window's start can be a win in any of
+ * them, and their WHOLE history is loaded, because "first win" and "started
+ * won" are read from the oldest move. `ownerId` narrows to one person's deals
+ * (a rep who may not see the board). A transfer successor's predecessors are
+ * loaded too (same tenant), because a chain is one deal — a re-win after a
+ * handover is not a second win (see the rule's header). They only ever
+ * SUBTRACT: a predecessor without a won move in the window cannot add a win.
+ *
+ * `tenant` is the caller's `tenantWhere(session)` — every read is ANDed with it.
+ */
+export async function loadWinCounts<K extends string>(
+  tenant: Awaited<ReturnType<typeof tenantWhere>>,
+  wonKeys: readonly string[],
+  ranges: Record<K, { gte: Date; lt: Date }>,
+  ownerId: string | null = null,
+): Promise<Record<K, Map<string, number>>> {
+  const names = Object.keys(ranges) as K[];
+  const empty = () => Object.fromEntries(names.map((k) => [k, new Map<string, number>()])) as Record<K, Map<string, number>>;
+  if (wonKeys.length === 0 || names.length === 0) return empty();
+  const all = names.map((k) => ranges[k]);
+  const gte = earliestStart(...all);
+  const lt = new Date(Math.max(...all.map((r) => r.lt.getTime())));
+  const select = {
+    id: true,
+    previousRelationId: true,
+    mentorId: true,
+    statusChanges: { orderBy: { createdAt: 'asc' as const }, select: { fromStatus: true, toStatus: true, createdAt: true } },
+  };
+  const deals = await prisma.mentorshipRelation.findMany({
+    where: withinTenant(
+      {
+        ...(ownerId ? { mentorId: ownerId } : {}),
+        statusChanges: { some: { toStatus: { in: [...wonKeys] }, createdAt: { gte, lt } } },
+      },
+      tenant,
+    ),
+    select,
+  });
+  const loaded = new Set(deals.map((d) => d.id));
+  // Bounded: chains are a handful of links; a cycle (no write path makes one)
+  // stops at the `loaded` check.
+  for (let depth = 0; depth < 20; depth++) {
+    const missing = [...new Set(deals.map((d) => d.previousRelationId).filter((id): id is string => !!id && !loaded.has(id)))];
+    if (missing.length === 0) break;
+    const prev = await prisma.mentorshipRelation.findMany({ where: withinTenant({ id: { in: missing } }, tenant), select });
+    for (const id of missing) loaded.add(id);
+    deals.push(...prev);
+  }
+  const histories = deals.map((d) => ({
+    id: d.id,
+    previousId: d.previousRelationId,
+    ownerId: d.mentorId,
+    moves: d.statusChanges.map((c) => ({ fromStatus: c.fromStatus, toStatus: c.toStatus, at: c.createdAt.getTime() })),
+  }));
+  const out = empty();
+  for (const k of names) out[k] = wonCountsByOwner(histories, wonKeys, ranges[k]);
+  return out;
 }

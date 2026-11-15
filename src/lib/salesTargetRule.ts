@@ -210,3 +210,60 @@ export function rankLeaderboard(entries: readonly LeaderboardEntry[], locale = '
   });
   return out;
 }
+
+// ── The week window and the team page's counters (#3779) ────────────────────
+//
+// The team page (/sales/team) reads the same wins as the leaderboard, in two
+// windows: this calendar month (`periodRange(currentPeriod())`, metering's
+// month and nothing else) and this ISO week. The week is UTC like the month,
+// starts on MONDAY 00:00 UTC, and is half-open `[gte, lt)` like
+// `periodRange()`, so a move at exactly Monday 00:00 belongs to the new week.
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The half-open UTC week (Monday 00:00 → next Monday 00:00) holding `now`. */
+export function weekRange(now: Date = new Date()): { gte: Date; lt: Date } {
+  const midnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  // getUTCDay(): Sunday = 0 … Saturday = 6; days since Monday = (day + 6) % 7.
+  const sinceMonday = (now.getUTCDay() + 6) % 7;
+  const gte = midnight - sinceMonday * DAY_MS;
+  return { gte: new Date(gte), lt: new Date(gte + 7 * DAY_MS) };
+}
+
+/** The earlier start of two windows — what a query must reach back to. */
+export function earliestStart(...ranges: { gte: Date }[]): Date {
+  return new Date(Math.min(...ranges.map((r) => r.gte.getTime())));
+}
+
+/**
+ * Deals LOST per owner in `[gte, lt)`: the first recorded move into one of the
+ * tenant's off-path stages (`outcomeStageKeysFrom().offPath`). "First" for the
+ * same reason a win is read from the first move: a deal lost, revived and lost
+ * again is one loss. A deal that STARTED off-path was never lost by a move and
+ * is not counted, like a deal that started won is not a win.
+ */
+export function lostCountsByOwner(
+  deals: readonly DealHistory[],
+  lostKeys: readonly string[],
+  range: { gte: Date; lt: Date },
+): Map<string, number> {
+  const out = new Map<string, number>();
+  if (lostKeys.length === 0) return out;
+  const lost = new Set(lostKeys);
+  const from = range.gte.getTime();
+  const to = range.lt.getTime();
+  for (const deal of deals) {
+    if (deal.moves.length === 0 || lost.has(deal.moves[0].fromStatus)) continue;
+    const m = deal.moves.find((x) => lost.has(x.toStatus));
+    if (!m || m.at < from || m.at >= to) continue;
+    out.set(deal.ownerId, (out.get(deal.ownerId) ?? 0) + 1);
+  }
+  return out;
+}
+
+/** The sum of a per-owner map — a team total. */
+export function totalOf(counts: ReadonlyMap<string, number>): number {
+  let n = 0;
+  for (const v of counts.values()) n += v;
+  return n;
+}

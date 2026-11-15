@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Target, Users } from 'lucide-react';
 import type { Dictionary } from '@/i18n/dictionaries';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
@@ -11,6 +12,9 @@ import type { SalesTargetView } from '@/lib/salesTarget';
 export function SalesTargetCards({ view, t, viewerId }: { view: SalesTargetView; t: Dictionary; viewerId: string }) {
   const s = t.sales;
   const { own, leaderboard } = view;
+  // This week's wins beside this month's (#3779). The ranking stays the
+  // month's; the week is a column, never a second order.
+  const weekWon = new Map((view.leaderboardWeek ?? []).map((e) => [e.userId, e.won]));
   const headline =
     own.target !== null
       ? s.target.progress.replace('{n}', String(own.won)).replace('{target}', String(own.target))
@@ -73,7 +77,8 @@ export function SalesTargetCards({ view, t, viewerId }: { view: SalesTargetView;
                   <tr className="border-b border-gray-200 text-xs text-gray-500">
                     <th scope="col" className="py-2 pr-3 font-medium w-12">{s.leaderboard.rank}</th>
                     <th scope="col" className="py-2 pr-3 font-medium">{s.leaderboard.name}</th>
-                    <th scope="col" className="py-2 font-medium text-right">{s.leaderboard.won}</th>
+                    <th scope="col" className="py-2 pr-3 font-medium text-right">{s.leaderboard.wonWeek}</th>
+                    <th scope="col" className="py-2 font-medium text-right">{s.leaderboard.wonMonth}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -91,6 +96,7 @@ export function SalesTargetCards({ view, t, viewerId }: { view: SalesTargetView;
                           {e.name}
                           {me && <span className="ml-1 text-gray-500 font-normal">{s.leaderboard.you}</span>}
                         </td>
+                        <td className="py-2 pr-3 text-right tabular-nums text-gray-900" data-testid="leaderboard-won-week">{weekWon.get(e.userId) ?? 0}</td>
                         <td className="py-2 text-right tabular-nums text-gray-900">{e.won}</td>
                       </tr>
                     );
@@ -102,6 +108,9 @@ export function SalesTargetCards({ view, t, viewerId }: { view: SalesTargetView;
           <p className="mt-3 text-xs text-gray-500" data-testid="sales-leaderboard-visibility">
             {view.leaderboardForReps ? s.leaderboard.sharedWithTeam : s.leaderboard.adminOnly}
           </p>
+          <Link href="/sales/team" className="mt-2 inline-block text-sm font-medium text-blue-600 hover:underline" data-testid="sales-team-link">
+            {s.team.viewAll}
+          </Link>
         </Card>
       )}
     </div>

@@ -166,3 +166,58 @@ test('leaderboard: most wins first, ties ordered by name and sharing a rank', ()
   // same name: id breaks the tie so the order is total and stable
   assert.deepEqual(rankLeaderboard([{ userId: 'b', name: 'X', won: 1 }, { userId: 'a', name: 'X', won: 1 }]).map((r) => r.userId), ['a', 'b']);
 });
+
+// ── The team page's week window and loss counter (#3779) ────────────────────
+
+import { weekRange, earliestStart, lostCountsByOwner, totalOf } from '../../src/lib/salesTargetRule.ts';
+
+test('weekRange: Monday 00:00 UTC to next Monday, half-open, whatever the weekday', () => {
+  const iso = (d) => d.toISOString();
+  // Wed 2026-11-11 → Mon 2026-11-09 … Mon 2026-11-16
+  assert.deepEqual([iso(weekRange(new Date('2026-11-11T15:30:00Z')).gte), iso(weekRange(new Date('2026-11-11T15:30:00Z')).lt)], [
+    '2026-11-09T00:00:00.000Z',
+    '2026-11-16T00:00:00.000Z',
+  ]);
+  // Sunday late belongs to the week that started the Monday before.
+  assert.equal(iso(weekRange(new Date('2026-11-15T23:59:59Z')).gte), '2026-11-09T00:00:00.000Z');
+  // Monday 00:00 starts a new week (half-open, like periodRange).
+  assert.equal(iso(weekRange(new Date('2026-11-16T00:00:00Z')).gte), '2026-11-16T00:00:00.000Z');
+  // A week across a month boundary: Tue 2026-12-01 → Mon 2026-11-30.
+  assert.equal(iso(weekRange(new Date('2026-12-01T08:00:00Z')).gte), '2026-11-30T00:00:00.000Z');
+  // Across a year boundary: Fri 2027-01-01 → Mon 2026-12-28.
+  assert.equal(iso(weekRange(new Date('2027-01-01T08:00:00Z')).gte), '2026-12-28T00:00:00.000Z');
+});
+
+test('earliestStart: the earlier window start (a week can begin in the previous month)', () => {
+  const month = { gte: new Date('2026-12-01T00:00:00Z') };
+  const week = { gte: new Date('2026-11-30T00:00:00Z') };
+  assert.equal(earliestStart(month, week).toISOString(), '2026-11-30T00:00:00.000Z');
+});
+
+test('lostCountsByOwner: the first move into an off-path stage, inside the window; a deal that started lost is not a loss', () => {
+  const at = (s) => Date.parse(s);
+  const range = { gte: new Date('2026-11-09T00:00:00Z'), lt: new Date('2026-11-16T00:00:00Z') };
+  const lost = ['LOST'];
+  const deals = [
+    { ownerId: 'a', moves: [{ fromStatus: 'NEW', toStatus: 'LOST', at: at('2026-11-10T10:00:00Z') }] },
+    // lost last week, revived and lost again this week: one loss, last week.
+    {
+      ownerId: 'a',
+      moves: [
+        { fromStatus: 'NEW', toStatus: 'LOST', at: at('2026-11-03T10:00:00Z') },
+        { fromStatus: 'LOST', toStatus: 'NEW', at: at('2026-11-04T10:00:00Z') },
+        { fromStatus: 'NEW', toStatus: 'LOST', at: at('2026-11-11T10:00:00Z') },
+      ],
+    },
+    // created lost (history starts off-path): never a loss by a move.
+    { ownerId: 'b', moves: [{ fromStatus: 'LOST', toStatus: 'NEW', at: at('2026-11-10T10:00:00Z') }, { fromStatus: 'NEW', toStatus: 'LOST', at: at('2026-11-11T10:00:00Z') }] },
+    { ownerId: 'b', moves: [{ fromStatus: 'NEW', toStatus: 'LOST', at: at('2026-11-15T23:59:59Z') }] },
+    // Monday 00:00 of the next week is outside.
+    { ownerId: 'c', moves: [{ fromStatus: 'NEW', toStatus: 'LOST', at: at('2026-11-16T00:00:00Z') }] },
+    { ownerId: 'c', moves: [] },
+  ];
+  const counts = lostCountsByOwner(deals, lost, range);
+  assert.deepEqual(Object.fromEntries(counts), { a: 1, b: 1 });
+  assert.equal(totalOf(counts), 2);
+  assert.equal(lostCountsByOwner(deals, [], range).size, 0);
+});
