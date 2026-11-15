@@ -4,16 +4,42 @@ import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnno
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Search } from 'lucide-react';
+import { ChevronDown, ChevronRight, MoreHorizontal, Search } from 'lucide-react';
 import { InstallAppButton } from '@/components/InstallAppButton';
 import { useT } from '@/i18n/client';
-import { ADMIN_NAV_LINKS, navAudienceAllows, visibleNavLinks } from '@/lib/navLinks';
+import { ADMIN_NAV_LINKS, groupNavLinks, isNavGroup, navAudienceAllows, navHubHref, visibleNavLinks, type NavGroup, type NavLink } from '@/lib/navLinks';
 import { TIER_PERMISSIONS, type AdminTier } from '@/lib/authzRule';
 import type { VerticalCapability } from '@/lib/verticals';
 import { OutboxBadge, useOutboxPending } from '@/components/outbox/OutboxBadge';
 
 // The route list itself lives in lib/navLinks — shared with the command
 // palette's "Go to" group (#2079), so the two can never drift apart.
+//
+// Grouped like iOS Settings (#3752): the daily items flat on top, then one
+// collapsible section per group (NAV_GROUPS order, empty groups dropped by
+// groupNavLinks), each ending in a "More" row to its hub page when it has
+// rarely used pages. Groups start open; a closed group is remembered per
+// browser, and the group holding the current page is always open.
+
+const COLLAPSED_KEY = 'adminNav.collapsedGroups';
+
+function readCollapsed(): NavGroup[] {
+  try {
+    const raw = window.localStorage.getItem(COLLAPSED_KEY);
+    const parsed: unknown = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter(isNavGroup) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCollapsed(groups: NavGroup[]) {
+  try {
+    window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify(groups));
+  } catch {
+    /* storage unavailable (private mode, blocked): the state just isn't remembered */
+  }
+}
 
 export function AdminNav({
   capabilities,
@@ -100,8 +126,83 @@ export function AdminNav({
   // so the new result count is spoken (debounced) while a filter is active.
   useFilterAnnouncement(q.trim() !== '' ? resultCountMessage(t.a11y, items.length) : null);
 
-  const isActive = (l: (typeof LINKS)[number]) =>
+  const isActive = (l: NavLink) =>
     l.exact ? pathname === l.href : pathname === l.href || pathname.startsWith(l.href + '/');
+
+  const { top, sections } = useMemo(() => groupNavLinks(LINKS), [LINKS]);
+  const groups = t.navGroups as Record<string, string>;
+  const [collapsed, setCollapsed] = useState<NavGroup[]>([]);
+  // Read after mount: the server render has no storage, and reading it during
+  // render would make the first client render disagree with the server's.
+  useEffect(() => { setCollapsed(readCollapsed()); }, []);
+  const activeGroup = useMemo(() => {
+    for (const s of sections) {
+      if (pathname === navHubHref(s.group) || pathname.startsWith(navHubHref(s.group) + '/')) return s.group;
+      if ([...s.sidebar, ...s.hub].some(isActive)) return s.group;
+    }
+    return null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections, pathname]);
+  const isOpen = (g: NavGroup) => g === activeGroup || !collapsed.includes(g);
+  const toggle = (g: NavGroup) => {
+    // The active page's group cannot be closed out from under the reader.
+    if (g === activeGroup) return;
+    const next = collapsed.includes(g) ? collapsed.filter((x) => x !== g) : [...collapsed, g];
+    setCollapsed(next);
+    writeCollapsed(next);
+  };
+
+  const linkRow = (l: NavLink) => {
+    const Icon = l.icon;
+    const active = isActive(l);
+    return (
+      <Link
+        key={l.href}
+        href={l.href}
+        data-tour-id={`nav-${l.key}`}
+        aria-current={active ? 'page' : undefined}
+        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${
+          active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+        }`}
+      >
+        <Icon className={`h-5 w-5 ${active ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`} />
+        <span className="flex-1">{nav[l.key] ?? l.key}</span>
+        {l.key === 'mentorApplications' && pendingApplications > 0 && (
+          <span
+            data-testid="mentor-applications-badge"
+            title={t.mentorApplicationsAdmin.pendingBadge.replace('{count}', String(pendingApplications))}
+            aria-label={t.mentorApplicationsAdmin.pendingBadge.replace('{count}', String(pendingApplications))}
+            className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center dark:!bg-red-600 dark:!text-white"
+          >
+            {pendingApplications > 9 ? '9+' : pendingApplications}
+          </span>
+        )}
+        {l.key === 'outbox' && outboxPending > 0 && <OutboxBadge count={outboxPending} />}
+        {l.key === 'hiring' && hiringActionable > 0 && (
+          <span
+            data-testid="admin-hiring-badge"
+            title={t.hiringDesk.actionableBadge.replace('{count}', String(hiringActionable))}
+            aria-label={t.hiringDesk.actionableBadge.replace('{count}', String(hiringActionable))}
+            className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center dark:!bg-red-600 dark:!text-white"
+          >
+            {hiringActionable > 9 ? '9+' : hiringActionable}
+          </span>
+        )}
+        {l.key === 'offers' && outstandingOffers > 0 && (
+          <span
+            data-testid="admin-offers-badge"
+            title={t.offersAdmin.outstandingBadge.replace('{count}', String(outstandingOffers))}
+            aria-label={t.offersAdmin.outstandingBadge.replace('{count}', String(outstandingOffers))}
+            className="min-w-[18px] h-[18px] px-1 rounded-full bg-amber-700 text-white text-[10px] font-bold flex items-center justify-center dark:!bg-amber-700 dark:!text-white"
+          >
+            {outstandingOffers > 9 ? '9+' : outstandingOffers}
+          </span>
+        )}
+      </Link>
+    );
+  };
+
+  const searching = q.trim() !== '';
 
   return (
     <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
@@ -116,54 +217,54 @@ export function AdminNav({
           className="w-full rounded-lg border border-gray-200 pl-8 pr-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
         />
       </div>
-      {items.map((l) => {
-        const Icon = l.icon;
-        const active = isActive(l);
-        return (
-          <Link
-            key={l.href}
-            href={l.href}
-            data-tour-id={`nav-${l.key}`}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${
-              active ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
-            }`}
-          >
-            <Icon className={`h-5 w-5 ${active ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`} />
-            <span className="flex-1">{nav[l.key] ?? l.key}</span>
-            {l.key === 'mentorApplications' && pendingApplications > 0 && (
-              <span
-                data-testid="mentor-applications-badge"
-                title={t.mentorApplicationsAdmin.pendingBadge.replace('{count}', String(pendingApplications))}
-                aria-label={t.mentorApplicationsAdmin.pendingBadge.replace('{count}', String(pendingApplications))}
-                className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center dark:!bg-red-600 dark:!text-white"
-              >
-                {pendingApplications > 9 ? '9+' : pendingApplications}
-              </span>
-            )}
-            {l.key === 'outbox' && outboxPending > 0 && <OutboxBadge count={outboxPending} />}
-            {l.key === 'hiring' && hiringActionable > 0 && (
-              <span
-                data-testid="admin-hiring-badge"
-                title={t.hiringDesk.actionableBadge.replace('{count}', String(hiringActionable))}
-                aria-label={t.hiringDesk.actionableBadge.replace('{count}', String(hiringActionable))}
-                className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center dark:!bg-red-600 dark:!text-white"
-              >
-                {hiringActionable > 9 ? '9+' : hiringActionable}
-              </span>
-            )}
-            {l.key === 'offers' && outstandingOffers > 0 && (
-              <span
-                data-testid="admin-offers-badge"
-                title={t.offersAdmin.outstandingBadge.replace('{count}', String(outstandingOffers))}
-                aria-label={t.offersAdmin.outstandingBadge.replace('{count}', String(outstandingOffers))}
-                className="min-w-[18px] h-[18px] px-1 rounded-full bg-amber-700 text-white text-[10px] font-bold flex items-center justify-center dark:!bg-amber-700 dark:!text-white"
-              >
-                {outstandingOffers > 9 ? '9+' : outstandingOffers}
-              </span>
-            )}
-          </Link>
-        );
-      })}
+      {searching ? (
+        // A search looks through every link, hub pages included, flat.
+        items.map(linkRow)
+      ) : (
+        <>
+          {top.map(linkRow)}
+          {sections.map((section) => {
+            const open = isOpen(section.group);
+            const label = groups[section.group] ?? section.group;
+            const hubHref = navHubHref(section.group);
+            const hubActive = pathname === hubHref || pathname.startsWith(hubHref + '/');
+            return (
+              <div key={section.group} className="pt-3" data-testid={`nav-group-${section.group}`}>
+                <button
+                  type="button"
+                  onClick={() => toggle(section.group)}
+                  aria-expanded={open}
+                  aria-controls={`nav-group-items-${section.group}`}
+                  data-testid={`nav-group-toggle-${section.group}`}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 hover:text-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  <span className="flex-1">{label}</span>
+                  {open ? <ChevronDown className="h-4 w-4" aria-hidden /> : <ChevronRight className="h-4 w-4" aria-hidden />}
+                </button>
+                {open && (
+                  <div id={`nav-group-items-${section.group}`} className="mt-1 space-y-1">
+                    {section.sidebar.map(linkRow)}
+                    {section.hub.length > 0 && (
+                      <Link
+                        href={hubHref}
+                        data-testid={`nav-hub-${section.group}`}
+                        aria-current={hubActive ? 'page' : undefined}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${
+                          hubActive ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-blue-50 hover:text-blue-700'
+                        }`}
+                      >
+                        <MoreHorizontal className={`h-5 w-5 ${hubActive ? 'text-blue-600' : 'text-gray-400 group-hover:text-blue-600'}`} />
+                        <span className="flex-1">{t.navGroups.more}</span>
+                        <ChevronRight className="h-4 w-4 text-gray-400" aria-hidden />
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </>
+      )}
       {items.length === 0 && <p className="px-3 py-2 text-sm text-gray-400">{t.common.none}</p>}
       <InstallAppButton />
     </nav>

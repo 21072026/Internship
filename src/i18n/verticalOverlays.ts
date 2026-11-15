@@ -137,6 +137,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         audience_BOTH: 'Leads and sales reps',
         createOnePerRole: 'This instrument asks sales reps a differently worded question, so it is one survey per role — create a second one for the other role.',
       },
+      // The Mentoring group holds only mentorship-tagged links, which MARKETING
+      // never renders; the label is overlaid so the leak ratchet stays honest (#3752).
+      navGroups: { mentoring: 'Programme' },
       nav: {
         mentorOffers: 'Offer to a lead',
         candidates: 'Leads',
@@ -1309,6 +1312,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         audience_BOTH: 'Müşteri adayları ve satış temsilcileri',
         createOnePerRole: 'Bu anket satış temsilcilerine soruyu farklı sözcüklerle soruyor, bu yüzden her rol için ayrı bir anket gerekir — diğer rol için ikincisini oluşturun.',
       },
+      // The Mentoring group holds only mentorship-tagged links, which MARKETING
+      // never renders; the label is overlaid so the leak ratchet stays honest (#3752).
+      navGroups: { mentoring: 'Program' },
       nav: {
         mentorOffers: 'Müşteri adayına teklif et',
         candidates: 'Müşteri Adayları',
@@ -2343,6 +2349,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         audience_BOTH: 'Leads und Vertriebsmitarbeiter',
         createOnePerRole: 'Diese Vorlage fragt Vertriebsmitarbeiter mit anderem Wortlaut, daher ist es eine Umfrage pro Rolle — legen Sie für die andere Rolle eine zweite an.',
       },
+      // The Mentoring group holds only mentorship-tagged links, which MARKETING
+      // never renders; the label is overlaid so the leak ratchet stays honest (#3752).
+      navGroups: { mentoring: 'Programm' },
       nav: {
         mentorOffers: 'Lead ein Angebot machen',
         candidates: 'Leads',

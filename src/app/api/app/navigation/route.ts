@@ -26,6 +26,9 @@ export async function GET() {
     key: l.key,
     href: l.href,
     label: nav[l.key] ?? l.key,
+    // The admin sidebar's group (#3752); null for a daily item and for the
+    // other shells. The app may ignore it — it is additive.
+    group: l.group ?? null,
   }));
   return NextResponse.json({ items });
 }
