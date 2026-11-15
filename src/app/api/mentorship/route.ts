@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { salesBookScope } from '@/lib/salesBook';
 import { actorFromSession, can, requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -125,6 +126,11 @@ export async function GET(request: Request) {
       .map((v) => v.trim())
       .filter((v) => /^[A-Za-z0-9_-]{1,64}$/.test(v))
       .slice(0, 50);
+    // `?surface=sales` — the sales board (#3657 follow-up, src/lib/salesBookRule.ts):
+    // only the viewer's own sales book (the whole tenant's for the dispatcher),
+    // so every card it lists opens on /sales/leads/<id>. ANDed below like the
+    // other filters: it narrows, it never widens. Any other value is ignored.
+    const salesBook = searchParams.get('surface') === 'sales' ? await salesBookScope(session) : undefined;
     const pageParam = searchParams.get('page');
     const page = Math.max(1, parseInt(pageParam || '1', 10) || 1);
     const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10) || 20));
@@ -180,7 +186,8 @@ export async function GET(request: Request) {
       // The board's rep filter (#3658): only these owners' records. ANDed with
       // the scope like every other filter here, so it can narrow a caller's view
       // but never widen it — a rep naming a colleague still sees only their own.
-      ownerIds.length > 0 ? { mentorId: { in: ownerIds } } : undefined
+      ownerIds.length > 0 ? { mentorId: { in: ownerIds } } : undefined,
+      salesBook,
     );
 
     const include = {
