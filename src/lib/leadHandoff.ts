@@ -41,6 +41,33 @@ export type HandoffOutcome =
   | { ok: true; relationId: string; mode: 'corrected' | 'transferred'; toName: string }
   | { ok: false; status: number; code: string };
 
+/**
+ * Who may hand this record off — the ONE answer, read by the hand-off below and
+ * by the lead page's button (#3657), so the page never offers what the route
+ * refuses. The owner hands off their own record; anyone else needs the admin
+ * write on it, or is the org's sales dispatcher (#3656). Both of those answer
+ * no under impersonation's write rules (dispatcherCovers), which is exactly
+ * where the page could otherwise show a button that would 404.
+ */
+export async function actorMayHandOff(
+  session: Session,
+  relation: { orgId: string | null; mentorId: string; cohortId?: string | null; companyId?: string | null },
+): Promise<boolean> {
+  if (relation.mentorId === session.user.id) return true;
+  const actor = await actorFromSession(session);
+  if (!actor) return false;
+  return dispatcherMay(actor, 'relation.write', relation.orgId) || (await can(actor, 'relation.write', relationSubject(relation), session));
+}
+
+/** The lead page's question (#3657): may this session hand off relation `id` of `orgId`? */
+export async function canHandOffLead(session: Session, orgId: string, relationId: string): Promise<boolean> {
+  const relation = await prisma.mentorshipRelation.findFirst({
+    where: { id: relationId, orgId, status: 'ACTIVE' },
+    select: { orgId: true, mentorId: true, companyId: true },
+  });
+  return !!relation && (await actorMayHandOff(session, relation));
+}
+
 export async function handOffLead(opts: {
   session: Session;
   orgId: string;
@@ -59,15 +86,8 @@ export async function handOffLead(opts: {
     select: { id: true, orgId: true, mentorId: true, menteeId: true, companyId: true, status: true, mentee: { select: { fullName: true } } },
   });
   if (!relation) return { ok: false, status: 404, code: 'missing' };
-  // The owner hands off their own record; anyone else needs the admin write on
-  // it. Not yours = 404, never a 403 that confirms the id.
-  if (relation.mentorId !== actorId) {
-    const actor = await actorFromSession(session);
-    // …or the org's sales dispatcher, who hands any of the org's leads (#3656).
-    if (!actor || (!dispatcherMay(actor, 'relation.write', relation.orgId) && !(await can(actor, 'relation.write', relationSubject(relation), session)))) {
-      return { ok: false, status: 404, code: 'missing' };
-    }
-  }
+  // Not yours = 404, never a 403 that confirms the id.
+  if (!(await actorMayHandOff(session, relation))) return { ok: false, status: 404, code: 'missing' };
   if (relation.mentorId === toUserId) return { ok: false, status: 400, code: 'same_owner' };
 
   const recipient = await findLeadOwner(orgId, toUserId);

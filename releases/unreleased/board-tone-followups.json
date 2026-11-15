@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Board follow-ups to the column colours (#3675, after #3666):**\n- The drop-target ring (`ring-blue-500`) now follows the org accent: `html[data-accent] .ring-blue-500` in `globals.css`. The few other non-focus `ring-blue-500` highlights (command palette, global search, the highlighted pricing plan) follow the accent too, like every other blue.\n- A collapsed empty-stage strip takes its stage tone, dashed, and gains the same ring as a drop target. It used to keep the old gray / blue-50 look.\n- `boardColumnTone()` has a unit test (`scripts/test/board-column-tone.test.mjs`).\n- The admin board's drop-target comments are updated.",
-  "notes": {
-    "en": ["Board: the drop highlight uses your organisation's accent colour, and collapsed empty stages keep their stage colour."],
-    "tr": ["Pano: bırakma vurgusu kurumunuzun vurgu rengini kullanıyor, daraltılmış boş aşamalar da kendi aşama rengini koruyor."],
-    "de": ["Board: Die Ablage-Hervorhebung nutzt die Akzentfarbe Ihrer Organisation, eingeklappte leere Phasen behalten ihre Phasenfarbe."]
-  }
-}
