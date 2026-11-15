@@ -24,6 +24,7 @@ import { PipelineStagesProvider } from '@/lib/pipelineStagesClient';
 import { resolveCustomStages } from '@/lib/pipelineStages';
 import { EvaluationCriteriaProvider } from '@/lib/evaluationCriteriaClient';
 import { resolveCustomCriteria } from '@/lib/evaluationTemplates';
+import { hasSalesSurface } from '@/lib/salesSurface';
 
 export async function RoleShell({
   children,
@@ -71,14 +72,20 @@ export async function RoleShell({
   // internship menu on exactly those pages. The menu now reads the same
   // capability set on every route.
   const capabilities = await shellCapabilities(session.user.orgId);
+  // A sales rep (a MENTOR of a vertical with the sales surface) wears the sales
+  // menu on the shared pages (/messages, /todos, /notifications), exactly like
+  // the /sales layout: no command palette and no global search, both of which
+  // lead into /mentor pages that only bounce back to /sales. An ADMIN keeps the
+  // admin shell here, as in every vertical.
+  const isSalesRep = isMentor && hasSalesSurface(role, capabilities);
 
   return (
     <>
-      <CommandPalette role={isAdmin ? 'ADMIN' : isMentor ? 'MENTOR' : 'MENTEE'} capabilities={capabilities} />
+      {!isSalesRep && <CommandPalette role={isAdmin ? 'ADMIN' : isMentor ? 'MENTOR' : 'MENTEE'} capabilities={capabilities} />}
       <ResponsiveShell
         mobileChrome={mobileChrome}
         brand={<BrandWordmark oneLine />}
-        headerExtra={isAdmin || isMentor ? <GlobalSearch /> : undefined}
+        headerExtra={(isAdmin || isMentor) && !isSalesRep ? <GlobalSearch /> : undefined}
         sidebar={
           <aside className="w-64 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col">
             <div className="p-6 border-b border-gray-200 dark:border-gray-800">
@@ -87,15 +94,15 @@ export async function RoleShell({
                 <BetaBadge />
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                {isAdmin ? t.panel.admin : isMentor ? t.panel.mentor : t.panel.mentee}
+                {isAdmin ? t.panel.admin : isSalesRep ? t.panel.sales : isMentor ? t.panel.mentor : t.panel.mentee}
               </p>
             </div>
 
             {isAdmin ? (
               <AdminNav capabilities={capabilities} />
             ) : isMentor ? (
-              <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-                <MentorNav capabilities={capabilities} />
+              <nav className="flex-1 p-4 space-y-1 overflow-y-auto" data-testid={isSalesRep ? 'sales-nav' : undefined}>
+                <MentorNav capabilities={capabilities} set={isSalesRep ? 'sales' : 'mentor'} />
                 <InstallAppButton />
               </nav>
             ) : (
