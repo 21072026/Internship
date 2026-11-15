@@ -3,7 +3,9 @@
 // Server-only.
 import type { Session } from 'next-auth';
 import { isSalesDispatcher } from '@/lib/salesDispatcher';
-import { canReadSalesTeamBook, parseSalesTeamBookSetting, salesBookWhere, type SalesBookWhere } from '@/lib/salesBookRule';
+import { canReadSalesTeamBook, parseSalesTeamBookSetting, salesBookWhere, salesBookWriteAllowed, type SalesBookWhere } from '@/lib/salesBookRule';
+import { actorFromSession, can, dispatcherMay } from '@/lib/authz';
+import { relationSubject } from '@/lib/authzRule';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { hasSalesSurface } from '@/lib/salesSurface';
 import { resolveSettingRaw } from '@/lib/settingsResolver';
@@ -27,4 +29,20 @@ export async function salesTeamReadAllowed(session: Session): Promise<boolean> {
     isSalesDispatcher(session.user.id),
   ]);
   return canReadSalesTeamBook({ teamSetting: parseSalesTeamBookSetting(raw), role: session.user.role, dispatcher });
+}
+
+/** May `session` work (write) this record? The write half of the rule, from the data. */
+export async function canWriteSalesRecord(
+  session: Session,
+  relation: { orgId: string | null; mentorId: string; cohortId?: string | null; companyId?: string | null },
+): Promise<boolean> {
+  if (relation.mentorId === session.user.id) return true;
+  const actor = await actorFromSession(session);
+  if (!actor) return false;
+  return salesBookWriteAllowed({
+    userId: session.user.id,
+    ownerId: relation.mentorId,
+    dispatcher: dispatcherMay(actor, 'relation.write', relation.orgId),
+    adminWrite: await can(actor, 'relation.write', relationSubject(relation), session),
+  });
 }

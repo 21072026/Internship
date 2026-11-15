@@ -56,3 +56,15 @@ export function salesTeamReadWhere(allowed: boolean): Record<string, never> | nu
 export function parseSalesTeamBookSetting(raw: string | null | undefined): boolean {
   return raw !== 'false';
 }
+
+/**
+ * May this viewer WORK (any write) this record? Independent of every read rule
+ * above: the record's owner, the org's sales dispatcher (#3656, not under
+ * impersonation), or an admin holding `relation.write` on it. The facts are
+ * resolved by the server (src/lib/salesBook.ts `canWriteSalesRecord`); every
+ * write route asks the same facts through its own guard, so a page that shows
+ * no editor and a route that refuses the write agree.
+ */
+export function salesBookWriteAllowed(facts: { userId: string; ownerId: string; dispatcher: boolean; adminWrite: boolean }): boolean {
+  return facts.ownerId === facts.userId || facts.dispatcher || facts.adminWrite;
+}
