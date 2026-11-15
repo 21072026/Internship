@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Security:** `GET /api/company/interests` and `GET /api/company/outreach` require `placements` like their POSTs, so a vertical without the company portal (MARKETING) reads nothing from them either (#2348)."
-}

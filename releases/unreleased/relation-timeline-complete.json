@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Relation timeline, completed (#1700):** mentor questions (`question_asked` / `question_answered`, dated by the answer once there is one) and the pairing's own submitted INTERIM/FINAL evaluations (`evaluation_interim` / `evaluation_final`) join `GET /api/mentorship/[id]/timeline` in the same descending order and cursor. A mentee sees an evaluation as the fact and the date only — no comment, no author, and scores are never selected; an interview panel's scorecard and an unsubmitted record are never listed. Someone who is neither a participant nor an admin reaching the relation now gets **404** instead of 403, and the admin check asks `program.read` with the relation as its subject, so a PROGRAM_ADMIN reads the timeline of a pairing its grant covers. Pinned by `e2e/relation-timeline-access.spec.ts` (@smoke).",
-  "notes": {
-    "en": ["The pairing timeline now also shows questions to the mentor and submitted evaluations — a mentee sees only that an evaluation was made, never its scores."],
-    "tr": ["Eşleşme zaman çizelgesi artık mentöre sorulan soruları ve gönderilen değerlendirmeleri de gösteriyor — mentee yalnızca bir değerlendirme yapıldığını görür, puanlarını asla görmez."],
-    "de": ["Die Zeitleiste einer Zuordnung zeigt jetzt auch Fragen an den Mentor und abgegebene Bewertungen – Mentees sehen nur, dass eine Bewertung erfolgt ist, nie die Punkte."]
-  }
-}
