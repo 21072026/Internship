@@ -102,6 +102,34 @@ per-person caps, cooldown, the dormancy-mail limits — is the nudge engine's
 paths and therefore the same unsubscribe check; there is no second opt-out check and
 no second segment vocabulary.
 
+## A fixed rule outside the engine: first-contact auto-advance (#3746)
+
+"No action moves a stage" stays true for every rule an admin writes here. The one stage move
+the product makes on a lead's behalf is **not** an engine rule. It is a fixed, narrow rule with
+one switch and one target, both org settings, decided in `src/lib/firstContactAdvanceRule.ts`
+and written by `src/lib/firstContactAdvance.ts`:
+
+- **Settings** (MARKETING only; any other vertical reads the switch as off): the switch is
+  `firstContactAutoAdvance` (`off` by default). The target is `firstContactTargetStage`; blank
+  means the marketing preset's `LEAD_CONTACTED`. If the pipeline has no such stage, the rule does
+  not run.
+- **When it moves:** logging a Call, Meeting or Email (the list is in the rule; a Feedback note
+  does not count) on an ACTIVE relation that still sits on the pipeline's first stage. It moves
+  forward only.
+- **Who calls it:** every path that creates an interaction, through one function —
+  `createInteraction()` (UI, `/api/v1`, chat), the mentor e-mail composer, the CRM BCC bridge, the
+  meeting auto-log and outcome mail. History imports and sample data do not call it.
+- **How it moves:** through the shared stage write path, `stageMoveData()` → a guarded
+  `updateMany` whose WHERE names the expected first stage → `recordStageMove()` with
+  `actor: null`. It is idempotent, and its `pipeline.stage_change` reaches this engine like any
+  other move.
+- **Why there is no loop:** the engine reacting to that stage change cannot move a stage, and the
+  fixed rule runs on interaction creation, never on a stage change.
+
+Status is shown on the automation screen as one line linking to settings, not as a rule in the
+list. Adding a stage-move action here would still need its own decision; this rule is not
+precedent for one.
+
 ## The admin API (#1704)
 
 Every route checks `requirePermission('org.settings.write')` **in the handler** (an

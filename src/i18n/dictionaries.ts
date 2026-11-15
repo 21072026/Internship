@@ -4926,6 +4926,12 @@ const en = {
     error: "Something went wrong. Please try again.",
   },
   automations: {
+    firstContactNote: {
+      label: 'First-contact auto-advance',
+      on: 'on',
+      off: 'off',
+      settingsLink: 'settings',
+    },
     title: "Stage automation",
     subtitle: "When a candidate enters or leaves a stage, run a fixed set of steps — notify, mail from a template, set a deadline, hand out a goal, ask for a document, add a tag. Every step comes from a fixed list: nothing here sends to an address you type or opens a link.",
     newRule: "New rule",
@@ -8554,6 +8560,9 @@ const en = {
     },
   },
   logInteraction: {
+    stageAdvanced: 'Lead moved to {stage}',
+    undo: 'Undo',
+    undoFailed: 'The stage could not be changed back.',
     add: 'Log interaction',
     hint: 'Something that already happened: a call, an e-mail, a meeting. Plan what comes next in the follow-up.',
     type: 'Type',
@@ -9345,6 +9354,17 @@ const en = {
     failed: 'The password does not meet the policy: {rules}.',
   },
   settings: {
+    firstContactAdvance: {
+      title: 'First contact moves the lead on',
+      subtitle: 'When someone logs a call, meeting or e-mail on a lead that is still in the first stage, the lead moves to the stage you choose here. It only ever moves forward, and only from the first stage.',
+      toggle: 'Move the lead on a first contact',
+      target: 'Move it to',
+      defaultTarget: 'Default: {stage}',
+      defaultMissing: 'Default stage not in this pipeline — choose one',
+      noTargetNote: 'This pipeline has no default "Contacted" stage. Choose a stage, or the rule will not run.',
+      boundsNote: 'A note does not count, a lead that is already further on is never moved, and the move appears in the activity like any other stage change.',
+      saved: 'Saved.',
+    },
     provenance: {
       setHere: 'Set here',
       inheritedGlobal: 'Inherited from global',
@@ -17298,6 +17318,12 @@ const tr: Dict = {
     error: "Bir şeyler ters gitti. Lütfen tekrar deneyin.",
   },
   automations: {
+    firstContactNote: {
+      label: 'İlk temas otomatik taşıma',
+      on: 'açık',
+      off: 'kapalı',
+      settingsLink: 'ayarlar',
+    },
     title: "Aşama otomasyonu",
     subtitle: "Bir aday bir aşamaya girdiğinde ya da çıktığında sabit adımlar çalıştır — bildirim gönder, şablondan e-posta at, son tarih koy, hedef ver, belge iste, etiket ekle. Her adım sabit bir listeden gelir: buradaki hiçbir şey yazdığın bir adrese göndermez ya da bir bağlantı açmaz.",
     newRule: "Yeni kural",
@@ -20852,6 +20878,9 @@ const tr: Dict = {
     },
   },
   logInteraction: {
+    stageAdvanced: 'Lead {stage} aşamasına taşındı',
+    undo: 'Geri al',
+    undoFailed: 'Aşama geri alınamadı.',
     add: 'Etkileşim ekle',
     hint: 'Yapılmış bir şey: arama, e-posta, toplantı. Yapılacak bir sonraki adımı takip alanına yazın.',
     type: 'Tür',
@@ -21632,6 +21661,17 @@ const tr: Dict = {
     failed: 'Parola politikaya uymuyor: {rules}.',
   },
   settings: {
+    firstContactAdvance: {
+      title: 'İlk temas lead\'i ilerletir',
+      subtitle: 'Hâlâ ilk aşamadaki bir lead\'e telefon, toplantı ya da e-posta kaydı girildiğinde lead burada seçtiğiniz aşamaya taşınır. Yalnızca ileri ve yalnızca ilk aşamadan taşır.',
+      toggle: 'İlk temasta lead\'i ilerlet',
+      target: 'Taşınacağı aşama',
+      defaultTarget: 'Varsayılan: {stage}',
+      defaultMissing: 'Varsayılan aşama bu pipeline\'da yok — bir aşama seçin',
+      noTargetNote: 'Bu pipeline\'da varsayılan "İletişime geçildi" aşaması yok. Bir aşama seçin; aksi halde kural çalışmaz.',
+      boundsNote: 'Not kaydı sayılmaz, zaten ilerideki bir lead hiç taşınmaz ve taşıma diğer aşama değişiklikleri gibi aktivitede görünür.',
+      saved: 'Kaydedildi.',
+    },
     provenance: {
       setHere: 'Burada ayarlandı',
       inheritedGlobal: 'Genel ayardan miras',
@@ -29540,6 +29580,12 @@ const de: Dict = {
     error: "Etwas ist schiefgelaufen. Bitte erneut versuchen.",
   },
   automations: {
+    firstContactNote: {
+      label: 'Automatischer Wechsel beim Erstkontakt',
+      on: 'an',
+      off: 'aus',
+      settingsLink: 'Einstellungen',
+    },
     title: "Phasen-Automatisierung",
     subtitle: "Wenn eine Kandidatin oder ein Kandidat eine Phase betritt oder verlässt, laufen feste Schritte — benachrichtigen, eine Vorlagen-E-Mail senden, eine Frist setzen, ein Ziel vergeben, ein Dokument anfordern, ein Tag setzen. Jeder Schritt stammt aus einer festen Liste: nichts hier sendet an eine eingetippte Adresse oder öffnet einen Link.",
     newRule: "Neue Regel",
@@ -33095,6 +33141,9 @@ const de: Dict = {
     },
   },
   logInteraction: {
+    stageAdvanced: 'Lead nach {stage} verschoben',
+    undo: 'Rückgängig',
+    undoFailed: 'Die Phase konnte nicht zurückgesetzt werden.',
     add: 'Interaktion erfassen',
     hint: 'Etwas, das schon passiert ist: ein Anruf, eine E-Mail, ein Termin. Den nächsten Schritt im Follow-up planen.',
     type: 'Typ',
@@ -33875,6 +33924,17 @@ const de: Dict = {
     failed: 'Das Passwort erfüllt die Richtlinie nicht: {rules}.',
   },
   settings: {
+    firstContactAdvance: {
+      title: 'Erstkontakt bringt den Lead weiter',
+      subtitle: 'Wird bei einem Lead, der noch in der ersten Phase steht, ein Anruf, ein Termin oder eine E-Mail erfasst, wechselt er in die hier gewählte Phase. Nur vorwärts und nur aus der ersten Phase.',
+      toggle: 'Lead beim Erstkontakt weiterschieben',
+      target: 'Verschieben nach',
+      defaultTarget: 'Standard: {stage}',
+      defaultMissing: 'Standardphase fehlt in dieser Pipeline — bitte eine wählen',
+      noTargetNote: 'Diese Pipeline hat keine Standardphase „Kontaktiert“. Wählen Sie eine Phase, sonst greift die Regel nicht.',
+      boundsNote: 'Eine Notiz zählt nicht, ein Lead, der schon weiter ist, wird nie verschoben, und der Wechsel erscheint wie jeder andere Phasenwechsel in der Aktivität.',
+      saved: 'Gespeichert.',
+    },
     provenance: {
       setHere: 'Hier festgelegt',
       inheritedGlobal: 'Global geerbt',

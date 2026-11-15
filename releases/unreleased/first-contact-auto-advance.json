@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**First contact moves a lead on (#3746, MARKETING):** with the new org setting `firstContactAutoAdvance = on`, logging a Call, Meeting or Email on an ACTIVE lead still on the pipeline's first stage moves it forward to `firstContactTargetStage` (blank = the marketing preset's `LEAD_CONTACTED`; no such stage → the rule never runs). A fixed rule outside the automation engine, which still has no stage-move action (docs/automation-rules.md): the decision is pure in `src/lib/firstContactAdvanceRule.ts`, the one writer `src/lib/firstContactAdvance.ts` is called by every interaction-creating path (createInteraction for UI/v1/chat, the mentor e-mail composer, the CRM BCC bridge, the meeting auto-log, outcome mail) and moves through `stageMoveData()` + a guarded `updateMany` + `recordStageMove()` (actor null, the triggering interaction named in the activity). The settings API refuses the keys outside MARKETING and checks the target against the tenant's stages; the settings page has a switch and a target picker, the automation page a status line, and the interaction form a toast with an Undo through `PUT /api/mentorship/[id]`.",
+  "notes": {
+    "en": ["Marketing CRM: when you log a call, meeting or e-mail on a new lead, it can now move to “Contacted” on its own — switch it on in the settings, and undo it from the notice if it was too early."],
+    "tr": ["Pazarlama CRM'i: yeni bir lead'e telefon, toplantı ya da e-posta kaydı girdiğinizde lead artık kendiliğinden “İletişime geçildi” aşamasına geçebiliyor. Ayarlardan açın; erken olduysa bildirimdeki “Geri al” ile geri alın."],
+    "de": ["Marketing-CRM: Erfassen Sie bei einem neuen Lead einen Anruf, Termin oder eine E-Mail, kann er jetzt von selbst nach „Kontaktiert“ wechseln — in den Einstellungen einschalten und, falls zu früh, über die Meldung rückgängig machen."]
+  }
+}

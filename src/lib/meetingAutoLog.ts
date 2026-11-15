@@ -3,6 +3,7 @@ import { emit } from '@/lib/events/emit';
 import { isLocale, defaultLocale, type Locale } from '@/i18n/config';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { offerMeetingLogInChat } from '@/lib/chat/meetingLogInChat';
+import { advanceOnFirstContact } from '@/lib/firstContactAdvance';
 
 // "The meeting we held should already be in the interaction log" (#1489).
 //
@@ -125,6 +126,9 @@ export async function logMeetingInteraction(meeting: LoggableMeeting): Promise<b
       date: meeting.scheduledAt.toISOString(),
       autoLogged: true,
     }, { orgId: meeting.relation?.orgId ?? null, actor: { type: 'system' } });
+    // A meeting that took place is a first contact (#3746). The meetingId is
+    // unique on the log, so this runs once per meeting whichever path logged it.
+    await advanceOnFirstContact({ relationId: meeting.relationId, interactionId: row.id, type: 'Meeting' });
     // The placeholder asks for what was discussed; a mentor on chat is asked
     // there too (#1953). Minutes already say it, so they get no card.
     if (meeting.relation && !minutesOf(meeting)) {
