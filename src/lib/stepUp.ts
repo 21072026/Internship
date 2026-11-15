@@ -21,8 +21,9 @@ import { clientIp, type HeaderSource } from '@/lib/clientIp';
 //     sign-in password is (`login-fail:<email>`, the `password` lockout, 10 per
 //     15 minutes), so the step-up cannot be used to guess the password around
 //     the sign-in limit.
-//   - no 2FA and a tenant that enforces SSO (no password exists to ask) →
-//     refused as `step_up_unavailable`: enrol 2FA first.
+//   - no 2FA and no password to ask — a tenant that enforces SSO, or an account
+//     SSO provisioned with a marker instead of a hash → refused as
+//     `step_up_unavailable`: enrol 2FA first.
 //
 // Never logs the code or the password; the refusals do not say which part of
 // the proof was wrong beyond what the sign-in form already says.
@@ -54,10 +55,16 @@ export async function stepUpMethodFor(userId: string): Promise<StepUpMethod | nu
   const user = await prisma.user.findUnique({ where: { id: userId }, select: STEP_UP_SELECT });
   if (!user) return null;
   if (user.twoFactorEnabled && user.twoFactorSecret) return 'totp';
-  return (await isPasswordLoginBlocked(user)) ? null : 'password';
+  return !hasPassword(user) || (await isPasswordLoginBlocked(user)) ? null : 'password';
 }
 
 const text = (v: unknown) => (typeof v === 'string' ? v : '');
+
+// An account provisioned by SSO stores a marker, not a hash (ssoProvisioning.ts):
+// it has no password its owner could type. Asking for one would only burn the
+// sign-in password counters, so such an account is sent to 2FA instead.
+const BCRYPT_HASH = /^\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}$/;
+const hasPassword = (user: { password: string }) => BCRYPT_HASH.test(user.password);
 
 export async function verifyStepUp(userId: string, input: StepUpInput, request: Request, action: string): Promise<StepUpResult> {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: STEP_UP_SELECT });
@@ -84,7 +91,7 @@ export async function verifyStepUp(userId: string, input: StepUpInput, request: 
     return { ok: true, method: 'totp' };
   }
 
-  if (await isPasswordLoginBlocked(user)) return { ok: false, code: 'step_up_unavailable', method: null, status: 403 };
+  if (!hasPassword(user) || (await isPasswordLoginBlocked(user))) return { ok: false, code: 'step_up_unavailable', method: null, status: 403 };
   const password = text(input.password);
   if (!password) return { ok: false, code: 'step_up_required', method: 'password', status: 403 };
   if (await getActiveLockout(email, 'password')) return { ok: false, code: 'step_up_locked', method: 'password', status: 429 };

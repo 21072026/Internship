@@ -192,6 +192,13 @@ test('an IBAN change needs the account holder again: the password, or the code o
     await prisma.accountLockout.deleteMany({ where: lockoutKey });
     expect([await writes(), await notices()]).toEqual(before);
 
+    // An account SSO provisioned has a marker, not a password: nothing to ask, so 2FA first.
+    const { password: hash } = await prisma.user.findUniqueOrThrow({ where: { id: partnerUserId }, select: { password: true } });
+    await prisma.user.update({ where: { id: partnerUserId }, data: { password: '!sso-no-login' } });
+    expect(await (await put({ stepUp: { password: '!sso-no-login' } })).json()).toEqual({ code: 'step_up_unavailable', method: null });
+    await prisma.user.update({ where: { id: partnerUserId }, data: { password: hash } });
+    expect([await writes(), await notices()]).toEqual(before);
+
     // 2FA on: the code is asked, a password no longer counts.
     const secret = generateSecret();
     await prisma.user.update({ where: { id: partnerUserId }, data: { twoFactorEnabled: true, twoFactorSecret: secret, lastTotpStep: null } });
