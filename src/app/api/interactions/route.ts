@@ -124,7 +124,9 @@ export async function POST(request: Request) {
       subject,
       actorId: session.user.id,
     });
-    return NextResponse.json({ interaction }, { status: 201 });
+    // `stageAdvance` (#3746): set when this log moved a first-stage lead on, so
+    // the form can say so and offer an Undo; null otherwise.
+    return NextResponse.json({ interaction, stageAdvance: interaction.stageAdvance }, { status: 201 });
     });
   } catch (error) {
     console.error('Create interaction error:', error);
