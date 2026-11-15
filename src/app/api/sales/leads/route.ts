@@ -12,8 +12,8 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { logger } from '@/lib/logger';
 import { createMarketingAccount } from '@/lib/marketingImportStore';
 import { findLeadOwner } from '@/lib/leadOwner';
-import { leadStandInEmail } from '@/lib/marketingImport';
-import { normalizeEmailKey } from '@/lib/duplicateDetection';
+import { leadContactKey, leadStandInEmail } from '@/lib/marketingImport';
+import { normalizePhoneKey } from '@/lib/duplicateDetection';
 
 // A sales rep types in their OWN lead (#2958) — the call, the trade-fair
 // badge, the LinkedIn message — from the /sales surface.
@@ -48,24 +48,41 @@ import { normalizeEmailKey } from '@/lib/duplicateDetection';
 //     any record in the org owned by someone else, the rep hears
 //     `contact_in_funnel` with `mine: false`; re-opening it is an admin's
 //     transfer, not a fresh lead.
+//   • E-MAIL OR PHONE (#3647). A lead from a trade-fair stand or a cold call
+//     often has only a number. At least one of the two is required; without
+//     an address the lead person is keyed on the normalized phone
+//     (`leadContactKey`, the import's own key with its phone fallback on), so
+//     the same number typed twice meets the same dedupe as the same address.
+//   • WHOSE IT IS. A refusal that points at a colleague's account or record
+//     names its owner (`ownerName`) — never the record's id, never the lead's
+//     own contact details — so the rep knows whom to ask.
 //
 // Creating a lead mails nobody: the import writer sends nothing, and this
 // route adds nothing (the e2e spec counts the mail queue and the mail log to
 // keep it so).
 
-const bodySchema = z.object({
+const bodySchema = z
+  .object({
   name: z.string().trim().min(1).max(TEXT_LIMITS.companyName),
   country: z.string().trim().max(TEXT_LIMITS.companyCountry).optional(),
   vatId: z.string().trim().max(TEXT_LIMITS.companyVatId).optional(),
   contactName: z.string().trim().max(TEXT_LIMITS.companyContactName).optional(),
-  // Required for the same reason as on the admin route: the funnel record's
-  // lead person is keyed by this address (stored on the account; the lead User
-  // gets a generated stand-in, never this mailbox).
-  contactEmail: z.string().trim().email().max(TEXT_LIMITS.companyContactEmail),
+  // E-mail OR phone (#3647): the lead person is keyed by the address, else by
+  // the normalized phone (stored on the account; the lead User gets a
+  // generated stand-in, never this mailbox).
+  contactEmail: z.string().trim().email().max(TEXT_LIMITS.companyContactEmail).optional(),
   contactPhone: z.string().trim().max(TEXT_LIMITS.companyContactPhone).optional(),
   source: z.string().trim().max(TEXT_LIMITS.profileShortText).optional(),
   stage: z.string().trim().max(TEXT_LIMITS.profileShortText).optional(),
-});
+  })
+  .superRefine((v, ctx) => {
+    if (v.contactEmail) return;
+    if (!v.contactPhone) {
+      ctx.addIssue({ code: 'custom', path: ['contactEmail'], message: 'contact_required' });
+    } else if (!normalizePhoneKey(v.contactPhone)) {
+      ctx.addIssue({ code: 'custom', path: ['contactPhone'], message: 'phone_invalid' });
+    }
+  });
 // Not `.strict()`: an `ownerId` (or anything else) in the body is dropped, not
 // refused — the form never sends one, and a scripted caller learns nothing.
 
@@ -107,6 +124,9 @@ async function handlePost(request: Request) {
   }
   const parsed = bodySchema.safeParse(raw);
   if (!parsed.success) {
+    // The two contact rules get a code the form can word; anything else is "invalid".
+    const contactIssue = parsed.error.issues.find((i) => i.message === 'contact_required' || i.message === 'phone_invalid');
+    if (contactIssue) return NextResponse.json({ code: contactIssue.message, error: 'An e-mail address or a phone number is required' }, { status: 400 });
     return NextResponse.json(
       { code: 'invalid', error: 'Validation failed', details: z.flattenError(parsed.error) },
       { status: 400 },
@@ -116,12 +136,14 @@ async function handlePost(request: Request) {
 
   return withTenantScope(session, async () => {
     try {
-      if (await closedLeadOfColleague(orgId, owner.id, fields.contactEmail)) {
-        return NextResponse.json({ code: 'contact_in_funnel', mine: false }, { status: 409 });
+      const colleague = await closedLeadOfColleague(orgId, owner.id, fields);
+      if (colleague) {
+        return NextResponse.json({ code: 'contact_in_funnel', mine: false, ownerName: colleague.ownerName }, { status: 409 });
       }
       const outcome = await createMarketingAccount({
         owner,
         fields,
+        phoneLeadKey: true,
         request,
         origin: 'manual',
         actor: { id: session.user.id, email: session.user.email ?? null },
@@ -137,7 +159,9 @@ async function handlePost(request: Request) {
         case 'exists': {
           const mine = outcome.companyId ? await isOwnAccount(orgId, owner.id, outcome.companyId) : false;
           return NextResponse.json(
-            mine ? { code: 'account_exists', mine: true, companyId: outcome.companyId } : { code: 'account_exists', mine: false },
+            mine
+              ? { code: 'account_exists', mine: true, companyId: outcome.companyId }
+              : { code: 'account_exists', mine: false, ownerName: outcome.companyId ? await accountOwnerName(orgId, outcome.companyId) : null },
             { status: 409 },
           );
         }
@@ -149,7 +173,9 @@ async function handlePost(request: Request) {
             ? await ownRelationOfLead(orgId, owner.id, outcome.leadId, { activeOnly: true })
             : null;
           return NextResponse.json(
-            relationId ? { code: 'contact_in_funnel', mine: true, relationId } : { code: 'contact_in_funnel', mine: false },
+            relationId
+              ? { code: 'contact_in_funnel', mine: true, relationId }
+              : { code: 'contact_in_funnel', mine: false, ownerName: outcome.leadId ? await leadOwnerName(orgId, outcome.leadId) : null },
             { status: 409 },
           );
         }
@@ -203,27 +229,59 @@ async function isOwnAccount(orgId: string, ownerId: string, companyId: string): 
 }
 
 /**
- * Whether the contact's lead person — under either address the import keys it
- * by (the real one, or this org's stand-in) — has NO active record but at
- * least one record owned by someone other than the rep. That is the case the
- * create-only writer would otherwise place on the rep's book. A lead with an
- * active record is left to the writer (`contact_in_funnel` / `already_mentored`),
- * and a lead only the rep ever held may be re-opened by the rep.
+ * Whether the contact's lead person — under either key the import finds it by
+ * (the real address, or this org's stand-in for the address or, without one,
+ * the phone; `leadContactKey`) — has NO active record but at least one record
+ * owned by someone other than the rep. That is the case the create-only writer
+ * would otherwise place on the rep's book. A lead with an active record is
+ * left to the writer (`contact_in_funnel` / `already_mentored`), and a lead
+ * only the rep ever held may be re-opened by the rep. Returns the colleague's
+ * name (the newest such record's owner), or null.
  */
-async function closedLeadOfColleague(orgId: string, ownerId: string, contactEmail: string): Promise<boolean> {
-  const key = normalizeEmailKey(contactEmail);
-  if (!key) return false;
+async function closedLeadOfColleague(
+  orgId: string,
+  ownerId: string,
+  contact: { contactEmail?: string; contactPhone?: string },
+): Promise<{ ownerName: string | null } | null> {
+  const key = leadContactKey(contact, true);
+  if (!key) return null;
   return runWithOrg(orgId, async () => {
     const leads = await prisma.user.findMany({
       where: { orgId, role: 'MENTEE', email: { in: [key, leadStandInEmail(key, orgId)] } },
       select: { id: true },
     });
-    if (leads.length === 0) return false;
+    if (leads.length === 0) return null;
     const relations = await prisma.mentorshipRelation.findMany({
       where: { orgId, menteeId: { in: leads.map((l) => l.id) } },
-      select: { mentorId: true, status: true },
+      orderBy: { startDate: 'desc' },
+      select: { mentorId: true, status: true, mentor: { select: { fullName: true } } },
     });
-    if (relations.some((r) => r.status === 'ACTIVE')) return false;
-    return relations.some((r) => r.mentorId !== ownerId);
+    if (relations.some((r) => r.status === 'ACTIVE')) return null;
+    const other = relations.find((r) => r.mentorId !== ownerId);
+    return other ? { ownerName: other.mentor?.fullName ?? null } : null;
   });
+}
+
+/** The name of whoever holds the lead's open record in the org — or null. Never the lead's own details. */
+async function leadOwnerName(orgId: string, leadId: string): Promise<string | null> {
+  const relation = await runWithOrg(orgId, () =>
+    prisma.mentorshipRelation.findFirst({
+      where: { orgId, menteeId: leadId, status: 'ACTIVE' },
+      orderBy: { startDate: 'desc' },
+      select: { mentor: { select: { fullName: true } } },
+    }),
+  );
+  return relation?.mentor?.fullName ?? null;
+}
+
+/** The name of the owner of the account's newest open record in the org — or null. */
+async function accountOwnerName(orgId: string, companyId: string): Promise<string | null> {
+  const relation = await runWithOrg(orgId, () =>
+    prisma.mentorshipRelation.findFirst({
+      where: { orgId, companyId, status: 'ACTIVE' },
+      orderBy: { startDate: 'desc' },
+      select: { mentor: { select: { fullName: true } } },
+    }),
+  );
+  return relation?.mentor?.fullName ?? null;
 }
