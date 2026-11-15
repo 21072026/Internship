@@ -21,7 +21,7 @@ export interface DropoffReasonDialogProps {
 // Reason picker shown before a mentee moves into a negative/off-path pipeline
 // stage (#810) — required so the drop-off analytics has something to
 // aggregate. Reused as-is by the candidate-detail stage select and both board
-// pages (drag-and-drop and the per-card CardStageSelect).
+// pages (drag-and-drop).
 export function DropoffReasonDialog({ open, stageLabel, loading = false, onConfirm, onCancel }: DropoffReasonDialogProps) {
   const t = useT();
   const d = t.dropoff;

@@ -14,7 +14,6 @@ import { useToast } from '@/components/ui/Toast';
 import { stageGateFrom, useStageGateDialog } from '@/components/StageGateDialog';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { BoardStageFilter } from '@/components/board/BoardStageFilter';
-import { CardStageSelect } from '@/components/board/CardStageSelect';
 import { BoardPhaseGroups } from '@/components/board/BoardPhaseGroups';
 import { BoardColumnHeader } from '@/components/board/BoardColumnHeader';
 import { boardColumnTone } from '@/lib/boardColumnTone';
@@ -214,7 +213,7 @@ export function MentorBoard({
     }
   };
 
-  // Gate for drag-and-drop and the per-card stage select: a move into a
+  // Gate for drag-and-drop: a move into a
   // negative/off-path stage collects a reason first (#810).
   const [pendingMove, setPendingMove] = useState<{ relationId: string; toStatus: string } | null>(null);
   const requestMove = (relationId: string, toStatus: string) => {
@@ -319,11 +318,6 @@ export function MentorBoard({
       <div className="flex items-center gap-1 text-xs text-gray-400 mt-2">
         <GraduationCap className="h-3 w-3" />
         {r._count.interactions} {t.mentor.interactions}
-        <CardStageSelect
-          stages={stages}
-          value={r.pipelineStatus}
-          onChange={(next) => requestMove(r.id, next)}
-        />
       </div>
       {r.nextActionAt && <div className="mt-1"><FollowUpChip at={r.nextActionAt} /></div>}
       <div className="mt-1 empty:hidden"><TrialEndChip pipelineStatus={r.pipelineStatus} trialEndsAt={r.trialEndsAt} /></div>
