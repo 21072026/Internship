@@ -24,10 +24,11 @@ export type FirstContactMode = (typeof FIRST_CONTACT_MODES)[number];
 /**
  * The interaction types that ARE a first contact. Listed, not derived: a new
  * InteractionType is not a contact until someone adds it here on purpose.
- * Feedback is a written note, not a contact. WhatsApp is left out because the
- * decision named call, meeting and e-mail (#3746); adding it is one entry.
+ * Feedback is a written note, not a contact. WhatsApp counts: a message the
+ * lead received on it is as real a first contact as a call (the click-to-call /
+ * click-to-WhatsApp actions on the lead page log exactly these two types).
  */
-export const FIRST_CONTACT_INTERACTION_TYPES = ['Call', 'Meeting', 'Email'] as const;
+export const FIRST_CONTACT_INTERACTION_TYPES = ['Call', 'Meeting', 'Email', 'WhatsApp'] as const;
 
 /** The marketing preset's "Contacted" stage (src/lib/programTemplates.ts). */
 export const DEFAULT_FIRST_CONTACT_TARGET = 'LEAD_CONTACTED';

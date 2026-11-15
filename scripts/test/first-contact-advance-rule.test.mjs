@@ -37,10 +37,10 @@ test('a call on a first-stage lead moves it to the preset "Contacted" stage', ()
   assert.deepEqual(decideFirstContactAdvance(BASE), { move: true, from: 'LEAD_NEW', to: 'LEAD_CONTACTED' });
 });
 
-test('call, meeting and e-mail count; a note (Feedback) and WhatsApp do not', () => {
-  assert.deepEqual([...FIRST_CONTACT_INTERACTION_TYPES], ['Call', 'Meeting', 'Email']);
-  for (const type of ['Call', 'Meeting', 'Email']) assert.equal(decideFirstContactAdvance({ ...BASE, interactionType: type }).move, true, type);
-  for (const type of ['Feedback', 'WhatsApp', 'Other']) {
+test('call, meeting, e-mail and WhatsApp count; a note (Feedback) does not', () => {
+  assert.deepEqual([...FIRST_CONTACT_INTERACTION_TYPES], ['Call', 'Meeting', 'Email', 'WhatsApp']);
+  for (const type of ['Call', 'Meeting', 'Email', 'WhatsApp']) assert.equal(decideFirstContactAdvance({ ...BASE, interactionType: type }).move, true, type);
+  for (const type of ['Feedback', 'Other']) {
     assert.deepEqual(decideFirstContactAdvance({ ...BASE, interactionType: type }), { move: false, reason: 'type' }, type);
   }
 });

@@ -9365,7 +9365,7 @@ const en = {
   settings: {
     firstContactAdvance: {
       title: 'First contact moves the lead on',
-      subtitle: 'When someone logs a call, meeting or e-mail on a lead that is still in the first stage, the lead moves to the stage you choose here. It only ever moves forward, and only from the first stage.',
+      subtitle: 'When someone logs a call, meeting, e-mail or WhatsApp message on a lead that is still in the first stage, the lead moves to the stage you choose here. It only ever moves forward, and only from the first stage.',
       toggle: 'Move the lead on a first contact',
       target: 'Move it to',
       defaultTarget: 'Default: {stage}',
@@ -21681,7 +21681,7 @@ const tr: Dict = {
   settings: {
     firstContactAdvance: {
       title: 'İlk temas lead\'i ilerletir',
-      subtitle: 'Hâlâ ilk aşamadaki bir lead\'e telefon, toplantı ya da e-posta kaydı girildiğinde lead burada seçtiğiniz aşamaya taşınır. Yalnızca ileri ve yalnızca ilk aşamadan taşır.',
+      subtitle: 'Hâlâ ilk aşamadaki bir lead\'e telefon, toplantı, e-posta ya da WhatsApp kaydı girildiğinde lead burada seçtiğiniz aşamaya taşınır. Yalnızca ileri ve yalnızca ilk aşamadan taşır.',
       toggle: 'İlk temasta lead\'i ilerlet',
       target: 'Taşınacağı aşama',
       defaultTarget: 'Varsayılan: {stage}',
@@ -33953,7 +33953,7 @@ const de: Dict = {
   settings: {
     firstContactAdvance: {
       title: 'Erstkontakt bringt den Lead weiter',
-      subtitle: 'Wird bei einem Lead, der noch in der ersten Phase steht, ein Anruf, ein Termin oder eine E-Mail erfasst, wechselt er in die hier gewählte Phase. Nur vorwärts und nur aus der ersten Phase.',
+      subtitle: 'Wird bei einem Lead, der noch in der ersten Phase steht, ein Anruf, ein Termin, eine E-Mail oder eine WhatsApp-Nachricht erfasst, wechselt er in die hier gewählte Phase. Nur vorwärts und nur aus der ersten Phase.',
       toggle: 'Lead beim Erstkontakt weiterschieben',
       target: 'Verschieben nach',
       defaultTarget: 'Standard: {stage}',

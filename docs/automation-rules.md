@@ -113,7 +113,7 @@ and written by `src/lib/firstContactAdvance.ts`:
   `firstContactAutoAdvance` (`off` by default). The target is `firstContactTargetStage`; blank
   means the marketing preset's `LEAD_CONTACTED`. If the pipeline has no such stage, the rule does
   not run.
-- **When it moves:** logging a Call, Meeting or Email (the list is in the rule; a Feedback note
+- **When it moves:** logging a Call, Meeting, Email or WhatsApp (the list is in the rule; a Feedback note
   does not count) on an ACTIVE relation that still sits on the pipeline's first stage. It moves
   forward only.
 - **Who calls it:** every path that creates an interaction, through one function —

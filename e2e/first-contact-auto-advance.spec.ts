@@ -4,7 +4,7 @@ import { signInAndSettle, gotoSettled, asHost, MARKETING_HOST } from './helpers/
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
 // First contact moves a lead on (#3746). A fixed rule outside the automation
-// engine: with `firstContactAutoAdvance = on`, a Call/Meeting/Email logged on
+// engine: with `firstContactAutoAdvance = on`, a Call/Meeting/Email/WhatsApp logged on
 // an ACTIVE lead still on the pipeline's FIRST stage moves it to the target
 // (blank = LEAD_CONTACTED). Never a note, never from a later stage, never with
 // the switch off, never in INTERNSHIP. The decision is unit-tested in
