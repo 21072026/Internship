@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Video, Flag, CheckCircle2, Repeat, Download, Printer, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Video, Flag, CheckCircle2, Repeat, Download, Printer, Users, CalendarClock, Hourglass } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { SkeletonRows } from '@/components/ui/Skeleton';
@@ -26,16 +26,38 @@ import { useProductName } from '@/lib/brandClient';
 
 export type CalendarViewMode = 'month' | 'week' | 'day' | 'agenda';
 
+// `followup` and `trial` (#3778) are the sales calendar's: a record's follow-up
+// day and a trial's end day. Both are DAYS, sent as `YYYY-MM-DD` with `allDay`,
+// and placed on that day whatever the viewer's zone — never through `new Date()`,
+// which would read the bare date as UTC midnight and move it a day west of it.
+export type CalendarEventType = 'meeting' | 'series' | 'deadline' | 'logged' | 'group' | 'followup' | 'trial';
+
 interface Ev {
   id: string;
-  type: 'meeting' | 'series' | 'deadline' | 'logged' | 'group';
+  type: CalendarEventType;
   title: string;
   who: string;
   date: string;
+  allDay?: boolean;
   durationMinutes?: number | null;
   overdue?: boolean;
   link?: string | null;
 }
+
+type CalendarDict = ReturnType<typeof useT>['calendar'];
+const LEGEND_LABEL: Record<CalendarEventType | 'overdue', (t: { calendar: CalendarDict }) => string> = {
+  meeting: (t) => t.calendar.meeting,
+  series: (t) => t.calendar.recurring,
+  group: (t) => t.calendar.groupSession,
+  logged: (t) => t.calendar.logged,
+  deadline: (t) => t.calendar.deadline,
+  followup: (t) => t.calendar.followUp,
+  trial: (t) => t.calendar.trialEnd,
+  overdue: (t) => t.calendar.overdue,
+};
+
+/** The legend the internship calendars always showed; the sales calendar passes its own. */
+const DEFAULT_LEGEND: Array<CalendarEventType | 'overdue'> = ['meeting', 'series', 'group', 'logged', 'deadline', 'overdue'];
 
 const VIEWS: CalendarViewMode[] = ['month', 'week', 'day', 'agenda'];
 const VIEW_STORAGE_KEY = 'crm.calendar.view';
@@ -47,6 +69,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 const dayKey = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** The local day an event belongs to: an all-day item IS its day string. */
+const eventDayKey = (e: Ev) => (e.allDay ? e.date.slice(0, 10) : dayKey(new Date(e.date)));
+/** The local Date of an event's day — for an all-day item, that day's local midnight. */
+const eventDay = (e: Ev) => (e.allDay ? new Date(`${e.date.slice(0, 10)}T00:00:00`) : new Date(e.date));
 const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const addDays = (d: Date, n: number) => {
   const out = new Date(d);
@@ -62,6 +88,8 @@ const CHIP: Record<Ev['type'], string> = {
   logged: 'bg-emerald-100 text-emerald-700',
   deadline: 'bg-amber-100 text-amber-700',
   group: 'bg-purple-100 text-purple-700',
+  followup: 'bg-orange-100 text-orange-700',
+  trial: 'bg-pink-100 text-pink-700',
 };
 const DOT: Record<Ev['type'], string> = {
   meeting: 'bg-blue-500',
@@ -69,7 +97,11 @@ const DOT: Record<Ev['type'], string> = {
   logged: 'bg-emerald-500',
   deadline: 'bg-amber-500',
   group: 'bg-purple-500',
+  followup: 'bg-orange-500',
+  trial: 'bg-pink-500',
 };
+/** An overdue deadline or follow-up turns red, everywhere it is drawn. */
+const chipClass = (e: Ev) => ((e.type === 'deadline' || e.type === 'followup') && e.overdue ? 'bg-red-100 text-red-700' : CHIP[e.type]);
 
 function EventIcon({ type }: { type: Ev['type'] }) {
   const cls = 'h-3 w-3 flex-shrink-0';
@@ -77,6 +109,8 @@ function EventIcon({ type }: { type: Ev['type'] }) {
   if (type === 'logged') return <CheckCircle2 className={cls} />;
   if (type === 'series') return <Repeat className={cls} />;
   if (type === 'group') return <Users className={cls} />;
+  if (type === 'followup') return <CalendarClock className={cls} />;
+  if (type === 'trial') return <Hourglass className={cls} />;
   return <Video className={cls} />;
 }
 
@@ -103,7 +137,29 @@ function icsUid(e: Ev) {
   return e.type === 'meeting' ? e.id.replace(/^meeting-/, '') : e.id;
 }
 
-export function CalendarView({ initialView, emptyText }: { initialView?: CalendarViewMode; emptyText?: string }) {
+export function CalendarView({
+  initialView,
+  emptyText,
+  source = '/api/calendar-events',
+  defaultView = 'month',
+  storageKey = VIEW_STORAGE_KEY,
+  refreshKey = 0,
+  legend = DEFAULT_LEGEND,
+}: {
+  /** A fixed view: the reader's saved choice and the phone default are ignored. */
+  initialView?: CalendarViewMode;
+  emptyText?: string;
+  /** Where the events come from (#3778): same `?from&to` contract, same shape. */
+  source?: string;
+  /** The desktop default when the reader has not picked one (phones still get the agenda). */
+  defaultView?: CalendarViewMode;
+  /** Where the reader's view choice is remembered, so two calendars do not share it. */
+  storageKey?: string;
+  /** Bump to refetch the window on screen (a meeting was just created). */
+  refreshKey?: number;
+  /** The kinds the legend explains. */
+  legend?: Array<CalendarEventType | 'overdue'>;
+}) {
   const t = useT();
   const locale = useLocale();
   const product = useProductName();
@@ -112,7 +168,7 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
   const [loadError, setLoadError] = useState(false);
   const [settledKey, setSettledKey] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
-  const [view, setView] = useState<CalendarViewMode>(initialView ?? 'month');
+  const [view, setView] = useState<CalendarViewMode>(initialView ?? defaultView);
   const [cursor, setCursor] = useState(() => startOfDay(new Date()));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
 
@@ -120,19 +176,19 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
   // month grid is the whole reason this component was unusable on mobile.
   useEffect(() => {
     if (initialView) return;
-    const saved = window.localStorage.getItem(VIEW_STORAGE_KEY);
+    const saved = window.localStorage.getItem(storageKey);
     if (saved && (VIEWS as string[]).includes(saved)) {
       setView(saved as CalendarViewMode);
       return;
     }
     if (window.matchMedia('(max-width: 767px)').matches) setView('agenda');
-  }, [initialView]);
+  }, [initialView, storageKey]);
 
   const pickView = (next: CalendarViewMode) => {
     setView(next);
     setSelectedDay(null);
     try {
-      window.localStorage.setItem(VIEW_STORAGE_KEY, next);
+      window.localStorage.setItem(storageKey, next);
     } catch {
       // Private mode / storage disabled — the view just won't be remembered.
     }
@@ -161,7 +217,7 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
       setLoadError(false);
       const qs = new URLSearchParams({ from, to });
       try {
-        const res = await fetch(`/api/calendar-events?${qs}`, { signal: controller.signal });
+        const res = await fetch(`${source}?${qs}`, { signal: controller.signal });
         if (!res.ok) throw new Error('Failed to load calendar events');
         const d = await res.json();
         setEvents(d.events ?? []);
@@ -178,7 +234,7 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
 
     load();
     return () => controller.abort();
-  }, [fetchKey, retryKey]);
+  }, [fetchKey, retryKey, source, refreshKey]);
 
   // A range change is pending immediately, before its effect runs. Events from
   // the previous range stay in memory but are not rendered as if they belonged
@@ -206,11 +262,19 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
       product,
       downloadable.map((e) => {
         const label = secondaryLabel(e) ? `${primaryLabel(e)} · ${secondaryLabel(e)}` : primaryLabel(e);
+        const marker = e.type === 'deadline' || e.allDay;
         return {
           uid: icsUid(e),
-          title: e.type === 'deadline' ? `${t.calendar.deadline} · ${e.who}` : label,
-          start: new Date(e.date),
-          durationMinutes: e.type === 'deadline' ? DEADLINE_EVENT_MINUTES : e.durationMinutes ?? null,
+          title:
+            e.type === 'deadline'
+              ? `${t.calendar.deadline} · ${e.who}`
+              : e.type === 'followup'
+                ? `${t.calendar.followUp} · ${e.who}`
+                : e.type === 'trial'
+                  ? `${t.calendar.trialEnd} · ${e.who}`
+                  : label,
+          start: eventDay(e),
+          durationMinutes: marker ? DEADLINE_EVENT_MINUTES : e.durationMinutes ?? null,
         };
       })
     );
@@ -226,15 +290,20 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
 
   const byDay = useMemo(() => {
     const map: Record<string, Ev[]> = {};
-    for (const e of displayedEvents) (map[dayKey(new Date(e.date))] ||= []).push(e);
+    for (const e of displayedEvents) (map[eventDayKey(e)] ||= []).push(e);
     for (const list of Object.values(map)) list.sort((a, b) => a.date.localeCompare(b.date));
     return map;
   }, [displayedEvents]);
 
   // `h23` — the app writes times as "18:30" throughout (the recurring rule, the
   // time inputs); a 12-hour calendar next to a 24-hour form reads as a bug.
-  const time = (iso: string) =>
+  const clock = (iso: string) =>
     new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
+  // A day-long item (a follow-up, a trial end) has no time of its own.
+  const time = (e: Ev) => (e.allDay ? t.calendar.allDay : clock(e.date));
+  // The context line of the sales kinds: the follow-up's own step, or what the day is.
+  const detail = (e: Ev) =>
+    e.type === 'followup' ? e.title || t.calendar.followUp : e.type === 'trial' ? t.calendar.trialEnd : secondaryLabel(e);
   const dayLong = (d: Date) =>
     new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(d);
   // What a month-grid cell is called by assistive tech (#2153): the full date,
@@ -267,16 +336,16 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
   // --- shared pieces -------------------------------------------------------
 
   const Chip = ({ e, withTime = false }: { e: Ev; withTime?: boolean }) => {
-    const cls = e.type === 'deadline' && e.overdue ? 'bg-red-100 text-red-700' : CHIP[e.type];
+    const cls = chipClass(e);
     const inner = (
       <span className="flex items-center gap-1 truncate">
         <EventIcon type={e.type} />
-        {withTime && <span className="tabular-nums opacity-70">{time(e.date)}</span>}
+        {withTime && !e.allDay && <span className="tabular-nums opacity-70">{time(e)}</span>}
         <span className="truncate">{primaryLabel(e)}</span>
       </span>
     );
     return (
-      <div title={`${e.title} · ${e.who}`} className={`rounded px-1 py-0.5 text-[10px] ${cls}`}>
+      <div title={`${detail(e)} · ${e.who}`} className={`rounded px-1 py-0.5 text-[10px] ${cls}`}>
         {e.link ? (
           <a href={e.link} target={e.link.startsWith('http') ? '_blank' : undefined} rel="noopener noreferrer">
             {inner}
@@ -294,7 +363,7 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
   // badge eats a fifth of the line, so it becomes a colour bar and the time
   // moves onto its own line to leave the title the full width.
   const Row = ({ e, compact = false }: { e: Ev; compact?: boolean }) => {
-    const cls = e.type === 'deadline' && e.overdue ? 'bg-red-100 text-red-700' : CHIP[e.type];
+    const cls = chipClass(e);
     const full = (
       <div className="flex items-start gap-2">
         <span className={`mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full ${cls}`}>
@@ -305,8 +374,9 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
             {primaryLabel(e)}
           </span>
           <span className="block truncate text-xs text-gray-500">
-            <span className="tabular-nums">{time(e.date)}</span>
-            {secondaryLabel(e) ? ` · ${secondaryLabel(e)}` : ''}
+            <span className="tabular-nums">{time(e)}</span>
+            {detail(e) ? ` · ${detail(e)}` : ''}
+            {e.overdue && e.type === 'followup' ? ` · ${t.calendar.overdue}` : ''}
             {e.type === 'series' ? ` · ${t.calendar.recurring}` : ''}
           </span>
         </span>
@@ -316,7 +386,7 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
       <div className={`rounded px-1.5 py-1 ${cls}`}>
         <span className="flex items-center gap-1 text-[10px] tabular-nums opacity-80">
           <EventIcon type={e.type} />
-          {time(e.date)}
+          {time(e)}
         </span>
         <span className="mt-0.5 block break-words text-[11px] font-medium leading-tight">{primaryLabel(e)}</span>
       </div>
@@ -490,11 +560,11 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
 
   const agendaGroups = useMemo(() => {
     const now = Date.now();
-    const upcoming = displayedEvents.filter((e) => new Date(e.date).getTime() >= now - DAY_MS);
+    const upcoming = displayedEvents.filter((e) => eventDay(e).getTime() >= now - DAY_MS);
     const groups: { key: string; date: Date; items: Ev[] }[] = [];
     for (const e of upcoming) {
-      const d = new Date(e.date);
-      const k = dayKey(d);
+      const d = eventDay(e);
+      const k = eventDayKey(e);
       const last = groups[groups.length - 1];
       if (last && last.key === k) last.items.push(e);
       else groups.push({ key: k, date: d, items: [e] });
@@ -556,7 +626,7 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
           </button>
           {view !== 'agenda' && (
             <>
-              <button onClick={() => step(-1)} aria-label={t.calendar.previous} className="rounded p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800">
+              <button onClick={() => step(-1)} aria-label={t.calendar.previous} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-800">
                 <ChevronLeft className="h-4 w-4" />
               </button>
               <button
@@ -564,11 +634,11 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
                   setCursor(startOfDay(new Date()));
                   setSelectedDay(null);
                 }}
-                className="rounded px-2 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+                className="min-h-11 rounded px-2 text-sm text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
               >
                 {t.calendar.today}
               </button>
-              <button onClick={() => step(1)} aria-label={t.calendar.next} className="rounded p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800">
+              <button onClick={() => step(1)} aria-label={t.calendar.next} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded hover:bg-gray-100 dark:hover:bg-gray-800">
                 <ChevronRight className="h-4 w-4" />
               </button>
             </>
@@ -600,7 +670,7 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
             aria-pressed={view === v}
             onClick={() => pickView(v)}
             data-testid={`calendar-view-${v}`}
-            className={`flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition ${
+            className={`min-h-11 flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition ${
               view === v
                 ? 'bg-white text-gray-900 shadow-sm dark:bg-gray-900 dark:text-gray-100'
                 : 'text-gray-700 hover:text-gray-900'
@@ -652,32 +722,14 @@ export function CalendarView({ initialView, emptyText }: { initialView?: Calenda
         <p className="mt-4 text-center text-sm text-gray-400">{emptyText ?? t.calendar.empty}</p>
       )}
 
-      <div className="no-print mt-4 flex flex-wrap gap-3 text-xs text-gray-500">
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded bg-blue-100" />
-          {t.calendar.meeting}
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded bg-indigo-100" />
-          {t.calendar.recurring}
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded bg-purple-100" />
-          {t.calendar.groupSession}
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded bg-emerald-100" />
-          {t.calendar.logged}
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded bg-amber-100" />
-          {t.calendar.deadline}
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="inline-block h-3 w-3 rounded bg-red-100" />
-          {t.calendar.overdue}
-        </span>
-      </div>
+      <ul className="no-print mt-4 flex flex-wrap gap-3 text-xs text-gray-500" data-testid="calendar-legend">
+        {legend.map((k) => (
+          <li key={k} className="flex items-center gap-1">
+            <span aria-hidden="true" className={`inline-block h-3 w-3 rounded ${k === 'overdue' ? 'bg-red-100' : CHIP[k].split(' ')[0]}`} />
+            {LEGEND_LABEL[k](t)}
+          </li>
+        ))}
+      </ul>
     </Card>
   );
 }

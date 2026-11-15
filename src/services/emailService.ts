@@ -122,6 +122,7 @@ import { meetingChatCard } from '@/lib/meetingChatCard';
 import { sameTenant } from '@/lib/orgScope';
 import { brandAssetPath } from '@/lib/brandRule';
 import { holdIfRequired } from '@/lib/outboundDrafts';
+import { outboundBlockedReason } from '@/lib/outboundApprovalRule';
 import { customerMailLocked } from '@/lib/customerMailLock';
 import { CUSTOMER_MAIL_LOCK_REASON } from '@/lib/customerMailLockRule';
 import { PAUSED, activeRelationWhere } from '@/lib/relationLifecycle';
@@ -857,7 +858,7 @@ export const __testable = {
 // throws (and is recorded FAILED first), so every existing try/catch keeps
 // working exactly as before. 'FAILED' is in the union for callers that catch and
 // want to name the outcome; sendEmail itself never returns it.
-export type EmailDeliveryResult = 'SENT' | 'QUEUED' | 'SKIPPED' | 'FAILED' | 'HELD';
+export type EmailDeliveryResult = 'SENT' | 'QUEUED' | 'SKIPPED' | 'FAILED' | 'HELD' | 'BLOCKED';
 
 /**
  * The From display name for a mail whose caller named none (docs/worlds.md):
@@ -1363,8 +1364,16 @@ export async function sendPrepared(
  * `!== 'SKIPPED'` stamps its claim (a digest, a reminder ladder) and moves on,
  * so tomorrow's run does not build the same draft again — the draft's own
  * de-duplication key catches the rest.
+ *
+ * BLOCKED (#3771) — the recipient org runs `outboundApproval =
+ * 'lead_mail_blocked'` and this mail is one it would have held: it is not
+ * sent, not drafted, not queued, and recorded SKIPPED (`Blocked:
+ * outbound_blocked (…)`). It reads as handled exactly like HELD — every
+ * `!== 'SKIPPED'` caller stamps its claim, so the same mail is not rebuilt and
+ * re-blocked every day — and a caller that reports what reached a person
+ * (a ledger, a tally) counts it with the skipped.
  */
-export type SendEmailResult = 'SENT' | 'QUEUED' | 'SKIPPED' | 'HELD';
+export type SendEmailResult = 'SENT' | 'QUEUED' | 'SKIPPED' | 'HELD' | 'BLOCKED';
 
 export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
   const result = await prepareEmail(args);
@@ -1396,6 +1405,11 @@ export async function sendEmail(args: SendEmailArgs): Promise<SendEmailResult> {
     logger.error('outbound_hold.check_failed', { category: p.category, error: e instanceof Error ? e.message : String(e) });
     await recordEmailOutcome(p, 'FAILED', 'Outbound approval check failed');
     throw e;
+  }
+  if (hold.blocked) {
+    const p = result.prepared;
+    await recordEmailOutcome(p, 'SKIPPED', outboundBlockedReason(hold.code));
+    return 'BLOCKED';
   }
   if (hold.held) {
     if (hold.created) {
@@ -3416,6 +3430,8 @@ export async function sendMentorApplicationUnderReviewEmail({
     // no-user-row: same recipient as the acknowledgement above — an application
     // under review still has no account behind it, so there is no preference to
     // read and no unsubscribe token to mint.
+    // The applicant's org, so the outbound rule (#3771) sees who owns the mail.
+    orgId,
     category: 'mentor-application-received',
     locale,
     fromName: brand.name,
@@ -3499,6 +3515,8 @@ export async function sendMentorApplicationRejectedEmail({
     // no-user-row: a declined application never became a User row, so there is
     // nothing to unsubscribe from — and this is the last mail it will ever
     // produce, which is the one case where that is self-evidently fine.
+    // The applicant's org, so the outbound rule (#3771) sees who owns the mail.
+    orgId,
     category: 'mentor-application',
     locale,
     fromName: brand.name,
@@ -4243,6 +4261,10 @@ export async function sendContactPermissionConfirmationEmail({
   const M = getDictionary(resolveLocale(locale)).contactPermissionEmail;
   return await sendEmail({
     to,
+    // The org the enquiry was sent to (#3771): without it the outbound rule
+    // read this mail as owned by no org, and a MARKETING org that blocks lead
+    // mail would still have sent it.
+    orgId,
     category: 'consent',
     locale,
     fromName: brand.name,

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { requireRoleOrPermission } from '@/lib/authz';
+import { can, requireRoleOrPermission } from '@/lib/authz';
+import { relationSubject } from '@/lib/authzRule';
+import { isSalesDispatcher } from '@/lib/salesDispatcher';
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { randomBytes } from 'crypto';
@@ -129,7 +131,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const gate = await requireRoleOrPermission(['MENTOR'], 'relation.write', { request });
   if ('error' in gate) return gate.error;
-  const { session, admin } = gate;
+  const { session, admin, actor } = gate;
 
   // Unlimited until #1446. Scheduling always mailed people, but only people the
   // caller was already connected to; it can now mail addresses the caller typed,
@@ -168,18 +170,39 @@ export async function POST(request: Request) {
     // Relation ids come from the client: an admin may schedule on any relation
     // OF THEIR TENANT, a mentor on their own. A foreign id is dropped exactly
     // like a missing one (#2542 follow-up).
-    const where = withinTenant(
-      admin
-        ? { id: { in: relationIds } }
-        : { id: { in: relationIds }, mentorId: session.user.id },
-      await tenantWhere(session),
-    );
+    const tenant = await tenantWhere(session);
+    // `preferredLanguage` for #1720, next to `timezone` for the same reason:
+    // the invite is rendered once per invitee, in their own settings.
+    const include = { mentee: { select: { id: true, email: true, fullName: true, timezone: true, preferredLanguage: true } } } as const;
     const relations = await prisma.mentorshipRelation.findMany({
-      where,
-      // `preferredLanguage` for #1720, next to `timezone` for the same reason:
-      // the invite is rendered once per invitee, in their own settings.
-      include: { mentee: { select: { id: true, email: true, fullName: true, timezone: true, preferredLanguage: true } } },
+      where: withinTenant(
+        admin
+          ? { id: { in: relationIds } }
+          : { id: { in: relationIds }, mentorId: session.user.id },
+        tenant,
+      ),
+      include,
     });
+    // A sales dispatcher (#3656) works another rep's records as their owner
+    // would, the sales calendar's meetings included (#3778). The ids the owner
+    // filter dropped are put to the permission layer one by one — the same
+    // `relation.write` on a named record of the org that every other dispatcher
+    // write asks — never widened by hand.
+    if (!admin && relations.length < relationIds.length && (await isSalesDispatcher(session.user.id))) {
+      const missing = relationIds.filter((rid) => !relations.some((r) => r.id === rid));
+      const others = await prisma.mentorshipRelation.findMany({ where: withinTenant({ id: { in: missing } }, tenant), include });
+      for (const r of others) {
+        if (await can(actor, 'relation.write', relationSubject(r), session)) relations.push(r);
+      }
+    }
+    // Nothing the caller may schedule on (#3778): a colleague's lead, another
+    // tenant's relation and an id that does not exist all answer the same 404 —
+    // it used to be "200, created 0", which a client could not tell from a
+    // conflict-free no-op. A bulk schedule with SOME ids out of reach still
+    // books the rest, as before.
+    if (relations.length === 0) {
+      return NextResponse.json({ error: 'Not found', code: 'relation_not_found' }, { status: 404 });
+    }
 
     // Bulk scheduling creates ONE shared meeting: everyone selected joins the
     // same room, so the video link is resolved once — pasted, the organizer's

@@ -220,7 +220,7 @@ test('a MARKETING admin reads funnel language on the board — and no mentorship
     // Wait for the fetch to land: the columns only exist once relations arrive.
     await expect(page.getByTestId('board-columns')).toBeVisible();
     await expect(
-      page.getByText('Every lead across every rep — drag a card, or use the stage menu on it, to change its stage')
+      page.getByText('Every lead across every rep — drag a card to change its stage, or open it to change the stage there')
     ).toBeVisible();
     await expect(page.getByTestId('board-search')).toHaveAttribute('placeholder', 'Find a lead or rep...');
     // The funnel's keys are all non-canonical, so every column lands in the
@@ -251,7 +251,7 @@ test('an INTERNSHIP admin still reads the original board strings (#2427)', async
     await page.goto('/admin/board');
     await expect(page.getByTestId('board-columns')).toBeVisible();
     await expect(
-      page.getByText('All mentees across every mentor — drag a card, or use the stage menu on it, to change its stage')
+      page.getByText('All mentees across every mentor — drag a card to change its stage, or open it to change the stage there')
     ).toBeVisible();
     await expect(page.getByTestId('board-search')).toHaveAttribute('placeholder', 'Find a mentee or mentor...');
     await expect(page.getByText('Pre-internship', { exact: true })).toBeVisible();

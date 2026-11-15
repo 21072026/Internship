@@ -16,8 +16,8 @@ import {
 // The rule is unit-tested (scripts/test/trial-reminder-rule.test.mjs) and the
 // ratchet (scripts/test/trial-window-writers.test.mjs) holds every stage writer
 // to it. What only a browser + database round trip can show is that the stamp
-// actually lands through the path a person uses — the board's "Move to stage"
-// select → PUT /api/mentorship/[id] — with the tenant's own trial length, that
+// actually lands through the path a person uses — a drag on the board
+// → PUT /api/mentorship/[id] — with the tenant's own trial length, that
 // a second entry keeps the first window, and that the stamped record is then
 // found by the reminder query on the right day.
 
@@ -68,8 +68,27 @@ async function cleanup(orgId: string, emails: string[]) {
 async function moveOnBoard(page: Page, leadName: string, relationId: string, stage: string) {
   // The admin board lists every relation the tenant can see; scope to this
   // test's own card.
+  //
+  // A fresh board for every move: the dragged card is re-mounted in its new
+  // column, so the browser never fires `dragend` on the node the drag started
+  // on, and Playwright's mouse-driven drag does not start a second one on the
+  // same page (mousedown, then no `dragstart`).
+  await gotoSettled(page, '/admin/board');
   const card = page.getByTestId('board-card').filter({ hasText: leadName });
-  await card.getByLabel('Move to stage').selectOption(stage);
+  await expect(card).toBeVisible({ timeout: 15_000 });
+  // Grab the card by its padding: its centre is the owner's hover-card link,
+  // and a drag that starts on a link drags the link, not the card.
+  const target = page.getByTestId(`board-column-${stage}`);
+  await target.scrollIntoViewIfNeeded();
+  await card.hover({ position: { x: 6, y: 6 } });
+  await page.mouse.down();
+  // The browser starts a drag only once the pointer has travelled with the
+  // button held; one jump straight onto the target is not always enough.
+  const box = (await card.boundingBox())!;
+  await page.mouse.move(box.x + 30, box.y + 30, { steps: 5 });
+  await target.hover();
+  await target.hover();
+  await page.mouse.up();
   await expect
     .poll(async () => (await prisma.mentorshipRelation.findUnique({ where: { id: relationId } }))?.pipelineStatus, {
       timeout: 10_000,

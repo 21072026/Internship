@@ -74,7 +74,7 @@ export const ACCESSIBILITY_EVIDENCE = [
   { key: 'focusRing', source: 'src/app/globals.css' },
   { key: 'dialogs', source: 'src/components/ui/useModalFocus.ts' },
   { key: 'targetSize', source: 'src/components/ui/Button.tsx' },
-  { key: 'dragAlternative', source: 'src/components/board/CardStageSelect.tsx' },
+  { key: 'dragAlternative', source: 'e2e/board-a11y.spec.ts' },
   { key: 'textSize', source: 'src/components/FontSizeControl.tsx' },
   { key: 'osPreferences', source: 'e2e/a11y-media-preferences.spec.ts' },
   { key: 'languages', source: 'scripts/check-i18n.ts' },

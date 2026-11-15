@@ -72,7 +72,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
               status: parsed.data.status,
               note: parsed.data.note || null,
             });
-            notified = sent !== 'SKIPPED';
+            // A blocked mail (#3771) reached nobody: not "notified".
+            notified = sent !== 'SKIPPED' && sent !== 'BLOCKED';
           } catch (e) {
             logger.warning('support_report.update_mail_failed', { reportId: id, error: e instanceof Error ? e.message : String(e) });
           }

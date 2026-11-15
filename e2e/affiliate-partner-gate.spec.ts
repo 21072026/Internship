@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
+import { generateSecret, totp } from '../src/lib/totp';
 import { signInViaApi, MARKETING_HOST, asHost } from './helpers/auth';
 import { prisma as appPrisma } from '../src/lib/prisma';
 import { saveContract, AffiliateContractError } from '../src/lib/affiliateContract';
@@ -133,7 +134,7 @@ test('payout details: validated, sealed, masked on the way out, audited and anno
 
   // A published example IBAN (ISO 13616), never a real account.
   const iban = 'DE89370400440532013000';
-  const put = await partner.put('/api/affiliate/me/payout-details', { headers: host, data: { iban: 'de89 3704 0044 0532 0130 00', holder: 'Gate Partner' } });
+  const put = await partner.put('/api/affiliate/me/payout-details', { headers: host, data: { iban: 'de89 3704 0044 0532 0130 00', holder: 'Gate Partner', stepUp: { password: PW } } });
   expect(put.status()).toBe(200);
   const putText = await put.text();
   expect(putText).not.toContain(iban);
@@ -154,8 +155,64 @@ test('payout details: validated, sealed, masked on the way out, audited and anno
 
   // A suspended partner's details are frozen.
   await prisma.affiliatePartner.update({ where: { id: partnerId }, data: { status: 'SUSPENDED' } });
-  expect((await partner.put('/api/affiliate/me/payout-details', { headers: host, data: { iban, holder: 'Someone Else' } })).status()).toBe(409);
+  expect((await partner.put('/api/affiliate/me/payout-details', { headers: host, data: { iban, holder: 'Someone Else', stepUp: { password: PW } } })).status()).toBe(409);
   await prisma.affiliatePartner.update({ where: { id: partnerId }, data: { status: 'ACTIVE' } });
+});
+
+// #3734: a signed-in session is not enough to redirect money. Every change asks
+// the account holder again — the password, or the authenticator code once 2FA is
+// on — and nothing is written, audited or announced until it is given.
+test('an IBAN change needs the account holder again: the password, or the code once 2FA is on', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  const partner = await signedIn(playwright, baseURL, partnerEmail);
+  const iban = 'DE89370400440532013000';
+  const put = (data: Record<string, unknown>) => partner.put('/api/affiliate/me/payout-details', { headers: host, data: { iban, holder: 'Gate Partner', ...data } });
+  const writes = () => prisma.auditLog.count({ where: { orgId, action: 'affiliate.payout_details.update' } });
+  const notices = () => prisma.notification.count({ where: { userId: partnerUserId, type: 'security.payoutDetailsChanged' } });
+  const before = [await writes(), await notices()];
+  const lockoutKey = { email: partnerEmail.toLowerCase(), reason: 'password' };
+
+  try {
+    const bare = await put({});
+    expect(bare.status()).toBe(403);
+    expect(await bare.json()).toEqual({ code: 'step_up_required', method: 'password' });
+    const wrong = await put({ stepUp: { password: 'not-the-password' } });
+    expect(wrong.status()).toBe(403);
+    expect(await wrong.json()).toEqual({ code: 'step_up_invalid', method: 'password' });
+    // The input is judged first: a typo in the IBAN costs no attempt and asks for nothing.
+    expect(await (await put({ iban: 'DE00', stepUp: {} })).json()).toMatchObject({ code: 'invalid_input' });
+    // The sign-in door's own lockout holds the step-up too.
+    await prisma.accountLockout.upsert({
+      where: { email_reason: lockoutKey },
+      create: { ...lockoutKey, userId: partnerUserId, orgId, failedCount: 10, windowStart: new Date(), lockedUntil: new Date(Date.now() + 60_000) },
+      update: { failedCount: 10, lockedUntil: new Date(Date.now() + 60_000) },
+    });
+    const locked = await put({ stepUp: { password: PW } });
+    expect(locked.status()).toBe(429);
+    expect(await locked.json()).toEqual({ code: 'step_up_locked', method: 'password' });
+    await prisma.accountLockout.deleteMany({ where: lockoutKey });
+    expect([await writes(), await notices()]).toEqual(before);
+
+    // An account SSO provisioned has a marker, not a password: nothing to ask, so 2FA first.
+    const { password: hash } = await prisma.user.findUniqueOrThrow({ where: { id: partnerUserId }, select: { password: true } });
+    await prisma.user.update({ where: { id: partnerUserId }, data: { password: '!sso-no-login' } });
+    expect(await (await put({ stepUp: { password: '!sso-no-login' } })).json()).toEqual({ code: 'step_up_unavailable', method: null });
+    await prisma.user.update({ where: { id: partnerUserId }, data: { password: hash } });
+    expect([await writes(), await notices()]).toEqual(before);
+
+    // 2FA on: the code is asked, a password no longer counts.
+    const secret = generateSecret();
+    await prisma.user.update({ where: { id: partnerUserId }, data: { twoFactorEnabled: true, twoFactorSecret: secret, lastTotpStep: null } });
+    expect(await (await put({ stepUp: { password: PW } })).json()).toEqual({ code: 'step_up_required', method: 'totp' });
+    expect(await (await put({ stepUp: { code: totp(secret, Date.now() - 10 * 60_000) } })).json()).toEqual({ code: 'step_up_invalid', method: 'totp' });
+    const code = totp(secret);
+    expect((await put({ stepUp: { code } })).status()).toBe(200);
+    expect([await writes(), await notices()]).toEqual([before[0] + 1, before[1] + 1]);
+    // A code is spent once (the sign-in replay floor).
+    expect(await (await put({ stepUp: { code } })).json()).toEqual({ code: 'step_up_invalid', method: 'totp' });
+  } finally {
+    await prisma.user.update({ where: { id: partnerUserId }, data: { twoFactorEnabled: false, twoFactorSecret: null, lastTotpStep: null } });
+    await prisma.accountLockout.deleteMany({ where: { email: partnerEmail.toLowerCase() } });
+  }
 });
 
 test('an empty or malformed contract is refused, never published', { tag: '@smoke' }, async () => {
@@ -193,7 +250,8 @@ test('the money and declaration writes refuse an impersonating admin and an un-e
   expect(await held.json()).toMatchObject({ code: 'two_factor_required' });
   await prisma.setting.deleteMany({ where: { orgId, key: 'require2fa' } });
 
-  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.payout_details.update' } })).toBe(1); // still only the partner's own change
+  // Still only the partner's own two changes (the password one, then the step-up test's code one).
+  expect(await prisma.auditLog.count({ where: { orgId, action: 'affiliate.payout_details.update' } })).toBe(2);
 });
 
 test('a partner is sent home from the mentoring pages, never shown the mentee shell', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
