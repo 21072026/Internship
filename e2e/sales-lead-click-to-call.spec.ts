@@ -8,9 +8,11 @@ import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/pro
  * Click-to-call on a MARKETING lead (#3748): the mentor page's ContactActions
  * reused on /sales/leads/[id] and on the admin's lead view.
  *
- *   - The rep's Call button opens tel:<number> (window.open, stubbed here). "No"
- *     logs nothing. "Yes" logs a Call interaction through POST /api/interactions,
- *     and the page's interaction list shows it after the refresh.
+ *   - On the lead page the contact card's tel: link (#3741) is the one way in:
+ *     the device dials (the navigation is stopped here), then "Did you reach
+ *     them?" — "No" logs nothing, "Add a note" opens the call draft and logs
+ *     nothing, "Yes" logs a Call through POST /api/interactions and the page's
+ *     interaction list shows it after the refresh.
  *   - A colleague rep sees neither the record (404) nor the buttons, and the API
  *     refuses them a log on it: 403, no row (@smoke — the security case).
  *   - On /admin/candidates/[id] an admin holding relation.write gets the buttons;
@@ -58,36 +60,52 @@ test.afterAll(async () => {
   await prisma.organization.deleteMany({ where: { id: orgId } });
 });
 
-/** window.open never leaves the page here: the URLs it was asked for are kept. */
-async function stubWindowOpen(page: Page) {
-  await page.addInitScript(() => {
-    const opened: [string, string | undefined][] = [];
-    (window as unknown as { __opened: typeof opened }).__opened = opened;
-    window.open = ((url?: string | URL, target?: string) => {
-      opened.push([String(url), target]);
-      return null;
-    }) as typeof window.open;
+/** The device's tel: navigation is stopped and recorded; the page's own click handler still runs. */
+async function stopTelNavigation(page: Page) {
+  await page.evaluate(() => {
+    const dialled: string[] = [];
+    (window as unknown as { __dialled: string[] }).__dialled = dialled;
+    document.addEventListener('click', (e) => {
+      const a = (e.target as HTMLElement).closest('a[href^="tel:"]');
+      if (a) {
+        e.preventDefault();
+        dialled.push(a.getAttribute('href') ?? '');
+      }
+    }, true);
   });
 }
-const opened = (page: Page) => page.evaluate(() => (window as unknown as { __opened: [string, string | undefined][] }).__opened);
+const dialled = (page: Page) => page.evaluate(() => (window as unknown as { __dialled: string[] }).__dialled);
 const callCount = () => prisma.interactionLog.count({ where: { relationId: ids.relation, type: 'Call' } });
 
-test('the rep calls from the lead page: No logs nothing, Yes logs a Call and the list shows it', async ({ page, baseURL }) => {
-  await stubWindowOpen(page);
+test('the rep calls from the lead page: No and Add a note log nothing, Yes logs a Call and the list shows it', async ({ page, baseURL }) => {
   await page.context().setExtraHTTPHeaders(host);
   await page.context().addCookies([{ name: 'locale', value: 'en', url: baseURL! }]);
   await signInAndSettle(page, mail.rep, PW, '/sales');
   await gotoSettled(page, `/sales/leads/${ids.relation}`);
+  await stopTelNavigation(page);
+  const phone = page.getByTestId('sales-lead-phone-link');
+  // One way in for one number: the tel: link, no second Call button.
+  await expect(phone).toHaveAttribute('href', 'tel:+49307654321');
+  await expect(page.getByTestId('contact-call')).toHaveCount(0);
 
   // "No": the number was dialled, nothing is logged.
-  await page.getByTestId('contact-call').click();
-  expect(await opened(page)).toEqual([['tel:+49307654321', '_self']]);
+  await phone.click();
+  expect(await dialled(page)).toEqual(['tel:+49307654321']);
   await page.getByTestId('contact-reached-no').click();
   await expect(page.getByTestId('contact-reached')).toHaveCount(0);
   expect(await callCount()).toBe(0);
 
+  // "Add a note": the page's interaction form opens as a call — and still nothing is logged.
+  await phone.click();
+  await page.getByTestId('contact-reached-note').click();
+  const form = page.getByTestId('sales-lead-log-interaction');
+  await expect(form.getByRole('combobox')).toHaveValue('Call');
+  await expect(page.getByTestId('contact-reached')).toHaveCount(0);
+  expect(await callCount()).toBe(0);
+  await form.getByRole('button', { name: /Cancel/i }).click();
+
   // "Yes": one Call interaction, through the route, and the list shows it.
-  await page.getByTestId('contact-call').click();
+  await phone.click();
   await page.getByTestId('contact-reached-yes').click();
   await expect.poll(callCount, { timeout: 10_000 }).toBe(1);
   await expect(page.getByTestId('sales-lead-interactions')).toContainText('Phone call', { timeout: 10_000 });
@@ -100,9 +118,9 @@ test("a colleague rep gets neither the record nor a log on it", { tag: '@smoke' 
   await signInAndSettle(page, mail.rep2, PW, '/sales');
   const res = await page.goto(`/sales/leads/${ids.relation}`);
   expect(res?.status()).toBe(404);
-  await expect(page.getByTestId('contact-call')).toHaveCount(0);
+  await expect(page.getByTestId('sales-lead-phone-link')).toHaveCount(0);
 
-  // The route the buttons post to refuses them too.
+  // The route the question posts to refuses them too.
   const ctx = await playwright.request.newContext({ baseURL, extraHTTPHeaders: host });
   try {
     expect((await signInViaApi(ctx, mail.rep2, PW, { host: MARKETING_HOST })).ok).toBe(true);
