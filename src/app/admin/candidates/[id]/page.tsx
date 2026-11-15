@@ -27,6 +27,8 @@ import { canIssueCertificate } from '@/lib/certificateEligibility';
 import { UserActivityPanel } from '@/components/UserActivityPanel';
 import { CandidateEraseDangerZone } from '@/components/CandidateEraseDangerZone';
 import { AddInteractionForm } from '@/components/AddInteractionForm';
+import { ContactActions } from '@/components/ContactActions';
+import { useVertical } from '@/lib/verticalClient';
 import { MenteeActivationPanel } from '@/components/MenteeActivationPanel';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
 import { EmploymentAttributionDialog, useNeedsAttribution } from '@/components/EmploymentAttributionDialog';
@@ -91,6 +93,8 @@ interface MenteeDetail {
   fullName: string;
   email: string;
   phone?: string;
+  /** Server-computed (#3748): may the caller log an interaction here (POST /api/interactions' admin rule)? */
+  canLogInteraction?: boolean;
   whatsapp?: string;
   city?: string;
   /** IANA zone, null when the candidate never saved one (#1210). */
@@ -129,6 +133,7 @@ function Field({ label, value }: { label: string; value?: string | number | null
 export default function AdminMenteeDetailPage() {
   const id = useParams().id as string;
   const t = useT();
+  const vertical = useVertical();
   const locale = useLocale();
   const label = useStageLabel();
   const stages = useResolvedStages();
@@ -489,6 +494,13 @@ export default function AdminMenteeDetailPage() {
             <Field label={t.candidateDetail.department} value={user.department} />
             <Field label={t.candidateDetail.graduationYear} value={user.graduationYear} />
             <Field label={t.candidateDetail.phone} value={user.phone} />
+            {/* Click-to-call on a MARKETING lead (#3748): the same buttons as the
+                rep's lead page, for an admin the server says may log. */}
+            {vertical === 'MARKETING' && user.phone && activeRelationId && user.canLogInteraction && (
+              <div data-testid="candidate-contact-actions">
+                <ContactActions relationId={activeRelationId} phone={user.phone} onLogged={load} />
+              </div>
+            )}
             <Field label={t.candidateDetail.whatsapp} value={user.whatsapp} />
             <Field label={t.candidateDetail.city} value={user.city} />
             <Field label={t.candidateDetail.birthDate} value={user.birthDate ? formatDate(user.birthDate, locale) : null} />
