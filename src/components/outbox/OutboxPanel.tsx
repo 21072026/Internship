@@ -66,6 +66,8 @@ export function OutboxPanel() {
   const [rows, setRows] = useState<DraftRow[]>([]);
   const [total, setTotal] = useState(0);
   const [approvalOn, setApprovalOn] = useState<boolean | null>(null);
+  // #3771: lead mail blocked outright — nothing is drafted, so the page says so.
+  const [blockedMode, setBlockedMode] = useState(false);
   const [scope, setScope] = useState<'org' | 'own'>('org');
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -95,6 +97,7 @@ export function OutboxPanel() {
       setRows(data.drafts ?? []);
       setTotal(data.total ?? 0);
       setApprovalOn(!!data.approvalOn);
+      setBlockedMode(data.mode === 'lead_mail_blocked');
       setScope(data.scope === 'own' ? 'own' : 'org');
       setSelected(new Set());
     } catch {
@@ -202,13 +205,16 @@ export function OutboxPanel() {
         <div
           data-testid="outbox-approval-state"
           data-on={approvalOn ? 'true' : 'false'}
+          data-mode={blockedMode ? 'lead_mail_blocked' : approvalOn ? 'lead_mail' : 'off'}
           className={`rounded-lg border px-4 py-3 text-sm ${
-            approvalOn
-              ? 'border-green-200 bg-green-50 text-green-900 dark:border-green-900 dark:bg-green-950 dark:text-green-100'
-              : 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100'
+            blockedMode
+              ? 'border-blue-200 bg-blue-50 text-blue-900 dark:border-blue-900 dark:bg-blue-950 dark:text-blue-100'
+              : approvalOn
+                ? 'border-green-200 bg-green-50 text-green-900 dark:border-green-900 dark:bg-green-950 dark:text-green-100'
+                : 'border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-100'
           }`}
         >
-          {approvalOn ? o.approvalOn : o.approvalOff}
+          {blockedMode ? o.approvalBlocked : approvalOn ? o.approvalOn : o.approvalOff}
           {scope === 'own' && <span className="block mt-1">{o.repScope}</span>}
         </div>
       )}

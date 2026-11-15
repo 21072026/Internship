@@ -191,6 +191,8 @@ export async function sendReportSubscription(
     // Held for approval (#2960): an external recipient of a sales org waits
     // in the outbox; the ledger must not claim it went.
     if (delivery === 'HELD') return await finish('SKIPPED', 'held_for_approval');
+    // Blocked (#3771): the sales org blocks automated mail to its contacts.
+    if (delivery === 'BLOCKED') return await finish('SKIPPED', 'outbound_blocked');
     return await finish('SENT');
   } catch (error) {
     logger.error('Report subscription send failed', { subscriptionId: sub.id, error: String(error) });

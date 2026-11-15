@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Board:** the per-card stage picker is gone from both boards (maintainer's decision: it crowded the card). A stage is changed by dragging the card, or — on a phone, by keyboard, or with a single pointer — on the record the card opens (`stage-select` on `/admin/candidates/[id]` and `/mentor/mentees/[id]`). `CardStageSelect` and `board.moveTo` are deleted; the board copy, the accessibility statement and the VPAT rows for 2.1.1 / 2.5.1 / 2.5.7 / 4.1.2 now describe that path, and the board specs move a card by drag or through the record.",
+  "notes": {
+    "en": ["Board cards no longer carry a stage picker. Drag a card to change its stage, or open it and change the stage there — on a phone, that is the way."],
+    "tr": ["Pano kartlarında artık aşama seçici yok. Aşamayı kartı sürükleyerek ya da kartı açıp oradan değiştirebilirsin — telefonda yol bu."],
+    "de": ["Board-Karten haben keine Phasenauswahl mehr. Zieh eine Karte, um die Phase zu ändern, oder öffne sie und ändere die Phase dort — auf dem Handy ist das der Weg."]
+  }
+}

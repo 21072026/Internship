@@ -370,7 +370,9 @@ export async function runNudgeSend(job: { ruleId: string; userId: string; dedupe
           role: user.role === 'MENTOR' ? 'MENTOR' : 'MENTEE',
         });
         if (result === 'HELD') outcome = 'held';
-        else if (result === 'SKIPPED' && rule.channel === 'EMAIL') outcome = 'skipped';
+        // Blocked (#3771) never reached the person: like a skipped send. The
+        // NudgeSend row stays claimed, so tomorrow's scan does not try again.
+        else if ((result === 'SKIPPED' || result === 'BLOCKED') && rule.channel === 'EMAIL') outcome = 'skipped';
       }
     } catch (e) {
       // Nothing was delivered: release the claim so the retry can send it.

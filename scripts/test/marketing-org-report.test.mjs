@@ -83,11 +83,11 @@ test('approval off is a gap that says where to switch it on', () => {
 });
 
 test('outboundApprovalLabel reads a stored value exactly as the rule does', () => {
-  for (const stored of [undefined, null, '', '  ', 'off', ' off ', 'lead_mail', 'LEAD_MAIL', 'on', 'true', 'misspelt']) {
+  for (const stored of [undefined, null, '', '  ', 'off', ' off ', 'lead_mail', 'LEAD_MAIL', 'lead_mail_blocked', ' lead_mail_blocked ', 'on', 'true', 'misspelt']) {
     assert.equal(outboundApprovalLabel(stored), parseOutboundApprovalMode(stored), JSON.stringify(stored));
   }
   // Its range is the rule's vocabulary, nothing more.
-  assert.deepEqual([...new Set(['', 'lead_mail'].map(outboundApprovalLabel))].sort(), [...OUTBOUND_APPROVAL_MODES].sort());
+  assert.deepEqual([...new Set(['', 'lead_mail', 'lead_mail_blocked'].map(outboundApprovalLabel))].sort(), [...OUTBOUND_APPROVAL_MODES].sort());
 });
 
 test("the setting's stored default is 'off' in settings.ts — the report's blank-means-off agrees", () => {

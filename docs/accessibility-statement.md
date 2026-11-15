@@ -66,7 +66,7 @@ a limitation (§5), not a claim.
 | Global `:focus-visible` ring, thickened under `prefers-contrast: more` | `src/app/globals.css` |
 | Dialog focus management: initial focus, two-way tab trap, Escape, focus restore | `src/components/ui/useModalFocus.ts` |
 | WCAG 2.2 Target Size — 44×44 on touch viewports, desktop density preserved | `src/components/ui/Button.tsx`, `src/components/ui/Input.tsx` |
-| Keyboard alternative to board drag-and-drop | `src/components/board/CardStageSelect.tsx`, `e2e/board-a11y.spec.ts` |
+| Keyboard alternative to board drag-and-drop | the stage select on the record a card links to (`src/app/admin/candidates/[id]/page.tsx`, `src/app/mentor/mentees/[id]/page.tsx`), `e2e/board-a11y.spec.ts` |
 | User-controlled text size | `src/components/FontSizeControl.tsx` |
 | `prefers-reduced-motion`, `prefers-contrast`, `forced-colors` | `src/app/globals.css`, `src/lib/motion.ts`, `e2e/a11y-media-preferences.spec.ts` |
 | EN/TR/DE with CI-enforced key parity; `lang` on the document | `scripts/check-i18n.ts`, `src/app/layout.tsx` |
