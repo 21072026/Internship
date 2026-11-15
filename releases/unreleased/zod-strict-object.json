@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**zod 4 deprecations, part 2 (#3568):** 201 `z.object({…}).strict()` schemas are now `z.strictObject({…})`, the zod 4 form of the same schema (same `unrecognized_keys` refusal); one redundant trailing `.strict()` after `.partial().extend()` is dropped. `scripts/test/zod-strict-object.test.mjs` pins the equivalence and that `.partial()` / `.extend()` keep an object strict."
-}

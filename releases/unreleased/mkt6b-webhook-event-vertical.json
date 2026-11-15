@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Webhook events follow the product (MKT-6b):** every public webhook event maps to a vertical capability (`WEBHOOK_EVENT_CAPABILITY`, `src/lib/webhookEventCapability.ts`). A MARKETING org is no longer offered offer/requisition/interview/application events, subscribing to one answers `400 event_unavailable` (admin, SOURCE) or `422` (`POST /api/v1/hooks`), and the fan-out never delivers one; a stored subscription keeps its row and lists the event as `ignoredEvents`. INTERNSHIP is unchanged. `check:api-scope-capabilities` now also fails an unmapped or stale webhook event."
-}

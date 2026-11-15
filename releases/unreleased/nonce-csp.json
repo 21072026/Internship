@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Security:** the strict nonce CSP can be enforced (#1552, step 3). `CSP_ENFORCE=1` makes it the page's `Content-Security-Policy`: `script-src 'self' 'nonce-…' 'strict-dynamic'` with no `'unsafe-inline'`, and no `'unsafe-eval'` in a production build. The middleware's header replaces next.config.js's, so a page carries one enforced policy, and `/embed` follows the same mode. Off by default on deployments; the e2e servers enforce it. The GA4/PostHog init no longer inserts an inline `<script>`, which `'strict-dynamic'` never trusts: it runs as a function after the loader. (zod's eval probe, the stream's only other violation, was closed by #3642.) `style-src 'unsafe-inline'` stays, see `docs/security-exceptions.md`."
-}

@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Go-live week numbers on the MARKETING funnel (#2578):**\n- **Two new boxes on `/admin/analytics`, for a MARKETING org only.** The funnel API (`GET /api/admin/analytics/funnel`) returns `medianFirstContactHours`, `firstContact` (contacted / waiting / contacted before the request) and `trialEndCoverage` (live `TRIAL_ACTIVE` records with a `trialEndsAt`, as a rate). An INTERNSHIP payload does not carry the keys. The rule is pure in `src/lib/firstContactRule.ts`: first contact runs from the demo request (else the record's start) to the first `InteractionLog`. Unlike last contact, DIRECT and group messages do not count. The definition is one sentence, `FIRST_CONTACT_DEFINITION`, and the unit test checks that `go-live-checklist.md` quotes it verbatim.\n- **The referrer is now a lead source** (`src/lib/leadSourceName.ts`). The order is affiliate > `utm_source` > `ref:<host>` > vendor > `acquisition_source` > unknown. The host comes from the stored referrer, lower-cased, with no port, path or query. A referrer on any served host is not a source. Leads stored earlier are not backfilled.\n- The funnel route's `?program=` handling is unchanged.",
-  "notes": {
-    "en": ["Marketing analytics: the median time to first contact and the share of live trials with an end date, and demo requests without a campaign tag are attributed to the site that referred them."],
-    "tr": ["Marketing analitiği: ilk temasa medyan süre ve bitiş tarihi dolu aktif denemelerin oranı eklendi; kampanya etiketi olmayan demo talepleri artık yönlendiren siteye atfediliyor."],
-    "de": ["Marketing-Analytics: Median bis zum ersten Kontakt und Anteil laufender Tests mit Enddatum; Demo-Anfragen ohne Kampagnen-Tag werden der verweisenden Website zugeordnet."]
-  }
-}

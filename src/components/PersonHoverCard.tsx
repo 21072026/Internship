@@ -9,6 +9,7 @@ import { useT } from '@/i18n/client';
 import { useStageLabel } from '@/lib/pipelineStagesClient';
 import { LanguageBadge } from '@/components/LanguageBadge';
 import { personHref } from '@/lib/personHref';
+import { useHasCapability } from '@/lib/capabilitiesClient';
 
 // A small card behind a person's name (#1166).
 //
@@ -64,6 +65,8 @@ export function PersonHoverCard({
   const t = useT();
   const router = useRouter();
   const { data: session } = useSession();
+  // The shell's modules (#2348): no mentor pages in a vertical without mentorship.
+  const hasMentorship = useHasCapability('mentorship');
   const stageLabel = useStageLabel();
   const cardId = useId();
   const [open, setOpen] = useState(false);
@@ -182,11 +185,11 @@ export function PersonHoverCard({
   // they are rendering; the loaded record wins once it arrives. `relationId`
   // only ever comes from the loaded record — a mentor's mentee page is keyed by
   // the relation, which no call site knows from a name alone.
-  const href = personHref(session?.user?.role, {
-    id: personId,
-    role: data?.role ?? role,
-    relationId: data?.relationId ?? null,
-  });
+  const href = personHref(
+    session?.user?.role,
+    { id: personId, role: data?.role ?? role, relationId: data?.relationId ?? null },
+    { mentorship: hasMentorship },
+  );
   const label = name ?? data?.fullName ?? '';
   const roleLabel = (r: string) =>
     ({
