@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
@@ -11,15 +11,48 @@ import { INTERACTION_TYPES, type InteractionType } from '@/lib/interactionTypes'
 // (parity with what a mentor can do, #707) and a sales rep on their lead page
 // (#2580). Posts to /api/interactions (ADMIN or the relation's owner) and calls
 // onAdded() to refresh the list.
-export function AddInteractionForm({ relationId, onAdded }: { relationId: string; onAdded: () => void }) {
+//
+// `draft` (#3737, sales lead page only): each new `draft.nonce` opens the form
+// with the given type and notes and focuses the notes — nothing is posted until
+// the person presses the button. Without it the form behaves as before.
+export interface InteractionFormDraft {
+  nonce: number;
+  type?: InteractionType;
+  notes?: string;
+}
+
+export function AddInteractionForm({
+  relationId,
+  onAdded,
+  draft,
+  addLabel,
+}: {
+  relationId: string;
+  onAdded: () => void;
+  draft?: InteractionFormDraft | null;
+  /** The closed form's button text; defaults to "+ Log interaction". */
+  addLabel?: string;
+}) {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const notesRef = useRef<HTMLTextAreaElement>(null);
   const [type, setType] = useState<InteractionType>('Meeting');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [subject, setSubject] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!draft) return;
+    setOpen(true);
+    setError(null);
+    if (draft.type) setType(draft.type);
+    if (draft.notes !== undefined) setNotes(draft.notes);
+    // After the form has rendered (it may have been closed a moment ago).
+    const id = window.setTimeout(() => notesRef.current?.focus(), 0);
+    return () => window.clearTimeout(id);
+  }, [draft]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,8 +87,9 @@ export function AddInteractionForm({ relationId, onAdded }: { relationId: string
         type="button"
         onClick={() => setOpen(true)}
         className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-700"
+        data-testid="interaction-form-open"
       >
-        + {t.logInteraction.add}
+        + {addLabel ?? t.logInteraction.add}
       </button>
     );
   }
@@ -96,6 +130,7 @@ export function AddInteractionForm({ relationId, onAdded }: { relationId: string
         className="w-full rounded-lg border border-gray-300 px-2 py-1 text-sm"
       />
       <Textarea
+        ref={notesRef}
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         rows={2}

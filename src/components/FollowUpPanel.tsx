@@ -71,16 +71,31 @@ const CHIP_CLASS =
  * Read mode first (#3647): a saved follow-up reads as a note — the day (with
  * its weekday, red when overdue, amber on the day) and the next step as plain
  * text — and the form opens only on Edit. Cancel throws the edits away, a
- * successful Save or Clear returns to reading. With nothing saved the panel
- * says so and offers "Add follow-up". Presentation only: the same PUT, the
- * same rules, the same suggestions inside the form.
+ * successful Save, Clear or Complete returns to reading. With nothing saved the
+ * panel says so and offers "Add follow-up". Presentation only: the same PUT,
+ * the same rules, the same suggestions and quick dates inside the form.
  */
+/** The local calendar day `days` from today, as the `YYYY-MM-DD` a date input reads. */
+export function localDayFromToday(days: number, now: Date = new Date()): string {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+const QUICK_DAYS = [
+  { days: 1, key: 'quickTomorrow' },
+  { days: 3, key: 'quick3Days' },
+  { days: 7, key: 'quick1Week' },
+  { days: 14, key: 'quick2Weeks' },
+] as const;
+
 export function FollowUpPanel({
   relationId,
   nextActionAt,
   nextActionNote,
   pipelineStatus,
   onSaved,
+  quickDates = false,
+  onComplete,
 }: {
   relationId: string;
   nextActionAt: string | null | undefined;
@@ -88,6 +103,14 @@ export function FollowUpPanel({
   /** The record's current stage key; without it no suggestions render. */
   pipelineStatus?: string | null;
   onSaved?: () => void | Promise<void>;
+  /** Offer "Tomorrow · 3 days · 1 week · 2 weeks" next to the date (#3739, sales lead page). */
+  quickDates?: boolean;
+  /**
+   * Offer "Complete follow-up" (#3740): clears the follow-up, then hands the
+   * note it had to the caller (the sales lead page opens its interaction form
+   * with it). Absent everywhere else, so those pages keep only Save / Clear.
+   */
+  onComplete?: (note: string | null) => void;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -145,15 +168,20 @@ export function FollowUpPanel({
   const stageLines = vertical === 'INTERNSHIP' ? nextStepSuggestions(locale, pipelineStatus) : [];
   const aiOffered = vertical === 'INTERNSHIP' && !!pipelineStatus && !aiHidden;
 
-  const save = async (next: { date: string; note: string }) => {
+  const save = async (
+    next: { date: string; note: string },
+    savedMessage: string = t.followUp.saved,
+    // Complete hands the keyboard to the interaction form it opens; it must not be pulled back here.
+    opts: { returnFocus?: boolean } = {},
+  ): Promise<boolean> => {
     setError('');
     if (!parseNextActionDate(next.date).ok) {
       setError(t.followUp.invalidDate);
-      return;
+      return false;
     }
     if (next.note.trim().length > NEXT_ACTION_NOTE_MAX) {
       setError(t.followUp.tooLong.replace('{max}', String(NEXT_ACTION_NOTE_MAX)));
-      return;
+      return false;
     }
     setSaving(true);
     try {
@@ -163,16 +191,23 @@ export function FollowUpPanel({
         body: JSON.stringify({ nextActionAt: next.date || null, nextActionNote: next.note || null }),
       });
       if (!res.ok) throw new Error();
-      toast(t.followUp.saved);
+      toast(savedMessage);
       setShown({ at: next.date || null, note: next.note.trim() || null });
-      returnFocus.current = true;
+      returnFocus.current = opts.returnFocus ?? true;
       setEditing(false);
       await onSaved?.();
+      return true;
     } catch {
       toast(t.followUp.saveError, 'error');
+      return false;
     } finally {
       setSaving(false);
     }
+  };
+
+  const complete = async () => {
+    const note = shown.note;
+    if (await save({ date: '', note: '' }, t.followUp.completed, { returnFocus: false })) onComplete?.(note);
   };
 
   // One click, one call (#2875): the gate's denials become a line under the
@@ -232,7 +267,18 @@ export function FollowUpPanel({
           </button>
         )}
       </div>
-      {!editing && hasFollowUp && <FollowUpReading at={shown.at} note={shown.note} />}
+      {!editing && hasFollowUp && (
+        <>
+          <FollowUpReading at={shown.at} note={shown.note} />
+          {onComplete && (
+            <div className="mt-3">
+              <Button size="sm" variant="secondary" disabled={saving} title={t.followUp.completeHint} onClick={() => void complete()} data-testid="follow-up-complete">
+                {t.followUp.complete}
+              </Button>
+            </div>
+          )}
+        </>
+      )}
       {!editing && !hasFollowUp && (
         <div className="flex flex-wrap items-center justify-between gap-2" data-testid="follow-up-empty">
           <p className="text-sm text-gray-600 dark:text-gray-400">{t.followUp.empty}</p>
@@ -267,6 +313,27 @@ export function FollowUpPanel({
               data-testid="follow-up-note"
             />
           </div>
+          {quickDates && (
+            <div className="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label={t.followUp.quickLabel} data-testid="follow-up-quick-dates">
+              <span className="text-xs text-gray-600 dark:text-gray-400">{t.followUp.quickLabel}</span>
+              {QUICK_DAYS.map(({ days, key }) => {
+                const value = localDayFromToday(days);
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`${CHIP_CLASS} ${date === value ? '!border-blue-500 !text-blue-700 dark:!text-blue-300' : ''}`}
+                    aria-pressed={date === value}
+                    disabled={saving}
+                    onClick={() => setDate(value)}
+                    data-testid={`follow-up-quick-${days}`}
+                  >
+                    {t.followUp[key]}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {showSuggestionRow && (
             <div className="mt-3" data-testid="follow-up-suggestions">
               <div className="flex flex-wrap items-center justify-between gap-2">

@@ -7,6 +7,7 @@ import { TrialEndPanel } from '@/components/TrialEndPanel';
 import { ContractEndPanel } from '@/components/ContractEndPanel';
 import { WinBackPanel } from '@/components/WinBackPanel';
 import { DealValuePanel, type DealValueState } from '@/components/DealValuePanel';
+import { openInteractionDraft } from './interactionDraft';
 
 // The editors a sales rep has on their own record (#2580): the follow-up
 // (#2563, PUT /api/mentorship/[id] — owner or ADMIN) and the trial end (#2553,
@@ -14,11 +15,14 @@ import { DealValuePanel, type DealValueState } from '@/components/DealValuePanel
 // The page around them is a server component, so a save refreshes it — the
 // badges and the attention queue are server-rendered.
 //
-// Layout (#3653): the follow-up stays full width with the last interaction right
-// under it — what comes next, then what happened last. The date and value panels
-// (trial end, win-back, contract end, estimated value) share a grid instead of
-// each taking a full-width row for a narrow input; a panel that does not render
+// Layout (#3737, the "action strip"): the two things a rep uses most sit side by
+// side at the top — the follow-up (what comes next) and the interactions (what
+// already happened, `interactions`). On a phone they stack in that order. The
+// date and value panels (trial end, win-back, contract end, estimated value) and
+// the contact card (`contact`) share the grid below; a panel that does not render
 // for the record's stage is `empty:hidden`, so it leaves no hole in the grid.
+// The follow-up offers quick dates (#3739) and "Complete" (#3740), which opens
+// the interaction form with the follow-up's note as a call.
 export function SalesRecordPanels({
   relationId,
   status,
@@ -29,7 +33,8 @@ export function SalesRecordPanels({
   trialEndsAt,
   contractEndsAt,
   dealValue,
-  lastInteraction,
+  interactions,
+  contact,
 }: {
   relationId: string;
   status: string;
@@ -40,23 +45,27 @@ export function SalesRecordPanels({
   trialEndsAt: string | null;
   contractEndsAt: string | null;
   dealValue: DealValueState;
-  /** Rendered between the follow-up and the date/value panels (server-built by the page). */
-  lastInteraction?: ReactNode;
+  /** The interactions card, beside the follow-up. */
+  interactions: ReactNode;
+  /** The contact card, last cell of the grid below. */
+  contact?: ReactNode;
 }) {
   const router = useRouter();
   const refresh = () => router.refresh();
   return (
     <>
-      <div className="mb-6">
+      <div className="mb-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-2" data-testid="sales-lead-action-strip">
         <FollowUpPanel
           relationId={relationId}
           nextActionAt={nextActionAt}
           nextActionNote={nextActionNote}
           pipelineStatus={pipelineStatus}
           onSaved={refresh}
+          quickDates
+          onComplete={status === 'ACTIVE' ? (note) => openInteractionDraft({ type: 'Call', notes: note ?? '' }) : undefined}
         />
+        {interactions}
       </div>
-      {lastInteraction && <div className="mb-6">{lastInteraction}</div>}
       <div className="mb-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-2 2xl:grid-cols-3" data-testid="sales-record-panels-grid">
         {/* Nothing renders outside a trial. */}
         <div className="empty:hidden">
@@ -93,6 +102,7 @@ export function SalesRecordPanels({
         <div>
           <DealValuePanel relationId={relationId} initial={dealValue} onSaved={refresh} />
         </div>
+        {contact && <div className="empty:hidden">{contact}</div>}
       </div>
     </>
   );
