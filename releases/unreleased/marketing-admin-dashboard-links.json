@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Fixed:** in a vertical without the `mentorship` module (MARKETING) the admin dashboard's reps card now opens `/admin/users` and its deals card, the recent-deals \"view all\" and the onboarding checklist's pairing steps open `/admin/board` — they led to `/admin/mentors` and `/admin/mentorship`, which that vertical closes, so a MARKETING admin got a 404. The checklist drops the evaluation-framework step where there is no `evaluations` module, and the accounts card, its quick action and the add-an-account step read in sales language (#2348, #2578).",
-  "notes": {
-    "en": ["Marketing admin dashboard: every card and checklist step now opens a working page — reps, deals and accounts."],
-    "tr": ["Pazarlama yönetici panosu: tüm kartlar ve kontrol listesi adımları artık çalışan bir sayfayı açıyor — temsilciler, fırsatlar ve hesaplar."],
-    "de": ["Marketing-Admin-Dashboard: Jede Karte und jeder Checklisten-Schritt öffnet jetzt eine funktionierende Seite — Vertriebsmitarbeiter, Deals und Accounts."]
-  }
-}

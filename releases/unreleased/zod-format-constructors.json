@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**zod 4 deprecations, part 3 (#3568):** 70 `z.string().email()` / `.url()` / `.datetime()` checks that come first in their chain are now `z.email()` / `z.url()` / `z.iso.datetime()` — the same check, accepting and refusing the same inputs with the same issues (`scripts/test/zod-format-constructors.test.mjs`, a corpus per format). Deliberately left as they are: a check after `.trim()` / `.min()` (the constructor checks first, so `z.email().trim()` would refuse ' a@b.co ') and a check with its own message (the constructor also applies it to a non-string input); the test pins both differences. `zodToJsonSchema` (`src/lib/events/payloadSchema.ts`) now also reads the format off `z.iso.datetime()` itself, so the published webhook contracts keep `format: date-time`."
-}
