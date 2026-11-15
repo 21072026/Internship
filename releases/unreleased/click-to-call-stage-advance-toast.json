@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**The click-to-call \"Yes\" says when it moved the lead (#3748 × #3746):** a \"Did you reach them? Yes\" on a first-stage lead goes through `POST /api/interactions`, so the first-contact rule could move it, but nothing on the page said so. `ContactActions` now reads the same `stageAdvance` answer the interaction form reads. It shows the same \"moved to <stage>\" toast with Undo, and the page (stage badge, interactions card) re-reads itself. The toast and Undo are one hook, `useStageAdvanceToast()`, shared by the form and the question; Undo moves the record back through `PUT /api/mentorship/[id]`, the board's stage write. With the setting off, the toast still says only that the contact was logged.",
+  "notes": {
+    "en": ["When a call from a lead's page moves the lead to the next stage, you now see it and can undo it."],
+    "tr": ["Lead sayfasından yapılan bir arama lead'i bir sonraki aşamaya taşıdığında artık bunu görüyor ve geri alabiliyorsunuz."],
+    "de": ["Wenn ein Anruf von der Lead-Seite den Lead in die nächste Phase verschiebt, sehen Sie das jetzt und können es rückgängig machen."]
+  }
+}
