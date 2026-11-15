@@ -81,6 +81,57 @@ export interface NavLink {
    * page's API answers 403 itself, and that is the control.
    */
   permission?: Permission;
+  /**
+   * The admin sidebar group this link sits in (#3752, iOS-Settings style). An
+   * admin link without one is a daily item, shown flat at the top. The sidebar
+   * renders the groups in `NAV_GROUPS` order and hides a group the filters
+   * above left empty. Presentation only.
+   */
+  group?: NavGroup;
+  /**
+   * A rarely used, settings-like page (#3752): listed on its group's hub page
+   * (`/admin/hub/<group>`) instead of in the sidebar, which shows one "More …"
+   * row for the group. Needs `group`. The palette and the native app menu
+   * still list it like any other link.
+   */
+  hub?: boolean;
+}
+
+/** The admin sidebar's groups, in display order (#3752). */
+export const NAV_GROUPS = ['pipeline', 'mentoring', 'communication', 'reports', 'team', 'integrations', 'settings', 'operations'] as const;
+export type NavGroup = (typeof NAV_GROUPS)[number];
+
+/** The href of a group's hub page — the one place the path is spelled. */
+export function navHubHref(group: NavGroup): string {
+  return `/admin/hub/${group}`;
+}
+
+export function isNavGroup(value: unknown): value is NavGroup {
+  return typeof value === 'string' && (NAV_GROUPS as readonly string[]).includes(value);
+}
+
+export interface NavSection {
+  group: NavGroup;
+  /** Links shown in the sidebar under the group's header. */
+  sidebar: NavLink[];
+  /** Links shown only on the group's hub page. */
+  hub: NavLink[];
+}
+
+/**
+ * Split an already-filtered link list into the sidebar's shape (#3752): the
+ * daily items (no group) in list order, then one section per group in
+ * NAV_GROUPS order. A group with no link left is dropped, so a vertical or a
+ * tier that filters a whole group away never sees an empty header. Pure.
+ */
+export function groupNavLinks(links: readonly NavLink[]): { top: NavLink[]; sections: NavSection[] } {
+  const top = links.filter((l) => !l.group);
+  const sections = NAV_GROUPS.map((group) => ({
+    group,
+    sidebar: links.filter((l) => l.group === group && !l.hub),
+    hub: links.filter((l) => l.group === group && l.hub),
+  })).filter((s) => s.sidebar.length + s.hub.length > 0);
+  return { top, sections };
 }
 
 /** Who is looking — the facts the audience tags above are judged against. */
@@ -108,135 +159,138 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/board', icon: Columns3, key: 'board' },
   // Stage automation rules (#1703/#1704): what runs when a relation enters or
   // leaves a stage. Every vertical with a pipeline has it.
-  { href: '/admin/automations', icon: Zap, key: 'automations', capability: 'pipeline', permission: 'org.settings.write' },
+  { href: '/admin/automations', icon: Zap, key: 'automations', capability: 'pipeline', permission: 'org.settings.write', group: 'pipeline' },
   { href: '/admin/companies', icon: Building2, key: 'companies' },
   // The partner programme (docs/affiliate-module.md), marketing CRM only.
-  { href: '/admin/affiliates', icon: Wallet, key: 'affiliates', capability: 'affiliate' },
+  { href: '/admin/affiliates', icon: Wallet, key: 'affiliates', capability: 'affiliate', group: 'pipeline' },
   // The hiring desk (#1874): the four queues waiting on the programme owner.
-  { href: '/admin/hiring', icon: Inbox, key: 'hiring', capability: 'placements' },
-  { href: '/admin/requisitions', icon: BriefcaseBusiness, key: 'requisitions' , capability: 'placements' },
-  { href: '/admin/offers', icon: Handshake, key: 'offers' , capability: 'placements' },
+  { href: '/admin/hiring', icon: Inbox, key: 'hiring', capability: 'placements', group: 'pipeline' },
+  { href: '/admin/requisitions', icon: BriefcaseBusiness, key: 'requisitions' , capability: 'placements', group: 'pipeline' },
+  { href: '/admin/offers', icon: Handshake, key: 'offers' , capability: 'placements', group: 'pipeline' },
   // The placement ledger (#1765): one row per hire, its attribution and invoice state.
-  { href: '/admin/placements', icon: Receipt, key: 'placements', capability: 'placements' },
-  { href: '/admin/interview-requests', icon: CalendarDays, key: 'interviewRequests' , capability: 'placements' },
-  { href: '/interviews', icon: ClipboardCheck, key: 'interviewPanels' , capability: 'placements' },
+  { href: '/admin/placements', icon: Receipt, key: 'placements', capability: 'placements', group: 'pipeline' },
+  { href: '/admin/interview-requests', icon: CalendarDays, key: 'interviewRequests' , capability: 'placements', group: 'pipeline' },
+  { href: '/interviews', icon: ClipboardCheck, key: 'interviewPanels' , capability: 'placements', group: 'pipeline' },
   { href: '/admin/candidates', icon: Users, key: 'candidates' },
-  { href: '/admin/duplicates', icon: GitMerge, key: 'duplicates' },
-  { href: '/admin/mentors', icon: UserCheck, key: 'mentors' , capability: 'mentorship' },
-  { href: '/admin/mentorship', icon: Users, key: 'mentorships' , capability: 'mentorship' },
+  // The inbox (#3752): every role already had /messages through RoleShell; the
+  // admin sidebar now lists it among the daily items.
+  { href: '/messages', icon: MessageSquare, key: 'messages' },
+  { href: '/admin/duplicates', icon: GitMerge, key: 'duplicates', group: 'pipeline', hub: true },
+  { href: '/admin/mentors', icon: UserCheck, key: 'mentors' , capability: 'mentorship', group: 'mentoring' },
+  { href: '/admin/mentorship', icon: Users, key: 'mentorships' , capability: 'mentorship', group: 'mentoring' },
   // Matching rule sets and their dry run (#1783).
-  { href: '/admin/matching', icon: Scale, key: 'matching', capability: 'mentorship' },
+  { href: '/admin/matching', icon: Scale, key: 'matching', capability: 'mentorship', group: 'mentoring' },
   // The org-wide at-risk queue (#1902): every pair, worst first, one next action.
-  { href: '/admin/health', icon: HeartPulse, key: 'health', capability: 'mentorship' },
-  { href: '/admin/mentor-applications', icon: GraduationCap, key: 'mentorApplications' , capability: 'mentorship' },
+  { href: '/admin/health', icon: HeartPulse, key: 'health', capability: 'mentorship', group: 'mentoring' },
+  { href: '/admin/mentor-applications', icon: GraduationCap, key: 'mentorApplications' , capability: 'mentorship', group: 'mentoring' },
   // The enquiry inbox is shared since #2569: on an internship tenant it holds the
   // /for-companies enquiries, on a MARKETING tenant the landing's demo requests
   // (and is the "unowned leads" list, #2580) — both are the `companies` module.
-  { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries', capability: 'companies' },
+  { href: '/admin/company-inquiries', icon: Building2, key: 'companyInquiries', capability: 'companies', group: 'pipeline' },
   // Outbound acquisition by letter (#2697) — the companies module, so both
   // products have it: a marketing org writes to online sellers, InternCRM to institutions.
-  { href: '/admin/acquisition', icon: Send, key: 'acquisition', capability: 'companies' },
+  { href: '/admin/acquisition', icon: Send, key: 'acquisition', capability: 'companies', group: 'pipeline' },
   // Automated mail to leads and customers waiting for approval (#2960) — the
   // sales vertical only (pipeline without mentorship, outboundApprovalRule.ts).
-  { href: '/admin/outbox', icon: MailCheck, key: 'outbox', capability: 'pipeline', withoutCapability: 'mentorship' },
+  { href: '/admin/outbox', icon: MailCheck, key: 'outbox', capability: 'pipeline', withoutCapability: 'mentorship', group: 'pipeline' },
   // Intern team/task projects and their contributor-IP terms, mentee goal
   // templates, programme cohorts and mentor/mentee success stories are
   // internship modules (#2499). A MARKETING
   // tenant carries none of these capabilities, so the links drop out of its
   // sidebar — and the projects write APIs are gated on the same capability.
-  { href: '/admin/projects', icon: FolderGit2, key: 'projects', capability: 'projects' },
-  { href: '/admin/goal-templates', icon: ListChecks, key: 'goalTemplates', capability: 'mentorship' },
+  { href: '/admin/projects', icon: FolderGit2, key: 'projects', capability: 'projects', group: 'mentoring' },
+  { href: '/admin/goal-templates', icon: ListChecks, key: 'goalTemplates', capability: 'mentorship', group: 'mentoring', hub: true },
   // The guided-conversation library a pair's session agenda is picked from (#1843).
-  { href: '/admin/agenda-templates', icon: BookOpenCheck, key: 'agendaTemplates', capability: 'mentorship' },
+  { href: '/admin/agenda-templates', icon: BookOpenCheck, key: 'agendaTemplates', capability: 'mentorship', group: 'mentoring', hub: true },
   // The canned-response pool the composer offers (#1871), next to the other
   // reusable-text screen rather than buried under settings.
-  { href: '/admin/message-templates', icon: MessageSquareQuote, key: 'messageTemplates' },
+  { href: '/admin/message-templates', icon: MessageSquareQuote, key: 'messageTemplates', group: 'communication', hub: true },
   { href: '/todos', icon: ClipboardList, key: 'todos' },
-  { href: '/admin/cohorts', icon: Layers, key: 'cohorts', capability: 'mentorship' },
-  { href: '/admin/tags', icon: TagIcon, key: 'tags' },
+  { href: '/admin/cohorts', icon: Layers, key: 'cohorts', capability: 'mentorship', group: 'mentoring' },
+  { href: '/admin/tags', icon: TagIcon, key: 'tags', group: 'settings', hub: true },
   // The canonical skill vocabulary and its review queue (#1817).
   // Its consumers are mentor suggestion and candidate ↔ requisition matching, so
   // it is an internship module: a MARKETING tenant has neither.
-  { href: '/admin/skills', icon: Sparkles, key: 'skills', capability: 'mentorship' },
-  { href: '/admin/sources', icon: Radio, key: 'sources' , capability: 'sourcing' },
-  { href: '/admin/users', icon: UserCog, key: 'users' },
+  { href: '/admin/skills', icon: Sparkles, key: 'skills', capability: 'mentorship', group: 'mentoring', hub: true },
+  { href: '/admin/sources', icon: Radio, key: 'sources' , capability: 'sourcing', group: 'team' },
+  { href: '/admin/users', icon: UserCog, key: 'users', group: 'team' },
   { href: '/admin/meetings', icon: Video, key: 'meetings' },
   { href: '/admin/calendar', icon: CalendarDays, key: 'calendar' },
   // Every mentor's hours, run by the admin without impersonation (#2005).
-  { href: '/admin/availability', icon: CalendarRange, key: 'availability', capability: 'mentorship' },
+  { href: '/admin/availability', icon: CalendarRange, key: 'availability', capability: 'mentorship', group: 'mentoring', hub: true },
   // Group sessions and office hours (#1856) — programme events, an internship module.
-  { href: '/admin/events', icon: Presentation, key: 'groupEvents', capability: 'mentorship' },
-  { href: '/admin/announcements', icon: Megaphone, key: 'announcements' },
+  { href: '/admin/events', icon: Presentation, key: 'groupEvents', capability: 'mentorship', group: 'mentoring' },
+  { href: '/admin/announcements', icon: Megaphone, key: 'announcements', group: 'communication' },
   // The newsletter is career content for MENTEE/MENTOR audiences (#1469): an
   // internship module. Tagged `mentorship` rather than a new `newsletter`
   // capability — its audiences only exist where mentorship does, and a second
   // key that always travels with the first is a key that can only drift.
   // Tagging also closes the URL (pageCapabilityGate) and the APIs gate on it.
-  { href: '/admin/newsletters', icon: MailOpen, key: 'newsletters', capability: 'mentorship' },
+  { href: '/admin/newsletters', icon: MailOpen, key: 'newsletters', capability: 'mentorship', group: 'communication' },
   // Admin-authored nudges (#1686): reminders to mentors and mentees, so `mentorship`.
   // Stage-change rules are the automations screen (#1704), not this one.
-  { href: '/admin/nudges', icon: BellRing, key: 'nudges', capability: 'mentorship', permission: 'org.settings.write' },
-  { href: '/admin/testimonials', icon: Quote, key: 'testimonials', capability: 'mentorship' },
+  { href: '/admin/nudges', icon: BellRing, key: 'nudges', capability: 'mentorship', permission: 'org.settings.write', group: 'communication', hub: true },
+  { href: '/admin/testimonials', icon: Quote, key: 'testimonials', capability: 'mentorship', group: 'communication', hub: true },
   // Survey results (#1910). Untagged: a survey's audience may be companies, and
   // the engine (#1879) is not a mentorship module.
-  { href: '/admin/surveys', icon: Smile, key: 'surveys' },
+  { href: '/admin/surveys', icon: Smile, key: 'surveys', group: 'communication' },
   // "E-mail your mentees" — addressed through mentorship relations.
-  { href: '/admin/email', icon: Mail, key: 'email', capability: 'mentorship' },
-  { href: '/admin/documents', icon: FileText, key: 'documents' },
-  { href: '/admin/support', icon: LifeBuoy, key: 'support' },
+  { href: '/admin/email', icon: Mail, key: 'email', capability: 'mentorship', group: 'communication' },
+  { href: '/admin/documents', icon: FileText, key: 'documents', group: 'settings' },
+  { href: '/admin/support', icon: LifeBuoy, key: 'support', group: 'communication' },
   // Safeguarding review queue (#2056). Untagged: every vertical has messaging.
-  { href: '/admin/safeguarding', icon: ShieldAlert, key: 'safeguarding' },
-  { href: '/admin/activity', icon: ScrollText, key: 'activity' },
+  { href: '/admin/safeguarding', icon: ShieldAlert, key: 'safeguarding', group: 'settings', hub: true },
+  { href: '/admin/activity', icon: ScrollText, key: 'activity', group: 'reports', hub: true },
   // The privileged-action trail (#1583) — gated on the `audit.read` permission
   // server-side; untagged, every vertical has admins and impersonation.
-  { href: '/admin/audit', icon: FileSearch, key: 'audit' },
-  { href: '/admin/mentee-activity', icon: Activity, key: 'menteeActivity' , capability: 'mentorship' },
+  { href: '/admin/audit', icon: FileSearch, key: 'audit', group: 'reports', hub: true },
+  { href: '/admin/mentee-activity', icon: Activity, key: 'menteeActivity' , capability: 'mentorship', group: 'reports' },
   // Term compliance of the weekly diaries (#1918) — an internship-only screen.
-  { href: '/admin/weekly-reports', icon: ClipboardList, key: 'weeklyReportsAdmin', capability: 'mentorship' },
+  { href: '/admin/weekly-reports', icon: ClipboardList, key: 'weeklyReportsAdmin', capability: 'mentorship', group: 'reports' },
   // Open-text insights (#2046): themes over evaluation comments and weekly-
   // report blockers — both internship records, hence `mentorship`.
-  { href: '/admin/insights', icon: Lightbulb, key: 'insights', capability: 'mentorship' },
+  { href: '/admin/insights', icon: Lightbulb, key: 'insights', capability: 'mentorship', group: 'reports' },
   // Mid-programme migration (#2073): people, pairs, stage history and notes
   // from another platform — internship records, hence `mentorship`.
-  { href: '/admin/migrate', icon: ArrowRightLeft, key: 'migrate', capability: 'mentorship' },
-  { href: '/admin/analytics', icon: BarChart3, key: 'analytics' },
+  { href: '/admin/migrate', icon: ArrowRightLeft, key: 'migrate', capability: 'mentorship', group: 'integrations', hub: true },
+  { href: '/admin/analytics', icon: BarChart3, key: 'analytics', group: 'reports' },
   // Stage-SLA breach queue and compliance rate (#1723). Untagged: every
   // vertical has a pipeline and may set service levels on it.
-  { href: '/admin/sla', icon: AlarmClock, key: 'slaQueue' },
+  { href: '/admin/sla', icon: AlarmClock, key: 'slaQueue', group: 'reports' },
   // AI spend, failures, quota and provider status (#2030). Untagged: every
   // vertical has AI tasks and a quota.
-  { href: '/admin/ai', icon: Sparkles, key: 'aiConsole' },
+  { href: '/admin/ai', icon: Sparkles, key: 'aiConsole', group: 'reports', hub: true },
   // Scheduled report delivery (#1905). Premium (ADVANCED_ANALYTICS) at its API.
-  { href: '/admin/reports/subscriptions', icon: CalendarClock, key: 'reportSubscriptions' },
+  { href: '/admin/reports/subscriptions', icon: CalendarClock, key: 'reportSubscriptions', group: 'reports', hub: true },
   // Segmentation attributes the reports slice by (#1920). Untagged: every vertical reports.
   // The registry's reports, read, downloaded and sliced (#1920). Premium (ADVANCED_ANALYTICS) at its API.
-  { href: '/admin/reports', icon: Table2, key: 'reportsExplorer' },
-  { href: '/admin/attributes', icon: SlidersHorizontal, key: 'orgAttributes' },
-  { href: '/admin/integrations', icon: Webhook, key: 'integrations' },
+  { href: '/admin/reports', icon: Table2, key: 'reportsExplorer', group: 'reports' },
+  { href: '/admin/attributes', icon: SlidersHorizontal, key: 'orgAttributes', group: 'settings', hub: true },
+  { href: '/admin/integrations', icon: Webhook, key: 'integrations', group: 'integrations' },
   // Scheduled HR roster sync (#1967): config, runs, row-level outcomes.
-  { href: '/admin/roster-feeds', icon: RefreshCw, key: 'rosterFeeds' },
+  { href: '/admin/roster-feeds', icon: RefreshCw, key: 'rosterFeeds', group: 'integrations', hub: true },
   // The whole deployment's API map — the operator's (#1575).
-  { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer', superAdminOnly: true },
+  { href: '/admin/api-explorer', icon: Braces, key: 'apiExplorer', superAdminOnly: true, group: 'integrations', hub: true },
   // The operations console (#1607): for the deployment's operators.
-  { href: '/admin/operations', icon: ServerCog, key: 'operations', operatorOnly: true },
-  { href: '/admin/retention', icon: ShieldCheck, key: 'retention' },
+  { href: '/admin/operations', icon: ServerCog, key: 'operations', operatorOnly: true, group: 'operations' },
+  { href: '/admin/retention', icon: ShieldCheck, key: 'retention', group: 'settings', hub: true },
   // Re-engaging dormant applicants/mentees is the internship funnel's tail.
-  { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement', capability: 'mentorship' },
+  { href: '/admin/re-engagement', icon: UserPlus, key: 'reEngagement', capability: 'mentorship', group: 'mentoring', hub: true },
   // Admin-defined registration / onboarding / profile questions (#1802).
-  { href: '/admin/forms', icon: ClipboardList, key: 'forms', capability: 'mentorship' },
+  { href: '/admin/forms', icon: ClipboardList, key: 'forms', capability: 'mentorship', group: 'settings', hub: true },
   // The mentoring agreement both sides accept at kickoff (#1790).
-  { href: '/admin/agreements', icon: FileSignature, key: 'agreements', capability: 'mentorship' },
-  { href: '/admin/contributor-terms', icon: FileSignature, key: 'contributorTerms', capability: 'projects' },
+  { href: '/admin/agreements', icon: FileSignature, key: 'agreements', capability: 'mentorship', group: 'settings', hub: true },
+  { href: '/admin/contributor-terms', icon: FileSignature, key: 'contributorTerms', capability: 'projects', group: 'settings', hub: true },
   // The tenant's own bill (#1739): plan, active-pair meter, history. The meter
   // and the price list are the internship product's (src/lib/plans.ts); a
   // MARKETING org has no plan gate and no checkout, hence `mentorship`.
-  { href: '/admin/billing', icon: Receipt, key: 'billing', capability: 'mentorship' },
-  { href: '/admin/organizations', icon: Network, key: 'organizations' },
-  { href: '/admin/settings', icon: Settings, key: 'settings' },
-  { href: '/admin/invite', icon: Mail, key: 'invite' },
+  { href: '/admin/billing', icon: Receipt, key: 'billing', capability: 'mentorship', group: 'settings', hub: true },
+  { href: '/admin/organizations', icon: Network, key: 'organizations', group: 'team' },
+  { href: '/admin/settings', icon: Settings, key: 'settings', group: 'settings' },
+  { href: '/admin/invite', icon: Mail, key: 'invite', group: 'team' },
   // The board that answers "who actually joined?" (#2071), next to the page
   // that sends the invitations in the first place.
-  { href: '/admin/invitations', icon: MailCheck, key: 'invitations' },
+  { href: '/admin/invitations', icon: MailCheck, key: 'invitations', group: 'team', hub: true },
 ];
 
 export const MENTOR_NAV_LINKS: NavLink[] = [
