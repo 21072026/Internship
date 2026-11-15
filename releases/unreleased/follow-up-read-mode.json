@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "The follow-up panel on a record (sales lead page, mentor mentee page, admin candidate page) shows a saved follow-up as a read-only note — the day with its weekday, red when overdue and amber on the day, and the next step as text — with an Edit button that opens the form (Save, Cancel, Clear). With nothing saved it offers \"Add follow-up\". Presentation only; the API and rules are unchanged (#3647).",
+  "notes": {
+    "en": [
+      "A saved follow-up now reads as a note — the day (with its weekday) and the next step — and opens for editing only when you press Edit."
+    ],
+    "tr": [
+      "Kayıtlı bir takip artık bir not gibi okunuyor: gün (haftanın günüyle) ve sonraki adım. Düzenleme formu yalnızca Düzenle'ye basınca açılıyor."
+    ],
+    "de": [
+      "Eine gespeicherte Wiedervorlage liest sich jetzt wie eine Notiz – der Tag (mit Wochentag) und der nächste Schritt – und öffnet sich erst mit „Bearbeiten“ zum Ändern."
+    ]
+  }
+}

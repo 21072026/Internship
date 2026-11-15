@@ -42,6 +42,9 @@ test('a follow-up date reminds its owner once, then flags the record until it is
     await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
     await gotoSettled(page, `/mentor/mentees/${rel.id}`);
     const panel = page.getByTestId('follow-up-panel');
+    // Nothing saved yet: the panel says so and opens its form on "Add" (#3647).
+    await expect(panel.getByTestId('follow-up-empty')).toBeVisible();
+    await panel.getByTestId('follow-up-add').click();
     // The panel says who reads the note (#2875), offers the stage's ready-made
     // lines, and a chip only fills the field — nothing is saved by the click.
     await expect(panel.getByTestId('follow-up-visibility')).toContainText('never does');
@@ -107,6 +110,7 @@ test('a follow-up date reminds its owner once, then flags the record until it is
 
     // Moving the date forward takes it out again.
     await gotoSettled(page, `/mentor/mentees/${rel.id}`);
+    await panel.getByTestId('follow-up-edit').click();
     await panel.getByTestId('follow-up-date').fill(utcDay(1));
     await panel.getByTestId('follow-up-save').click();
     await expect(page.getByText('Follow-up saved')).toBeVisible();
@@ -139,5 +143,79 @@ test('a follow-up date reminds its owner once, then flags the record until it is
     await cleanupByEmail(menteeEmail);
     await cleanupByEmail(mentorEmail);
     await cleanupByEmail(adminEmail);
+  }
+});
+
+test('a saved follow-up reads as a note; Edit opens the form, Cancel throws edits away, Save returns to reading', async ({ page }) => {
+  test.slow();
+  const mentorEmail = uniqueEmail('fu-read-mentor');
+  const menteeEmail = uniqueEmail('fu-read-mentee');
+  const mentor = await seedUser(mentorEmail, 'MentorPass123', 'MENTOR', 'FU Read Mentor');
+  const mentee = await seedUser(menteeEmail, 'MenteePass123', 'MENTEE', 'Follow Up Reader');
+  const rel = await prisma.mentorshipRelation.create({
+    data: {
+      mentorId: mentor.id,
+      menteeId: mentee.id,
+      nextActionAt: new Date(`${utcDay(-2)}T00:00:00.000Z`),
+      nextActionNote: 'Send the offer letter',
+    },
+  });
+  const weekday = (day: string) =>
+    new Intl.DateTimeFormat('en', { timeZone: 'UTC', weekday: 'long' }).format(new Date(`${day}T00:00:00.000Z`));
+
+  try {
+    await signInAsFreshUser(page, mentorEmail, 'MentorPass123', '/mentor');
+    await gotoSettled(page, `/mentor/mentees/${rel.id}`);
+    const panel = page.getByTestId('follow-up-panel');
+
+    // Reading: the day with its weekday, flagged overdue, and the step as text — no form.
+    await expect(panel.getByTestId('follow-up-read-date')).toContainText(weekday(utcDay(-2)));
+    await expect(panel.getByTestId('follow-up-read-date')).toHaveClass(/text-red-700/);
+    await expect(panel.getByTestId('follow-up-status')).toHaveText('Overdue');
+    await expect(panel.getByTestId('follow-up-read-note')).toHaveText('Send the offer letter');
+    await expect(panel.getByTestId('follow-up-date')).toHaveCount(0);
+    await expect(panel.getByTestId('follow-up-visibility')).toHaveCount(0);
+    const edit = panel.getByRole('button', { name: 'Edit follow-up' });
+    await expect(edit).toBeVisible();
+    const box = await edit.boundingBox();
+    expect(box && box.height >= 44 && box.width >= 44).toBeTruthy();
+
+    // Edit opens today's form with the saved values; Cancel throws the edits away.
+    await edit.click();
+    await expect(panel.getByTestId('follow-up-date')).toHaveValue(utcDay(-2));
+    await expect(panel.getByTestId('follow-up-date')).toBeFocused();
+    await expect(panel.getByTestId('follow-up-visibility')).toBeVisible();
+    await expect(panel.getByTestId('follow-up-clear')).toBeVisible();
+    await panel.getByTestId('follow-up-note').fill('Something else');
+    await panel.getByTestId('follow-up-cancel').click();
+    await expect(panel.getByTestId('follow-up-read-note')).toHaveText('Send the offer letter');
+    await expect(panel.getByRole('button', { name: 'Edit follow-up' })).toBeFocused();
+    expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: rel.id } })).nextActionNote).toBe('Send the offer letter');
+    await panel.getByTestId('follow-up-edit').click();
+    await expect(panel.getByTestId('follow-up-note')).toHaveValue('Send the offer letter');
+
+    // Save returns to reading, with what was saved.
+    await panel.getByTestId('follow-up-date').fill(utcDay(4));
+    await panel.getByTestId('follow-up-note').fill('Call the hiring manager');
+    await panel.getByTestId('follow-up-save').click();
+    await expect(panel.getByTestId('follow-up-read-note')).toHaveText('Call the hiring manager');
+    await expect(panel.getByTestId('follow-up-read-date')).toContainText(weekday(utcDay(4)));
+    await expect(panel.getByTestId('follow-up-date')).toHaveCount(0);
+    const saved = await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: rel.id } });
+    expect(saved.nextActionAt?.toISOString()).toBe(`${utcDay(4)}T00:00:00.000Z`);
+    expect(saved.nextActionNote).toBe('Call the hiring manager');
+
+    // Clear lives in the form; afterwards the panel offers "Add follow-up".
+    await panel.getByTestId('follow-up-edit').click();
+    await panel.getByTestId('follow-up-clear').click();
+    await expect(panel.getByTestId('follow-up-empty')).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Add follow-up' })).toBeVisible();
+    await expect.poll(async () => (await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: rel.id } })).nextActionNote).toBeNull();
+    await panel.getByRole('button', { name: 'Add follow-up' }).click();
+    await expect(panel.getByTestId('follow-up-date')).toHaveValue('');
+  } finally {
+    await prisma.mentorshipRelation.deleteMany({ where: { id: rel.id } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(mentorEmail);
   }
 });
