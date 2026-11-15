@@ -179,7 +179,23 @@ export async function requireSecondFactor(
   const totpKey = `totp-fail:${email}`;
   const recoveryKey = `2fa-recovery-fail:${email}`;
   const step = verifyTotpStep(user.twoFactorSecret, code);
-  const replayed = step !== null && user.lastTotpStep !== null && step <= user.lastTotpStep;
+  // A cheap early answer from the row the caller read; the conditional claim
+  // below is what actually makes a code single-use (#3770).
+  let replayed = step !== null && user.lastTotpStep !== null && step <= user.lastTotpStep;
+
+  // Spend the step BEFORE judging the code: one conditional UPDATE that only a
+  // step above the stored floor can win. Two requests carrying the same code
+  // both read the old floor; only one of them moves it, and the other is a
+  // replay — the same one-writer rule the recovery codes use (#1542). A
+  // recovery submission never gets here (step === null), so it still leaves
+  // the floor alone.
+  if (step !== null && !replayed) {
+    const claimed = await prisma.user.updateMany({
+      where: { id: user.id, OR: [{ lastTotpStep: null }, { lastTotpStep: { lt: step } }] },
+      data: { lastTotpStep: step },
+    });
+    if (claimed.count === 0) replayed = true;
+  }
 
   // The second door (#1542): a submission that is not a live TOTP code
   // may still be a recovery code, for the person whose authenticator is
@@ -284,17 +300,9 @@ export async function requireSecondFactor(
     clearRateLimit(recoveryKey);
     clearRateLimit(totpKey);
   } else {
-    // A live, unreplayed TOTP code — the ordinary path.
-    // Burn the step so the same code can't be used again inside the
-    // ±1-step acceptance window.
-    // `select` here is not cosmetic: an unqualified update() returns the
-    // whole row, which would re-introduce the Json-column read that
-    // AUTH_USER_SELECT exists to avoid.
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastTotpStep: step },
-      select: { id: true },
-    });
+    // A live, unreplayed TOTP code — the ordinary path. Its step was
+    // already burned by the conditional claim above, so the same code
+    // cannot be used again inside the ±1-step acceptance window.
     clearRateLimit(totpKey);
   }
 }
