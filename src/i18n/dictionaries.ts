@@ -7797,6 +7797,18 @@ const en = {
   },
   // The link button on a chat card (#1942).
   chatCard: { join: 'Join the meeting', accept: 'Accept', decline: 'Decline', book: 'Book a session', rsvpYes: 'Yes, I’ll be there', rsvpNo: 'I can’t make it', approve: 'Approve', answerSurvey: 'Answer now', addNotes: 'Add notes' },
+  // "Today" on the sales dashboard (#3778).
+  salesToday: {
+    title: 'Today',
+    followUps: 'Follow-ups',
+    meetings: 'Meetings',
+    todos: 'To-dos',
+    overdue: 'Overdue',
+    noStep: 'No next step written',
+    none: 'Nothing here.',
+    empty: 'Nothing due today — no follow-ups, meetings or open to-dos.',
+    allTodos: 'All {n} to-dos',
+  },
   // The sales rep's calendar (#3778): /sales/calendar and the lead page's "Plan meeting".
   salesCalendar: {
     title: 'Calendar',
@@ -20262,6 +20274,17 @@ const tr: Dict = {
     requestHandled: 'Bu istek zaten yanıtlandı.',
   },
   chatCard: { join: 'Toplantıya katıl', accept: 'Kabul et', decline: 'Reddet', book: 'Randevu al', rsvpYes: 'Evet, katılacağım', rsvpNo: 'Katılamıyorum', approve: 'Onayla', answerSurvey: 'Şimdi yanıtla', addNotes: 'Not ekle' },
+  salesToday: {
+    title: 'Bugün',
+    followUps: 'Takipler',
+    meetings: 'Toplantılar',
+    todos: 'Yapılacaklar',
+    overdue: 'Gecikmiş',
+    noStep: 'Sonraki adım yazılmadı',
+    none: 'Burada bir şey yok.',
+    empty: 'Bugün için bir şey yok — takip, toplantı ya da açık yapılacak yok.',
+    allTodos: 'Tüm {n} yapılacak',
+  },
   salesCalendar: {
     title: 'Takvim',
     subtitle: 'Toplantıların, takiplerin ve deneme bitişlerin tek yerde.',
@@ -32643,6 +32666,17 @@ const de: Dict = {
     requestHandled: 'Diese Anfrage wurde bereits beantwortet.',
   },
   chatCard: { join: 'Am Meeting teilnehmen', accept: 'Annehmen', decline: 'Ablehnen', book: 'Termin buchen', rsvpYes: 'Ja, ich bin dabei', rsvpNo: 'Ich kann nicht', approve: 'Freigeben', answerSurvey: 'Jetzt antworten', addNotes: 'Notizen hinzufügen' },
+  salesToday: {
+    title: 'Heute',
+    followUps: 'Wiedervorlagen',
+    meetings: 'Termine',
+    todos: 'Aufgaben',
+    overdue: 'Überfällig',
+    noStep: 'Kein nächster Schritt notiert',
+    none: 'Nichts.',
+    empty: 'Heute steht nichts an — keine Wiedervorlagen, Termine oder offenen Aufgaben.',
+    allTodos: 'Alle {n} Aufgaben',
+  },
   salesCalendar: {
     title: 'Kalender',
     subtitle: 'Deine Termine, Wiedervorlagen und Testenden an einem Ort.',

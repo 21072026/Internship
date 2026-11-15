@@ -172,7 +172,7 @@ function fill(path: string): string {
 /** A probe body whose string values may name a seeded id (`':ownCompanyId'`). */
 function fillBody(body: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
-    Object.entries(body).map(([k, v]) => [k, typeof v === 'string' && /^:[A-Za-z]+$/.test(v) ? fill(v) : v]),
+    Object.entries(body).map(([k, v]) => [k, Array.isArray(v) ? v.map((x) => (typeof x === 'string' && /^:[A-Za-z]+$/.test(x) ? fill(x) : x)) : typeof v === 'string' && /^:[A-Za-z]+$/.test(v) ? fill(v) : v]),
   );
 }
 
