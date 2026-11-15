@@ -183,6 +183,8 @@ function statusMatches(status: number, expected: SalesExpectation): boolean {
       return status === 401 || status === 403;
     case 'forbidden':
       return status === 403;
+    case 'refused':
+      return status === 403 || status === 404;
     case 'notFound':
       return status === 404;
     case 'ok':

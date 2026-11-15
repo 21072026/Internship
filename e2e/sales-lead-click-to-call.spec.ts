@@ -119,14 +119,20 @@ test('the rep calls from the lead page: No and Add a note log nothing, Yes logs 
   await expect(page.getByTestId('sales-lead-interactions')).toContainText('Phone call', { timeout: 10_000 });
 });
 
-test("a colleague rep gets neither the record nor a log on it", { tag: '@smoke' }, async ({ page, playwright, baseURL }) => {
+test("a colleague rep reads the record but neither sees the number nor logs on it", { tag: '@smoke' }, async ({ page, playwright, baseURL }) => {
   const before = await prisma.interactionLog.count({ where: { relationId: ids.relation } });
-  // The page: someone else's record is the same 404 as a missing one, so no buttons.
+  // The page: the team read opens someone else's record read-only
+  // (src/lib/salesBookRule.ts) — and the contact's phone and e-mail stay the owner's.
   await page.context().setExtraHTTPHeaders(host);
   await signInAndSettle(page, mail.rep2, PW, '/sales');
   const res = await page.goto(`/sales/leads/${ids.relation}`);
-  expect(res?.status()).toBe(404);
+  expect(res?.status()).toBe(200);
+  await expect(page.getByTestId('sales-lead-readonly')).toBeVisible({ timeout: 20_000 });
+  await page.waitForLoadState('networkidle');
   await expect(page.getByTestId('sales-lead-phone-link')).toHaveCount(0);
+  await expect(page.getByTestId('sales-lead-phone')).toHaveCount(0);
+  await expect(page.getByText('+49 30 7654321')).toHaveCount(0);
+  await expect(page.getByTestId('contact-reached')).toHaveCount(0);
 
   // The route the question posts to refuses them too.
   const ctx = await playwright.request.newContext({ baseURL, extraHTTPHeaders: host });
