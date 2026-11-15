@@ -22,6 +22,7 @@ import { NewSalesLeadButton } from '@/components/sales/NewSalesLeadButton';
 import { salesLeadCreateAvailable } from '@/lib/salesLeadCreate';
 import { verticalFor } from '@/lib/verticalContext';
 import { LeadPoolCard } from '@/components/sales/LeadPoolCard';
+import { SalesTodayCard } from '@/components/SalesTodayCard';
 
 // The sales rep's dashboard (#2580): their own attention queue and their own
 // records. Every read is the rep's rows only (`mentorId = self`) AND the rep's
@@ -88,6 +89,9 @@ export default async function SalesDashboard() {
         </div>
         {canCreateLead && <NewSalesLeadButton />}
       </div>
+
+      {/* What is due today, each line a link (#3778). */}
+      <SalesTodayCard userId={session.user.id} orgId={session.user.orgId} />
 
       {showPool && <LeadPoolCard />}
 
