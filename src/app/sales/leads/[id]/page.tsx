@@ -1,4 +1,6 @@
 import Link from 'next/link';
+import { AffiliateSourceBadge } from '@/components/AffiliateSourceBadge';
+import { affiliatePartnerNames, affiliatePartnerNameFor } from '@/lib/affiliateLeadSource';
 import { notFound } from 'next/navigation';
 import { getServerSession } from 'next-auth';
 import { ArrowLeft } from 'lucide-react';
@@ -75,7 +77,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
       // The record's estimated monthly value (#2422) — its own row, read by
       // name here and on the owner/ADMIN value route only.
       value: { select: { valueMinor: true, currency: true, source: true } },
-      mentee: { select: { id: true, fullName: true, email: true, phone: true } },
+      mentee: { select: { id: true, fullName: true, email: true, phone: true, source: { select: { name: true } } } },
       // Through the tenant filter too: a record pointing at another tenant's
       // company (a bad import) shows no account rather than a foreign one.
       companyId: true,
@@ -135,6 +137,12 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
     dispatcherMay(actor, 'relation.write', relation.orgId) ||
     (!!actor && (await can(actor, 'relation.write', undefined, session)));
 
+  // The partner behind an affiliate-sourced lead (#3647), by this org's own partner list.
+  const affiliatePartner = affiliatePartnerNameFor(
+    await affiliatePartnerNames([{ orgId: relation.orgId, sourceName: relation.mentee.source?.name }]),
+    { orgId: relation.orgId, sourceName: relation.mentee.source?.name },
+  );
+
   return (
     <div data-testid="sales-lead">
       <Link href="/sales" className="mb-4 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800">
@@ -160,6 +168,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
           {canHandOff && <LeadPageHandoff relationId={relation.id} leadName={relation.mentee.fullName} />}
           {/* Plan a meeting with this lead (#3778): the calendar's dialog, prefilled; the server decides who may. */}
           {relation.status === 'ACTIVE' && <PlanMeetingButton relationId={relation.id} leadName={relation.mentee.fullName} variant="outline" />}
+          <AffiliateSourceBadge partnerName={affiliatePartner} />
           <Badge variant="info" data-testid="sales-lead-stage">{stageLabel(stages, relation.pipelineStatus, locale)}</Badge>
           <Badge variant={relation.status === 'ACTIVE' ? 'success' : 'default'}>
             {relation.status === 'ACTIVE' ? s.statusActive : s.statusCompleted}

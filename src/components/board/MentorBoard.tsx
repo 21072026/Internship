@@ -1,5 +1,6 @@
 'use client';
 
+import { AffiliateSourceBadge } from '@/components/AffiliateSourceBadge';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -42,6 +43,8 @@ interface Relation {
   // when the board holds more than one owner's records — a sales dispatcher's
   // board (#3656); a rep's own board is all theirs and shows no name.
   mentor?: { id: string; fullName: string };
+  /** The affiliate partner behind the lead, named by GET /api/mentorship (#3647). */
+  affiliatePartner?: string | null;
   pipelineStatus: string;
   // The stage clock (#1724), both served by GET /api/mentorship inside the
   // caller's existing scope. `stageDeadline` is the org's per-stage SLA once
@@ -315,6 +318,7 @@ export function MentorBoard({
       {manyOwners && r.mentor && (
         <p className="mt-1 truncate text-xs text-gray-500" data-testid="board-card-owner">{r.mentor.fullName}</p>
       )}
+      <AffiliateSourceBadge partnerName={r.affiliatePartner} className="mt-1 text-[10px]" />
       <div className="flex items-center gap-1 text-xs text-gray-400 mt-2">
         <GraduationCap className="h-3 w-3" />
         {r._count.interactions} {t.mentor.interactions}
