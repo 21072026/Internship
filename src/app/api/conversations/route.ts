@@ -9,6 +9,8 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { requireCapability } from '@/lib/capabilityGate';
 import { loadInbox } from '@/lib/inbox';
 import { getServerDictionary } from '@/i18n/server';
+import { prisma } from '@/lib/prisma';
+import { inCallerTenant } from '@/lib/tenantFilter';
 
 const schema = z.union([
   z.object({ userId: z.string().min(1), projectId: z.never().optional() }),
@@ -83,6 +85,14 @@ async function handlePost(request: Request) {
     if (!targetId) return NextResponse.json({ error: 'Validation failed' }, { status: 400 });
     if (targetId === session.user.id) {
       return NextResponse.json({ error: 'Cannot message yourself' }, { status: 400 });
+    }
+
+    // Another tenant's user — or an id that does not exist — is a 404, never a
+    // 403 that would confirm the id (#2542). canMessage() refuses the pair as
+    // well; this only chooses the answer.
+    const target = await prisma.user.findUnique({ where: { id: targetId }, select: { orgId: true } });
+    if (!target || !(await inCallerTenant(target.orgId, session.user.orgId))) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
     // Authorization lives inside findOrCreateDirectConversation, so it can never

@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "The sales calendar's Team view shows colleagues' follow-up DAYS to a rep too (#3778, the user's decision of 2026-11-15: the team sees each other's work) — the day, the lead's name and the owner's initials, never the note. A new narrow, pure rule `canSeeTeamFollowUpDate()` (`src/lib/teamFollowUpDateRule.ts`, unit-tested) allows the date on that one screen only; `canSeeNextAction` is unchanged and still gates the note and every other reader, and the team book's fields do not change. With `salesTeamBookForReps` off the Team API stays a 404.",
+  "notes": {
+    "en": ["In the calendar's Team view you now also see on which day your colleagues' follow-ups are due — never their notes."],
+    "tr": ["Takvimin Ekip görünümünde artık ekip arkadaşlarının takiplerinin hangi gün olduğu da görünüyor — notları asla."],
+    "de": ["In der Team-Ansicht des Kalenders siehst du jetzt auch, an welchem Tag die Wiedervorlagen deiner Kolleg:innen fällig sind – nie ihre Notizen."]
+  }
+}
