@@ -27,7 +27,7 @@ const STAMP = `${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
 const host = asHost(MARKETING_HOST);
 const mail = { rep: uniqueEmail('c2c-rep'), rep2: uniqueEmail('c2c-rep2'), admin: uniqueEmail('c2c-admin'), observer: uniqueEmail('c2c-observer') };
 let orgId = '';
-const ids = { relation: '', lead: '' };
+const ids = { relation: '', lead: '', fresh: '' };
 
 test.describe.configure({ mode: 'serial' });
 
@@ -48,12 +48,20 @@ test.beforeAll(async () => {
   });
   ids.lead = lead.id;
   ids.relation = (await prisma.mentorshipRelation.create({ data: { orgId, mentorId: rep.id, menteeId: lead.id, companyId: company.id, pipelineStatus: 'LEAD_CONTACTED' } })).id;
+  // A first-stage lead for the first-contact move (#3746).
+  const freshCompany = await prisma.company.create({ data: { orgId, name: `Example Fresh ${STAMP}`, contactName: 'Frida Example', contactPhone: '+49 30 1112223' } });
+  const freshLead = await prisma.user.create({
+    data: { orgId, email: `c2c-fresh-${STAMP}@import.local`, password: 'x', role: 'MENTEE', fullName: 'Frida Example', phone: '+49 30 1112223', skills: [], companyId: freshCompany.id },
+  });
+  ids.fresh = (await prisma.mentorshipRelation.create({ data: { orgId, mentorId: rep.id, menteeId: freshLead.id, companyId: freshCompany.id, pipelineStatus: 'LEAD_NEW' } })).id;
 });
 
 test.afterAll(async () => {
   await prisma.interactionLog.deleteMany({ where: { relation: { orgId } } });
+  await prisma.setting.deleteMany({ where: { orgId } });
+  await prisma.statusChange.deleteMany({ where: { relation: { orgId } } });
   await prisma.mentorshipRelation.deleteMany({ where: { orgId } });
-  await prisma.user.deleteMany({ where: { id: ids.lead } });
+  await prisma.user.deleteMany({ where: { orgId, role: 'MENTEE' } });
   for (const email of Object.values(mail)) await cleanupByEmail(email);
   await prisma.company.deleteMany({ where: { orgId } });
   await prisma.pipelineStage.deleteMany({ where: { orgId } });
@@ -154,4 +162,60 @@ test('the admin lead view: buttons for an admin who may log, none for an observe
   } finally {
     await observer.close();
   }
+});
+
+// #3746 × #3748: a "Yes" on a first-stage lead goes through the same write as the
+// form, so the first-contact rule moves it — and the question says so, with the
+// form's own toast and Undo (useStageAdvanceToast), and the stage badge follows.
+async function setFirstContactAdvance(value: 'on' | 'off') {
+  await prisma.setting.deleteMany({ where: { orgId, key: 'firstContactAutoAdvance', programId: null } });
+  await prisma.setting.create({ data: { orgId, key: 'firstContactAutoAdvance', value } });
+}
+const stageOf = async (id: string) => (await prisma.mentorshipRelation.findUnique({ where: { id }, select: { pipelineStatus: true } }))?.pipelineStatus;
+
+async function callAndSayYes(page: Page, baseURL: string, beforeCall?: () => Promise<void>) {
+  await page.context().setExtraHTTPHeaders(host);
+  await page.context().addCookies([{ name: 'locale', value: 'en', url: baseURL }]);
+  await signInAndSettle(page, mail.rep, PW, '/sales');
+  await gotoSettled(page, `/sales/leads/${ids.fresh}`);
+  await beforeCall?.();
+  await stopTelNavigation(page);
+  await page.getByTestId('sales-lead-phone-link').click();
+  await page.getByTestId('contact-reached-yes').click();
+}
+
+test('switched on: Yes on a first-stage lead moves it, the toast names the stage, Undo moves it back', async ({ page, baseURL }) => {
+  await setFirstContactAdvance('on');
+  await prisma.mentorshipRelation.update({ where: { id: ids.fresh }, data: { pipelineStatus: 'LEAD_NEW' } });
+  const before = (await prisma.interactionLog.count({ where: { relationId: ids.fresh } }));
+  let firstLabel = '';
+  await callAndSayYes(page, baseURL!, async () => {
+    firstLabel = (await page.getByTestId('sales-lead-stage').textContent())!.trim();
+  });
+  await expect.poll(() => stageOf(ids.fresh), { timeout: 10_000 }).toBe('LEAD_CONTACTED');
+  expect(await prisma.interactionLog.count({ where: { relationId: ids.fresh } })).toBe(before + 1);
+  // The page re-read itself: the badge shows the new stage, and the toast names the same one.
+  const toast = page.getByRole('status').filter({ has: page.getByRole('button', { name: 'Undo' }) });
+  await expect(toast).toBeVisible({ timeout: 10_000 });
+  const toastText = (await toast.textContent()) ?? '';
+  await expect(page.getByText('Contact logged')).toHaveCount(0);
+  // The page re-read itself: the badge leaves the first stage, and the toast named that new stage.
+  const badge = page.getByTestId('sales-lead-stage');
+  await expect.poll(async () => (await badge.textContent())?.trim(), { timeout: 10_000 }).not.toBe(firstLabel);
+  const label = (await badge.textContent())!.trim();
+  expect(toastText).toContain(label);
+
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect.poll(() => stageOf(ids.fresh), { timeout: 10_000 }).toBe('LEAD_NEW');
+});
+
+test('switched off: Yes logs the call and the toast only says it was logged', async ({ page, baseURL }) => {
+  await setFirstContactAdvance('off');
+  await prisma.mentorshipRelation.update({ where: { id: ids.fresh }, data: { pipelineStatus: 'LEAD_NEW' } });
+  const before = (await prisma.interactionLog.count({ where: { relationId: ids.fresh } }));
+  await callAndSayYes(page, baseURL!);
+  await expect.poll(() => prisma.interactionLog.count({ where: { relationId: ids.fresh } }), { timeout: 10_000 }).toBe(before + 1);
+  await expect(page.getByText('Contact logged')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Undo' })).toHaveCount(0);
+  expect(await stageOf(ids.fresh)).toBe('LEAD_NEW');
 });

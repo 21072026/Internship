@@ -6,8 +6,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { useT } from '@/i18n/client';
 import { INTERACTION_TYPES, type InteractionType } from '@/lib/interactionTypes';
-import { useToast } from '@/components/ui/Toast';
-import { useStageLabel } from '@/lib/pipelineStagesClient';
+import { stageAdvanceFrom, useStageAdvanceToast } from '@/components/useStageAdvanceToast';
 
 // Compact "log an interaction" form — admins on the candidate detail screen
 // (parity with what a mentor can do, #707) and a sales rep on their lead page
@@ -36,8 +35,7 @@ export function AddInteractionForm({
   addLabel?: string;
 }) {
   const t = useT();
-  const toast = useToast();
-  const stageLabel = useStageLabel();
+  const stageAdvanceToast = useStageAdvanceToast();
   const [open, setOpen] = useState(false);
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const [type, setType] = useState<InteractionType>('Meeting');
@@ -77,22 +75,8 @@ export function AddInteractionForm({
         onAdded();
         // A first contact moved the lead on (#3746): say so, with an Undo that
         // moves it back through the same stage write path a board drag uses.
-        const body = (await res.json().catch(() => null)) as { stageAdvance?: { from: string; to: string } | null } | null;
-        const advance = body?.stageAdvance;
-        if (advance) {
-          toast(t.logInteraction.stageAdvanced.replace('{stage}', stageLabel(advance.to)), 'success', {
-            label: t.logInteraction.undo,
-            onClick: async () => {
-              const undone = await fetch(`/api/mentorship/${relationId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pipelineStatus: advance.from }),
-              }).catch(() => null);
-              if (undone?.ok) onAdded();
-              else toast(t.logInteraction.undoFailed, 'error');
-            },
-          });
-        }
+        const advance = stageAdvanceFrom(await res.json().catch(() => null));
+        if (advance) stageAdvanceToast(relationId, advance, onAdded);
       } else {
         setError(t.logInteraction.failed);
       }
