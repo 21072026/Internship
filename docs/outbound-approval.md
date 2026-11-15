@@ -16,6 +16,7 @@ An operator previews it and then **sends it now**, **schedules** it or
 |---|---|
 | `off` (default) | Mail behaves exactly as it always has. |
 | `lead_mail` | Automated mail to a lead, a customer or an account-less contact of the org is held. |
+| `lead_mail_blocked` | The same mail is **blocked** — never sent, never drafted (#3771). See [Blocking lead mail](#blocking-lead-mail-lead_mail_blocked-3771). |
 
 - **Default `off` for every org.** Merging this changes nothing for any tenant;
   switching an org on is a data step (`/admin/settings` → *Approve automated
@@ -24,8 +25,61 @@ An operator previews it and then **sends it now**, **schedules** it or
   no mentorship (`outboundApprovalApplies()`, the same rule as `/sales`):
   `PUT /api/admin/settings` refuses it anywhere else (`400 vertical_mismatch`),
   and the rule reads it as `off` in such a vertical whatever a row says.
-- A stored value other than `off`/`lead_mail` (only writable by hand) reads as
+- A stored value other than `off`/`lead_mail`/`lead_mail_blocked` (only writable by hand) reads as
   **on** — the safe side of a misspelt switch is a draft, not a mail.
+
+## Blocking lead mail — `lead_mail_blocked` (#3771)
+
+The decision behind it: in the Marketing CRM no e-mail should reach a lead at
+all, while the team (reps, admins) keeps getting its mail — and drafts piling up
+in an outbox nobody works through is not that.
+
+- **No mail to a non-staff recipient, no exemption.** In a MARKETING org a lead
+  is a record the reps track, not a person who signs in: there is no password
+  reset, sign-in link or confirmation of theirs to protect. So in this mode
+  `outboundDecision()` checks only the switch, the org and the recipient: staff
+  passes, **everybody else is blocked whatever the category** — the
+  `account_security` group (password reset, sign-in link, invitation, security
+  notices), the DOI `consent` mail and the own-acknowledgement mails included.
+  Codes `blocked_lead`, `blocked_customer`, `blocked_contact`, `blocked_other`.
+  `lead_mail` keeps its exemptions unchanged.
+- **The audience is the held audience:** leads (MENTEE), **customer logins
+  (COMPANY)** and **contacts without an account** (and any other non-staff
+  role). A consequence: in this mode a customer login gets no invitation and no
+  password reset by mail either.
+- **Staff is never affected:** the org's ADMIN and MENTOR (rep) accounts get
+  every mail, as for `lead_mail`. A mail no org owns (the operator alert
+  address) is not a lead's and passes.
+- **The demo form's double opt-in.** The confirmation mail is blocked like any
+  other: `sendDoiConfirmation()` treats `BLOCKED` like `SKIPPED` — the day's
+  slot is given back and `marketingOptInMailSentAt` is **not** stamped (it is
+  evidence that a mail went out). The enquiry is stored as always, its
+  permission stays `NONE`, and the form answers the sender exactly as before —
+  no error. The contact-permission rules are untouched.
+- **The same hook.** `holdIfRequired()` answers `{ blocked: true }` without
+  writing anything; `sendEmail()` records the mail `SKIPPED` with
+  `Blocked: outbound_blocked (<code>)` (`outboundBlockedReason()`) and returns
+  **`'BLOCKED'`**: no draft, no `email.send` job, no transport. Like `'HELD'`
+  it reads as handled to every caller that compares `!== 'SKIPPED'`, so a
+  digest or reminder ladder stamps its claim and the same mail is not rebuilt
+  and re-blocked every day. Callers that report what reached a person count it
+  with the skipped: the notification ledger (`SKIPPED outbound_blocked`), a
+  newsletter's send row (`SKIPPED`, `outbound_blocked`), a report subscription
+  run, a nudge's `NudgeSend`, an announcement's tally, the bug-report
+  "notified" flag.
+- **No back door through the outbox.** While the org is in this mode a draft held
+  earlier cannot be sent or scheduled (`409 outbound_blocked`); it can still be
+  discarded. A draft already on the queue (SCHEDULED before the switch) was an
+  operator's explicit decision and is left alone.
+- **The screens.** `/admin/settings` offers it as the third option ("No e-mail
+  to leads at all"), and its hint says that nothing — a password reset or a
+  confirmation included — reaches a lead, while reps and admins still get theirs; `GET /api/admin/outbox` returns `mode`, and the outbox
+  shows "lead e-mail is switched off; no drafts are created".
+- **Next to the customer-mail lock.** The deployment-wide customer-mail lock
+  (`docs/mail-queue.md` § The customer-mail lock, `MARKETING_CUSTOMER_MAIL_ENABLED`)
+  runs *before* this hook and silences a MARKETING org's non-staff recipients
+  the same way until the operator opens it. This mode is the per-org switch that
+  stays once the lock opens.
 
 ## Which mail is held — the one rule
 

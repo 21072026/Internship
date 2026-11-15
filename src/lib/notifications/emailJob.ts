@@ -99,8 +99,9 @@ export async function runNotificationEmail(payload: Payload, job: JobRecord, now
       locale: mail.locale,
       ...(key ? { dedupeKey: `notify:${key}` } : {}),
     });
-    if (result === 'SKIPPED') {
-      await settle(key, 'SENT', 'SKIPPED', { skipReason: 'send_skipped' });
+    if (result === 'SKIPPED' || result === 'BLOCKED') {
+      // BLOCKED (#3771): the org blocks automated mail to leads; final, no retry.
+      await settle(key, 'SENT', 'SKIPPED', { skipReason: result === 'BLOCKED' ? 'outbound_blocked' : 'send_skipped' });
       return 'skipped_by_send';
     }
     return 'sent';
@@ -147,8 +148,9 @@ async function sendPrerendered(payload: Payload, sealed: string, key: string | n
       ...(mail.locale !== undefined ? { locale: mail.locale } : {}),
       ...(key ? { dedupeKey: `notify:${key}` } : {}),
     });
-    if (result === 'SKIPPED') {
-      await settle(key, 'SENT', 'SKIPPED', { skipReason: 'send_skipped' });
+    if (result === 'SKIPPED' || result === 'BLOCKED') {
+      // BLOCKED (#3771): the org blocks automated mail to leads; final, no retry.
+      await settle(key, 'SENT', 'SKIPPED', { skipReason: result === 'BLOCKED' ? 'outbound_blocked' : 'send_skipped' });
       return 'skipped_by_send';
     }
     return 'sent';
