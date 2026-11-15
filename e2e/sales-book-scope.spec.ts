@@ -5,15 +5,18 @@ import { MARKETING_HOST, asHost, signInViaApi, signInAndSettle, gotoSettled } fr
 import { freshIp } from './helpers/rateLimit';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
-// The sales surface is the viewer's OWN book (src/lib/salesBookRule.ts).
+// The sales surface: the viewer's OWN book by default, the team's on request
+// (src/lib/salesBookRule.ts).
 //
-// The bug: /sales/board listed what GET /api/mentorship lets the role read — the
-// whole tenant for an ORG_ADMIN or OBSERVER — while /sales/leads/<id> opened only
-// `mentorId = self`, so a colleague's card was on the board and clicking it was a
-// 404. The rule now: on /sales every card is one its viewer can open, and a card
-// they cannot open is not listed. Only the sales dispatcher (#3656) sees the
-// tenant's book there. The admin board keeps the whole book and opens the admin
-// detail (/admin/candidates/<menteeId>), never the sales lead page.
+// The first bug (#3755): /sales/board listed what GET /api/mentorship lets the
+// role read — the whole tenant for an ORG_ADMIN or OBSERVER — while
+// /sales/leads/<id> opened only `mentorId = self`, so a colleague's card was on
+// the board and clicking it was a 404. Then the team view: the org is closed in
+// on itself, so every seller may READ every record of it (`?view=team`), and
+// every record page opens — a colleague's read-only. Writing stays the owner's,
+// the dispatcher's and an admin's (salesBookWriteAllowed; pinned per route by
+// e2e/sales-team-view.spec.ts). The admin board keeps the whole book and opens
+// the admin detail (/admin/candidates/<menteeId>), never the sales lead page.
 
 test.describe.configure({ mode: 'serial' });
 
@@ -77,7 +80,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-// Who sees which record on /sales (the list) — and every listed record opens.
+// Who sees which record on /sales by default (the list); the team view lists all.
 const BOOK: Record<string, string[]> = {
   rep1: ['r1'],
   rep2: ['r2'],
@@ -87,17 +90,20 @@ const BOOK: Record<string, string[]> = {
 };
 const ALL = ['r1', 'r2', 'a1'];
 
-test('the sales list is the viewer’s own book; every listed record opens, every other one is a 404', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+test('the default sales list is the viewer’s own book, the team view the org’s; every record of the org opens', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  const mine = (rows: { id: string }[]) => rows.map((r) => r.id).filter((id) => ALL.some((k) => ids[`rel-${k}`] === id)).sort();
   for (const [viewer, own] of Object.entries(BOOK)) {
     const ctx = await jar(playwright, baseURL, viewer);
     try {
       const res = await ctx.get('/api/mentorship?surface=sales');
       expect(res.status(), viewer).toBe(200);
-      const listed = ((await res.json()).relations as { id: string }[]).map((r) => r.id).filter((id) => ALL.some((k) => ids[`rel-${k}`] === id));
-      expect(listed.sort(), viewer).toEqual(own.map((k) => ids[`rel-${k}`]).sort());
+      expect(mine((await res.json()).relations), viewer).toEqual(own.map((k) => ids[`rel-${k}`]).sort());
+      const team = await ctx.get('/api/mentorship?surface=sales&view=team');
+      expect(team.status(), `${viewer} team`).toBe(200);
+      expect(mine((await team.json()).relations), `${viewer} team`).toEqual(ALL.map((k) => ids[`rel-${k}`]).sort());
       for (const k of ALL) {
         const page = await ctx.get(`/sales/leads/${ids[`rel-${k}`]}`, { maxRedirects: 0 });
-        expect(page.status(), `${viewer} → ${k}`).toBe(own.includes(k) ? 200 : 404);
+        expect(page.status(), `${viewer} → ${k}`).toBe(200);
       }
     } finally {
       await ctx.dispose();
@@ -110,9 +116,12 @@ test('surface=sales only narrows: without it an org admin still reads the whole 
   try {
     const all = ((await (await ctx.get('/api/mentorship')).json()).relations as { id: string }[]).map((r) => r.id);
     for (const k of ALL) expect(all, k).toContain(ids[`rel-${k}`]);
-    // An unknown surface value is ignored, never a wider list either.
+    // An unknown surface value is ignored, never a wider list either; and
+    // view=team without surface=sales is no team view (the admin read is unchanged).
     const odd = ((await (await ctx.get('/api/mentorship?surface=everything')).json()).relations as { id: string }[]).map((r) => r.id);
     expect(odd.sort()).toEqual(all.sort());
+    const noSurface = ((await (await ctx.get('/api/mentorship?view=team')).json()).relations as { id: string }[]).map((r) => r.id);
+    expect(noSurface.sort()).toEqual(all.sort());
   } finally {
     await ctx.dispose();
   }

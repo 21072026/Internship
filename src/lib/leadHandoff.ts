@@ -4,8 +4,7 @@
 import type { Session } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { runUnscoped } from '@/lib/tenantAmbient';
-import { actorFromSession, can, dispatcherMay } from '@/lib/authz';
-import { relationSubject } from '@/lib/authzRule';
+import { canWriteSalesRecord } from '@/lib/salesBook';
 import { findLeadOwner, LEAD_OWNER_ROLES } from '@/lib/leadOwner';
 import { transferMentorship } from '@/lib/mentorTransfer';
 import { nextActionPatch, parseNextActionDate } from '@/lib/nextActionRule';
@@ -53,20 +52,11 @@ export async function actorMayHandOff(
   session: Session,
   relation: { orgId: string | null; mentorId: string; cohortId?: string | null; companyId?: string | null },
 ): Promise<boolean> {
-  if (relation.mentorId === session.user.id) return true;
-  const actor = await actorFromSession(session);
-  if (!actor) return false;
-  return dispatcherMay(actor, 'relation.write', relation.orgId) || (await can(actor, 'relation.write', relationSubject(relation), session));
+  // The sales surface's write rule (src/lib/salesBookRule.ts) — one rule for
+  // every write on a sales record, the hand-off included.
+  return canWriteSalesRecord(session, relation);
 }
 
-/** The lead page's question (#3657): may this session hand off relation `id` of `orgId`? */
-export async function canHandOffLead(session: Session, orgId: string, relationId: string): Promise<boolean> {
-  const relation = await prisma.mentorshipRelation.findFirst({
-    where: { id: relationId, orgId, status: 'ACTIVE' },
-    select: { orgId: true, mentorId: true, companyId: true },
-  });
-  return !!relation && (await actorMayHandOff(session, relation));
-}
 
 export async function handOffLead(opts: {
   session: Session;

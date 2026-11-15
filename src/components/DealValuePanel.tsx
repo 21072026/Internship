@@ -36,10 +36,13 @@ export function DealValuePanel({
   relationId,
   initial,
   onSaved,
+  readOnly = false,
 }: {
   relationId: string;
   initial?: DealValueState;
   onSaved?: () => void | Promise<void>;
+  /** Reading only (the sales team view, a colleague's record): the value, no form. */
+  readOnly?: boolean;
 }) {
   const t = useT();
   const d = t.dealValue;
@@ -118,7 +121,8 @@ export function DealValuePanel({
         </span>
         {state.source === 'IMPORT' && <span className="text-xs text-gray-500 dark:text-gray-400">{d.fromImport}</span>}
       </div>
-      <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">{d.hint}</p>
+      {!readOnly && <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">{d.hint}</p>}
+      {!readOnly && (
       <div className="flex flex-wrap items-end gap-2">
         <div className="w-44">
           <Input
@@ -152,6 +156,7 @@ export function DealValuePanel({
           </Button>
         )}
       </div>
+      )}
       {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400" data-testid="deal-value-error">{error}</p>}
     </div>
   );

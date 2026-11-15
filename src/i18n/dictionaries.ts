@@ -2171,6 +2171,9 @@ const en = {
   // mentorship module shows it, so the base copy is vertical-neutral; the
   // MARKETING overlay (verticalOverlays.ts) says "lead" and "account".
   sales: {
+    // The team view (the user's rule, 2026-11-15): "Mine" is the default; "Team"
+    // shows every seller's records of the org, read-only unless they are yours.
+    view: { label: 'Show', mine: 'Mine', team: 'Team' },
     pool: {
       title: 'Unassigned leads',
       hint: '{count} leads nobody has taken yet. Take one and it lands on your board at the first stage.',
@@ -2227,6 +2230,8 @@ const en = {
       back: 'My companies',
     },
     lead: {
+      readOnlyBanner: 'This record belongs to {owner}. You are only viewing it.',
+      owner: 'Owner',
       back: 'My records',
       contact: 'Contact',
       email: 'E-mail',
@@ -14711,6 +14716,7 @@ const tr: Dict = {
     },
   },
   sales: {
+    view: { label: 'Göster', mine: 'Benim', team: 'Ekip' },
     pool: {
       title: 'Atanmamış lead\'ler',
       hint: 'Henüz kimsenin almadığı {count} lead. Birini alırsan ilk aşamada senin panona düşer.',
@@ -14767,6 +14773,8 @@ const tr: Dict = {
       back: 'Firmalarım',
     },
     lead: {
+      readOnlyBanner: 'Bu kayıt {owner} adına. Yalnızca görüntülüyorsun.',
+      owner: 'Sahibi',
       back: 'Kayıtlarım',
       contact: 'İletişim',
       email: 'E-posta',
@@ -27042,6 +27050,7 @@ const de: Dict = {
     },
   },
   sales: {
+    view: { label: 'Anzeigen', mine: 'Meine', team: 'Team' },
     pool: {
       title: 'Nicht zugewiesene Leads',
       hint: '{count} Leads, die noch niemand übernommen hat. Übernimm einen, und er landet in der ersten Stufe auf deinem Board.',
@@ -27098,6 +27107,8 @@ const de: Dict = {
       back: 'Meine Unternehmen',
     },
     lead: {
+      readOnlyBanner: 'Dieser Datensatz gehört {owner}. Sie sehen ihn nur an.',
+      owner: 'Zuständig',
       back: 'Meine Datensätze',
       contact: 'Kontakt',
       email: 'E-Mail',

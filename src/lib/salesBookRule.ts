@@ -1,26 +1,59 @@
-// The sales surface is the person's OWN book (the user's rule, 2026-11-15; #3755).
+// Who SEES and who WORKS a record on the sales surface (`/sales/*`).
 //
-// `/sales/*` — the board, the lead page, the lists — shows `mentorId = self`
-// records for everybody, an ADMIN of any tier included. The ONE exception is
-// the org's sales dispatcher (#3656, src/lib/salesDispatcher.ts), who works the
-// whole tenant's book and whose lead page already opens any record of it. An
-// admin reads the whole book on /admin/board and /admin/candidates, whose cards
-// open the admin detail — never /sales/leads/<id>.
+// The user's rule (2026-11-15, the team view; it replaces the "own book only"
+// read of #3755): an organization is closed to the outside and open inside —
+// every seller sees the whole team's leads and customers, because seeing each
+// other's work is part of the motivation. Working a record is still the
+// owner's:
 //
-// Why one rule: the board used to list what GET /api/mentorship lets the role
-// read (the whole tenant for an ORG_ADMIN / OBSERVER, the grants of a
-// PROGRAM_ADMIN, both sides of a relation for a MENTOR) while the lead page
-// opened only `mentorId = self` — so a card of somebody else's lead was on the
-// board and its click was a 404. Every card a viewer sees must open for that
-// viewer: the list and the page read this one answer.
+//   READ  — `salesBookReadWhere(view)`: "mine" is `mentorId = self` (the
+//           default, what #3755 shipped), "team" is every sales record of the
+//           org. Never wider than the org: the caller ALWAYS ANDs its tenant
+//           filter (withinTenant), and only a role with the sales surface
+//           (`hasSalesSurface`) gets here at all.
+//   WRITE — `salesBookWriteAllowed(facts)`: the record's owner, the org's sales
+//           dispatcher (#3656, not under impersonation), or an admin holding
+//           `relation.write` on it. Every write route asks this (or the same
+//           facts through its own guard) on the server, independent of what a
+//           read showed; a colleague's record is read-only, never writable.
 //
-// Dependency-free so scripts/test/sales-book-rule.test.mjs loads it under plain
-// Node. The org conjunct is NOT here: every caller already ANDs its tenant
-// filter, and this only ever narrows.
+// One module, two functions, so a page cannot show an editor that the route
+// would refuse and a list cannot hold a card that would not open.
+// Dependency-free so scripts/test/sales-book-rule.test.mjs loads it under plain Node.
+
+export type SalesBookView = 'mine' | 'team';
+
+export function isSalesBookView(value: unknown): value is SalesBookView {
+  return value === 'mine' || value === 'team';
+}
+
+/** The `view` a request asked for; anything else is the default "mine". */
+export function salesBookView(value: unknown): SalesBookView {
+  return isSalesBookView(value) ? value : 'mine';
+}
 
 export type SalesBookWhere = { mentorId: string } | Record<string, never>;
 
-/** Which of the tenant's relations belong to this person's sales book. */
+/**
+ * Which of the org's sales records a view lists and opens. "mine" is the
+ * viewer's own book — the whole org's for the dispatcher, whose book it is;
+ * "team" is the whole org's for everybody. The org conjunct is the caller's.
+ */
+export function salesBookReadWhere(viewer: { userId: string; dispatcher: boolean }, view: SalesBookView): SalesBookWhere {
+  if (view === 'team' || viewer.dispatcher) return {};
+  return { mentorId: viewer.userId };
+}
+
+/** #3755's name for the "mine" read — kept for its callers. */
 export function salesBookWhere(viewer: { userId: string; dispatcher: boolean }): SalesBookWhere {
-  return viewer.dispatcher ? {} : { mentorId: viewer.userId };
+  return salesBookReadWhere(viewer, 'mine');
+}
+
+/**
+ * May this viewer WORK (any write) this record? The facts are resolved by the
+ * server: `dispatcher` is `dispatcherMay(actor, 'relation.write', orgId)` (false
+ * under impersonation), `adminWrite` is the admin permission on the record.
+ */
+export function salesBookWriteAllowed(facts: { userId: string; ownerId: string; dispatcher: boolean; adminWrite: boolean }): boolean {
+  return facts.ownerId === facts.userId || facts.dispatcher || facts.adminWrite;
 }

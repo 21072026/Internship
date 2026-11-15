@@ -28,6 +28,9 @@ import { FollowUpChip } from '@/components/FollowUpPanel';
 import { TrialEndChip } from '@/components/TrialEndPanel';
 import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
 import { HandoffCardButton, useLeadHandoff } from '@/components/board/LeadHandoff';
+import { BoardOwnerFilter } from '@/components/board/BoardOwnerFilter';
+import { SalesViewToggle } from '@/components/sales/SalesViewToggle';
+import type { SalesBookView } from '@/lib/salesBookRule';
 
 interface Mentee {
   id: string;
@@ -59,6 +62,17 @@ interface Relation {
   trialEndsAt?: string | null;
   mentee: Mentee;
   _count: { interactions: number };
+  // The sales surface only (salesBookWriteAllowed, from the server): may the
+  // viewer work this record? Off = a colleague's card in the team view — it
+  // opens read-only and does not move.
+  canWrite?: boolean;
+}
+
+/** The owners on the loaded cards, for the team view's owner filter. */
+function ownerOptionsFrom(relations: Relation[]): { id: string; fullName: string }[] {
+  const byId = new Map<string, string>();
+  for (const r of relations) if (r.mentor) byId.set(r.mentor.id, r.mentor.fullName);
+  return [...byId].map(([id, fullName]) => ({ id, fullName })).sort((a, b) => a.fullName.localeCompare(b.fullName));
 }
 
 // The owner's stage board: the mentor shell's /mentor/board and, for a MARKETING
@@ -90,6 +104,43 @@ export function MentorBoard({
   const toast = useToast();
   const narrow = useIsNarrow();
   const [relations, setRelations] = useState<Relation[]>([]);
+  // The sales team view (src/lib/salesBookRule.ts): "mine" by default, "team"
+  // from the URL (`?view=team`, bookmarkable) — read once on mount so the first
+  // fetch already asks for the right book. `?owners=` narrows the team view to
+  // these owners (the admin board's #3658 filter, here from the loaded cards).
+  const [view, setViewState] = useState<SalesBookView>('mine');
+  const [owners, setOwnersState] = useState<string[]>([]);
+  const [urlRead, setUrlRead] = useState(surface !== 'sales');
+  useEffect(() => {
+    if (surface !== 'sales') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'team') setViewState('team');
+    const fromUrl = params.get('owners');
+    if (fromUrl) setOwnersState(fromUrl.split(',').filter(Boolean));
+    setUrlRead(true);
+  }, [surface]);
+  const setView = (next: SalesBookView) => {
+    setViewState(next);
+    const url = new URL(window.location.href);
+    if (next === 'team') url.searchParams.set('view', 'team');
+    else {
+      url.searchParams.delete('view');
+      url.searchParams.delete('owners');
+      setOwnersState([]);
+    }
+    window.history.replaceState(null, '', url.toString());
+  };
+  const setOwners = (ids: string[]) => {
+    setOwnersState(ids);
+    const url = new URL(window.location.href);
+    if (ids.length) url.searchParams.set('owners', ids.join(','));
+    else url.searchParams.delete('owners');
+    window.history.replaceState(null, '', url.toString());
+  };
+  const team = surface === 'sales' && view === 'team';
+  // A card the viewer may not work (the team view's colleague records): no
+  // drag, no stage picker. Outside the sales surface every card is the viewer's.
+  const movable = (r: Relation) => r.canWrite !== false;
   // moveTo is also called much later from a toast's "Undo", where the closed-over
   // `relations` would be stale — read the live list through a ref instead.
   const relationsRef = useRef<Relation[]>([]);
@@ -121,7 +172,7 @@ export function MentorBoard({
   const fetchRelations = useCallback(async () => {
     setLoadError(false);
     try {
-      const res = await fetch(surface === 'sales' ? '/api/mentorship?surface=sales' : '/api/mentorship');
+      const res = await fetch(surface === 'sales' ? `/api/mentorship?surface=sales${view === 'team' ? '&view=team' : ''}` : '/api/mentorship');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setRelations(data.relations ?? []);
@@ -130,7 +181,7 @@ export function MentorBoard({
     } finally {
       setLoading(false);
     }
-  }, [surface]);
+  }, [surface, view]);
 
   useEffect(() => {
     relationsRef.current = relations;
@@ -150,8 +201,8 @@ export function MentorBoard({
   const showHandoff = handoff && leadHandoff.enabled;
 
   useEffect(() => {
-    fetchRelations();
-  }, [fetchRelations]);
+    if (urlRead) fetchRelations();
+  }, [fetchRelations, urlRead]);
 
   // The desktop twin of the phone rule below: once, on first load, bring the
   // first stage that holds a card into view.
@@ -257,7 +308,12 @@ export function MentorBoard({
   // Search ∩ stage. Every column header count is derived from this, so the
   // numbers describe what is actually on screen rather than the unfiltered set.
   const itemsFor = (status: string) =>
-    relations.filter((r) => r.pipelineStatus === status && matchesMenteeQuery(r, q));
+    relations.filter(
+      (r) =>
+        r.pipelineStatus === status &&
+        matchesMenteeQuery(r, q) &&
+        (!team || owners.length === 0 || (!!r.mentor && owners.includes(r.mentor.id))),
+    );
 
   // When every measured column breaches, the chips have stopped pointing
   // anywhere and are dropped (src/lib/boardWip.ts). The admin board says so
@@ -279,18 +335,25 @@ export function MentorBoard({
       e.preventDefault();
       setDragOver(null);
       const id = e.dataTransfer.getData('relationId');
-      if (id) requestMove(id, status);
+      // A colleague's card does not move: nothing happens, silently (the
+      // drag itself is off; this is the drop side of the same rule).
+      const card = relationsRef.current.find((r) => r.id === id);
+      if (id && card && movable(card)) requestMove(id, status);
     },
   });
 
   const renderCard = (r: Relation) => (
     <div
       key={r.id}
-      draggable
-      onDragStart={(e) => e.dataTransfer.setData('relationId', r.id)}
+      draggable={movable(r)}
+      onDragStart={(e) => {
+        if (!movable(r)) return e.preventDefault();
+        e.dataTransfer.setData('relationId', r.id);
+      }}
       onClick={() => router.push(`${detailBase}/${r.id}`)}
       data-testid="board-card"
-      className="bg-white border border-gray-200 rounded-lg p-3 cursor-grab active:cursor-grabbing hover:border-blue-300 hover:shadow-sm transition"
+      data-writable={movable(r) ? 'true' : 'false'}
+      className={`bg-white border border-gray-200 rounded-lg p-3 hover:border-blue-300 hover:shadow-sm transition ${movable(r) ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'}`}
     >
       <div className="flex items-start justify-between gap-2">
         {/* The name is a real link so the card is reachable (and openable) by keyboard. */}
@@ -313,8 +376,17 @@ export function MentorBoard({
       {r.mentee.university && (
         <p className="text-xs text-gray-500 truncate mt-0.5">{r.mentee.university}</p>
       )}
-      {manyOwners && r.mentor && (
-        <p className="mt-1 truncate text-xs text-gray-500" data-testid="board-card-owner">{r.mentor.fullName}</p>
+      {(team || manyOwners) && r.mentor && (
+        <p className="mt-1 flex items-center gap-1 truncate text-xs text-gray-500" data-testid="board-card-owner">
+          {/* Whose record it is, at a glance: the owner's initials (as on the admin board, #3658). */}
+          <span
+            aria-hidden="true"
+            className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-[9px] font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-200"
+          >
+            {r.mentor.fullName.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join('')}
+          </span>
+          <span className="truncate">{r.mentor.fullName}</span>
+        </p>
       )}
       <div className="flex items-center gap-1 text-xs text-gray-400 mt-2">
         <GraduationCap className="h-3 w-3" />
@@ -323,11 +395,12 @@ export function MentorBoard({
           stages={stages}
           value={r.pipelineStatus}
           onChange={(next) => requestMove(r.id, next)}
+          disabled={!movable(r)}
         />
       </div>
       {r.nextActionAt && <div className="mt-1"><FollowUpChip at={r.nextActionAt} /></div>}
       <div className="mt-1 empty:hidden"><TrialEndChip pipelineStatus={r.pipelineStatus} trialEndsAt={r.trialEndsAt} /></div>
-      {showHandoff && <HandoffCardButton onClick={() => leadHandoff.openFor(r.id)} />}
+      {showHandoff && movable(r) && <HandoffCardButton onClick={() => leadHandoff.openFor(r.id)} />}
     </div>
   );
 
@@ -356,6 +429,19 @@ export function MentorBoard({
           {t.mentor.boardSubtitle}
         </p>
       </div>
+
+      {surface === 'sales' && (
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <SalesViewToggle view={view} onChange={setView} />
+          {team && (
+            <BoardOwnerFilter
+              options={ownerOptionsFrom(relations)}
+              selected={owners}
+              onChange={setOwners}
+            />
+          )}
+        </div>
+      )}
 
       {showHandoff && relations.length > 0 && leadHandoff.strip}
 

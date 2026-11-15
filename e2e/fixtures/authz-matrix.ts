@@ -443,6 +443,8 @@ export const MARKETING_MENTOR_ROWS: SalesProbe[] = [
   // Which records it holds per role (rep, dispatcher, ORG_ADMIN, OBSERVER), and
   // that each one opens, is pinned by e2e/sales-book-scope.spec.ts.
   { method: 'GET', path: '/api/mentorship?surface=sales', expect: 'ok', why: 'own sales book' },
+  // The team view: every seller reads the org's whole book (read-only).
+  { method: 'GET', path: '/api/mentorship?surface=sales&view=team', expect: 'ok', why: "the team's sales book (read-only)" },
   { method: 'GET', path: '/api/mentorship/:colleagueRelationId', expect: 'forbidden', why: "a colleague's record" },
   // Resolved inside the caller's tenant first (#2613): another org's record
   // answers like a missing one, not with a 403 that confirms it exists.
@@ -467,15 +469,22 @@ export const MARKETING_MENTOR_ROWS: SalesProbe[] = [
   { method: 'POST', path: '/api/sales/leads/:foreignRelationId/handoff', body: { toUserId: ':colleagueRepId', action: 'call' }, expect: 'notFound', why: "hand off another org's lead" },
 ];
 
-/** The sales surface pages: own record 200, anything else a real 404. */
+/**
+ * The sales surface pages: every record and account of the rep's org opens
+ * (the team view, src/lib/salesBookRule.ts — a colleague's read-only, its
+ * writes refused by the routes above); another org's is a real 404.
+ */
 export const MARKETING_MENTOR_PAGES: Array<{ path: string; expect: 200 | 404; why: string }> = [
   { path: '/sales', expect: 200, why: 'dashboard' },
   { path: '/sales/board', expect: 200, why: 'board' },
   { path: '/sales/accounts', expect: 200, why: 'own accounts' },
   { path: '/sales/accounts/:ownCompanyId', expect: 200, why: 'own account' },
   { path: '/sales/leads/:ownRelationId', expect: 200, why: 'own record' },
-  { path: '/sales/accounts/:colleagueCompanyId', expect: 404, why: "a colleague's account" },
-  { path: '/sales/leads/:colleagueRelationId', expect: 404, why: "a colleague's record" },
+  { path: '/sales/board?view=team', expect: 200, why: 'team board' },
+  { path: '/sales?view=team', expect: 200, why: 'team dashboard' },
+  { path: '/sales/accounts?view=team', expect: 200, why: 'team accounts' },
+  { path: '/sales/accounts/:colleagueCompanyId', expect: 200, why: "a colleague's account (read-only)" },
+  { path: '/sales/leads/:colleagueRelationId', expect: 200, why: "a colleague's record (read-only)" },
   { path: '/sales/accounts/:foreignCompanyId', expect: 404, why: "another org's account" },
   { path: '/sales/leads/:foreignRelationId', expect: 404, why: "another org's record" },
 ];

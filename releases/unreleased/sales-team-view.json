@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "Sales team view: `/sales/board`, `/sales` and `/sales/accounts` get a \"Mine / Team\" toggle (`?view=team`); every rep reads every record and account of their org, and a colleague's lead page opens read-only with an owner banner. Writing stays owner / dispatcher / admin (`salesBookReadWhere` + `salesBookWriteAllowed` in `src/lib/salesBookRule.ts`); the board disables drag and the stage picker on cards you cannot write, and every write route keeps its own ownership check.",
+  "notes": {
+    "en": [
+      "Team view: see every record of your team, read-only — switch between Mine and Team on the board, the dashboard and the accounts."
+    ],
+    "tr": [
+      "Ekip görünümü: tüm ekip kayıtları salt-okunur görülebilir — panoda, ana sayfada ve hesaplarda Benim / Ekip arasında geçiş yapın."
+    ],
+    "de": [
+      "Teamansicht: alle Datensätze des Teams schreibgeschützt einsehen — auf dem Board, der Startseite und bei den Accounts zwischen Meine und Team wechseln."
+    ]
+  }
+}

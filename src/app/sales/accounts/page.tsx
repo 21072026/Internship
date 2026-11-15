@@ -12,23 +12,29 @@ import { marketingEmailPermissionFilter } from '@/lib/contactPermission';
 import { marketingEmailAllowed } from '@/lib/contactPermissionRule';
 import { NewSalesLeadButton } from '@/components/sales/NewSalesLeadButton';
 import { salesLeadCreateAvailable } from '@/lib/salesLeadCreate';
+import { SalesViewLinks } from '@/components/sales/SalesViewLinks';
+import { salesBookView } from '@/lib/salesBookRule';
 
 // The rep's own accounts (#2580): the companies behind at least one of THEIR
 // relations, in their tenant — the MENTOR `company` scope of
 // src/lib/authzScope.ts narrowed to the owner side. The count next to each is
 // the rep's own records there, never the account's total (the same rule
 // docs/role-access-matrix.md sets for `_count.mentorships` on the list route).
+// The team view (`?view=team`, src/lib/salesBookRule.ts) lists every account of
+// the org that has a record, counting all records there; it only reads.
 
 const ACCOUNT_LIMIT = 200;
 
 export default async function SalesAccountsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ permission?: string }>;
+  searchParams: Promise<{ permission?: string; view?: string }>;
 }) {
   // "With provable e-mail permission" (#2577) — the same filter as
   // /admin/companies, from the one rule. Any other value is no filter.
-  const onlyPermitted = (await searchParams).permission === 'email';
+  const query = await searchParams;
+  const onlyPermitted = query.permission === 'email';
+  const view = salesBookView(query.view);
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) redirect('/auth/signin');
   const capabilities = await shellCapabilities(session.user.orgId);
@@ -37,7 +43,7 @@ export default async function SalesAccountsPage({
   if (!hasSalesSurface(session.user.role, capabilities) || !capabilities.includes('companies')) notFound();
 
   const tenant = await tenantWhere(session);
-  const own = withinTenant({ mentorId: session.user.id }, tenant);
+  const own = withinTenant(view === 'team' ? {} : { mentorId: session.user.id }, tenant);
   const found = await prisma.company.findMany({
     where: withinTenant(
       onlyPermitted ? { AND: [{ mentorships: { some: own } }, marketingEmailPermissionFilter()] } : { mentorships: { some: own } },
@@ -77,18 +83,21 @@ export default async function SalesAccountsPage({
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{s.title}</h1>
           <p className="text-gray-500 mt-1">{s.subtitle}</p>
         </div>
-        {canCreateLead && <NewSalesLeadButton />}
+        <div className="flex flex-wrap items-center gap-3">
+          <SalesViewLinks view={view} basePath="/sales/accounts" labels={t.sales.view} />
+          {canCreateLead && <NewSalesLeadButton />}
+        </div>
       </div>
       <nav className="mb-4 flex gap-2 text-sm" aria-label={s.permission} data-testid="sales-accounts-permission-filter">
         <Link
-          href="/sales/accounts"
+          href={`/sales/accounts${view === 'team' ? '?view=team' : ''}`}
           aria-current={onlyPermitted ? undefined : 'page'}
           className={`rounded-full px-3 py-1 ${onlyPermitted ? 'bg-gray-100 text-gray-700' : 'bg-gray-900 text-white'}`}
         >
           {s.permissionAll}
         </Link>
         <Link
-          href="/sales/accounts?permission=email"
+          href={`/sales/accounts?permission=email${view === 'team' ? '&view=team' : ''}`}
           aria-current={onlyPermitted ? 'page' : undefined}
           data-testid="sales-accounts-permission-email"
           className={`rounded-full px-3 py-1 ${onlyPermitted ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'}`}

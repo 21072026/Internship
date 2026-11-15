@@ -37,6 +37,7 @@ export function SalesRecordPanels({
   dealValue,
   interactions,
   contact,
+  readOnly = false,
 }: {
   relationId: string;
   status: string;
@@ -55,6 +56,11 @@ export function SalesRecordPanels({
   interactions: ReactNode;
   /** The contact card, last cell of the grid below. */
   contact?: ReactNode;
+  /**
+   * The team view's colleague record (decided on the server, salesBookWriteAllowed):
+   * every value reads, no editor or action renders. The routes refuse the write anyway.
+   */
+  readOnly?: boolean;
 }) {
   const router = useRouter();
   const refresh = () => router.refresh();
@@ -68,7 +74,8 @@ export function SalesRecordPanels({
           pipelineStatus={pipelineStatus}
           onSaved={refresh}
           quickDates
-          onComplete={status === 'ACTIVE' ? (note) => openInteractionDraft({ type: 'Call', notes: note ?? '' }) : undefined}
+          readOnly={readOnly}
+          onComplete={!readOnly && status === 'ACTIVE' ? (note) => openInteractionDraft({ type: 'Call', notes: note ?? '' }) : undefined}
         />
         {interactions}
       </div>
@@ -80,7 +87,7 @@ export function SalesRecordPanels({
             pipelineStatus={pipelineStatus}
             trialStartedAt={trialStartedAt}
             trialEndsAt={trialEndsAt}
-            canEdit={canEditTrial}
+            canEdit={!readOnly && canEditTrial}
             readFirst
             status={status}
             stageName={stageName}
@@ -88,6 +95,7 @@ export function SalesRecordPanels({
           />
         </div>
         {/* A lost customer came back (#2842); renders on an open DEAL_LOST record only. */}
+        {!readOnly && (
         <div className="empty:hidden">
           <WinBackPanel
             relationId={relationId}
@@ -96,20 +104,21 @@ export function SalesRecordPanels({
             hrefFor={(id) => `/sales/leads/${id}`}
           />
         </div>
+        )}
         {/* A won customer's notice period (#2841); renders on DEAL_WON only. */}
         <div className="empty:hidden">
           <ContractEndPanel
             relationId={relationId}
             pipelineStatus={pipelineStatus}
             contractEndsAt={contractEndsAt}
-            canEdit={status === 'ACTIVE'}
+            canEdit={!readOnly && status === 'ACTIVE'}
             onSaved={refresh}
           />
         </div>
         {/* The estimated monthly value (#2422, PUT /api/mentorship/[id]/value —
             owner or ADMIN). */}
         <div>
-          <DealValuePanel relationId={relationId} initial={dealValue} onSaved={refresh} />
+          <DealValuePanel relationId={relationId} initial={dealValue} onSaved={refresh} readOnly={readOnly} />
         </div>
         {contact && <div className="empty:hidden">{contact}</div>}
       </div>

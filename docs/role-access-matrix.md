@@ -595,6 +595,11 @@ yerde: [`src/lib/salesSurface.ts`](../src/lib/salesSurface.ts)
 - **Kim değil**: MARKETING'de `MENTEE` lead'in muhatabıdır (kayıt, operatör
   değil) ve `COMPANY` müşteridir — ikisi de `/account`'ta kalır. `ADMIN` kendi
   admin kabuğunu kullanır.
+- **Ekip görünümü** (`src/lib/salesBookRule.ts`): org kendi içinde kapalıdır —
+  her temsilci org'un tüm kayıtlarını ve hesaplarını **okur** (`?view=team`, lead
+  ve hesap sayfaları); **yazmak** yalnızca sahibin, dağıtıcının ve yazma yetkili
+  admin'indir (`salesBookWriteAllowed`). Aşağıdaki "kendi" kuralı varsayılan
+  görünümü ve tüm API okuma rotalarını anlatır.
 - **Satırlar**: her okuma `mentorId = self` **ve** temsilcinin tenant'ı
   (`tenantWhere`/`withinTenant`, #2542). Server component'ler API filtresinden
   geçmediği için ikisi de sayfada elle yazılı. Başka bir temsilcinin ya da başka
@@ -608,14 +613,14 @@ yerde: [`src/lib/salesSurface.ts`](../src/lib/salesSurface.ts)
 | Yüzey / uç | MARKETING `MENTOR` | Not |
 |---|---|---|
 | `/sales` (pano + dikkat kuyruğu) | ✅ kendi | Kuyruk: `overdue`, `trial_expired`, `trial_no_end_date`, `next_action_due` (`SALES_ATTENTION_REASONS`); mentorluk nedenleri yok |
-| `/sales/board`, `GET /api/mentorship?surface=sales` | ✅ kendi | **Kişinin kendi satış defteri** (`src/lib/salesBookRule.ts`): `mentorId = self` — ADMIN (ORG_ADMIN, OBSERVER, PROGRAM_ADMIN) dahil; yalnızca satış dağıtıcısı (#3656) org'un tamamını görür. Lead sayfası aynı kuralı okur, yani panodaki her kart açılır ve açılmayacak kart listelenmez. `surface=sales` yalnızca daraltır; parametresiz `GET /api/mentorship` admin yüzeyleri için role göre kapsamını korur. Admin'in tüm defteri `/admin/board` ve `/admin/candidates`'tadır; oradaki kartlar admin detayına (`/admin/candidates/<menteeId>`) gider. Fixture: `MARKETING_MENTOR_ROWS`; rol × kayıt matrisi `e2e/sales-book-scope.spec.ts` |
-| `/sales/accounts`, `/sales/accounts/[id]` | ✅ kendi / 404 | Sayaç yalnızca kendi kayıtları |
-| `/sales/leads/[id]` | ✅ kendi / 404 | Takip (#2563) ve deneme bitişi (#2553) editörleri. Açılan küme panonun listesiyle aynı kural (`salesBookScope`): sahibi ya da dağıtıcı; başka herkes, bir ADMIN dahil, gerçek 404 |
+| `/sales/board`, `GET /api/mentorship?surface=sales` | ✅ kendi · `?view=team` ✅ org (salt-okunur) | **Varsayılan: kişinin kendi satış defteri** (`src/lib/salesBookRule.ts`, `salesBookReadWhere`): `mentorId = self`. **Ekip görünümü** (`?view=team`, panoda "Benim / Ekip"): org'un tüm kayıtları okunur; kart sahibinin adını taşır, yalnızca yazılabilen kart (`canWrite`, `salesBookWriteAllowed`: sahip ∨ dağıtıcı ∨ `relation.write` tutan admin) sürüklenir ve aşama seçicisi açıktır. `view` parametresi okumayı asla kiracı dışına taşımaz; `surface=sales` olmadan `view=team` yok sayılır. Varsayılan görünümde — ADMIN (ORG_ADMIN, OBSERVER, PROGRAM_ADMIN) dahil; yalnızca satış dağıtıcısı (#3656) org'un tamamını görür. Lead sayfası aynı kuralı okur, yani panodaki her kart açılır ve açılmayacak kart listelenmez. `surface=sales` yalnızca daraltır; parametresiz `GET /api/mentorship` admin yüzeyleri için role göre kapsamını korur. Admin'in tüm defteri `/admin/board` ve `/admin/candidates`'tadır; oradaki kartlar admin detayına (`/admin/candidates/<menteeId>`) gider. Fixture: `MARKETING_MENTOR_ROWS`; rol × kayıt matrisi `e2e/sales-book-scope.spec.ts` |
+| `/sales/accounts`, `/sales/accounts/[id]` | ✅ kendi · `?view=team` org / başka org 404 | Liste varsayılan olarak kendi hesapları (sayaç kendi kayıtları); ekip görünümünde org'un kayıtlı tüm hesapları. Hesap sayfası org'daki her hesabı açar (salt-okunur; ADMIN kolonları yine çıkarılır) |
+| `/sales/leads/[id]` | ✅ org (başkasınınki salt-okunur) / başka org 404 | Org'un her kaydı açılır (`salesBookReadWhere(…, 'team')`). Yazamayan için (`canWriteSalesRecord`) salt-okunur: aşama, sahip, son temas, takip, deneme, değer, etkileşimler, iletişim görünür; hiçbir editör, takip formu, devretme, etkileşim kaydı ya da iletişim düzenleme render edilmez, `tel:` düz bağlantıdır; banner "Bu kayıt {sahip} adına. Yalnızca görüntülüyorsun." Dağıtıcı ve yazma yetkili admin için banner yok. Rotalar yazmayı ayrıca reddeder |
 | `PUT /api/mentorship/[id]` (aşama, takip) | ✅ kendi / 403 | Sahip ∨ ADMIN |
 | `PUT /api/mentorship/[id]` `{companyId}` | **403** `company_change_admin_only` | Kaydı başka bir hesaba bağlamak **her dikeyde** ADMIN kararı (#2613) — yoksa `/sales/accounts` o hesabı açardı. Rol kontrolü id aranmadan önce cevaplar; mevcut değeri geri göndermek no-op'tur |
 | `POST /api/interactions` (kendi kaydı) | ✅ 201 | `/sales/leads/[id]` üzerinden; `mentorship` olmayan dikeyde menteeye `interaction.logged` bildirimi gitmez |
 | `PATCH /api/mentorship/[id]/trial` | ✅ kendi / 403 | Sahip ∨ ADMIN, `pipeline` yeteneği |
-| `GET/PUT /api/mentorship/[id]` başka temsilcinin | 403 | Aynı kiracı, sahip değil |
+| `GET/PUT /api/mentorship/[id]` başka temsilcinin | 403 | Aynı kiracı, sahip değil. Ekip görünümü yalnızca sayfaları ve listeyi açar; **her yazma rotası** (aşama/takip PUT, trial, contract-end, value, win-back, lifecycle, extend, next-step, certificate, ai-draft, skills/confirm, handoff, contact, `POST /api/interactions`, `interactions/[id]`, `POST /api/meetings`, meeting-series, notes, goals, agendas …) sahipliği kendi sunucu kontrolüyle doğrular → 403/404. Pin: `e2e/sales-team-view.spec.ts` |
 | `GET/PUT /api/mentorship/[id]` başka org'un | 404 | İlişki çağıranın kiracısı içinde aranır (#2613); ADMIN dahil |
 | `GET /api/companies/[id]` başkasının | 404 | `company` kapsamı |
 | `POST /api/sales/leads` (yeni lead, #2958) | ✅ 201, sahibi **her zaman** kendisi | Gövdedeki `ownerId`/`orgId` yok sayılır; admin formuyla aynı yazıcı ve tekilleştirme (`createMarketingAccount`). "Zaten var" cevabı yalnızca temsilcinin **kendi** kaydının kimliğini döndürür. MENTEE/COMPANY 403, INTERNSHIP MENTOR/ADMIN `403 vertical_unavailable`, oturumsuz 401. Fixture: `SALES_LEAD_CREATE` |

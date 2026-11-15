@@ -8,8 +8,8 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { hasSalesSurface } from '@/lib/salesSurface';
 import { isSalesDispatcher } from '@/lib/salesDispatcher';
-import { salesBookWhere } from '@/lib/salesBookRule';
-import { actorFromSession, can, dispatcherMay } from '@/lib/authz';
+import { salesBookReadWhere } from '@/lib/salesBookRule';
+import { canWriteSalesRecord } from '@/lib/salesBook';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { formatDate } from '@/lib/relativeTime';
 import { getServerDictionary } from '@/i18n/server';
@@ -20,7 +20,6 @@ import { SalesInteractionsCard } from '@/components/sales/SalesInteractionsCard'
 import { LeadContactEditor } from '@/components/sales/LeadContactEditor';
 import { shownEmail } from '@/lib/leadEmail';
 import { LeadPageHandoff } from '@/components/sales/LeadPageHandoff';
-import { canHandOffLead } from '@/lib/leadHandoff';
 
 // One of the rep's own records (#2580): who the lead is, the account behind it,
 // its stage, the follow-up, trial-end and estimated-value (#2422) editors, what happened last and a
@@ -55,10 +54,11 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   const tenant = await tenantWhere(session);
   const dispatcher = await isSalesDispatcher(session.user.id);
   const relation = await prisma.mentorshipRelation.findFirst({
-    // The viewer's sales book (src/lib/salesBookRule.ts): a rep — an ADMIN
-    // included — their own records, the sales dispatcher (#3656) the tenant's.
-    // The board lists exactly this set, so every card it shows opens here.
-    where: withinTenant({ id, ...salesBookWhere({ userId: session.user.id, dispatcher }) }, tenant),
+    // The team view (src/lib/salesBookRule.ts): every seller opens every sales
+    // record of the org — the tenant filter keeps it inside the org. Whether the
+    // viewer may WORK it is the write rule below; a colleague's record opens
+    // read-only, never as a 404 (every card the team board shows opens here).
+    where: withinTenant({ id, ...salesBookReadWhere({ userId: session.user.id, dispatcher }, 'team') }, tenant),
     select: {
       id: true,
       orgId: true,
@@ -75,15 +75,20 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
       // name here and on the owner/ADMIN value route only.
       value: { select: { valueMinor: true, currency: true, source: true } },
       mentee: { select: { id: true, fullName: true, email: true, phone: true } },
+      mentor: { select: { fullName: true } },
       // Through the tenant filter too: a record pointing at another tenant's
       // company (a bad import) shows no account rather than a foreign one.
       companyId: true,
     },
   });
   if (!relation) notFound();
-  // The hand-off button (#3657) only for whom the hand-off route would let
-  // through — the same check, asked of the data here (src/lib/leadHandoff.ts).
-  const canHandOff = session.user.orgId ? await canHandOffLead(session, session.user.orgId, relation.id) : false;
+  // Who may WORK this record (src/lib/salesBookRule.ts, salesBookWriteAllowed):
+  // the owner, the org's sales dispatcher, or an admin with relation.write.
+  // Anyone else reads it — every editor below is off, and every write route
+  // refuses them on its own anyway.
+  const writable = await canWriteSalesRecord(session, relation);
+  // The hand-off button (#3657): the same rule, on an open record.
+  const canHandOff = writable && relation.status === 'ACTIVE';
 
 
   const [company, interactions] = await Promise.all([
@@ -116,23 +121,12 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
     phone: company?.contactPhone ?? relation.mentee.phone,
     position: company?.contactPosition ?? null,
   };
-  // Who may log a contact here (#3748) — the rule POST /api/interactions applies,
-  // from the data: the record's owner, the org's sales dispatcher, or an admin
-  // holding relation.write. The phone link's "Did you reach them?" is offered only
-  // to them; the route still checks on every write.
-  const actor = await actorFromSession(session);
-  const canLog =
-    relation.status === 'ACTIVE' &&
-    (relation.mentorId === session.user.id || dispatcher || (!!actor && (await can(actor, 'relation.write', undefined, session))));
-  // Who may move the trial end — the trial route's own rule, read here so the
-  // Edit button is offered to exactly the people the PATCH accepts: an admin
-  // with relation.write, the owner, or the tenant's sales dispatcher (#3656).
-  // Status and stage are NOT part of it: when the record forbids the edit, the
-  // panel says why (trialEndLockReason) — to these people only.
-  const canEditTrial =
-    relation.mentorId === session.user.id ||
-    dispatcherMay(actor, 'relation.write', relation.orgId) ||
-    (!!actor && (await can(actor, 'relation.write', undefined, session)));
+  // Who may log a contact here (#3748) and move the trial end — the write rule
+  // above, which POST /api/interactions and PATCH …/trial apply too. The phone
+  // link's "Did you reach them?" is offered only to them; a reader's phone link
+  // is a plain tel: link.
+  const canLog = relation.status === 'ACTIVE' && writable;
+  const canEditTrial = writable;
 
   return (
     <div data-testid="sales-lead">
@@ -141,6 +135,15 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
         {s.back}
       </Link>
 
+      {!writable && (
+        <p
+          className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+          role="status"
+          data-testid="sales-lead-readonly"
+        >
+          {s.readOnlyBanner.replace('{owner}', relation.mentor.fullName)}
+        </p>
+      )}
       <div className="mb-8 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100" data-testid="sales-lead-name">
@@ -175,6 +178,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
         contractEndsAt={iso(relation.contractEndsAt)}
         canEditTrial={canEditTrial}
         stageName={stageLabel(stages, relation.pipelineStatus, locale)}
+        readOnly={!writable}
         dealValue={{
           valueMinor: relation.value?.valueMinor ?? null,
           currency: relation.value?.currency ?? null,
@@ -195,8 +199,9 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
             {/* The person — editable by the record's rep (#3655); the account and the date below are not.
                 The phone and e-mail are tel:/mailto: links that also log the contact: the e-mail opens an
                 interaction draft (#3741), the phone asks "Did you reach them?" (#3748). */}
-            <LeadContactEditor relationId={relation.id} initial={contact} canEdit={!!company} logOnContact={canLog} />
+            <LeadContactEditor relationId={relation.id} initial={contact} canEdit={!!company && writable} logOnContact={canLog} />
             <dl className="mt-4 grid grid-cols-1 gap-4 border-t border-gray-100 pt-4 dark:border-gray-800" data-testid="sales-lead-contact">
+              <Field label={s.owner} value={relation.mentor.fullName} testId="sales-lead-owner" />
               <Field label={s.company} value={company?.name} />
               <Field label={s.since} value={date(relation.startDate)} hint={s.sinceHint} testId="sales-lead-since" />
             </dl>

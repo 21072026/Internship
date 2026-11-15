@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { salesBookScope } from '@/lib/salesBook';
+import { canWriteSalesRecord, salesBookScope } from '@/lib/salesBook';
+import { salesBookView } from '@/lib/salesBookRule';
+import { hasSalesSurface } from '@/lib/salesSurface';
 import { actorFromSession, can, requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
@@ -126,11 +128,17 @@ export async function GET(request: Request) {
       .map((v) => v.trim())
       .filter((v) => /^[A-Za-z0-9_-]{1,64}$/.test(v))
       .slice(0, 50);
-    // `?surface=sales` — the sales board (#3657 follow-up, src/lib/salesBookRule.ts):
-    // only the viewer's own sales book (the whole tenant's for the dispatcher),
-    // so every card it lists opens on /sales/leads/<id>. ANDed below like the
-    // other filters: it narrows, it never widens. Any other value is ignored.
-    const salesBook = searchParams.get('surface') === 'sales' ? await salesBookScope(session) : undefined;
+    // `?surface=sales` — the sales board (src/lib/salesBookRule.ts). `view=mine`
+    // (the default) is the viewer's own sales book, ANDed like the other filters:
+    // it only narrows. `view=team` is the whole org's sales book — the ONE place
+    // this route reads wider than the role scope, so it is held to three things:
+    // only a role that has the sales surface in its org gets it, the org filter
+    // (tenantWhere) is always its own conjunct, and any other value is "mine".
+    const salesSurface = searchParams.get('surface') === 'sales';
+    const salesView = salesBookView(searchParams.get('view'));
+    const salesTeam =
+      salesSurface && salesView === 'team' && hasSalesSurface(session.user.role, await shellCapabilities(session.user.orgId));
+    const salesBook = salesSurface && !salesTeam ? await salesBookScope(session, 'mine') : undefined;
     const pageParam = searchParams.get('page');
     const page = Math.max(1, parseInt(pageParam || '1', 10) || 1);
     const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get('pageSize') || '20', 10) || 20));
@@ -149,7 +157,9 @@ export async function GET(request: Request) {
     // Fail-closed scoping (#848): SOURCE was missing from this chain and read
     // every relation in the tenant. Roles without a defined scope are denied.
     // COMPANY stays read-only and limited to its own company's relations.
-    const scope = await scopeForRole(session.user, 'relation');
+    const scope = salesTeam
+      ? withinTenant<Prisma.MentorshipRelationWhereInput>(await salesBookScope(session, 'team'), await tenantWhere(session))
+      : await scopeForRole(session.user, 'relation');
     if (!scope) {
       await logScopeDenial(session.user, 'GET /api/mentorship');
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -308,9 +318,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ recipients, total, page: rp.page, pageSize: rp.take });
     }
 
+    // The sales surface marks each row with whether the viewer may WORK it
+    // (salesBookWriteAllowed, src/lib/salesBookRule.ts) — the board turns the
+    // drag and the stage picker off on the rest. Presentation: every write
+    // route still checks on its own.
+    const withSalesWrite = async <T extends { id: string; mentorId: string; orgId: string | null; companyId: string | null }>(rows: T[]) =>
+      salesSurface ? Promise.all(rows.map(async (r) => ({ ...r, canWrite: await canWriteSalesRecord(session, r) }))) : rows;
+
     if (!paged) {
       const relations = await prisma.mentorshipRelation.findMany({ where, include, orderBy: { startDate: 'desc' } });
-      return NextResponse.json({ relations: await withAgreement(withStageClock(relations)) });
+      return NextResponse.json({ relations: await withAgreement(withStageClock(await withSalesWrite(relations))) });
     }
 
     const [total, relations] = await Promise.all([

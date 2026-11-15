@@ -22,6 +22,10 @@ import { CompanyDetailView } from '@/components/CompanyDetailView';
 //   - the funnel and interaction lists hold the rep's own records only;
 //   - the ADMIN-only columns (VAT id, contact name, contact phone) are stripped
 //     by src/lib/companyVisibility.ts exactly as on GET /api/companies/[id].
+//
+// The team view (src/lib/salesBookRule.ts) widened the read: every account of
+// the org opens, with every record there — reading only. The pages behind it
+// (/sales/leads/[id]) decide writing per record; the loader takes no `ownerId`.
 // No loading.tsx above this page, so notFound() is a real HTTP 404.
 export default async function SalesAccountPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -37,7 +41,6 @@ export default async function SalesAccountPage({ params }: { params: Promise<{ i
     id,
     tenant,
     headers: await headers(),
-    ownerId: session.user.id,
   });
   if (!data) notFound();
 

@@ -22,6 +22,8 @@ import { NewSalesLeadButton } from '@/components/sales/NewSalesLeadButton';
 import { salesLeadCreateAvailable } from '@/lib/salesLeadCreate';
 import { verticalFor } from '@/lib/verticalContext';
 import { LeadPoolCard } from '@/components/sales/LeadPoolCard';
+import { SalesViewLinks } from '@/components/sales/SalesViewLinks';
+import { salesBookView } from '@/lib/salesBookRule';
 
 // The sales rep's dashboard (#2580): their own attention queue and their own
 // records. Every read is the rep's rows only (`mentorId = self`) AND the rep's
@@ -32,7 +34,11 @@ import { LeadPoolCard } from '@/components/sales/LeadPoolCard';
  *  board lists everything. */
 const RECORD_LIMIT = 100;
 
-export default async function SalesDashboard() {
+export default async function SalesDashboard({ searchParams }: { searchParams: Promise<{ view?: string }> }) {
+  // The team view (src/lib/salesBookRule.ts): `?view=team` lists every seller's
+  // records of the org, read-only unless they are yours. The queue and the
+  // stats stay the viewer's own — they are a to-do list, not a window.
+  const view = salesBookView((await searchParams).view);
   const session = await getServerSession(authOptions);
   // The layout gates this, but a session can be revoked between the two.
   if (!session?.user?.id) redirect('/auth/signin');
@@ -43,10 +49,11 @@ export default async function SalesDashboard() {
 
   const tenant = await tenantWhere(session);
   const own = withinTenant({ mentorId: session.user.id }, tenant);
+  const listed = view === 'team' ? withinTenant({}, tenant) : own;
 
   const [records, openCount, accountCount, attention, dict] = await Promise.all([
     prisma.mentorshipRelation.findMany({
-      where: own,
+      where: listed,
       orderBy: { startDate: 'desc' },
       take: RECORD_LIMIT,
       select: {
@@ -58,6 +65,7 @@ export default async function SalesDashboard() {
         trialEndsAt: true,
         mentee: { select: { id: true, fullName: true } },
         company: { select: { id: true, name: true } },
+        mentor: { select: { id: true, fullName: true } },
       },
     }),
     prisma.mentorshipRelation.count({ where: withinTenant({ mentorId: session.user.id, status: 'ACTIVE' as const }, tenant) }),
@@ -133,7 +141,10 @@ export default async function SalesDashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>{s.records.title}</CardTitle>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <CardTitle>{s.records.title}</CardTitle>
+            <SalesViewLinks view={view} basePath="/sales" labels={s.view} />
+          </div>
         </CardHeader>
         {records.length === 0 ? (
           <p className="text-sm text-gray-500" data-testid="sales-records-empty">{s.records.empty}</p>
@@ -143,6 +154,7 @@ export default async function SalesDashboard() {
               <thead>
                 <tr className="border-b border-gray-200 text-xs text-gray-500">
                   <th scope="col" className="py-2 pr-4 font-medium">{s.records.person}</th>
+                  {view === 'team' && <th scope="col" className="py-2 pr-4 font-medium">{s.lead.owner}</th>}
                   <th scope="col" className="py-2 pr-4 font-medium">{s.records.company}</th>
                   <th scope="col" className="py-2 pr-4 font-medium">{s.records.stage}</th>
                   <th scope="col" className="py-2 pr-4 font-medium">{s.records.nextAction}</th>
@@ -160,6 +172,11 @@ export default async function SalesDashboard() {
                         <Badge variant="default" className="ml-2 text-xs">{s.lead.statusCompleted}</Badge>
                       )}
                     </td>
+                    {view === 'team' && (
+                      <td className="py-2 pr-4 text-gray-700" data-testid={`sales-record-owner-${r.id}`}>
+                        {r.mentor.fullName}
+                      </td>
+                    )}
                     <td className="py-2 pr-4">
                       {r.company ? (
                         <Link href={`/sales/accounts/${r.company.id}`} className="text-gray-700 hover:underline">
