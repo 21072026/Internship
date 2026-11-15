@@ -18,6 +18,7 @@ import { formatDateTime } from '@/lib/relativeTime';
 import { EvaluationFrameworkEditor } from '@/components/EvaluationFrameworkEditor';
 import { OfferLetterTemplateEditor } from '@/components/OfferLetterTemplateEditor';
 import { EvaluationScheduleEditor } from '@/components/EvaluationScheduleEditor';
+import { FirstContactAdvanceEditor } from '@/components/FirstContactAdvanceEditor';
 import { StageSlaEditor } from '@/components/StageSlaEditor';
 import { SlaDayModeCard } from '@/components/admin/SlaDayModeCard';
 import { CrmBccCard } from '@/components/CrmBccCard';
@@ -1058,6 +1059,8 @@ export default function AdminSettingsPage() {
       {verticalHasCapability(vertical, 'placements') && <OfferLetterTemplateEditor />}
       {/* When INTERIM/FINAL fall due, and their reminders (#1891). */}
       {verticalHasCapability(vertical, 'evaluations') && <EvaluationScheduleEditor />}
+      {/* First-contact auto-advance (#3746): the sales vertical only. */}
+      {hasTrialStage && <FirstContactAdvanceEditor />}
       {/* The tenant starter pack (#2066): safe to apply again at any time. */}
       {session?.user?.orgId && <StarterPackCard orgId={session.user.orgId} />}
 

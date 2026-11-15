@@ -7,6 +7,7 @@ import { shellCapabilities } from '@/lib/shellCapabilities';
 import { emit } from '@/lib/events/emit';
 import { recordPairActivity } from '@/lib/metering';
 import { notifyIfAllowed } from '@/lib/notify';
+import { advanceOnFirstContact } from '@/lib/firstContactAdvance';
 
 // Logging an interaction, as ONE write path (#1996): the row, the metering
 // signal, the `interaction.logged` webhook and the mentee's bell. It is what
@@ -57,7 +58,11 @@ export async function createInteraction(opts: {
   if (relation.menteeId !== opts.actorId && (await shellCapabilities(relation.orgId)).includes('mentorship')) {
     await notifyIfAllowed(relation.menteeId, 'interactions', 'interaction.logged', {}, '/portal/journey');
   }
-  return interaction;
+  // A first contact on a lead still in the first stage may move it on (#3746,
+  // src/lib/firstContactAdvance.ts — the one writer). The result rides back so
+  // the person who logged it can be told, with an Undo.
+  const stageAdvance = await advanceOnFirstContact({ relationId: relation.id, interactionId: interaction.id, type: opts.type });
+  return Object.assign(interaction, { stageAdvance });
 }
 
 /**
