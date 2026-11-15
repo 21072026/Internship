@@ -37,6 +37,8 @@ export function SalesRecordPanels({
   dealValue,
   interactions,
   contact,
+  readOnly = false,
+  showFollowUp = true,
 }: {
   relationId: string;
   status: string;
@@ -55,12 +57,22 @@ export function SalesRecordPanels({
   interactions: ReactNode;
   /** The contact card, last cell of the grid below. */
   contact?: ReactNode;
+  /**
+   * The team view's colleague record (decided on the server, salesBookWriteAllowed):
+   * the values it may see read, no editor or action renders, and the deal value is
+   * not shown (it is the owner's, like on GET /api/sales/team-book). The routes
+   * refuse every write anyway.
+   */
+  readOnly?: boolean;
+  /** The follow-up and the notice period are the owner's (canSeeNextAction): hidden, not shown empty, for anyone else. */
+  showFollowUp?: boolean;
 }) {
   const router = useRouter();
   const refresh = () => router.refresh();
   return (
     <>
       <div className="mb-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-2" data-testid="sales-lead-action-strip">
+        {showFollowUp && (
         <FollowUpPanel
           relationId={relationId}
           nextActionAt={nextActionAt}
@@ -68,8 +80,10 @@ export function SalesRecordPanels({
           pipelineStatus={pipelineStatus}
           onSaved={refresh}
           quickDates
-          onComplete={status === 'ACTIVE' ? (note) => openInteractionDraft({ type: 'Call', notes: note ?? '' }) : undefined}
+          readOnly={readOnly}
+          onComplete={!readOnly && status === 'ACTIVE' ? (note) => openInteractionDraft({ type: 'Call', notes: note ?? '' }) : undefined}
         />
+        )}
         {interactions}
       </div>
       <div className="mb-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-2 2xl:grid-cols-3" data-testid="sales-record-panels-grid">
@@ -80,7 +94,7 @@ export function SalesRecordPanels({
             pipelineStatus={pipelineStatus}
             trialStartedAt={trialStartedAt}
             trialEndsAt={trialEndsAt}
-            canEdit={canEditTrial}
+            canEdit={!readOnly && canEditTrial}
             readFirst
             status={status}
             stageName={stageName}
@@ -88,6 +102,7 @@ export function SalesRecordPanels({
           />
         </div>
         {/* A lost customer came back (#2842); renders on an open DEAL_LOST record only. */}
+        {!readOnly && (
         <div className="empty:hidden">
           <WinBackPanel
             relationId={relationId}
@@ -96,21 +111,26 @@ export function SalesRecordPanels({
             hrefFor={(id) => `/sales/leads/${id}`}
           />
         </div>
-        {/* A won customer's notice period (#2841); renders on DEAL_WON only. */}
+        )}
+        {/* A won customer's notice period (#2841); renders on DEAL_WON only — the owner's, like the follow-up. */}
+        {showFollowUp && (
         <div className="empty:hidden">
           <ContractEndPanel
             relationId={relationId}
             pipelineStatus={pipelineStatus}
             contractEndsAt={contractEndsAt}
-            canEdit={status === 'ACTIVE'}
+            canEdit={!readOnly && status === 'ACTIVE'}
             onSaved={refresh}
           />
         </div>
+        )}
         {/* The estimated monthly value (#2422, PUT /api/mentorship/[id]/value —
             owner or ADMIN). */}
-        <div>
-          <DealValuePanel relationId={relationId} initial={dealValue} onSaved={refresh} />
-        </div>
+        {!readOnly && (
+          <div>
+            <DealValuePanel relationId={relationId} initial={dealValue} onSaved={refresh} />
+          </div>
+        )}
         {contact && <div className="empty:hidden">{contact}</div>}
       </div>
     </>

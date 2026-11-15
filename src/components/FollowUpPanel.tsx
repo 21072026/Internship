@@ -96,6 +96,7 @@ export function FollowUpPanel({
   onSaved,
   quickDates = false,
   onComplete,
+  readOnly = false,
 }: {
   relationId: string;
   nextActionAt: string | null | undefined;
@@ -111,6 +112,8 @@ export function FollowUpPanel({
    * with it). Absent everywhere else, so those pages keep only Save / Clear.
    */
   onComplete?: (note: string | null) => void;
+  /** Reading only (the sales team view, a colleague's record): no edit, add or complete control. */
+  readOnly?: boolean;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -253,7 +256,7 @@ export function FollowUpPanel({
         <CalendarClock className="h-4 w-4 text-gray-500 dark:text-gray-400" />
         <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{t.followUp.title}</p>
         <FollowUpStatus at={shown.at} className="text-xs" />
-        {!editing && hasFollowUp && (
+        {!readOnly && !editing && hasFollowUp && (
           <button
             ref={editRef}
             type="button"
@@ -270,7 +273,7 @@ export function FollowUpPanel({
       {!editing && hasFollowUp && (
         <>
           <FollowUpReading at={shown.at} note={shown.note} />
-          {onComplete && (
+          {!readOnly && onComplete && (
             <div className="mt-3">
               <Button size="sm" variant="secondary" disabled={saving} title={t.followUp.completeHint} onClick={() => void complete()} data-testid="follow-up-complete">
                 {t.followUp.complete}
@@ -282,12 +285,14 @@ export function FollowUpPanel({
       {!editing && !hasFollowUp && (
         <div className="flex flex-wrap items-center justify-between gap-2" data-testid="follow-up-empty">
           <p className="text-sm text-gray-600 dark:text-gray-400">{t.followUp.empty}</p>
-          <Button ref={addRef} type="button" size="sm" variant="outline" className="min-h-11" onClick={startEditing} data-testid="follow-up-add">
-            <Plus className="mr-1 h-4 w-4" aria-hidden="true" /> {t.followUp.add}
-          </Button>
+          {!readOnly && (
+            <Button ref={addRef} type="button" size="sm" variant="outline" className="min-h-11" onClick={startEditing} data-testid="follow-up-add">
+              <Plus className="mr-1 h-4 w-4" aria-hidden="true" /> {t.followUp.add}
+            </Button>
+          )}
         </div>
       )}
-      {editing && (
+      {!readOnly && editing && (
         <div data-testid="follow-up-form">
           {/* The follow-up is what comes NEXT; what already happened is an interaction (#3652). */}
           <p className="mb-2 text-xs text-gray-600 dark:text-gray-400" data-testid="follow-up-purpose">{t.followUp.purpose}</p>

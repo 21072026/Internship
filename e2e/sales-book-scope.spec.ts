@@ -3,17 +3,22 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
 import { MARKETING_HOST, asHost, signInViaApi, signInAndSettle, gotoSettled } from './helpers/auth';
 import { freshIp } from './helpers/rateLimit';
+import { writeSetting } from '../src/lib/settingsWrite';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
-// The sales surface is the viewer's OWN book (src/lib/salesBookRule.ts).
+// The sales surface: the viewer's OWN book is the default list and the write
+// scope; READING is the team's (src/lib/salesBookRule.ts).
 //
-// The bug: /sales/board listed what GET /api/mentorship lets the role read — the
-// whole tenant for an ORG_ADMIN or OBSERVER — while /sales/leads/<id> opened only
-// `mentorId = self`, so a colleague's card was on the board and clicking it was a
-// 404. The rule now: on /sales every card is one its viewer can open, and a card
-// they cannot open is not listed. Only the sales dispatcher (#3656) sees the
-// tenant's book there. The admin board keeps the whole book and opens the admin
-// detail (/admin/candidates/<menteeId>), never the sales lead page.
+// The first bug (#3755): /sales/board listed what GET /api/mentorship lets the
+// role read — the whole tenant for an ORG_ADMIN or OBSERVER — while
+// /sales/leads/<id> opened only `mentorId = self`, so a colleague's card was on
+// the board and clicking it was a 404. The list stays the own book. Then the
+// team view (2026-11-15): while `salesTeamBookForReps` is on (the default) a
+// rep opens every record page of the org, a colleague's read-only (pinned in
+// e2e/sales-team-view.spec.ts); an admin and the dispatcher always do. Off, a
+// rep's colleague's record is a 404 again. The admin board keeps the whole book
+// and opens the admin detail (/admin/candidates/<menteeId>), never the sales
+// lead page.
 
 test.describe.configure({ mode: 'serial' });
 
@@ -72,12 +77,13 @@ test.afterAll(async () => {
   await prisma.activityLog.deleteMany({ where: { orgId } }).catch(() => {});
   await prisma.mentorshipRelation.deleteMany({ where: { orgId } }).catch(() => {});
   for (const e of emails) await cleanupByEmail(e);
+  await prisma.setting.deleteMany({ where: { orgId } }).catch(() => {});
   await prisma.pipelineStage.deleteMany({ where: { orgId } }).catch(() => {});
   await prisma.organization.deleteMany({ where: { id: orgId } }).catch(() => {});
   await prisma.$disconnect();
 });
 
-// Who sees which record on /sales (the list) — and every listed record opens.
+// Who sees which record on /sales (the list): the own book; the dispatcher the tenant's.
 const BOOK: Record<string, string[]> = {
   rep1: ['r1'],
   rep2: ['r2'],
@@ -87,22 +93,29 @@ const BOOK: Record<string, string[]> = {
 };
 const ALL = ['r1', 'r2', 'a1'];
 
-test('the sales list is the viewer’s own book; every listed record opens, every other one is a 404', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
-  for (const [viewer, own] of Object.entries(BOOK)) {
-    const ctx = await jar(playwright, baseURL, viewer);
-    try {
-      const res = await ctx.get('/api/mentorship?surface=sales');
-      expect(res.status(), viewer).toBe(200);
-      const listed = ((await res.json()).relations as { id: string }[]).map((r) => r.id).filter((id) => ALL.some((k) => ids[`rel-${k}`] === id));
-      expect(listed.sort(), viewer).toEqual(own.map((k) => ids[`rel-${k}`]).sort());
-      for (const k of ALL) {
-        const page = await ctx.get(`/sales/leads/${ids[`rel-${k}`]}`, { maxRedirects: 0 });
-        expect(page.status(), `${viewer} → ${k}`).toBe(own.includes(k) ? 200 : 404);
+test('the sales list is the viewer’s own book; with the team read every record of the org opens, without it a rep’s colleague’s is a 404', { tag: '@smoke' }, async ({ playwright, baseURL }) => {
+  // Off: a rep opens their own only; an admin (any tier) and the dispatcher read the team either way.
+  const OPENS_WITHOUT_TEAM_READ: Record<string, string[]> = { rep1: ['r1'], rep2: ['r2'], orgAdmin: ALL, observer: ALL, disp: ALL };
+  for (const teamSetting of ['true', 'false'] as const) {
+    await writeSetting('salesTeamBookForReps', teamSetting, orgId);
+    for (const [viewer, own] of Object.entries(BOOK)) {
+      const ctx = await jar(playwright, baseURL, viewer);
+      try {
+        const res = await ctx.get('/api/mentorship?surface=sales');
+        expect(res.status(), viewer).toBe(200);
+        const listed = ((await res.json()).relations as { id: string }[]).map((r) => r.id).filter((id) => ALL.some((k) => ids[`rel-${k}`] === id));
+        expect(listed.sort(), viewer).toEqual(own.map((k) => ids[`rel-${k}`]).sort());
+        const opens = teamSetting === 'true' ? ALL : OPENS_WITHOUT_TEAM_READ[viewer];
+        for (const k of ALL) {
+          const page = await ctx.get(`/sales/leads/${ids[`rel-${k}`]}`, { maxRedirects: 0 });
+          expect(page.status(), `${viewer} → ${k} (team ${teamSetting})`).toBe(opens.includes(k) ? 200 : 404);
+        }
+      } finally {
+        await ctx.dispose();
       }
-    } finally {
-      await ctx.dispose();
     }
   }
+  await writeSetting('salesTeamBookForReps', 'true', orgId);
 });
 
 test('surface=sales only narrows: without it an org admin still reads the whole tenant (the admin surfaces)', { tag: '@smoke' }, async ({ playwright, baseURL }) => {

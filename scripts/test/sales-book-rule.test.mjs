@@ -44,3 +44,13 @@ test('the setting is on unless explicitly off', () => {
 test('the write scope did not move: a rep still owns only their own records', () => {
   assert.deepEqual(salesBookWhere({ userId: 'u1', dispatcher: false }), { mentorId: 'u1' });
 });
+
+// The write rule: owner, dispatcher, admin — never the team read.
+test('only the owner, the dispatcher or an admin with relation.write may work a record', async () => {
+  const { salesBookWriteAllowed } = await import('../../src/lib/salesBookRule.ts');
+  const base = { userId: 'u1', ownerId: 'u2', dispatcher: false, adminWrite: false };
+  assert.equal(salesBookWriteAllowed(base), false);
+  assert.equal(salesBookWriteAllowed({ ...base, ownerId: 'u1' }), true);
+  assert.equal(salesBookWriteAllowed({ ...base, dispatcher: true }), true);
+  assert.equal(salesBookWriteAllowed({ ...base, adminWrite: true }), true);
+});
