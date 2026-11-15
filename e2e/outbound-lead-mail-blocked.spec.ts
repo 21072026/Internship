@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { test, expect } from '@playwright/test';
 import { recipientHash } from '@/lib/mailDeliveryRule';
 import { applyDraftAction, type OutboxActor } from '@/lib/outboundDrafts';
+import { sendDoiConfirmation } from '@/lib/contactPermissionDoi';
 import {
   mailMeterIdleForTests,
   resetMailTransportsForTests,
@@ -16,10 +17,10 @@ import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 import { asHost, gotoSettled, MARKETING_HOST, signInAndSettle, signInViaApi } from './helpers/auth';
 
 // Lead mail switched off entirely (#3771, docs/outbound-approval.md): with
-// `outboundApproval = 'lead_mail_blocked'` a MARKETING org's automated mail to
-// a lead, a customer or a contact never leaves — no mail, no draft, no job,
-// one EmailLog row SKIPPED — while the org's own staff keep theirs and the
-// lead's own security / double-opt-in mail still goes out.
+// `outboundApproval = 'lead_mail_blocked'` NO mail of a MARKETING org reaches a
+// lead, a customer or a contact — no exemption, a password reset and the
+// double opt-in included — no mail, no draft, no job, one EmailLog row
+// SKIPPED; the org's own staff keep theirs.
 //
 // Same harness as outbound-approval.spec.ts: the app server Playwright boots
 // has no SMTP, so this process points ITSELF at a fake SMTP server and calls
@@ -151,9 +152,9 @@ test.describe('outbound approval: lead mail blocked', () => {
     expect((await logFor(CONTACT)).every((l) => l.status === 'SKIPPED' && l.error === 'Blocked: outbound_blocked (blocked_contact)')).toBe(true);
   });
 
-  test('the lead\'s own security mail still goes out: a password reset and the double opt-in', async () => {
+  test('no exemption for a lead: a password reset and the double opt-in are blocked too; staff still gets a reset', async () => {
     const reset = await sendPasswordResetEmail({ to: E.lead, token: `tok-${STAMP}`, fullName: 'Blocked Lead', orgId: ids.org });
-    expect(reset).toBe('SENT');
+    expect(reset).toBe('BLOCKED');
     const doi = await sendContactPermissionConfirmationEmail({
       to: E.lead,
       contactName: 'Blocked Lead',
@@ -162,9 +163,31 @@ test.describe('outbound approval: lead mail blocked', () => {
       optOutUrl: 'https://acme-sales.example.test/optout',
       orgId: ids.org,
     });
-    expect(doi).toBe('SENT');
-    expect(smtp.to(E.lead)).toHaveLength(2);
+    expect(doi).toBe('BLOCKED');
+    expect(smtp.to(E.lead)).toHaveLength(0);
     expect(await draftsFor(E.lead)).toHaveLength(0);
+    const staffReset = await sendPasswordResetEmail({ to: E.rep, token: `tok-rep-${STAMP}`, fullName: 'Blocked Rep', orgId: ids.org });
+    expect(staffReset).toBe('SENT');
+    expect(smtp.to(E.rep).length).toBeGreaterThan(0);
+  });
+
+  test('the demo form\'s double opt-in, blocked: no mail, no evidence stamp, the slot is given back, no error', async () => {
+    const inquiry = await prisma.companyInquiry.create({
+      data: { orgId: ids.org, companyName: 'Acme Prospect', contactName: 'Pat Prospect', email: CONTACT, marketingOptInRequested: true },
+    });
+    try {
+      const input = { inquiryId: inquiry.id, orgId: ids.org, email: CONTACT, contactName: 'Pat Prospect', companyName: 'Acme Prospect', locale: 'en', origin: 'https://acme-sales.example.test' };
+      expect(await sendDoiConfirmation(input)).toBe('failed');
+      // Not spent: a second submission the same day is not "capped" either.
+      expect(await sendDoiConfirmation(input)).toBe('failed');
+      const row = await prisma.companyInquiry.findUniqueOrThrow({ where: { id: inquiry.id } });
+      expect(row.marketingOptInMailSentAt).toBeNull();
+      expect(row.marketingOptInConfirmedAt).toBeNull();
+      expect(smtp.to(CONTACT)).toHaveLength(0);
+      expect(await prisma.contactPermission.count({ where: { orgId: ids.org, basis: 'DOI_CONFIRMED' } })).toBe(0);
+    } finally {
+      await prisma.companyInquiry.deleteMany({ where: { id: inquiry.id } });
+    }
   });
 
   test('INTERNSHIP never blocks, whatever a row says', async () => {
@@ -205,7 +228,7 @@ test.describe('outbound approval: lead mail blocked', () => {
     await gotoSettled(page, '/admin/settings');
     const select = page.getByTestId('outbound-approval-select');
     await expect(select).toHaveValue('lead_mail_blocked');
-    await expect(page.locator('#outbound-approval-hint')).toContainText('password reset');
+    await expect(page.locator('#outbound-approval-hint')).toContainText('No e-mail at all is sent to leads');
     await gotoSettled(page, '/admin/outbox');
     await expect(page.getByTestId('outbox-approval-state')).toHaveAttribute('data-mode', 'lead_mail_blocked');
   });

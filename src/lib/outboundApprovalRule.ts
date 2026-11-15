@@ -11,10 +11,13 @@
 // THE SETTING. `outboundApproval`, per org through the settings chain:
 //   'off'       — default; mail behaves exactly as it always has.
 //   'lead_mail' — automated mail to a lead or a customer is held.
-//   'lead_mail_blocked' — the same mail is BLOCKED instead (#3771): never sent,
-//               never drafted, never queued; recorded SKIPPED in the EmailLog.
-//               Same audience and same exemptions as 'lead_mail' — only what
-//               happens to a held mail changes, so the two cannot drift apart.
+//   'lead_mail_blocked' — NO mail reaches a non-staff recipient (#3771): never
+//               sent, never drafted, never queued; recorded SKIPPED in the
+//               EmailLog. Same audience as 'lead_mail' (lead, customer, contact,
+//               other) but WITHOUT the exemptions below: in a MARKETING org a
+//               lead is a record the reps track, not a person who signs in, so
+//               there is no password reset or confirmation of theirs to protect
+//               — the decision is "no mail to leads at all". Staff are untouched.
 // Only a vertical with the sales surface (pipeline, no mentorship — MARKETING)
 // can turn it on: anywhere else the mode reads 'off' whatever a row says, so an
 // internship tenant can never stop its own mail by a stray setting.
@@ -239,23 +242,26 @@ export interface OutboundDecisionInput {
 const PASS = (code: OutboundDecisionCode): OutboundDecision => ({ hold: false, block: false, code });
 
 /**
- * The whole decision, in this order: switch, org, category, recipient. Both
- * modes share every step up to the last one; `lead_mail_blocked` only turns
- * the final "held" into "blocked", so an exemption (a password reset, the DOI
- * confirmation the lead asked for) or staff mail is never blocked, and an
- * unknown category is blocked exactly where it would have been held.
+ * The whole decision. `lead_mail`: switch, org, category, recipient — an exempt
+ * category leaves, staff mail leaves, everything else (an unknown category
+ * included) is held. `lead_mail_blocked`: switch, org, recipient — staff mail
+ * leaves, EVERY other mail is blocked, whatever its category (#3771: no
+ * exemption, the security group and the DOI confirmation included).
  */
 export function outboundDecision(input: OutboundDecisionInput): OutboundDecision {
   if (!input.applies || input.mode === 'off') return PASS('approval_off');
   // A mail no organization owns (an operator alert to the server's alert
-  // address) has no outbox to wait in.
+  // address) has no outbox to wait in, and no lead behind it.
   if (!input.hasOrg) return PASS('no_org');
+  const who = input.recipient === 'lead' || input.recipient === 'customer' || input.recipient === 'contact' ? input.recipient : 'other';
+  if (input.mode === 'lead_mail_blocked') {
+    if (input.recipient === 'staff') return PASS('staff_recipient');
+    return { hold: false, block: true, code: `blocked_${who}` };
+  }
   const entry = input.category ? OUTBOUND_CATEGORIES[input.category] : undefined;
   if (entry?.exempt) return PASS('exempt_category');
   if (input.recipient === 'staff') return PASS('staff_recipient');
-  // An unknown category falls through to here on purpose: held (or blocked).
-  const who = input.recipient === 'lead' || input.recipient === 'customer' || input.recipient === 'contact' ? input.recipient : 'other';
-  if (input.mode === 'lead_mail_blocked') return { hold: false, block: true, code: `blocked_${who}` };
+  // An unknown category falls through to here on purpose: held.
   return { hold: true, block: false, code: `held_${who}` };
 }
 

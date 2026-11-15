@@ -34,21 +34,28 @@ The decision behind it: in the Marketing CRM no e-mail should reach a lead at
 all, while the team (reps, admins) keeps getting its mail — and drafts piling up
 in an outbox nobody works through is not that.
 
-- **The same rule, one step changed.** `outboundDecision()` walks the very same
-  steps as for `lead_mail` (switch, org, exempt category, staff); only the final
-  "hold" becomes **block** (`block: true`, codes `blocked_lead`,
-  `blocked_customer`, `blocked_contact`, `blocked_other`). So the audience is
-  exactly the held audience — **leads, customer logins (COMPANY) and contacts
-  without an account**, not leads alone — and an **unknown category is blocked**
-  where it would have been held (fail-closed). The unit test asserts every
-  `OUTBOUND_CATEGORIES` entry × every recipient in both modes.
-- **Still exempt:** the `account_security` group — sign-in links, verification,
-  password reset, invitations, security notices, and `consent`, the double-opt-in
-  confirmation — and the acknowledgement of the person's own application. These
-  are mails the lead asked for; blocking them would break the UWG § 7
-  confirmation and access to the account. Blocking those too would be a separate
-  decision.
-- **Staff is never affected**, as for `lead_mail`.
+- **No mail to a non-staff recipient, no exemption.** In a MARKETING org a lead
+  is a record the reps track, not a person who signs in: there is no password
+  reset, sign-in link or confirmation of theirs to protect. So in this mode
+  `outboundDecision()` checks only the switch, the org and the recipient: staff
+  passes, **everybody else is blocked whatever the category** — the
+  `account_security` group (password reset, sign-in link, invitation, security
+  notices), the DOI `consent` mail and the own-acknowledgement mails included.
+  Codes `blocked_lead`, `blocked_customer`, `blocked_contact`, `blocked_other`.
+  `lead_mail` keeps its exemptions unchanged.
+- **The audience is the held audience:** leads (MENTEE), **customer logins
+  (COMPANY)** and **contacts without an account** (and any other non-staff
+  role). A consequence: in this mode a customer login gets no invitation and no
+  password reset by mail either.
+- **Staff is never affected:** the org's ADMIN and MENTOR (rep) accounts get
+  every mail, as for `lead_mail`. A mail no org owns (the operator alert
+  address) is not a lead's and passes.
+- **The demo form's double opt-in.** The confirmation mail is blocked like any
+  other: `sendDoiConfirmation()` treats `BLOCKED` like `SKIPPED` — the day's
+  slot is given back and `marketingOptInMailSentAt` is **not** stamped (it is
+  evidence that a mail went out). The enquiry is stored as always, its
+  permission stays `NONE`, and the form answers the sender exactly as before —
+  no error. The contact-permission rules are untouched.
 - **The same hook.** `holdIfRequired()` answers `{ blocked: true }` without
   writing anything; `sendEmail()` records the mail `SKIPPED` with
   `Blocked: outbound_blocked (<code>)` (`outboundBlockedReason()`) and returns
@@ -64,14 +71,15 @@ in an outbox nobody works through is not that.
   earlier cannot be sent or scheduled (`409 outbound_blocked`); it can still be
   discarded. A draft already on the queue (SCHEDULED before the switch) was an
   operator's explicit decision and is left alone.
-- **The screens.** `/admin/settings` offers it as the third option, and its hint
-  names the exemptions; `GET /api/admin/outbox` returns `mode`, and the outbox
+- **The screens.** `/admin/settings` offers it as the third option ("No e-mail
+  to leads at all"), and its hint says that nothing — a password reset or a
+  confirmation included — reaches a lead, while reps and admins still get theirs; `GET /api/admin/outbox` returns `mode`, and the outbox
   shows "lead e-mail is switched off; no drafts are created".
 - **Next to the customer-mail lock.** The deployment-wide customer-mail lock
   (`docs/mail-queue.md` § The customer-mail lock, `MARKETING_CUSTOMER_MAIL_ENABLED`)
-  runs *before* this hook and silences a MARKETING org's non-staff recipients,
-  security mail included, until the operator opens it. This mode is the per-org
-  switch that stays once the lock opens.
+  runs *before* this hook and silences a MARKETING org's non-staff recipients
+  the same way until the operator opens it. This mode is the per-org switch that
+  stays once the lock opens.
 
 ## Which mail is held — the one rule
 

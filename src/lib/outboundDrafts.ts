@@ -193,10 +193,6 @@ export function fallbackDraftKey(prepared: PreparedEmail, now: Date): string {
  * treats it like a transport failure.
  */
 export async function holdIfRequired(prepared: PreparedEmail, opts: HoldOptions = {}): Promise<HoldResult> {
-  // The cheap exits first: an exempt category costs no query at all.
-  const fast = outboundDecision({ mode: 'lead_mail', applies: true, hasOrg: true, category: prepared.category, recipient: 'contact' });
-  if (fast.code === 'exempt_category') return { held: false, code: 'exempt_category' };
-
   // The org the mail belongs to: the sender's word, or the recipient account's.
   let orgId = prepared.orgId ?? null;
   if (!orgId && prepared.userId) {
@@ -207,6 +203,14 @@ export async function holdIfRequired(prepared: PreparedEmail, opts: HoldOptions 
   if (!(await approvalAppliesTo(orgId))) return { held: false, code: 'approval_off' };
   const mode = parseOutboundApprovalMode(await resolveSettingRaw('outboundApproval', { orgId }));
   if (mode === 'off') return { held: false, code: 'approval_off' };
+  // The cheap exit: in the holding mode an exempt category needs no recipient
+  // lookup. (No longer ahead of the org lookup, #3771: in 'lead_mail_blocked'
+  // no category is exempt, so the mode must be known first. The org's vertical
+  // is memoised and the setting is read only where approval applies.)
+  if (mode === 'lead_mail') {
+    const fast = outboundDecision({ mode, applies: true, hasOrg: true, category: prepared.category, recipient: 'contact' });
+    if (fast.code === 'exempt_category') return { held: false, code: 'exempt_category' };
+  }
 
   const facts = await recipientFacts({ ...prepared, orgId: prepared.orgId ?? orgId });
   const draftOrg = facts.orgId ?? orgId;

@@ -177,35 +177,28 @@ test('the setting has exactly three values, and the blocking one is new', () => 
   assert.deepEqual([...OUTBOUND_APPROVAL_MODES], ['off', 'lead_mail', 'lead_mail_blocked']);
 });
 
-test('blocked mode, every category × every recipient: blocked exactly where lead_mail would hold, never both', () => {
-  // One assert per entry of OUTBOUND_CATEGORIES, so a category added later gets
-  // checked in this mode too: exempt → passes, otherwise blocked for anyone
-  // but staff.
-  for (const [category, entry] of Object.entries(OUTBOUND_CATEGORIES)) {
+test('blocked mode, every category × every recipient: staff passes, everybody else is blocked — no exemption', () => {
+  // One assert per entry of OUTBOUND_CATEGORIES (and an unknown one), so a
+  // category added later is checked in this mode too. Unlike lead_mail there is
+  // no exempt category here: in a MARKETING org a lead never signs in (#3771).
+  for (const category of [...Object.keys(OUTBOUND_CATEGORIES), 'never-classified', undefined]) {
     for (const recipient of ['staff', 'lead', 'customer', 'contact', 'other']) {
       const d = outboundDecision({ ...blocked, category, recipient });
-      const held = outboundDecision({ ...on, category, recipient });
       assert.equal(d.hold, false, `${category}/${recipient}: blocked mode never drafts`);
-      assert.equal(d.block, held.hold, `${category}/${recipient}: blocked iff lead_mail holds`);
-      if (entry.exempt) assert.deepEqual(d, { hold: false, block: false, code: 'exempt_category' }, category);
-      else if (recipient === 'staff') assert.deepEqual(d, { hold: false, block: false, code: 'staff_recipient' }, category);
+      if (recipient === 'staff') assert.deepEqual(d, { hold: false, block: false, code: 'staff_recipient' }, String(category));
       else assert.deepEqual(d, { hold: false, block: true, code: `blocked_${recipient}` }, `${category}/${recipient}`);
     }
   }
 });
 
-test('blocked mode: the lead\'s own security and confirmation mail still leaves; staff always gets theirs', () => {
-  for (const category of ['password-reset', 'verification', 'consent', 'invitation', 'security', 'mentor-application-received']) {
-    assert.deepEqual(outboundDecision({ ...blocked, category, recipient: 'lead' }), { hold: false, block: false, code: 'exempt_category' }, category);
+test('blocked mode: password reset, sign-in link, invitation and the DOI confirmation are blocked for a lead too; staff still gets them', () => {
+  for (const category of ['password-reset', 'verification', 'consent', 'invitation', 'account', 'security', 'mentor-application-received']) {
+    assert.deepEqual(outboundDecision({ ...blocked, category, recipient: 'lead' }), { hold: false, block: true, code: 'blocked_lead' }, category);
+    assert.deepEqual(outboundDecision({ ...blocked, category, recipient: 'contact' }), { hold: false, block: true, code: 'blocked_contact' }, category);
+    assert.deepEqual(outboundDecision({ ...blocked, category, recipient: 'staff' }), { hold: false, block: false, code: 'staff_recipient' }, category);
   }
-  assert.deepEqual(outboundDecision({ ...blocked, category: 'stage-deadline', recipient: 'staff' }), { hold: false, block: false, code: 'staff_recipient' });
-  // The re-consent cron is essential-grouped but not the person's own ask: blocked.
-  assert.deepEqual(outboundDecision({ ...blocked, category: 'retention-reminder', recipient: 'lead' }), { hold: false, block: true, code: 'blocked_lead' });
-});
-
-test('blocked mode fails closed: an unknown or missing category is blocked, not sent', () => {
-  assert.deepEqual(outboundDecision({ ...blocked, category: 'brand-new-mail', recipient: 'lead' }), { hold: false, block: true, code: 'blocked_lead' });
-  assert.deepEqual(outboundDecision({ ...blocked, category: undefined, recipient: 'contact' }), { hold: false, block: true, code: 'blocked_contact' });
+  // lead_mail keeps its exemptions: the new mode changed nothing there.
+  assert.deepEqual(outboundDecision({ ...on, category: 'password-reset', recipient: 'lead' }), { hold: false, block: false, code: 'exempt_category' });
 });
 
 test('blocked mode never applies outside the sales vertical, nor to a mail no org owns', () => {
