@@ -9,7 +9,7 @@ import { shellCapabilities } from '@/lib/shellCapabilities';
 import { hasSalesSurface } from '@/lib/salesSurface';
 import { isSalesDispatcher } from '@/lib/salesDispatcher';
 import { salesBookWhere } from '@/lib/salesBookRule';
-import { actorFromSession, can } from '@/lib/authz';
+import { actorFromSession, can, dispatcherMay } from '@/lib/authz';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { formatDate } from '@/lib/relativeTime';
 import { getServerDictionary } from '@/i18n/server';
@@ -61,6 +61,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
     where: withinTenant({ id, ...salesBookWhere({ userId: session.user.id, dispatcher }) }, tenant),
     select: {
       id: true,
+      orgId: true,
       mentorId: true,
       status: true,
       pipelineStatus: true,
@@ -83,6 +84,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   // The hand-off button (#3657) only for whom the hand-off route would let
   // through — the same check, asked of the data here (src/lib/leadHandoff.ts).
   const canHandOff = session.user.orgId ? await canHandOffLead(session, session.user.orgId, relation.id) : false;
+
 
   const [company, interactions] = await Promise.all([
     relation.companyId
@@ -122,6 +124,15 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   const canLog =
     relation.status === 'ACTIVE' &&
     (relation.mentorId === session.user.id || dispatcher || (!!actor && (await can(actor, 'relation.write', undefined, session))));
+  // Who may move the trial end — the trial route's own rule, read here so the
+  // Edit button is offered to exactly the people the PATCH accepts: an admin
+  // with relation.write, the owner, or the tenant's sales dispatcher (#3656).
+  // A closed record is refused there too (relation_closed).
+  const canEditTrial =
+    relation.status === 'ACTIVE' &&
+    (relation.mentorId === session.user.id ||
+      dispatcherMay(actor, 'relation.write', relation.orgId) ||
+      (!!actor && (await can(actor, 'relation.write', undefined, session))));
 
   return (
     <div data-testid="sales-lead">
@@ -162,6 +173,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
         trialStartedAt={iso(relation.trialStartedAt)}
         trialEndsAt={iso(relation.trialEndsAt)}
         contractEndsAt={iso(relation.contractEndsAt)}
+        canEditTrial={canEditTrial}
         dealValue={{
           valueMinor: relation.value?.valueMinor ?? null,
           currency: relation.value?.currency ?? null,

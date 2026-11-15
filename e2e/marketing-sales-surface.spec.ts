@@ -287,6 +287,9 @@ test('the rep works their own record: the follow-up moves it out of the queue', 
   await expect(page.getByTestId('trial-end-missing').first()).toBeVisible();
   const trialEnd = new Date(Date.now() + 10 * DAY).toISOString().slice(0, 10);
   const panel = page.getByTestId('trial-end-panel');
+  // The date reads as text; the field opens on Edit (#3647).
+  await expect(panel.getByTestId('trial-end-input')).toHaveCount(0);
+  await panel.getByTestId('trial-end-edit').click();
   await panel.getByTestId('trial-end-input').fill(trialEnd);
   await panel.getByTestId('trial-end-save').click();
   await expect

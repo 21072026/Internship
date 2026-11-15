@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "The trial end on the sales lead page (`/sales/leads/[id]`) reads as text with an Edit button (pencil) — the follow-up panel's read-mode pattern (#3747) — and the date field opens on Edit with Save and Cancel; a save moves the badge (\"Ended\" / days left) at once. `TrialEndPanel` takes an opt-in `readFirst` prop, so the admin candidate page keeps its always-open field. Who sees Edit is computed on the server with the trial route's own rule (`canEditTrial`: owner, the tenant's sales dispatcher, an admin with `relation.write`; open records only). Same `PATCH /api/mentorship/[id]/trial`, same rules (#3647).",
+  "notes": {
+    "en": ["On a lead's page the trial end now reads as a date with an Edit button; editing opens only when you press it, and the remaining-days badge updates as soon as you save."],
+    "tr": ["Lead sayfasında deneme bitişi artık bir tarih ve Düzenle butonu olarak görünüyor; düzenleme alanı yalnızca butona basınca açılıyor, kalan gün rozeti kaydeder kaydetmez güncelleniyor."],
+    "de": ["Auf der Lead-Seite erscheint das Testende jetzt als Datum mit einer Schaltfläche „Bearbeiten“; das Feld öffnet sich erst auf Klick, und die Anzeige der verbleibenden Tage aktualisiert sich sofort nach dem Speichern."]
+  }
+}
