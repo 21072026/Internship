@@ -51,7 +51,10 @@ async function marketingOrg(label: string) {
 
 /** A lead of `orgId` whose Source is `sourceName`, on `ownerId`'s book at `stage`. */
 async function lead(orgId: string, ownerId: string, label: string, sourceName: string, stage: string, fullName = `Lead ${label} ${STAMP}`) {
-  const source = await prisma.source.create({ data: { orgId, name: sourceName } });
+  // One Source per name in an org (@@unique([orgId, name])) — a partner's leads share it.
+  const source =
+    (await prisma.source.findFirst({ where: { orgId, name: sourceName } })) ??
+    (await prisma.source.create({ data: { orgId, name: sourceName } }));
   const company = await prisma.company.create({ data: { orgId, name: `Acme ${label} ${STAMP}` } });
   const email = `aff-${label}-${STAMP}@${PLACEHOLDER_EMAIL_DOMAIN}`.toLowerCase();
   emails.push(email);
