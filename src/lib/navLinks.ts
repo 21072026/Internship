@@ -159,7 +159,7 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   { href: '/admin/board', icon: Columns3, key: 'board' },
   // Stage automation rules (#1703/#1704): what runs when a relation enters or
   // leaves a stage. Every vertical with a pipeline has it.
-  { href: '/admin/automations', icon: Zap, key: 'automations', capability: 'pipeline', permission: 'org.settings.write', group: 'pipeline', hub: true },
+  { href: '/admin/automations', icon: Zap, key: 'automations', capability: 'pipeline', permission: 'org.settings.write', group: 'pipeline' },
   { href: '/admin/companies', icon: Building2, key: 'companies' },
   // The partner programme (docs/affiliate-module.md), marketing CRM only.
   { href: '/admin/affiliates', icon: Wallet, key: 'affiliates', capability: 'affiliate', group: 'pipeline' },

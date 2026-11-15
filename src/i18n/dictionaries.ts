@@ -110,7 +110,6 @@ const en = {
     hubEmpty: "Nothing here for your account.",
   },
   navHub: {
-    automations: "What runs when a record enters or leaves a stage",
     duplicates: "Find and merge records that describe the same person",
     messageTemplates: "Reusable message texts for the team",
     reportSubscriptions: "Reports delivered by e-mail on a schedule",
@@ -12660,7 +12659,6 @@ const tr: Dict = {
     hubEmpty: "Hesabın için burada bir şey yok.",
   },
   navHub: {
-    automations: "Bir kayıt bir aşamaya girerken ya da çıkarken ne çalışır",
     duplicates: "Aynı kişiyi anlatan kayıtları bul ve birleştir",
     messageTemplates: "Ekip için tekrar kullanılan mesaj metinleri",
     reportSubscriptions: "Takvime göre e-postayla gelen raporlar",
@@ -24953,7 +24951,6 @@ const de: Dict = {
     hubEmpty: "Hier gibt es für dein Konto nichts.",
   },
   navHub: {
-    automations: "Was läuft, wenn ein Datensatz eine Phase betritt oder verlässt",
     duplicates: "Datensätze derselben Person finden und zusammenführen",
     messageTemplates: "Wiederverwendbare Nachrichtentexte für das Team",
     reportSubscriptions: "Berichte per E-Mail nach Zeitplan",
