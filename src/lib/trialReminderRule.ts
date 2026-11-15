@@ -313,6 +313,24 @@ export function isTrialEndEditableStage(pipelineStatus: string | null | undefine
   return pipelineStatus === TRIAL_ACTIVE_STAGE_KEY || pipelineStatus === TRIAL_EXPIRED_STAGE_KEY;
 }
 
+export type TrialEndLockReason = 'closed' | 'not_in_trial';
+
+/**
+ * Why the trial end of this record cannot be changed right now, or null when it
+ * can — the ONE source of the reason a screen gives (#3647). The same two
+ * refusals `PATCH /api/mentorship/[id]/trial` answers, in its order: a closed
+ * record first (`relation_closed`), then a stage outside the trial
+ * (`not_in_trial`). Who may edit is a separate question, asked on the server.
+ */
+export function trialEndLockReason(record: {
+  status: string | null | undefined;
+  pipelineStatus: string | null | undefined;
+}): TrialEndLockReason | null {
+  if (record.status !== 'ACTIVE') return 'closed';
+  if (!isTrialEndEditableStage(record.pipelineStatus)) return 'not_in_trial';
+  return null;
+}
+
 /**
  * The trial-end day a person typed: `YYYY-MM-DD`, stored as midnight UTC — a
  * DAY, compared by UTC day like every other trial date in this module. A real

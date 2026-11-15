@@ -127,12 +127,12 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   // Who may move the trial end — the trial route's own rule, read here so the
   // Edit button is offered to exactly the people the PATCH accepts: an admin
   // with relation.write, the owner, or the tenant's sales dispatcher (#3656).
-  // A closed record is refused there too (relation_closed).
+  // Status and stage are NOT part of it: when the record forbids the edit, the
+  // panel says why (trialEndLockReason) — to these people only.
   const canEditTrial =
-    relation.status === 'ACTIVE' &&
-    (relation.mentorId === session.user.id ||
-      dispatcherMay(actor, 'relation.write', relation.orgId) ||
-      (!!actor && (await can(actor, 'relation.write', undefined, session))));
+    relation.mentorId === session.user.id ||
+    dispatcherMay(actor, 'relation.write', relation.orgId) ||
+    (!!actor && (await can(actor, 'relation.write', undefined, session)));
 
   return (
     <div data-testid="sales-lead">
@@ -174,6 +174,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
         trialEndsAt={iso(relation.trialEndsAt)}
         contractEndsAt={iso(relation.contractEndsAt)}
         canEditTrial={canEditTrial}
+        stageName={stageLabel(stages, relation.pipelineStatus, locale)}
         dealValue={{
           valueMinor: relation.value?.valueMinor ?? null,
           currency: relation.value?.currency ?? null,

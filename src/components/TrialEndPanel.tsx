@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { Hourglass, Pencil } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Hourglass, Info, Lock, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
@@ -13,6 +13,7 @@ import {
   isTrialEndEditableStage,
   isTrialMissingEndDate,
   parseTrialEndDate,
+  trialEndLockReason,
 } from '@/lib/trialReminderRule';
 
 // The trial end on a funnel record (#2553). Every rule here is read from
@@ -90,6 +91,12 @@ export function TrialEndChip({
  * throws the edit away and a successful Save returns to reading with the badge
  * already on the new day. Presentation only: the same PATCH, the same rules.
  * Without it the panel keeps its always-open field (admin candidate page).
+ *
+ * In readFirst mode `canEdit` is WHO may edit (decided on the server), and the
+ * record itself may still forbid it: closed, or outside a trial stage. Then
+ * the Edit button's place says so in a short line, and an info button opens
+ * the full reason — readable on a phone, never left to a hover. The reason
+ * comes from `trialEndLockReason()` only; `stageName` is the tenant's own label.
  */
 export function TrialEndPanel({
   relationId,
@@ -98,6 +105,8 @@ export function TrialEndPanel({
   trialEndsAt,
   canEdit = true,
   readFirst = false,
+  status = 'ACTIVE',
+  stageName,
   onSaved,
 }: {
   relationId: string;
@@ -106,6 +115,10 @@ export function TrialEndPanel({
   trialEndsAt: string | null | undefined;
   canEdit?: boolean;
   readFirst?: boolean;
+  /** The record's status — a closed record is locked (readFirst only). */
+  status?: string;
+  /** The current stage as the tenant labels it, for the lock reason. */
+  stageName?: string;
   onSaved?: () => void | Promise<void>;
 }) {
   const t = useT();
@@ -120,6 +133,8 @@ export function TrialEndPanel({
   const [editing, setEditing] = useState(false);
   const editRef = useRef<HTMLButtonElement>(null);
   const returnFocus = useRef(false);
+  const [reasonOpen, setReasonOpen] = useState(false);
+  const reasonId = useId();
 
   useEffect(() => {
     setDate(inputValue(trialEndsAt));
@@ -134,7 +149,11 @@ export function TrialEndPanel({
   }, [editing]);
 
   if (!hasTrialToShow(pipelineStatus, shownEndsAt)) return null;
-  const editable = canEdit && isTrialEndEditableStage(pipelineStatus);
+  // readFirst asks the one rule for why it is locked; the legacy mode keeps its stage check.
+  const lockReason = readFirst ? trialEndLockReason({ status, pipelineStatus }) : null;
+  const editable = canEdit && (readFirst ? lockReason === null : isTrialEndEditableStage(pipelineStatus));
+  // The reason is for those who could edit were it not locked; nobody else sees an editor anyway.
+  const showLock = readFirst && canEdit && lockReason !== null;
   const missing = isTrialMissingEndDate({ pipelineStatus, trialEndsAt: shownEndsAt });
   // Without readFirst the field is always open, as it always was.
   const formOpen = editable && (!readFirst || editing);
@@ -234,7 +253,31 @@ export function TrialEndPanel({
             <span>{t.trialEnd.edit}</span>
           </button>
         )}
+        {showLock && (
+          <span className="ml-auto inline-flex items-center gap-1 text-xs text-gray-600 dark:text-gray-300" data-testid="trial-end-lock">
+            <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+            <span>{lockReason === 'closed' ? t.trialEnd.lockedShortClosed : t.trialEnd.lockedShortNotInTrial}</span>
+            <button
+              type="button"
+              aria-label={t.trialEnd.lockedInfoLabel}
+              aria-expanded={reasonOpen}
+              aria-controls={reasonId}
+              onClick={() => setReasonOpen((open) => !open)}
+              data-testid="trial-end-lock-info"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-gray-600 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              <Info className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </span>
+        )}
       </div>
+      {showLock && reasonOpen && (
+        <p id={reasonId} className="mb-2 text-xs text-gray-700 dark:text-gray-200" data-testid="trial-end-lock-reason">
+          {lockReason === 'closed'
+            ? t.trialEnd.lockedClosed
+            : t.trialEnd.lockedNotInTrial.replace('{stage}', stageName ?? pipelineStatus)}
+        </p>
+      )}
       {missing && <p className="mb-2 text-xs text-red-700 dark:text-red-300" data-testid="trial-end-missing-hint">{t.trialEnd.missingHint}</p>}
       {formOpen && (
         <div className="flex flex-wrap items-end gap-2" data-testid="trial-end-form">
