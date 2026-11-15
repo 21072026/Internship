@@ -270,7 +270,7 @@ test('"Today" on /sales lists the follow-ups due and overdue, today\'s meetings 
   await expect(page.getByText(`Prepare the demo deck ${STAMP}`).first()).toBeVisible({ timeout: 20_000 });
 });
 
-test('the Team view shows colleagues\' meetings read-only with their initials — never a title or a note', async ({ page, playwright, baseURL }) => {
+test('the Team view shows colleagues\' meetings with their initials, opening the lead read-only — never a title or a note', async ({ page, playwright, baseURL }) => {
   test.slow();
   await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
   await signInAndSettle(page, mail.rep, PW, '/sales');
@@ -284,8 +284,8 @@ test('the Team view shows colleagues\' meetings read-only with their initials �
   await expect(theirs).toContainText(`Cal lead-colleague ${STAMP}`);
   // The week column renders a phone and a desktop form of each row; both name the owner.
   await expect(theirs.getByTestId('calendar-event-owner').first()).toContainText(`Cal colleague ${STAMP}`);
-  // Read-only: no link to a record the rep cannot open.
-  await expect(theirs.locator('a')).toHaveCount(0);
+  // It opens the colleague's lead page, which the team-read rule opens read-only (WP2b).
+  await expect(theirs.locator('a').first()).toHaveAttribute('href', `/sales/leads/${ids['rel-colleague']}`);
   // The rep's own items are still there, in full.
   await expect(day.getByTestId(`calendar-event-meeting-${ids.meeting}`)).toBeVisible();
   // Never the colleague's meeting title or follow-up note; a rep does not get a colleague's follow-up day at all.

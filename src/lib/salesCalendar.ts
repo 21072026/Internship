@@ -155,7 +155,8 @@ export async function loadSalesCalendar(opts: {
 // owner wrote) and never `nextActionNote`. A teammate's follow-up DAY is the
 // owner's working data too (canSeeNextAction: the owner and an ADMIN), so it is
 // listed only for a viewer that rule lets read it; a rep sees colleagues'
-// meetings. Items carry no link: the lead page opens the viewer's own records.
+// meetings. An item opens the colleague's lead page, which the same team-read
+// rule opens read-only (WP2b, #3793) — no write reaches it from here.
 
 export interface SalesTeamCalendarEvent {
   id: string;
@@ -166,7 +167,8 @@ export interface SalesTeamCalendarEvent {
   allDay?: true;
   durationMinutes?: number | null;
   overdue?: boolean;
-  link: null;
+  /** The colleague's lead page — read-only for a team reader (WP2b). */
+  link: string;
   /** The owner's initials, and their name for the tooltip / screen reader. */
   owner: string;
   ownerName: string;
@@ -200,6 +202,7 @@ export async function loadSalesTeamCalendar(opts: {
         id: true,
         scheduledAt: true,
         durationMinutes: true,
+        relationId: true,
         relation: { select: { mentee: { select: { fullName: true } }, mentor: { select: { fullName: true } } } },
       },
       orderBy: { scheduledAt: 'asc' },
@@ -223,7 +226,7 @@ export async function loadSalesTeamCalendar(opts: {
 
   return [
     ...meetings
-      .filter((m) => m.scheduledAt && m.relation)
+      .filter((m) => m.scheduledAt && m.relationId && m.relation)
       .map((m) => ({
         id: `team-meeting-${m.id}`,
         type: 'meeting' as const,
@@ -231,7 +234,7 @@ export async function loadSalesTeamCalendar(opts: {
         who: m.relation!.mentee.fullName,
         date: m.scheduledAt!.toISOString(),
         durationMinutes: m.durationMinutes ?? null,
-        link: null,
+        link: salesLeadHref(m.relationId!),
         owner: initialsOf(m.relation!.mentor.fullName),
         ownerName: m.relation!.mentor.fullName,
       })),
@@ -243,7 +246,7 @@ export async function loadSalesTeamCalendar(opts: {
       date: utcDay(r.nextActionAt!),
       allDay: true as const,
       overdue: isNextActionOverdue(r.nextActionAt!, now),
-      link: null,
+      link: salesLeadHref(r.id),
       owner: initialsOf(r.mentor.fullName),
       ownerName: r.mentor.fullName,
     })),

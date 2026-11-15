@@ -1,6 +1,6 @@
 {
   "bump": "patch",
-  "changelog": "The sales calendar gets a \"Me / Team\" toggle (#3778): the Team view (`GET /api/sales/calendar/team`) adds colleagues' meetings — read-only, with the owner's initials and the lead's name, never the meeting title or a follow-up note — offered only when the shared team-read rule (`salesTeamReadAllowed`) lets the viewer read the org's book. A colleague's follow-up day is listed only for a viewer `canSeeNextAction` allows (an admin), never its note.",
+  "changelog": "The sales calendar gets a \"Me / Team\" toggle (#3778): the Team view (`GET /api/sales/calendar/team`) adds colleagues' meetings — with the owner's initials and the lead's name, opening the colleague's lead page read-only, never the meeting title or a follow-up note — offered only when the shared team-read rule (`salesTeamReadAllowed`) lets the viewer read the org's book. A colleague's follow-up day is listed only for a viewer `canSeeNextAction` allows (an admin), never its note.",
   "notes": {
     "en": ["The sales calendar has a Team view: your colleagues' meetings appear read-only, with their initials."],
     "tr": ["Satış takviminde artık Ekip görünümü var: ekip arkadaşlarının toplantıları baş harfleriyle, salt okunur görünüyor."],

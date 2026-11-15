@@ -10,8 +10,8 @@ type Scope = 'me' | 'team';
 
 // The sales rep's calendar (#3778), client half. "Me" is GET /api/sales/calendar
 // (the rep's own book); "Team" is GET /api/sales/calendar/team (their own items
-// plus colleagues' — read-only, the owner's initials and the lead's name, never
-// a note). The toggle is only offered when the shared team-read rule lets this
+// plus colleagues' — the owner's initials and the lead's name, never a note;
+// an item opens the colleague's lead page, read-only for a team reader). The toggle is only offered when the shared team-read rule lets this
 // viewer read the org's book (the server page asks it); the API asks again.
 export function SalesCalendarClient({ teamAllowed }: { teamAllowed: boolean }) {
   const t = useT();
