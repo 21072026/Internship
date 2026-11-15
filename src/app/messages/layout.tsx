@@ -10,6 +10,8 @@ import { resolveRequestVertical } from '@/i18n/server';
 import { themeColorFor } from '@/lib/accent';
 import { requestBrand } from '@/lib/hostBrand';
 import { I18nScope } from '@/i18n/scope';
+import { shellCapabilities } from '@/lib/shellCapabilities';
+import { hasSalesSurface, SALES_HOME } from '@/lib/salesSurface';
 
 // Signed-in area: never in a search result (#1376).
 export const metadata = NO_INDEX;
@@ -51,9 +53,12 @@ async function MessagesLayout({ children }: { children: React.ReactNode }) {
   // land here after signing in, instead of on the role's home page.
   if (!session) redirect('/auth/signin?callbackUrl=/messages');
 
+  // A sales rep's home is /sales, not the mentor shell that would only bounce there.
+  const salesRep =
+    session.user.role === 'MENTOR' && hasSalesSurface(session.user.role, await shellCapabilities(session.user.orgId));
   return (
     <RoleShell mobileChrome={false}>
-      <MessagesShell homeHref={roleHome(session.user.role)}>{children}</MessagesShell>
+      <MessagesShell homeHref={salesRep ? SALES_HOME : roleHome(session.user.role)}>{children}</MessagesShell>
     </RoleShell>
   );
 }

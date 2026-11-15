@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "Partner page media (`/api/public/partner-media/[id]`) is now served with its own `default-src 'none'; sandbox` Content-Security-Policy; the route set it, but the site-wide policy from `next.config.js` shadowed it (#3732). The dead `Content-Length` lines are gone — Next's App Router drops that header, and WebKit plays the ranged video from `Content-Range` alone."
+}

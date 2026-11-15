@@ -150,6 +150,8 @@ test.beforeAll(async () => {
     },
   });
   ids.foreignRelationId = foreignRel.id;
+  ids.foreignRepId = foreignRep;
+  ids.colleagueLeadId = lc;
 });
 
 test.afterAll(async () => {

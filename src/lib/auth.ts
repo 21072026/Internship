@@ -146,7 +146,7 @@ const RECOVERY_FAIL_LIMIT = { limit: 5, windowMs: 60 * 60 * 1000 } as const;
  * the recovery door (#1542) and the replay floor (#865). Throws exactly what
  * the password door always threw; returns once a code is accepted and spent.
  */
-async function requireSecondFactor(
+export async function requireSecondFactor(
   user: { id: string; email: string; orgId: string | null; twoFactorSecret: string; lastTotpStep: number | null },
   submitted: string | undefined,
   ctx: { email: string; ip: string; origin: ReturnType<typeof headerSource> },

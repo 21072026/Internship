@@ -592,7 +592,20 @@ exactly as they are.
   page redirect and does not protect an API (true of every role today), so the one
   write that redirects money — `PUT /api/affiliate/me/payout-details` — checks the
   policy itself and answers `403 two_factor_required` to an un-enrolled partner.
-  A step-up (password or code on every IBAN change) is a separate, later task.
+- **Step-up on every IBAN change** (#3734, `src/lib/stepUp.ts`): a signed-in
+  session is not enough to redirect money. Every `PUT` carries `stepUp.code` (a
+  TOTP or recovery code, when the account has 2FA) or `stepUp.password` (when it
+  has not); which one is the account's own, never the caller's choice. The code
+  goes through the sign-in doors' own `requireSecondFactor()` (`src/lib/auth.ts`)
+  — no second TOTP implementation — and a wrong password is charged to the
+  sign-in password counters (`login-fail:<email>` and the durable `password`
+  lockout, 10 per 15 minutes), so the step-up cannot be used to guess around the
+  sign-in limit. Refusals: 403 `step_up_required` (with the `method` to ask for),
+  403 `step_up_invalid`, 429 `step_up_locked`, and 403 `step_up_unavailable` for an
+  SSO-only account without 2FA (no password exists to ask; enrol 2FA first). The
+  input is validated first, so a typo in the IBAN never costs an attempt. The
+  first entry counts as a change too: it decides where money goes just the same.
+  A successful change is still audited and announced (`payoutDetailsChanged`).
 - While an admin impersonates a partner, the partner's own declarations and money
   writes are refused (400 `impersonating`): accepting the contract and changing
   payout details — the same rule as `/api/account`.
@@ -1055,8 +1068,21 @@ section of the target alone — an empty address in the file would otherwise
 *clear* the target's and break every partner's link. The theme's media travel inside the file,
 base64, with their SHA-256: they are compressed already, so a zip would save
 nothing and would put an archive parser (paths, decompression bombs) in front of
-the import. At most one asset per media slot; 50 MB per file
+the import. At most one asset per media slot; 32 MiB per file
 (`SETTINGS_TRANSFER_MAX_BYTES`), counted while the body is read.
+
+The limit is the admin JSON ceiling the middleware already enforces under
+`/api/admin/` (`src/lib/bodyLimitRule.ts`), so the number the screen names is the
+one that works (#3728). It was 50 MB on paper, but no file over 10 MB ever
+imported: Next hands middleware a clone of the body and silently truncates what
+the route reads past `experimental.middlewareClientMaxBodySize` (default 10 MB),
+so a large file failed as "not a settings file". That setting is now 40 MB, the
+reverse proxy's cap (`infra/README.md` § Request body limit); raising the file
+limit past 32 MiB instead would have meant loosening the global admin ceiling
+for one screen. The cost: a theme whose media together exceed ~23 MB (base64
+adds a third) does not fit in one file, and the screen refuses it by size before
+uploading. A second import of the same programme while one runs answers
+`409 busy`, which the screen shows as its own message.
 
 **Never in it:** partners, customers, payments, commissions, payouts,
 applications, contract acceptances — no person and no money that happened — and
