@@ -126,7 +126,15 @@ async function AdminDashboard() {
   // The first-run panel (#1751) is a mentoring product's guidance: a vertical
   // without `mentorship` has no pairs to get to.
   // Never for a PROGRAM_ADMIN (#1577): zero rows in its scope is not a new tenant.
-  const firstRun = !stats.programScoped && stats.totalRelations === 0 && (await shellCapabilities(session?.user.orgId)).includes('mentorship');
+  const capabilities = await shellCapabilities(session?.user.orgId);
+  const hasMentorship = capabilities.includes('mentorship');
+  const firstRun = !stats.programScoped && stats.totalRelations === 0 && hasMentorship;
+  // Where the people and pairing cards lead (#2348): /admin/mentors and
+  // /admin/mentorship are mentorship segments, closed by gatePage in a vertical
+  // without the module — a MARKETING admin clicking them got a 404. There the
+  // reps are users and the relations are deals on the board.
+  const mentorsHref = hasMentorship ? '/admin/mentors' : '/admin/users';
+  const relationsHref = hasMentorship ? '/admin/mentorship' : '/admin/board';
   const orgPlan = firstRun && session?.user.orgId
     ? (await prisma.organization.findUnique({ where: { id: session.user.orgId }, select: { plan: true } }))?.plan
     : null;
@@ -159,7 +167,7 @@ async function AdminDashboard() {
           </Card>
         </Link>
 
-        <Link href="/admin/mentors" className="block">
+        <Link href={mentorsHref} className="block">
           <Card className="hover:border-blue-200 hover:shadow-md transition-all cursor-pointer">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
@@ -187,7 +195,7 @@ async function AdminDashboard() {
           </Card>
         </Link>
 
-        <Link href="/admin/mentorship" className="block">
+        <Link href={relationsHref} className="block">
           <Card className="hover:border-blue-200 hover:shadow-md transition-all cursor-pointer">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
@@ -289,7 +297,7 @@ async function AdminDashboard() {
                 <CardTitle>{t.dashboard.recentMentorships}</CardTitle>
                 <CardDescription>{t.dashboard.latestAssignments}</CardDescription>
               </div>
-              <Link href="/admin/mentorship" className="text-sm text-blue-600 hover:underline">
+              <Link href={relationsHref} className="text-sm text-blue-600 hover:underline">
                 {t.dashboard.viewAll}
               </Link>
             </div>

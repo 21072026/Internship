@@ -31,6 +31,8 @@ import {
   retainedRecordCutoff,
 } from '@/lib/erasureRetentionRule';
 import { deleteExpiredContactProofs } from '@/lib/contactPermission';
+import { countOverdueProspectsAllOrgs } from '@/lib/prospectRetention';
+import { PROSPECT_RETENTION_MONTHS } from '@/lib/prospectRetentionRule';
 import {
   RETENTION_ACTIVITY_ACTION,
   formatRetentionSummary,
@@ -1227,6 +1229,20 @@ export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
     reason:
       'An erased affiliate partner\'s IBAN and account holder outlive the account for the bookkeeping duty only (§ 257 HGB, § 147 AO: ten years for booking records), counted from the end of the calendar year in which the relationship ended — the latest of the erasure, the termination and the last payout. Then the details are cleared; the partner row and its payouts are the bookings and stay.',
     run: clearErasedPayoutDetails,
+  },
+  {
+    key: 'prospectContact',
+    // REPORT ONLY (MKT-4): it counts, it never erases. No setting: the window
+    // is the one every postal letter prints (PROSPECT_RETENTION_MONTHS), and the
+    // runner's day count is nominal — the rule computes its own calendar-month
+    // cutoff (src/lib/prospectRetentionRule.ts).
+    defaultDays: PROSPECT_RETENTION_MONTHS * 30,
+    reason:
+      'Every letter promises a prospect their data is kept at most 24 months after the last contact. Accounts past that — no customer history, no live contact permission — are listed on /admin/retention for an admin to erase by hand, one at a time; this entry only counts them, so the run summary shows the backlog. Automatic erasure is deliberately not built.',
+    run: async () => {
+      const { total, orgs } = await countOverdueProspectsAllOrgs();
+      return { deleted: 0, note: orgs > 0 ? `due:${total}` : undefined };
+    },
   },
 ];
 

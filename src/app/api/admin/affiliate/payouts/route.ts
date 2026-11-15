@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { requirePermission } from '@/lib/authz';
 import { decide } from '@/lib/authzRule';
 import { requireCapability } from '@/lib/capabilityGate';
+import { PAYOUT_LIST, parseListQuery } from '@/lib/affiliateListQueryRule';
 import { listPayouts } from '@/lib/affiliatePayouts';
 import { parseCalendarDay } from '@/lib/calendarDay';
 import { AffiliateWriteError, MAX_COMMISSIONS_PER_ACTION, createPayout } from '@/lib/affiliatePaymentWriter';
@@ -18,8 +19,11 @@ export async function GET(request: Request) {
   const refusal = await requireCapability(orgId, 'affiliate');
   if (refusal) return refusal;
 
-  const url = new URL(request.url);
-  const result = await listPayouts(orgId, { partnerId: url.searchParams.get('partnerId'), page: Number(url.searchParams.get('page') ?? 1) || 1 });
+  // Filters and sort (#3539): `partnerId`, `q` (transfer reference), `from`/`to` (paid days), `sort` =
+  // date | amount, `dir`. A value outside the allowlist is a 400.
+  const parsed = parseListQuery(PAYOUT_LIST, new URL(request.url).searchParams);
+  if (!parsed.ok) return NextResponse.json({ code: 'invalid_query', field: parsed.field }, { status: 400 });
+  const result = await listPayouts(orgId, parsed.query);
   return NextResponse.json({ ...result, canWrite: decide({ actor: auth.actor, permission: 'affiliate.write' }).allow });
 }
 

@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**API keys follow the product (MKT-6b):** every API key scope and every top-level `/api/v1` segment maps to a vertical capability (`SCOPE_CAPABILITY`, `V1_PREFIX_CAPABILITY` in `src/lib/apiScopes.ts`). A MARKETING org is no longer offered `hiring:read`, creating a key with it answers `400 scope_unavailable`, and a key that already stores it keeps the row but gets `403 capability_unavailable` on `/requisitions`, `/offers` and `/interview-requests` (the scope is ignored, not deleted). INTERNSHIP is unchanged. New CI check `check:api-scope-capabilities` fails an unmapped scope or prefix.",
+  "notes": {
+    "en": [
+      "API keys in a marketing workspace now only offer the scopes your product has — internship hiring scopes are no longer listed or accepted."
+    ],
+    "tr": [
+      "Marketing çalışma alanındaki API anahtarları artık yalnızca ürününüzde bulunan kapsamları sunuyor; staja özgü işe alım kapsamları listelenmiyor ve kabul edilmiyor."
+    ],
+    "de": [
+      "API-Schlüssel in einem Marketing-Arbeitsbereich bieten jetzt nur noch die Berechtigungen Ihres Produkts an – praktikumsspezifische Recruiting-Berechtigungen werden weder angezeigt noch akzeptiert."
+    ]
+  }
+}

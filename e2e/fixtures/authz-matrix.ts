@@ -455,6 +455,12 @@ export const MARKETING_MENTOR_ROWS: SalesProbe[] = [
   { method: 'GET', path: '/api/companies/:ownCompanyId', expect: 'ok', why: 'own account' },
   { method: 'GET', path: '/api/companies/:colleagueCompanyId', expect: 'notFound', why: "a colleague's account" },
   { method: 'GET', path: '/api/companies/:foreignCompanyId', expect: 'notFound', why: "another org's account" },
+  // Handing a lead on (#3672): only the owner (or an org admin) may, and "not
+  // yours" is a 404, never a 403 that confirms the id. The body names a real
+  // colleague so the refusal is the ownership check, not the validator.
+  // The rest of the hand-off's answers are pinned by e2e/sales-lead-handoff.spec.ts.
+  { method: 'POST', path: '/api/sales/leads/:colleagueRelationId/handoff', body: { toUserId: ':colleagueRepId', action: 'call' }, expect: 'notFound', why: "hand off a colleague's lead" },
+  { method: 'POST', path: '/api/sales/leads/:foreignRelationId/handoff', body: { toUserId: ':colleagueRepId', action: 'call' }, expect: 'notFound', why: "hand off another org's lead" },
 ];
 
 /** The sales surface pages: own record 200, anything else a real 404. */

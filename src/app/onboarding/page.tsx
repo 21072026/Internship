@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { OnboardingForm } from '@/components/forms/OnboardingForm';
 import { MentorOnboardingForm } from '@/components/forms/MentorOnboardingForm';
 import { getServerDictionary } from '@/i18n/server';
+import { gateCapability } from '@/lib/pageCapabilityGate';
 
 export default async function OnboardingPage() {
   const session = await getServerSession(authOptions);
@@ -15,6 +16,9 @@ export default async function OnboardingPage() {
   if (session.user.role !== 'MENTOR' && session.user.role !== 'MENTEE') {
     redirect('/');
   }
+  // The mentor/mentee profile step belongs to the mentorship module; a MARKETING
+  // org's MENTOR is a sales rep with no such profile (MKT-6a).
+  await gateCapability('mentorship');
 
   const { t } = await getServerDictionary();
 

@@ -7,11 +7,15 @@ import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { createMeetingRequest } from '@/lib/meetingRequestCreate';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // GET ?relationId= — meeting requests for a thread (participants/admin).
 export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Meeting requests inside a mentorship (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const relationId = new URL(request.url).searchParams.get('relationId') || '';
     // getThreadIfAllowed lets any ADMIN through; another tenant's relation
@@ -37,5 +41,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Meeting requests inside a mentorship (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return createMeetingRequest(session, await request.json().catch(() => null));
 }

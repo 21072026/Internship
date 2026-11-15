@@ -92,6 +92,7 @@ export const FUNNEL_SORTS = [
   'passive',
   'registrationRate',
   'payingRate',
+  'earningsPerClick',
   'toThreshold',
 ] as const;
 export type FunnelSort = (typeof FUNNEL_SORTS)[number];
@@ -102,6 +103,10 @@ export interface FunnelBoardRow extends Funnel {
   displayName: string;
   registrationRate: number | null;
   payingRate: number | null;
+  /** Commission earned in the period, minor units of the programme's currency (#3545). */
+  earnedMinor: number;
+  /** `earnedMinor` per click, minor units; null without clicks (#3545, `earningsPerClick()`). */
+  earningsPerClick: number | null;
   /** Customers left to the plan's switch; 0 once reached; null without a threshold. */
   toThreshold: number | null;
 }
@@ -116,6 +121,7 @@ const SORT_VALUE: Record<FunnelSort, (r: FunnelBoardRow) => string | number | nu
   passive: (r) => r.passive,
   registrationRate: (r) => r.registrationRate,
   payingRate: (r) => r.payingRate,
+  earningsPerClick: (r) => r.earningsPerClick,
   toThreshold: (r) => r.toThreshold,
 };
 

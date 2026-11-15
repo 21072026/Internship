@@ -9,7 +9,8 @@ import { redactedDiff, API_KEY_DIFF_SPEC } from '@/lib/events/diff';
 import { generateApiKey } from '@/lib/apiKey';
 import { resolveOrgId } from '@/lib/orgScope';
 import { ownSource } from '@/lib/sourceIntegrations';
-import { apiKeyStatus, isApiScope, maxApiKeyExpiry, parseScopes, serializeScopes } from '@/lib/apiScopes';
+import { apiKeyStatus, isApiScope, maxApiKeyExpiry, parseScopes, scopeAvailable, serializeScopes } from '@/lib/apiScopes';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import { SOURCE_KEY_SCOPE_CEILING, checkSourceScopeCeiling } from '@/lib/sourceApiKeyRule';
 import { integrationsLocked } from '@/lib/integrationsGate';
 
@@ -80,6 +81,12 @@ export async function POST(request: Request) {
   const ceiling = checkSourceScopeCeiling(parsed.data.scopes);
   if (!ceiling.ok) {
     return NextResponse.json({ error: 'Scope above what a source key may hold', code: 'scope_above_ceiling', scopes: ceiling.above }, { status: 403 });
+  }
+  // The product's catalogue (MKT-6b), the same refusal as the admin path.
+  const capabilities = await shellCapabilities(resolveOrgId(session));
+  const unavailable = parsed.data.scopes.filter((sc) => !scopeAvailable(sc, capabilities));
+  if (unavailable.length) {
+    return NextResponse.json({ error: 'Scope not available in this product', code: 'scope_unavailable', scopes: unavailable }, { status: 400 });
   }
   // The API is the paid feature (#1744), for a source owner as for an admin.
   const locked = await integrationsLocked(session);

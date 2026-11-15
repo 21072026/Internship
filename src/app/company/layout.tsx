@@ -18,6 +18,8 @@ import { resolveCustomStages } from '@/lib/pipelineStages';
 import { is2faRequiredFor } from '@/lib/twoFactorPolicy';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { I18nScope } from '@/i18n/scope';
+import { shellCapabilities } from '@/lib/shellCapabilities';
+import { NEUTRAL_HOME } from '@/lib/salesSurface';
 
 // Signed-in area: never in a search result (#1376).
 export const metadata = NO_INDEX;
@@ -36,6 +38,15 @@ async function CompanyLayout({ children }: { children: React.ReactNode }) {
   // behind the session is already authenticated and cannot enrol for someone.
   if (!session.user.impersonatorId && !me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role, await settingsOrgOf(session)))) {
     redirect('/security-setup');
+  }
+  // The company portal is the internship product's (#2348 MKT-2). In a vertical
+  // without `placements` (MARKETING) a company is the customer, and this shell
+  // reads the funnel — lead names, owners, stages. After the 2FA gate, as in the
+  // mentor and portal shells. A COMPANY login goes to the role-neutral terminal
+  // page (roleHome('COMPANY') is '/company', so '/' would loop back here); an
+  // ADMIN goes to its own shell.
+  if (!(await shellCapabilities(session.user.orgId)).includes('placements')) {
+    redirect(session.user.role === 'ADMIN' ? '/admin' : NEUTRAL_HOME);
   }
   // Show the premium talent-pool link only when the company is entitled (admins
   // always see it for support).

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -13,11 +13,15 @@ import { formatMinorAmount } from '@/lib/money';
 import { formatDate } from '@/lib/relativeTime';
 import { interpolate } from '@/lib/notificationText';
 import { AffiliateTabs } from '../AffiliateTabs';
+import { AffiliateListToolbar, useAffiliateListQuery } from '@/components/affiliate/AffiliateListControls';
+import { PARTNER_LIST, hasListFilter, listQueryParams } from '@/lib/affiliateListQueryRule';
 
 // The programme's partners (docs/affiliate-module.md, #3116): list with totals,
 // add a partner, suspend / reactivate / terminate, and reveal the payout IBAN for
 // the transfer (audited). Every rule is the server's; this page only asks.
 // A termination is a calendar date, stored as UTC midnight and shown in UTC.
+// Status and search filters and the sort (#3539) live in the URL and are applied
+// on the server, over every partner (the list is not paged).
 
 type Status = 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';
 interface Row {
@@ -36,10 +40,21 @@ interface Row {
 const STATUS_VARIANT: Record<Status, 'success' | 'warning' | 'default'> = { ACTIVE: 'success', SUSPENDED: 'warning', TERMINATED: 'default' };
 
 export default function AffiliatePartnersPage() {
+  return (
+    <Suspense fallback={<SkeletonRows rows={4} />}>
+      <AffiliatePartners />
+    </Suspense>
+  );
+}
+
+function AffiliatePartners() {
   const t = useT();
   const L = t.affiliatePartners;
   const locale = useLocale();
   const toast = useToast();
+  const A = t.affiliateList;
+  const { query, set } = useAffiliateListQuery(PARTNER_LIST);
+  const qs = listQueryParams(PARTNER_LIST, query).toString();
   const [rows, setRows] = useState<Row[] | null>(null);
   const [canWrite, setCanWrite] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -53,7 +68,7 @@ export default function AffiliatePartnersPage() {
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
-    const res = await fetch('/api/admin/affiliate/partners');
+    const res = await fetch(`/api/admin/affiliate/partners?${qs}`);
     if (res.status === 403) {
       setForbidden(true);
       return;
@@ -65,7 +80,7 @@ export default function AffiliatePartnersPage() {
     const body = await res.json();
     setRows(body.partners);
     setCanWrite(Boolean(body.canWrite));
-  }, []);
+  }, [qs]);
 
   useEffect(() => {
     void load();
@@ -152,10 +167,26 @@ export default function AffiliatePartnersPage() {
       <AffiliateTabs />
       {rows && !canWrite && <p className="text-sm text-gray-600 dark:text-gray-400">{L.readOnly}</p>}
 
+      <AffiliateListToolbar
+        spec={PARTNER_LIST}
+        query={query}
+        set={set}
+        searchLabel={A.searchPartners}
+        allStatusesLabel={A.allStatuses}
+        statusOptions={PARTNER_LIST.statuses.map((s) => ({ value: s, label: L[`status${s}`] }))}
+        sortOptions={[
+          { value: 'created', label: A.sortCreated },
+          { value: 'name', label: A.sortName },
+          { value: 'customers', label: A.sortCustomers },
+          { value: 'open', label: A.sortOpen },
+        ]}
+        resultCount={rows?.length ?? null}
+      />
+
       {!rows ? (
         <SkeletonRows rows={4} />
       ) : rows.length === 0 ? (
-        <EmptyState testId="affiliate-partners" title={L.empty} />
+        <EmptyState testId="affiliate-partners" title={hasListFilter(query) ? A.noMatch : L.empty} />
       ) : (
         <div className="space-y-3" data-testid="affiliate-partner-list">
           {rows.map((p) => (

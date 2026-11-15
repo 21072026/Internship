@@ -15,6 +15,8 @@
 // column does not keep key order (MySQL 8 stores keys sorted), so comparing the
 // serialized objects would call an unchanged save "changed" and audit it.
 
+import { PARTNER_CODE_RE } from './affiliateCodeRule';
+
 export const LANDING_LOCALES = ['en', 'tr', 'de'] as const;
 export type LandingLocale = (typeof LANDING_LOCALES)[number];
 
@@ -484,12 +486,8 @@ export function maxOneOffCommission(plan: PublicPlanShape): number {
   return Math.max(plan.topCommissionMinor, ...plan.tiers.map((t) => t.commissionMinor));
 }
 
-/**
- * A partner code as it may appear after `?ref=` — the same shape as
- * PARTNER_CODE_RE in src/lib/affiliatePartners.ts (kept here because this file
- * stays dependency-free; the unit test pins the two together).
- */
-export const REFERRAL_CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
+/** A partner code as it may appear after `?ref=` — the one rule (#3550, src/lib/affiliateCodeRule.ts). */
+export const REFERRAL_CODE_RE = PARTNER_CODE_RE;
 
 /**
  * Where a visitor who arrived through a partner's link (`/partner?ref=<code>`,

@@ -27,7 +27,8 @@ import { prisma } from '@/lib/prisma';
 import { runWithOrg } from '@/lib/orgContext';
 import { requireServerSecret } from '@/lib/serverSecret';
 import { entitled } from '@/lib/entitlements';
-import { apiKeyStatus, parseScopes, type ApiScope } from '@/lib/apiScopes';
+import { apiKeyStatus, effectiveScopes, parseScopes, type ApiScope } from '@/lib/apiScopes';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import { KEYSET_ORDER, keysetWhere, type CursorPosition } from '@/lib/api/v1';
 import {
   candidateSelect,
@@ -283,7 +284,9 @@ export async function keyMayRead(apiKeyId: string, orgId: string, scopes: readon
     select: { scopes: true, expiresAt: true, revokedAt: true },
   });
   if (!key || apiKeyStatus(key) !== 'active') return false;
-  const held = parseScopes(key.scopes);
+  // The same vertical filter as the door (MKT-6b): a stored scope of a module
+  // the org lacks is ignored here too.
+  const held = effectiveScopes(parseScopes(key.scopes), await shellCapabilities(orgId));
   if (!scopes.every((s) => held.includes(s))) return false;
   return entitled(orgId, 'INTEGRATIONS_API');
 }

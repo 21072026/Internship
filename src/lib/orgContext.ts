@@ -512,6 +512,8 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // Per-partner daily link clicks (#3541): written by the sessionless /r/<code>
   // route, which passes the host-resolved orgId itself; counters only.
   'AffiliateClickDaily',
+  // The same clicks per campaign tag (#3545); written by the same route the same way.
+  'AffiliateClickCampaignDaily',
 ]);
 
 // Actions whose `where` selects rows to read or mutate — inject orgId there.

@@ -17,9 +17,10 @@
 
 import { createHmac } from 'node:crypto';
 import { parseReferralUrl, referralLink } from './affiliateReferralRule';
+import { PARTNER_CODE_RE } from './affiliateCodeRule';
 
-/** A partner code's shape — the same as PARTNER_CODE_RE (src/lib/affiliatePartners.ts). */
-export const CLICK_CODE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
+/** A partner code's shape — the one rule (#3550, src/lib/affiliateCodeRule.ts). */
+export const CLICK_CODE_RE = PARTNER_CODE_RE;
 
 /** Counted clicks per visitor (hashed IP) per hour; above it the visitor is still redirected. */
 export const CLICK_RATE_LIMIT = { limit: 30, windowMs: 60 * 60 * 1000 } as const;
@@ -85,4 +86,30 @@ export function visitorKey(secret: string, now: Date, ip: string, userAgent: str
 /** The rate-limit subject: HMAC(day key, IP) — the limiter never holds an address either. */
 export function ipKey(secret: string, now: Date, ip: string): string {
   return createHmac('sha256', dailyKey(secret, now)).update(`ip\n${ip}`).digest('hex');
+}
+
+// ---------------------------------------------------------------------------
+// Campaign tags (#3545, docs/affiliate-module.md § Campaign tags).
+//
+// A partner may append `?c=<tag>` to its tracked link to tell its channels
+// apart (`/r/ada?c=newsletter`, `/r/ada?c=yt-2026`). The tag is a short word
+// from a fixed alphabet, lower-cased; anything else — too long, another
+// character, an array of them — is IGNORED: the click is still redirected and
+// still counted in the partner's total, only without a campaign. The tag never
+// reaches the redirect target (the target comes from the settings alone).
+
+export const CAMPAIGN_TAG_RE = /^[a-z0-9_-]{1,32}$/;
+
+/**
+ * Distinct campaign rows per partner and UTC day. A click with a new tag past
+ * it is counted in the total only: the tag is chosen by whoever holds the link,
+ * so without a ceiling a script could mint one row per request.
+ */
+export const CAMPAIGNS_PER_PARTNER_DAY = 50;
+
+/** The tag of a click, or null when there is none or it is not a valid one. */
+export function parseCampaignTag(raw: string | null | undefined): string | null {
+  if (typeof raw !== 'string') return null;
+  const tag = raw.trim().toLowerCase();
+  return CAMPAIGN_TAG_RE.test(tag) ? tag : null;
 }

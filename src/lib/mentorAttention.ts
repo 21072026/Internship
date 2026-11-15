@@ -200,12 +200,12 @@ export async function getAttentionItems(
     // lib/stageClock.ts owns time-in-stage and the board already shows it. This
     // branch answers only "is this one waiting for a decision?".
     //
-    // Know what that board number currently says for an AUTOMATICALLY expired
-    // trial, though: the sweep writes an `AuditLog` row and no `StatusChange`
-    // (it has no `User` to put in the required FK), and `StatusChange` is the
-    // only thing the stage clock reads — so such a record shows the age of the
-    // whole trial rather than the age of the decision. #2527 fixes that at the
-    // source; nothing here should paper over it with a second calculation.
+    // An AUTOMATICALLY expired trial reads correctly on that clock too: the
+    // sweep (expireTrials, src/lib/jobs/trialReminders.ts) writes the move and
+    // its `StatusChange` row in one transaction (#2527), dated by
+    // expiryRecordedAt() to when the trial ENDED rather than to the tick that
+    // noticed it (#2970). So the board shows the age of the decision, and
+    // nothing here should second-guess it with a calculation of its own.
     if (r.pipelineStatus === TRIAL_EXPIRED_STAGE_KEY) reasons.push('trial_expired');
     // A running trial with no end date (#2553) is invisible to the reminder
     // ladder and the expiry sweep alike — nothing would ever happen to it. It

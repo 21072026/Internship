@@ -23,6 +23,7 @@ import { authOptions } from '@/lib/auth';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { ADMIN_NAV_LINKS, MENTOR_NAV_LINKS, PORTAL_NAV_LINKS } from '@/lib/navLinks';
 import { capabilityForPath } from '@/lib/navRouteCapability';
+import type { VerticalCapability } from '@/lib/verticals';
 
 const ALL_LINKS = [...ADMIN_NAV_LINKS, ...MENTOR_NAV_LINKS, ...PORTAL_NAV_LINKS];
 
@@ -37,4 +38,17 @@ export async function gatePage(href: string): Promise<void> {
   if (!session) return;
   const caps = await shellCapabilities(session.user.orgId);
   if (!caps.includes(needed)) notFound();
+}
+
+/**
+ * notFound() when the signed-in user's vertical lacks `capability` — for a page
+ * no nav link names, so `gatePage(href)` has nothing to derive the capability
+ * from (MKT-6a: the mentor/mentee `/onboarding` step, the contributor-terms
+ * step of the projects module). No session → returns, like `gatePage`.
+ */
+export async function gateCapability(capability: VerticalCapability): Promise<void> {
+  const session = await getServerSession(authOptions);
+  if (!session) return;
+  const caps = await shellCapabilities(session.user.orgId);
+  if (!caps.includes(capability)) notFound();
 }

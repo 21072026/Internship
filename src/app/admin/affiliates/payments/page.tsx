@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -17,16 +17,25 @@ import { formatMinorAmount, parseMinorUnits } from '@/lib/money';
 import { formatDate } from '@/lib/relativeTime';
 import { interpolate } from '@/lib/notificationText';
 import { AffiliateTabs } from '../AffiliateTabs';
+import { AffiliateListToolbar, SortHeader, useAffiliateListQuery } from '@/components/affiliate/AffiliateListControls';
+import { PAYMENT_LIST, hasListFilter, listQueryParams } from '@/lib/affiliateListQueryRule';
 
 // Customer payments (docs/affiliate-module.md, #3116): record one by hand, see
 // the commission the plan gave it. The writer decides everything; the amount is
 // typed the way a person writes it ("19,99") and sent as minor units.
+// The amount is the COMMISSION BASE (#3553): either transactions × the
+// undiscounted price per transaction, or the base amount itself — the writer's
+// resolvePaymentBase() decides; this screen only shows the product it will get.
 // A customer's partner-facing label (#3352) is edited from its row.
+// Partner, search and date filters and the column sort (#3539) live in the URL
+// and are applied on the server.
 
 interface Row {
   id: string;
   receivedAt: string;
   amountMinor: number;
+  transactionCount: number | null;
+  unitPriceMinor: number | null;
   currency: string;
   externalPaymentRef: string;
   customerId: string;
@@ -42,6 +51,14 @@ interface Partner {
   status: string;
 }
 
+/** A whole number of transactions (≥ 1), or null. Digits only: "1.000" is not a count. */
+function parseCount(raw: string): number | null {
+  const t = raw.trim();
+  if (!/^\d{1,10}$/.test(t)) return null;
+  const n = Number(t);
+  return n >= 1 && Number.isSafeInteger(n) ? n : null;
+}
+
 // The admin's own calendar day (the server allows up to +14 h ahead of UTC).
 const today = () => {
   const d = new Date();
@@ -49,21 +66,33 @@ const today = () => {
 };
 
 export default function AffiliatePaymentsPage() {
+  return (
+    <Suspense fallback={<SkeletonRows rows={5} />}>
+      <AffiliatePayments />
+    </Suspense>
+  );
+}
+
+function AffiliatePayments() {
   const t = useT();
   const L = t.affiliatePayments;
   const locale = useLocale();
   const toast = useToast();
   const [data, setData] = useState<{ rows: Row[]; total: number; page: number; perPage: number; canWrite: boolean } | null>(null);
   const [partners, setPartners] = useState<Partner[]>([]);
-  const [page, setPage] = useState(1);
+  const A = t.affiliateList;
+  const { query, set } = useAffiliateListQuery(PAYMENT_LIST);
+  const page = query.page;
+  const qs = listQueryParams(PAYMENT_LIST, query).toString();
   const [failed, setFailed] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const [busy, setBusy] = useState(false);
   const [labelFor, setLabelFor] = useState<{ customerId: string; draft: string } | null>(null);
-  const [form, setForm] = useState({ partnerId: '', customerExternalRef: '', amount: '', receivedOn: today(), externalPaymentRef: '' });
+  const [form, setForm] = useState({ partnerId: '', customerExternalRef: '', amount: '', transactionCount: '', unitPrice: '', receivedOn: today(), externalPaymentRef: '' });
+  const [mode, setMode] = useState<'breakdown' | 'amount'>('breakdown');
 
   const load = useCallback(async () => {
-    const [p, q] = await Promise.all([fetch(`/api/admin/affiliate/payments?page=${page}`), fetch('/api/admin/affiliate/partners')]);
+    const [p, q] = await Promise.all([fetch(`/api/admin/affiliate/payments?${qs}`), fetch('/api/admin/affiliate/partners')]);
     if (p.status === 403 || q.status === 403) {
       setForbidden(true);
       return;
@@ -74,7 +103,7 @@ export default function AffiliatePaymentsPage() {
     }
     setData(await p.json());
     setPartners((await q.json()).partners);
-  }, [page]);
+  }, [qs]);
 
   useEffect(() => {
     void load();
@@ -104,10 +133,26 @@ export default function AffiliatePaymentsPage() {
   }
 
   async function save() {
-    const amountMinor = parseMinorUnits(form.amount);
-    if (amountMinor === null || Number.isNaN(amountMinor)) {
-      toast(L.errors.invalid_input, 'error');
-      return;
+    let base: { amountMinor: number } | { transactionCount: number; unitPriceMinor: number };
+    if (mode === 'amount') {
+      const amountMinor = parseMinorUnits(form.amount);
+      if (amountMinor === null || Number.isNaN(amountMinor)) {
+        toast(L.errors.invalid_input, 'error');
+        return;
+      }
+      base = { amountMinor };
+    } else {
+      const transactionCount = parseCount(form.transactionCount);
+      const unitPriceMinor = parseMinorUnits(form.unitPrice);
+      if (transactionCount === null) {
+        toast(L.baseErrors.transaction_count, 'error');
+        return;
+      }
+      if (unitPriceMinor === null || Number.isNaN(unitPriceMinor)) {
+        toast(L.baseErrors.unit_price, 'error');
+        return;
+      }
+      base = { transactionCount, unitPriceMinor };
     }
     setBusy(true);
     try {
@@ -117,7 +162,7 @@ export default function AffiliatePaymentsPage() {
         body: JSON.stringify({
           partnerId: form.partnerId || null,
           customerExternalRef: form.customerExternalRef,
-          amountMinor,
+          ...base,
           receivedOn: form.receivedOn,
           externalPaymentRef: form.externalPaymentRef,
         }),
@@ -127,12 +172,16 @@ export default function AffiliatePaymentsPage() {
         const moved = (body.created ?? 0) + (body.updated ?? 0);
         toast(moved > 0 ? interpolate(L.savedCommission, { n: String(moved) }) : L.saved);
         if (body.drift > 0) toast(interpolate(L.drift, { n: String(body.drift) }), 'error');
-        setForm({ ...form, customerExternalRef: '', amount: '', externalPaymentRef: '' });
-        setPage(1);
-        await load();
+        setForm({ ...form, customerExternalRef: '', amount: '', transactionCount: '', unitPrice: '', externalPaymentRef: '' });
+        // The new payment is the newest: back to the first page of the default order.
+        // (A changed URL reloads by itself; an unchanged one is reloaded here.)
+        if (page > 1 || query.sort !== PAYMENT_LIST.defaultSort || query.dir !== PAYMENT_LIST.defaultDir) set({ page: 1, sort: PAYMENT_LIST.defaultSort, dir: PAYMENT_LIST.defaultDir });
+        else await load();
       } else {
         const code = body.code as keyof typeof L.errors | undefined;
-        toast(code && code in L.errors ? L.errors[code] : L.failed, 'error');
+        // A commission-base refusal names its issue (#3553); say which one.
+        const issue = Array.isArray(body.issues) ? (body.issues as string[]).find((i): i is keyof typeof L.baseErrors => i in L.baseErrors) : undefined;
+        toast(issue ? L.baseErrors[issue] : code && code in L.errors ? L.errors[code] : L.failed, 'error');
       }
     } finally {
       setBusy(false);
@@ -145,6 +194,13 @@ export default function AffiliatePaymentsPage() {
   // What the server will receive, before saving: "1.000" is a thousand euro.
   const parsedAmount = parseMinorUnits(form.amount);
   const amountPreview = parsedAmount === null || Number.isNaN(parsedAmount) ? undefined : interpolate(L.amountPreview, { amount: money(parsedAmount) });
+  // The product the writer will record, live: "340 × 0,15 € = 51,00 €".
+  const parsedCount = parseCount(form.transactionCount);
+  const parsedPrice = parseMinorUnits(form.unitPrice);
+  const breakdownPreview =
+    parsedCount === null || parsedPrice === null || Number.isNaN(parsedPrice)
+      ? undefined
+      : interpolate(L.breakdownPreview, { count: new Intl.NumberFormat(locale).format(parsedCount), price: money(parsedPrice), amount: money(parsedCount * parsedPrice) });
 
   return (
     <div className="space-y-6">
@@ -170,7 +226,38 @@ export default function AffiliatePaymentsPage() {
               data-testid="affiliate-payment-partner"
             />
             <Input label={L.customerRef} hint={L.customerRefHint} value={form.customerExternalRef} onChange={(e) => setForm({ ...form, customerExternalRef: e.target.value })} data-testid="affiliate-payment-customer" />
-            <Input label={L.amount} hint={amountPreview} inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="affiliate-payment-amount" />
+            <div className="space-y-2 sm:col-span-2 lg:col-span-3">
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label={L.baseMode}>
+                <span className="text-sm text-gray-600 dark:text-gray-400">{L.baseMode}</span>
+                {(['breakdown', 'amount'] as const).map((m) => (
+                  <Button
+                    key={m}
+                    type="button"
+                    size="sm"
+                    variant={mode === m ? 'primary' : 'secondary'}
+                    aria-pressed={mode === m}
+                    onClick={() => setMode(m)}
+                    data-testid={`affiliate-payment-mode-${m}`}
+                  >
+                    {m === 'breakdown' ? L.modeBreakdown : L.modeAmount}
+                  </Button>
+                ))}
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {mode === 'breakdown' ? (
+                  <>
+                    <Input label={L.transactionCount} inputMode="numeric" value={form.transactionCount} onChange={(e) => setForm({ ...form, transactionCount: e.target.value })} data-testid="affiliate-payment-count" />
+                    <Input label={L.unitPrice} inputMode="decimal" value={form.unitPrice} onChange={(e) => setForm({ ...form, unitPrice: e.target.value })} data-testid="affiliate-payment-unit-price" />
+                    <p className="self-end pb-2 text-sm font-medium text-gray-900 tabular-nums dark:text-gray-100" aria-live="polite" data-testid="affiliate-payment-breakdown-preview">
+                      {breakdownPreview}
+                    </p>
+                  </>
+                ) : (
+                  <Input label={L.amount} hint={amountPreview} inputMode="decimal" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} data-testid="affiliate-payment-amount" />
+                )}
+              </div>
+              <p className="text-xs text-gray-500" data-testid="affiliate-payment-base-hint">{L.baseHint}</p>
+            </div>
             <Input label={L.receivedOn} type="date" max={today()} value={form.receivedOn} onChange={(e) => setForm({ ...form, receivedOn: e.target.value })} data-testid="affiliate-payment-date" />
             <Input label={L.paymentRef} hint={L.paymentRefHint} value={form.externalPaymentRef} onChange={(e) => setForm({ ...form, externalPaymentRef: e.target.value })} data-testid="affiliate-payment-ref" />
           </div>
@@ -182,27 +269,29 @@ export default function AffiliatePaymentsPage() {
         </Card>
       )}
 
+      <AffiliateListToolbar spec={PAYMENT_LIST} query={query} set={set} partners={partners} searchLabel={A.searchPayments} dateLabel={A.dateReceived} resultCount={data?.total ?? null} />
+
       {!data ? (
         <SkeletonRows rows={5} />
       ) : data.rows.length === 0 ? (
-        <EmptyState testId="affiliate-payments" title={L.empty} />
+        <EmptyState testId="affiliate-payments" title={hasListFilter(query) ? A.noMatch : L.empty} />
       ) : (
         <Card padding="none">
           <div className="overflow-x-auto">
             <table className="w-full text-sm" data-testid="affiliate-payment-table">
               <thead className="text-left text-gray-500">
                 <tr>
-                  <th className="px-4 py-2">{L.colDate}</th>
+                  <SortHeader label={L.colDate} sortKey="date" query={query} set={set} />
                   <th className="px-4 py-2">{L.colCustomer}</th>
                   <th className="px-4 py-2">{L.colPartner}</th>
-                  <th className="px-4 py-2 text-right">{L.colAmount}</th>
+                  <SortHeader label={L.colAmount} sortKey="amount" query={query} set={set} numeric />
                   <th className="px-4 py-2">{L.colRef}</th>
                   <th className="px-4 py-2">{L.colCommission}</th>
                 </tr>
               </thead>
               <tbody>
                 {data.rows.map((r) => (
-                  <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800">
+                  <tr key={r.id} className="border-t border-gray-100 dark:border-gray-800" data-testid="affiliate-payment-row">
                     <td className="px-4 py-2 whitespace-nowrap">{formatDate(r.receivedAt, locale, { timeZone: 'UTC' })}</td>
                     <td className="px-4 py-2">
                       <div className="flex items-start gap-2">
@@ -221,7 +310,14 @@ export default function AffiliatePaymentsPage() {
                       </div>
                     </td>
                     <td className="px-4 py-2">{r.partner.displayName}</td>
-                    <td className="px-4 py-2 text-right whitespace-nowrap">{money(r.amountMinor, r.currency)}</td>
+                    <td className="px-4 py-2 text-right whitespace-nowrap">
+                      {money(r.amountMinor, r.currency)}
+                      {r.transactionCount !== null && r.unitPriceMinor !== null && (
+                        <div className="text-xs text-gray-500" data-testid="affiliate-payment-breakdown">
+                          {interpolate(L.breakdownLine, { count: new Intl.NumberFormat(locale).format(r.transactionCount), price: money(r.unitPriceMinor, r.currency) })}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-2 font-mono">{r.externalPaymentRef}</td>
                     <td className="px-4 py-2 whitespace-nowrap">
                       {r.commission ? (
@@ -239,9 +335,9 @@ export default function AffiliatePaymentsPage() {
           </div>
           {pages > 1 && (
             <div className="flex items-center justify-between px-4 py-2 text-sm">
-              <Button type="button" size="sm" variant="ghost" disabled={page <= 1} onClick={() => setPage(page - 1)}>{L.prev}</Button>
+              <Button type="button" size="sm" variant="ghost" disabled={page <= 1} onClick={() => set({ page: page - 1 })}>{L.prev}</Button>
               <span>{interpolate(L.page, { page: String(page), pages: String(pages) })}</span>
-              <Button type="button" size="sm" variant="ghost" disabled={page >= pages} onClick={() => setPage(page + 1)}>{L.next}</Button>
+              <Button type="button" size="sm" variant="ghost" disabled={page >= pages} onClick={() => set({ page: page + 1 })}>{L.next}</Button>
             </div>
           )}
         </Card>

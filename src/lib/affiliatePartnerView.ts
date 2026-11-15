@@ -13,15 +13,17 @@
 import { prisma } from '@/lib/prisma';
 import { affiliateRowScope } from '@/lib/affiliateContractRule';
 import { COMMISSION_STATUSES, listCommissions, type CommissionStatus } from '@/lib/affiliateCommissions';
-import { evaluatePartner, parseCommissionPlan } from '@/lib/affiliateCommissionRule';
-import { customerWindows, planHasPercent, readWindowNoticeDays, windowsEndingSoon, type CustomerWindow } from '@/lib/affiliateWindowNoticeRule';
+import { parseCommissionPlan } from '@/lib/affiliateCommissionRule';
+import { windowsEndingSoon, type CustomerWindow } from '@/lib/affiliateWindowNoticeRule';
+import { customerWindowsByPartner, windowView, type WindowView } from '@/lib/affiliateCustomerWindows';
 import { planTermsView } from '@/lib/affiliatePlanTerms';
 import { listPayouts } from '@/lib/affiliatePayouts';
 import { referralLink } from '@/lib/affiliateReferralRule';
 import { trackedReferralLink } from '@/lib/affiliateClicks';
 import { partnerCustomerStatuses } from '@/lib/affiliateCustomerStatus';
 import { CUSTOMER_STATUSES, emptyStatusCounts, type CustomerStatus } from '@/lib/affiliateCustomerStatusRule';
-import { partnerFunnels, partnerThresholds } from '@/lib/affiliateFunnel';
+import { partnerCampaigns, partnerEarnings, partnerFunnels, partnerThresholds, partnerTrend } from '@/lib/affiliateFunnel';
+import { earningsPerClick } from '@/lib/affiliateTrendRule';
 import { funnelFromCounts, parseFunnelPeriod } from '@/lib/affiliateFunnelRule';
 import type { GatedPartner } from '@/lib/affiliateContract';
 
@@ -91,52 +93,58 @@ export async function partnerPlanTerms(partner: GatedPartner) {
  * The partner's own funnel for a period and its progress towards the plan's
  * switch to a percent (#3543) — through the same aggregate the admin screens
  * read (src/lib/affiliateFunnel.ts), narrowed to this partner. `threshold` is
- * null when the plan has no threshold (the indicator is then hidden).
+ * null when the plan has no threshold (the indicator is then hidden). Since
+ * #3545 also the period's earnings per click, its clicks per campaign tag and
+ * the monthly trend.
  */
 export async function partnerFunnel(partner: GatedPartner, rawPeriod?: unknown) {
   const scope = scopeOf(partner);
   const period = parseFunnelPeriod(rawPeriod);
-  const [funnels, thresholds] = await Promise.all([
-    partnerFunnels(scope.orgId, { partnerIds: [scope.partnerId], period }),
+  const now = new Date();
+  const [funnels, thresholds, earnings, campaigns, trend] = await Promise.all([
+    partnerFunnels(scope.orgId, { partnerIds: [scope.partnerId], period, now }),
     partnerThresholds(scope.orgId, { partnerIds: [scope.partnerId] }),
+    partnerEarnings(scope.orgId, { partnerIds: [scope.partnerId], period, now }),
+    partnerCampaigns(scope.orgId, scope.partnerId, { period, now }),
+    partnerTrend(scope.orgId, scope.partnerId, now),
   ]);
   const threshold = thresholds.get(scope.partnerId) ?? null;
+  const funnel = funnels.get(scope.partnerId) ?? funnelFromCounts({ clicks: 0, uniqueClicks: 0 }, emptyStatusCounts());
+  const earned = earnings.byPartner.get(scope.partnerId) ?? 0;
   return {
     period,
-    funnel: funnels.get(scope.partnerId) ?? funnelFromCounts({ clicks: 0, uniqueClicks: 0 }, emptyStatusCounts()),
+    funnel,
     threshold: threshold && { ...threshold, reachedAt: threshold.reachedAt?.toISOString() ?? null },
+    // #3545: earnings per click in the period, the clicks per campaign tag and the 12-month trend.
+    earnedMinor: earned,
+    currency: earnings.currency,
+    earningsPerClickMinor: earnings.currency ? earningsPerClick(earned, funnel.clicks) : null,
+    campaigns,
+    trend,
   };
 }
 
 /** A customer's window as the portal renders it: dates as ISO strings. */
-export type PortalWindow = { kind: 'none' } | { kind: 'unlimited' } | { kind: 'ends'; endsAt: string; ended: boolean };
-
-const portalWindow = (w: CustomerWindow | undefined): PortalWindow =>
-  !w || w.kind === 'none' ? { kind: 'none' } : w.kind === 'unlimited' ? w : { kind: 'ends', endsAt: w.endsAt.toISOString(), ended: w.ended };
+export type PortalWindow = WindowView;
+const portalWindow = windowView;
 
 /**
- * The partner's customers' commission windows (#3557), from the engine run over
- * the partner's whole payment history — the same `windowEndsAt` the window-notice
- * mail names (#3556), never a second calculation. `showColumn` is false when the
- * plan has no percent phase (there is no window to show); `endingSoon` counts the
- * windows the mail would announce within the programme's lead time.
+ * The partner's customers' commission windows (#3557) — the shared reading
+ * (src/lib/affiliateCustomerWindows.ts) for this one partner. `showColumn` is
+ * false when the plan has no percent phase (there is no window to show);
+ * `endingSoon` counts the windows the mail would announce within the
+ * programme's lead time.
  */
 async function partnerWindows(scope: { orgId: string; partnerId: string }, now = new Date()) {
-  const [settings, row, payments] = await Promise.all([
-    prisma.affiliateProgramSettings.findUnique({ where: { orgId: scope.orgId }, select: { plan: true, windowNoticeDays: true } }),
-    prisma.affiliatePartner.findFirst({ where: { id: scope.partnerId, orgId: scope.orgId }, select: { noticeEffectiveAt: true } }),
-    prisma.affiliatePayment.findMany({
-      where: { orgId: scope.orgId, customer: { partnerId: scope.partnerId } },
-      select: { id: true, customerId: true, amountMinor: true, currency: true, receivedAt: true },
-    }),
-  ]);
-  const parsed = settings?.plan ? parseCommissionPlan(settings.plan) : null;
-  if (!parsed?.ok || !planHasPercent(parsed.plan)) return { showColumn: false, windows: new Map<string, CustomerWindow>(), endingSoon: 0, leadDays: 0 };
-  const facts = { noticeEffectiveAt: row?.noticeEffectiveAt ?? null };
-  const evaluation = evaluatePartner(parsed.plan, facts, payments);
-  const windows = customerWindows({ plan: parsed.plan, partner: facts, evaluation, now });
-  const leadDays = readWindowNoticeDays(settings?.windowNoticeDays);
-  return { showColumn: true, windows, endingSoon: windowsEndingSoon({ plan: parsed.plan, evaluation, windows, now, leadDays }), leadDays };
+  const w = await customerWindowsByPartner(scope.orgId, [scope.partnerId], now);
+  const own = w.partners.get(scope.partnerId);
+  if (!w.plan || !own) return { showColumn: false, windows: new Map<string, CustomerWindow>(), endingSoon: 0, leadDays: 0 };
+  return {
+    showColumn: true,
+    windows: own.windows,
+    endingSoon: windowsEndingSoon({ plan: w.plan, evaluation: own.evaluation, windows: own.windows, now, leadDays: w.leadDays }),
+    leadDays: w.leadDays,
+  };
 }
 
 /** The home page's warning: how many customers' commission ends within the lead time (0 = no warning). */
@@ -232,6 +240,9 @@ export async function partnerCommissions(partner: GatedPartner, opts: { status?:
       customerRef: r.customerRef,
       customerLabel: r.customerLabel,
       paymentAmountMinor: r.payment.amountMinor,
+      // The breakdown of the commission base when it was entered as one (#3554); both or neither.
+      paymentTransactionCount: r.payment.transactionCount,
+      paymentUnitPriceMinor: r.payment.unitPriceMinor,
     })),
   };
 }

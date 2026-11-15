@@ -3,7 +3,7 @@ import { getServerSession, type Session } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { actorFromSession, can, type Permission } from '@/lib/authz';
+import { actorFromSession, can, dispatcherMay, type Permission } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -51,7 +51,8 @@ async function loadForEditor(session: Session, id: string, perm: Permission) {
     select: { id: true, orgId: true, mentorId: true, value: { select: { valueMinor: true, currency: true, source: true, updatedAt: true } } },
   });
   if (!relation) return { denied: NextResponse.json({ error: 'Relation not found' }, { status: 404 }) } as const;
-  if (!isAdmin && relation.mentorId !== session.user.id) {
+  // The owner, or the org's sales dispatcher on this record (#3656).
+  if (!isAdmin && relation.mentorId !== session.user.id && !dispatcherMay(actor, perm, relation.orgId)) {
     return { denied: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) } as const;
   }
   if (!isDealValueEnabled(await shellCapabilities(relation.orgId))) {

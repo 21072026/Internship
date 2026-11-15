@@ -20,7 +20,7 @@ per organisation, and every number in tests and examples here is synthetic.
 | 3 | Payment source | **Manual entry by an ADMIN** is the only source in the first milestone. It goes through the one payment writer that a later API import will also use (`source` = `MANUAL` / `API`). No commission is written anywhere else — except the one-off migration (`IMPORT`, below), which takes a previous system's history as recorded. |
 | 4 | Attribution | A customer (the customer's id on the product side, opaque here) is linked to a partner **automatically** when an account event carries a matching `referral_code` ([Automatic attribution](#automatic-attribution-3354)), or by an ADMIN on the first manual payment entry. One partner per customer, first link wins. |
 | 5 | Identity | Existing CRM sign-in, new `AFFILIATE` role. Partners moved from a previous system are **invited** (invitation / sign-in link); no password hash from another system is ever imported. |
-| 6 | Referral codes | Permanent once issued, unique per organisation. A migrated partner keeps the exact code the previous system used (a number or a custom slug). |
+| 6 | Referral codes | Permanent once issued, unique per organisation. A migrated partner keeps the exact code the previous system used (a number, a custom slug, or a user name with `.` and `@`, #3550). One rule: `src/lib/affiliateCodeRule.ts` — a letter or digit, then letters, digits, `.`, `@`, `-`, `_`, at most 100. A code with a space is reported by the migration as needing a new code. `/r/ada%40example` and `/r/ada@example` are one code; links carry `@` as `%40`. |
 | 7 | Payouts | Recorded and approved in the CRM; the bank transfer itself stays manual. |
 | 8 | Contract | Each organisation writes its programme copy and partner contract (per locale). A changed contract bumps its version, and every partner must accept the current version before the portal or its API answers. |
 | 9 | Clicks | Not migrated. New clicks are counted through the tracked link `/r/<code>` as **per-partner, per-day counters only** — no IP, user-agent or cookie is stored ([Link clicks](#link-clicks-3541)). |
@@ -110,6 +110,52 @@ reconciliation.
 The engine is pure and dependency-free (`src/lib/affiliateCommissionRule.ts`) and
 unit-tested with synthetic plans.
 
+### Commission base (#3551/#3552)
+
+A payment's `amountMinor` is the **commission base**, not the amount the customer
+actually paid: the undiscounted, gross (VAT included) amount for the period's
+transaction count. A discount the customer got does not lower the partner's
+commission. In a partial month (a free period ending mid-month) the free and the
+paid transactions are added up, and the base is the amount for that total.
+
+A payment may arrive in two shapes, and the writer accepts both:
+
+- **(a) breakdown** — `transactionCount` × `unitPriceMinor` (the undiscounted gross
+  price per transaction). The base is their product, and both are stored on the
+  payment so the partner can see where the amount came from.
+- **(b) base** — `amountMinor`, already computed by the sender. The breakdown
+  columns stay null.
+
+Both together are accepted only when they agree. `resolvePaymentBase()`
+(`src/lib/affiliatePaymentBaseRule.ts`, pure, unit-tested) is the ONE place that
+decides; `recordAffiliatePayment()` calls it before the shape checks, and no
+caller multiplies. Refusals come back as `invalid_input` with one issue:
+`amount_required` (neither shape), `incomplete_breakdown` (only one of the two),
+`transaction_count` (not a whole number ≥ 1), `unit_price` (not whole minor units
+≥ 0), `amount_range` (a product of zero, or past `MAX_AMOUNT_MINOR`) and
+`amount_mismatch` (both shapes, different amounts). The engine keeps reading
+`amountMinor` only, so existing payments and their commissions do not change.
+Every entry path takes both shapes (#3553) and leaves the decision to the rule:
+
+- **Admin form** (`/admin/affiliates/payments`): "Transactions × price" (the
+  default, with the product shown live, e.g. `340 × €0.15 = €51.00`) or "Base
+  amount", with the undiscounted/gross/partial-month note under the fields. A
+  refusal names its issue.
+- **Admin API** (`POST /api/admin/affiliate/payments`): `amountMinor`,
+  `transactionCount` + `unitPriceMinor`, or all three; a refusal is
+  `400 { code: 'invalid_input', issues: [<issue>] }`. A client sending only
+  `amountMinor` is unchanged.
+- **Account event** `payment_received`: `amount_minor` and/or `transaction_count` +
+  `unit_price_minor` ([account-events.md](integrations/account-events.md#customer-payments-3355)).
+- **Migration CSV**: `payment_amount` and/or `transaction_count` + `unit_price`
+  (see [Migration](#migration-from-a-previous-system)).
+
+**Shown** (#3554): a payment with a breakdown carries it under the base as a
+small line — `340 transactions × €0.15` — in the admin's payment list and on the
+partner portal's commissions page (the partner's own customers only, through the
+existing scope; no personal data beyond the customer reference). A payment
+without one shows the amount alone.
+
 ### Re-evaluation after a plan change (#3170)
 
 A plan save returns as soon as the plan is committed, whatever the number of
@@ -158,8 +204,9 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   writer `src/lib/affiliateCustomerLabel.ts`.
   `createdAt` is the registration (the linking event's time); `endedAt` is the
   account's cancellation, null while live (#3542, [Customer status](#customer-status-3542)).
-- **AffiliatePayment** — `amountMinor`, `currency`, `receivedAt` (never in the
-  future), `source` (MANUAL / API / IMPORT), `externalPaymentRef` (**required,
+- **AffiliatePayment** — `amountMinor` (the [commission base](#commission-base-35513552)),
+  `transactionCount` + `unitPriceMinor` (the breakdown when it arrived as one, both
+  or neither), `currency`, `receivedAt` (never in the future), `source` (MANUAL / API / IMPORT), `externalPaymentRef` (**required,
   unique per organisation**, so a double entry is caught even under a mistyped customer).
 - **AffiliateCommission** — one per payment at most: `kind` (TIER / PERCENT, or
   IMPORTED for a migrated one),
@@ -179,7 +226,55 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
 
 ## Admin screens
 
-`/admin/affiliates` has one sidebar entry and its own tabs:
+`/admin/affiliates` has one sidebar entry and its own tabs, in two groups (#3538)
+so the two money flows are not mistaken for each other: **Customers** (the customer
+list, and the customer payments — what customers pay the product) and **Partners**
+(partners, applications, funnel, commissions, and the partner payouts — what the
+partners earn and are paid). Overview, Migration and Settings stand alone. A group
+opens its first screen; the open group shows its screens in a second row, the group
+carries `aria-current="true"` and the screen `aria-current="page"`. The URLs did not
+change. The applications badge sits on the open sub-tab, or on the Partners group
+while it is closed — never twice.
+
+**Filters and sort** (#3539): commissions, customer payments, partner payouts and
+partners share one filter bar and sortable column headers
+(`src/components/affiliate/AffiliateListControls.tsx`). The lists are paged, so
+both happen on the **server**: every route reads its query through
+`parseListQuery()` in `src/lib/affiliateListQueryRule.ts` (pure, unit-tested in
+`scripts/test/affiliate-list-query-rule.test.mjs`) — the same allowlist pattern as
+the funnel. A `sort`, `dir`, `status`, `kind`, day or partner id outside the
+allowlist is a **400** (`invalid_query` + the field), never passed on; an order is
+built from a constant table and always ends with the row id, so a request string
+never reaches Prisma as a field name and equal rows keep their place across pages.
+Every query carries the session's `orgId`, so another organisation's `partnerId`
+simply matches nothing. The URL is the state — the screen parses it with the same
+function (dropping only a value the server would refuse) and writes every change
+back, so a link opens the same view; any change but the page goes back to page 1.
+
+| List | Filters | Sort (default first) |
+|------|---------|----------------------|
+| Commissions | partner, status, type (TIER/PERCENT/IMPORTED), due days | due ↑, amount, partner |
+| Customer payments | partner, `q` (customer number, label or payment reference), received days | received ↓, amount |
+| Partner payouts | partner, `q` (transfer reference), paid days | paid ↓, amount |
+| Partners | status, `q` (name, code or contact e-mail) | added ↓, name, customers, open commission |
+
+Days are `from`/`to` calendar days, **both inclusive** (`listDateRange()`: a
+half-open UTC interval). The commission totals per status follow every filter but
+the status itself, so the chips count the filtered list. A changed filter, sort or
+page reloads the commission list and clears its selection, so a bulk action never
+acts on rows that are no longer shown. The partner list is not paged, so its sort
+(on sums such as the open commission, pending + approved) runs after the SQL sums,
+over every matching partner. The payout history got its pager here too.
+
+- **Customer list** (`/admin/affiliates/customers`, `/api/admin/affiliate/customers`,
+  `src/lib/affiliateCustomerList.ts`, #3538) — one row per referred customer, newest
+  first, paged: its partner, first and last payment day, number of payments, the end
+  of its commission window and the commission it earned (everything but REJECTED).
+  The window is the engine's, through `customerWindowsByPartner()`
+  (`src/lib/affiliateCustomerWindows.ts`) — the reading the partner portal shares, so
+  admin and partner see the same date; the column is hidden when the plan has no
+  percent phase. Read-only, `affiliate.read` (OBSERVER included). `?partnerId=` of
+  another organisation answers 404. Five queries per page whatever its size.
 
 - **Overview** (`src/lib/affiliateOverview.ts`, `/api/admin/affiliate/overview`,
   #3173) — partners per state, referred customers, commission totals per status,
@@ -216,7 +311,7 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   (`affiliate.customer_status.update`) with the old and new values.
 - **Partners** (`src/lib/affiliatePartners.ts`, `/api/admin/affiliate/partners`) —
   the list with customer counts and PENDING / APPROVED / PAID totals summed in SQL,
-  a new partner (referral code: letters, digits, `-`, `_`, unique per organisation
+  a new partner (referral code: letters, digits, `.`, `@`, `-`, `_` — `src/lib/affiliateCodeRule.ts`, #3550 — unique per organisation
   case-insensitively, permanent), and the state changes. Suspend / reactivate /
   terminate go through `changePartnerState()` in the payment writer: under the
   partner lock, re-evaluating the partner's commissions, audited
@@ -229,7 +324,7 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   instead of rolling it into the next month. The full IBAN is revealed to an
   `affiliate.write` admin only, and every reveal is audited
   (`affiliate.payout_details.read`).
-- **Payments** (`/api/admin/affiliate/payments`, list in `src/lib/affiliatePayments.ts`) —
+- **Customer payments** (`/api/admin/affiliate/payments`, list in `src/lib/affiliatePayments.ts`) —
   a manual entry goes straight to `recordAffiliatePayment()`; the currency is the
   plan's, the amount is typed as people write it (`19,99`) and sent as minor
   units, the received date is a calendar day (UTC midnight, up to +14 h ahead of
@@ -250,7 +345,7 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   final. `driftReport()` lists the frozen rows the current plan would calculate
   differently — read only, nothing written, the whole programme in three queries,
   and run only when the admin asks for it ("Check for differences").
-- **Payouts** (`/api/admin/affiliate/payouts`, list in `src/lib/affiliatePayouts.ts`) —
+- **Partner payouts** (`/api/admin/affiliate/payouts`, list in `src/lib/affiliatePayouts.ts`) —
   recorded after the manual bank transfer. The screen lists a partner's approved
   commissions unpaged (`/payouts/candidates`, up to the 200 a payout can take) and
   says when there are more, so the sum shown is always the rows selected. `createPayout()` (payment writer)
@@ -676,6 +771,30 @@ server half: `src/lib/affiliateClicks.ts`.
   ties a click to a later registration — attribution stays with the
   `referral_code` of the account event (below).
 
+### Campaign tags (#3545)
+
+A partner tells its channels apart by appending a tag to its tracked link:
+`/r/<code>?c=newsletter`. The rule is `parseCampaignTag()` in
+`src/lib/affiliateClickRule.ts`: trimmed, lower-cased, `[a-z0-9_-]{1,32}`.
+
+- An **invalid tag is ignored**, never an error: the visitor is redirected and the
+  click is counted in the partner's total, only without a campaign.
+- The tag **never reaches the redirect target** — the target still comes from the
+  settings alone (`clickRedirectTarget`).
+- A tagged click adds to `AffiliateClickDaily` (the total, unchanged) **and** to
+  `AffiliateClickCampaignDaily` — one row per partner, UTC day and tag, counters
+  only, registered in `TENANT_MODELS`. Untagged clicks have no row there, so
+  "without a campaign" is the total minus the tagged rows.
+- "Unique" is per campaign: the same hashed visitor key, scoped to the tag, so a
+  visitor who follows two channels is a first visitor of each but still one in
+  the total.
+- At most `CAMPAIGNS_PER_PARTNER_DAY` (50) distinct tags per partner and day; a new
+  tag past it is counted in the total only. Whoever holds the link chooses the tag,
+  so without a ceiling a script could mint one row per request.
+- **Not yet:** the tag is not carried on to the product (`?campaign=`) and does
+  not come back with the account event, so registrations and payments are not
+  split by campaign. That needs a product-side decision and is a follow-up.
+
 ## Automatic attribution (#3354)
 
 A partner's link is `<base URL>?ref=<code>` (`src/lib/affiliateReferralRule.ts`). The
@@ -781,6 +900,28 @@ rules are pure in `src/lib/affiliateFunnelRule.ts`
   fold, so a filter count and a funnel number cannot disagree. A partner reads
   only its own partner id (session scope); every query names `orgId`.
 
+### Trend and earnings per click (#3545)
+
+Under the funnel the portal shows three more cards, all read from
+`src/lib/affiliateFunnel.ts` (the rules pure in `src/lib/affiliateTrendRule.ts`,
+`scripts/test/affiliate-trend-rule.test.mjs`):
+
+- **Earnings per click** for the funnel's period: commission with `accruedAt` in
+  the period, in every status but `REJECTED`, in the plan's currency
+  (`partnerEarnings()`), divided by the period's clicks, in minor units, rounded.
+  Not shown without clicks ("no clicks yet", never "0 per click") and not at all
+  without a valid plan. Customers who came through the direct link earn without a
+  click, as they register without one in the funnel — the figure is a guide.
+- **Campaigns** for the period: clicks and unique clicks per tag
+  (`partnerCampaigns()`, most clicks first, at most 20 rows) and a "without a
+  campaign" row; the hint shows the partner's own tracked link with `?c=`.
+- **The last 12 months** (`partnerTrend()`): per UTC month, clicks, registrations
+  and paying customers by the funnel's own definitions — paying is a cohort of the
+  month's registrations, judged by the same `partnerCustomerStatuses()`. Two bar
+  charts (clicks on their own axis, registrations and paying side by side) and the
+  same numbers as a table under a disclosure. Every month is present; an empty one
+  is zeros.
+
 ## Admin funnel board (#3544)
 
 The admin's Funnel tab (`/admin/affiliates/funnel`, `GET /api/admin/affiliate/funnel`,
@@ -793,7 +934,9 @@ through `evaluatePartner()`). The board adds only admin-only pieces on top, in
 
 - **Columns**: clicks, unique clicks, registrations, paying, active, passive, click →
   registration and registration → paying (whole %, the portal card's `stepRate`;
-  empty when there is nothing to divide by), and the customers left to the plan's
+  empty when there is nothing to divide by), earnings per click (the portal's
+  figure, `partnerEarnings()` ÷ clicks, #3545; empty without clicks or a plan),
+  and the customers left to the plan's
   switch (lifetime whatever the period; "Reached" at 0; empty without a switch).
 - **Periods**: the shared vocabulary, `month` / `year` / `all`.
 - **Badges** (thresholds fixed in the rule file, not settings):
@@ -977,8 +1120,11 @@ run only after a clean dry run of exactly the files it checked.
 
 - **Input** — three CSV files (comma or semicolon, a header row). Partners:
   `code, name, paid_total, unpaid_total` (+ `email, status, ended_on`). Commissions:
-  `partner_code, customer_ref, payment_ref, payment_amount, payment_date,
-  commission_amount, status` (+ `due_date, payout_ref`). Payouts:
+  `partner_code, customer_ref, payment_ref, payment_date, commission_amount,
+  status` and the payment's commission base as `payment_amount` and/or
+  `transaction_count` + `unit_price` (#3553; both when they agree — the same
+  `resolvePaymentBase()` as the writer, the breakdown stored beside it)
+  (+ `due_date, payout_ref`). Payouts:
   `payout_ref, partner_code, amount, paid_date` (+ `bank_reference`). Amounts in
   euros in an unambiguous shape only (`1234`, `19,99`, `19.99`, `1.234,56`,
   `1,234.56`, `1 234,56`; three digits after a mark are a thousands group) —

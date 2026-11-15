@@ -7,8 +7,8 @@ and the CRM never suggests, and never performs, an advertising contact it cannot
 
 > Not legal advice. The channel rules themselves (which basis opens which channel,
 > the limits of § 7 Abs. 3, sender identity and Impressum) are the Fachanwalt-ready
-> document of #2576 (`docs/marketing-vertical/outreach-compliance.md`, not yet
-> written). This file is the CRM side, and it uses exactly the same four basis codes.
+> document of #2576 (`docs/marketing-vertical/outreach-compliance.md`). This file is
+> the CRM side, and it uses exactly the same four basis codes.
 
 ## The model
 

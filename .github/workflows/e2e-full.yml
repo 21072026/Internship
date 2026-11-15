@@ -117,9 +117,8 @@ jobs:
 
   # ONE production build per run (#3509), shared with the four shards and the
   # isolation job — the same shape as the PR gate (e2e.yml). Each of those five
-  # jobs used to build the same commit itself. This one builds in the shards'
-  # environment (MySQL service + schema + seed, the same env block, `npm ci`,
-  # a 7 GiB build heap) and with FULL git history: release dates come from git,
+  # jobs used to build the same commit itself. This one builds with the shards'
+  # env block, `npm ci` and a 7 GiB build heap (no database since #3710) and with FULL git history: release dates come from git,
   # and the shards checked out with fetch-depth 0 precisely so the build would
   # date them (#2829, #2750). `.next` without its cache goes up as an artifact
   # named after the commit, with the sha stamped inside; every consumer checks
@@ -131,20 +130,10 @@ jobs:
     needs: [gate]
     if: needs.gate.outputs.run == 'true'
 
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: internship_test
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -proot"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=15
-
+    # No MySQL service (#3710): `next build` never connects — the production
+    # image is built the same way, against a placeholder URL (Dockerfile) — so
+    # the service container, `db push` and the seed only cost ~1 min here.
+    # DATABASE_URL stays because Prisma wants a well-formed one at build time.
     env:
       DATABASE_URL: "mysql://root:root@127.0.0.1:3306/internship_test"
       NODE_OPTIONS: --max-old-space-size=8192
@@ -172,17 +161,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply DB schema
-        run: npx prisma db push
-
-      - name: Seed admin user
-        run: npx prisma db seed
+      # Read-only: main's webpack cache, saved by the push run of e2e.yml (#3710).
+      - name: Restore Next.js build cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.sha }}
+          restore-keys: nextjs-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-
 
       - name: Build app
         run: npm run build
         # Keep the Next.js build worker above its default ~2 GiB heap limit.
         env:
           NODE_OPTIONS: --max-old-space-size=7168
+          # Lint and tsc run in ci.yml on the same commit (#3710).
+          NEXT_SKIP_BUILD_CHECKS: '1'
 
       # A tarball, not the directory: upload-artifact drops hidden paths such
       # as `.next` by default, and a tar keeps modes and layout exactly.

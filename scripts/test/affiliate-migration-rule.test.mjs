@@ -88,6 +88,38 @@ test('payouts must hold exactly their commissions, of their own partner', () => 
   assert.ok(codes.includes('payout_other_partner'));
 });
 
+test('a payment is its base amount, transactions × unit price, or both when they agree (#3553)', () => {
+  const csv = `partner_code,customer_ref,payment_ref,payment_amount,transaction_count,unit_price,payment_date,commission_amount,status
+1042,CUST-A,PAY-20,,340,"0,15",2026-01-10,1.00,PENDING
+1042,CUST-A,PAY-21,51.00,340,0.15,2026-01-10,1.00,PENDING
+1042,CUST-A,PAY-22,51.00,,,2026-01-10,1.00,PENDING
+1042,CUST-A,PAY-23,50.00,340,0.15,2026-01-10,1.00,PENDING
+1042,CUST-A,PAY-24,,340,,2026-01-10,1.00,PENDING
+1042,CUST-A,PAY-25,,,0.15,2026-01-10,1.00,PENDING
+1042,CUST-A,PAY-26,,,,2026-01-10,1.00,PENDING
+1042,CUST-A,PAY-27,,0,0.15,2026-01-10,1.00,PENDING
+1042,CUST-A,PAY-28,,2.5,0.15,2026-01-10,1.00,PENDING
+1042,CUST-A,PAY-29,,3,0,2026-01-10,1.00,PENDING
+1042,CUST-A,PAY-30,,3,abc,2026-01-10,1.00,PENDING
+`;
+  const { rows } = read(undefined, csv);
+  assert.deepEqual(rows.map((r) => (r.ok ? `${r.value.paymentAmountMinor}/${r.value.transactionCount}/${r.value.unitPriceMinor}` : r.reason)), [
+    '5100/340/15',
+    '5100/340/15',
+    '5100/null/null',
+    'payment_amount:amount_mismatch',
+    'unit_price:required',
+    'transaction_count:required',
+    'payment_amount:required',
+    'transaction_count:invalid_count',
+    'transaction_count:invalid_count',
+    'unit_price:amount_range',
+    'unit_price:invalid_amount',
+  ]);
+  // payment_amount is no longer a required column: the breakdown alone is a whole file.
+  assert.deepEqual(missingColumns('commissions', ['partner_code', 'customer_ref', 'payment_ref', 'transaction_count', 'unit_price', 'payment_date', 'commission_amount', 'status']), []);
+});
+
 test('row checks name the column and the issue', () => {
   const bad = `partner_code,customer_ref,payment_ref,payment_amount,payment_date,commission_amount,status,due_date,payout_ref
 1042,CUST-A,PAY-9,abc,2026-01-10,1.00,PENDING,,
@@ -126,11 +158,13 @@ test('cross-file duplicates and unknown partners are caught, case-insensitively'
 
 test('missing columns and bad partner rows stop the file', () => {
   assert.deepEqual(missingColumns('partners', ['code', 'name']), ['paid_total', 'unpaid_total']);
-  const { p } = read('code;name;paid_total;unpaid_total;status\nok-1;Name;0;0;TERMINATED\n;No Code;0;0;\nx y;Bad;0;0;\n');
+  const { p } = read('code;name;paid_total;unpaid_total;status\nok-1;Name;0;0;TERMINATED\n;No Code;0;0;\nx y;Bad;0;0;\nx/y;Bad;0;0;\n');
   assert.deepEqual(p.issues.map((i) => [i.row, i.subject, i.code]), [
     [1, 'ended_on', 'ended_on_required'],
     [2, 'code', 'required'],
-    [3, 'code', 'invalid_code'],
+    // A space is the old-system shape that needs a new code (#3550); a slash is no code at all.
+    [3, 'code', 'code_needs_new'],
+    [4, 'code', 'invalid_code'],
   ]);
 });
 

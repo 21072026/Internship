@@ -1,0 +1,7 @@
+# 2026-11-13 — MKT-5: go-live week numbers and the referrer as a lead source (#2578)
+
+- **Pin a definition that lives in two places with a test that reads both.** The first-contact definition is one exported string (`FIRST_CONTACT_DEFINITION`). The unit test fails if `docs/marketing-vertical/go-live-checklist.md` does not quote it verbatim, so the doc and the code cannot drift apart silently.
+- **`tenantWhere(session)` filters by hand, whatever `MT_ENFORCE_ISOLATION` says.** Older specs (e.g. `trial-conversion.spec.ts`) still say the funnel route "reads every relation in the database" outside the isolation project. That is no longer true for routes that use `withinTenant()`, so per-org numbers can be asserted exactly instead of as deltas.
+- **A MARKETING account's lead record carries the account in `companyId`, and the demo request links to the same account through `CompanyInquiry.convertedCompanyId`.** That join is how the record finds "its" request; take the earliest request when an account has several.
+- **A Prisma `where` spread with a string literal enum** (`status: 'ACTIVE'`) needs `as const` once it is merged with a typed fragment, or `tsc` widens it to `string`.
+- **A branch cut before a sibling PR lands must re-run that PR's tests.** #3630 added a `?program=` leak case for the funnel route while this branch was open. Merge main and run `--project=isolation e2e/isolation/leak-matrix.spec.ts` again before merging.

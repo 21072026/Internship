@@ -4,6 +4,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { withTenantScope } from '@/lib/orgContext';
 import { BENCHMARK_MIN_BUCKET, benchmarkBuckets, normalizeToMonthlyMinor, type BenchmarkInput } from '@/lib/compensation';
 import { requirePermission } from '@/lib/authz';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // The offer benchmark read model (#1851): what accepted offers for a position
 // pay, as count / median / p25 / p75 of the base pay normalised to a month.
@@ -27,6 +28,9 @@ export async function GET(request: Request) {
   const gate = await requirePermission('company.read', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // The offer benchmark is the placement module (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
 
   return await withTenantScope(session, async () => {
     const sp = new URL(request.url).searchParams;

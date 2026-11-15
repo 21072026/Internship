@@ -15,12 +15,30 @@
 //                            sign-up in the source system (an account event's
 //                            `acquisition_source`, one of ACQUISITION_SOURCES
 //                            below).
+//   • `referrer`           — the page the browser came from, as the demo form
+//                            stores it (#2569, `cleanReferrer()` in
+//                            src/lib/inquiryAttribution.ts: origin + path,
+//                            query and fragment already dropped, the host the
+//                            request arrived on already dropped). Only its
+//                            HOST is used here (#2578).
+//   • `servedHosts`        — every hostname this deployment serves
+//                            (`servedHosts()`, src/lib/servedHosts.ts), passed
+//                            in so this file stays import-free: a referrer on
+//                            one of OUR hosts is a visitor moving between our
+//                            own sites, not a channel that sent them.
 //   • `vendor`             — the marketing platform a PULL connector read the
 //                            lead from, and how that platform says the person
 //                            arrived (Klaviyo: the subscription method and the
 //                            form/list it names, docs/integrations/klaviyo.md).
 //
-// ── THE PRIORITY: affiliate reference > utm_source > vendor > acquisition_source > unknown
+// ── THE PRIORITY: affiliate reference > utm_source > ref:<host> > vendor > acquisition_source > unknown
+//
+//   The referrer sits below a UTM: a campaign parameter is what the sender
+//   wrote on purpose, the referrer is only the page the visitor happened to
+//   leave (a newsletter link opened from a webmail tab names the webmail). It
+//   sits above the vendor and the self-reported channel because it is still a
+//   measurement, and it is what turns a demo request without utm_source into
+//   something other than `unsourced` (#2578).
 //
 //   A vendor detail sits below a UTM for the same reason the self-reported
 //   channel does: the UTM is the campaign the browser measured, the vendor only
@@ -48,6 +66,11 @@
 //                                    utm_term/utm_content are not: they are
 //                                    per-ad detail and would make a Source per
 //                                    keyword.
+//   ref:<host>                       the referring page's hostname, lower-cased,
+//                                    without port, path or query — one Source
+//                                    per referring site, not per page. Empty,
+//                                    unparseable or one of OUR served hosts:
+//                                    not a source (falls through).
 //   channel:<acquisition_source>     one of the six values, verbatim.
 //   <vendor>:<detail>                the connector's own namespace, lower-cased
 //                                    vendor, detail as the vendor names it
@@ -89,6 +112,7 @@ export const SOURCE_NAME_MAX = 120;
 const AFFILIATE_CODE_MAX = 100;
 const UTM_SEGMENT_MAX = 36;
 const VENDOR_NAME_MAX = 20;
+const REF_PREFIX = 'ref:';
 
 export interface LeadSourceInput {
   reference?: string | null;
@@ -96,12 +120,16 @@ export interface LeadSourceInput {
   utmMedium?: string | null;
   utmCampaign?: string | null;
   acquisitionSource?: string | null;
+  /** The stored referrer (origin + path); only its host is used. */
+  referrer?: string | null;
+  /** Hostnames this deployment serves; a referrer on one of them is not a source. */
+  servedHosts?: Iterable<string> | null;
   /** A pull connector's platform and its own description of the entry point. */
   vendor?: { name: string; detail?: string | null } | null;
 }
 
 export type LeadSourceResult =
-  | { kind: 'affiliate' | 'utm' | 'vendor' | 'channel'; name: string }
+  | { kind: 'affiliate' | 'utm' | 'referrer' | 'vendor' | 'channel'; name: string }
   | { kind: 'unknown' };
 
 // eslint-disable-next-line no-control-regex
@@ -111,6 +139,28 @@ function clean(value: unknown, max: number): string | null {
   if (typeof value !== 'string') return null;
   const v = value.replace(CONTROL, ' ').replace(/\//g, '-').replace(/\s+/g, ' ').trim().slice(0, max).trim();
   return v || null;
+}
+
+/**
+ * The referring site's hostname: lower-cased, no port, path or query, no
+ * trailing dot. Null when there is none, it does not parse as an http(s) URL,
+ * or it is one of `servedHosts`.
+ */
+export function referrerHost(referrer: unknown, servedHosts?: Iterable<string> | null): string | null {
+  if (typeof referrer !== 'string' || !referrer.trim()) return null;
+  let url: URL;
+  try {
+    url = new URL(referrer.trim());
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  const host = url.hostname.toLowerCase().replace(/\.+$/, '');
+  if (!host) return null;
+  for (const served of servedHosts ?? []) {
+    if (typeof served === 'string' && served.toLowerCase().replace(/\.+$/, '') === host) return null;
+  }
+  return host.slice(0, SOURCE_NAME_MAX - REF_PREFIX.length);
 }
 
 /** The Source name for a lead, by the priority and naming rules above. */
@@ -124,6 +174,9 @@ export function leadSourceName(input: LeadSourceInput): LeadSourceResult {
     const campaign = clean(input.utmCampaign, UTM_SEGMENT_MAX)?.toLowerCase() ?? '-';
     return { kind: 'utm', name: `utm:${source}/${medium}/${campaign}` };
   }
+
+  const host = referrerHost(input.referrer, input.servedHosts);
+  if (host) return { kind: 'referrer', name: `${REF_PREFIX}${host}` };
 
   const vendor = clean(input.vendor?.name, VENDOR_NAME_MAX)?.toLowerCase().replace(/[^a-z0-9_-]/g, '');
   if (vendor) {

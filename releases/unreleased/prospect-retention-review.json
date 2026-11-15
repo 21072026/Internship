@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Prospect retention (MARKETING):** `/admin/retention` lists the accounts past the 24 months every postal letter promises (`PROSPECT_RETENTION_MONTHS`) — no customer history (the shared ever-won check, now `recordsEverWon()` / `relationsEverWon()`), no live contact permission, no contact since (funnel last contact, last letter, last enquiry). `GET /api/admin/retention/prospects` (≤ 50 rows, name + date) and `POST /api/admin/retention/prospects/[id]/erase` (org-scoped, 404 for another org, 409 when not due, AuditLog row) erase the contact columns, enquiry details, address-book entries and letter snapshots by hand; the Company row and the block list stay. A report-only `prospectContact` retention entry counts the backlog — no scheduled erasure (MKT-4).",
+  "notes": {
+    "en": [
+      "Admins of the sales product now see which prospects are past the 24-month retention period promised in every letter, and can erase their contact data with one click per account."
+    ],
+    "tr": [
+      "Satış ürününün yöneticileri artık her mektupta söz verilen 24 aylık saklama süresini aşan potansiyel müşterileri görüyor ve iletişim verilerini hesap başına tek tıkla silebiliyor."
+    ],
+    "de": [
+      "Admins des Vertriebsprodukts sehen jetzt, welche Interessenten die in jedem Brief zugesagte Speicherfrist von 24 Monaten überschritten haben, und können deren Kontaktdaten pro Account mit einem Klick löschen."
+    ]
+  }
+}

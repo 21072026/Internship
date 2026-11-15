@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "**Vertical gates, part 3 (MKT-6a, epic #2348):** the admin APIs behind destinations the nav already hides for a MARKETING org — and whose pages already 404 — now ask `requireCapability()` too: `/api/admin/billing/entitlements`, `/api/admin/forms` (+`/[id]`, `/publish`), `/api/admin/matching/custom-fields` and `/api/admin/nudges` (+`/[id]`, `/sends`, `/preview`) for `mentorship`, `/api/admin/offers/benchmark` for `placements`, `/api/admin/source-users` for `sourcing`. `/api/admin/sources` stays open on purpose: `Source` carries marketing lead attribution and a MARKETING admin reads it. INTERNSHIP is unchanged."
+}

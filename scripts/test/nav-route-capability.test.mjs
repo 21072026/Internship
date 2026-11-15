@@ -42,7 +42,7 @@ test('MARKETING is refused the internship-only surfaces; INTERNSHIP keeps all', 
   const all = [...ADMIN_NAV_LINKS, ...MENTOR_NAV_LINKS, ...PORTAL_NAV_LINKS];
   const M = verticalCapabilities('MARKETING');
   const I = verticalCapabilities('INTERNSHIP');
-  for (const p of ['/admin/newsletters', '/admin/email', '/admin/testimonials', '/admin/re-engagement', '/newsletters', '/admin/goal-templates']) {
+  for (const p of ['/admin/newsletters', '/admin/email', '/admin/testimonials', '/admin/re-engagement', '/newsletters', '/admin/goal-templates', '/interviews', '/interviews/abc']) {
     assert.equal(pathAllowed(all, p, M), false, p);
     assert.equal(pathAllowed(all, p, I), true, p);
   }
@@ -58,9 +58,11 @@ test('ratchet: every capability-tagged destination closes its URL', () => {
   for (const { href } of tagged) {
     if (seen.has(href)) continue;
     seen.add(href);
-    // Segments outside the gated shells close by other means: /interviews and
     // /mentor/* and /portal/* sit behind shell-level vertical gates (#2351).
-    if (!href.startsWith('/admin/') && href !== '/newsletters') continue;
+    // /interviews has a shell of its own, so it carries the same one-line gate
+    // as an admin segment (MKT-6a — the comment here used to claim a shell gate
+    // that its layout did not have).
+    if (!href.startsWith('/admin/') && href !== '/newsletters' && href !== '/interviews') continue;
     const file = new URL(`../../src/app${href}/layout.tsx`, import.meta.url);
     if (!existsSync(file) || !readFileSync(file, 'utf8').includes(`gatePage('${href}')`)) missing.push(href);
   }

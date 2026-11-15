@@ -5,6 +5,7 @@ import { tenantWhere } from '@/lib/tenantFilter';
 import { requirePermission } from '@/lib/authz';
 import { matchableCustomFields, type CustomAnswerDb } from '@/lib/matching/customAnswers';
 import { matchableAttributes, type AttributeValueDb } from '@/lib/matching/attributeValues';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // GET — the org's matchable admin-defined questions (#1803) and its org
 // attributes (#3424): key, type and labels only, so a score breakdown can name
@@ -15,6 +16,9 @@ export async function GET(request: Request) {
   const gate = await requirePermission('program.read', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // Matching criteria are the mentorship module (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return withTenantScope(session, async () => {
     const tenant = await tenantWhere(session);
     return NextResponse.json({

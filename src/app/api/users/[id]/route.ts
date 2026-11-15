@@ -179,6 +179,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         sessionsValidFrom?: Date;
         deactivatedBy?: string | null;
         rosterAbsentSince?: null;
+        salesDispatcher?: boolean;
       } = {};
       let roleUnchanged = false;
       // The admin's choice for a promoted mentee's own open relations (#1506).
@@ -224,6 +225,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           // Recorded so a roster feed can tell its own deactivation from a
           // human's: a feed reactivates only what a feed switched off (#1966).
           data.deactivatedBy = session.user.id;
+          // A dispatcher who leaves stops being one (#3656): a later reactivation
+          // must not silently bring the whole sales book back.
+          data.salesDispatcher = false;
           const target = await prisma.user.findUnique({
             where: { id },
             select: { emailVerified: true, ssoExempt: true, orgId: true },
@@ -409,6 +413,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
           previousRole = target.role;
           convertedUser = target;
           data.role = body.role;
+          // A role change ends the sales-dispatcher grant (#3656); an admin grants it again on purpose.
+          data.salesDispatcher = false;
           // `role` lives in the JWT from sign-in until an explicit update(), so
           // without this a demoted mentor would keep a live staff-shell token.
           // Revoke every session (the sign-out-all cutoff); the next sign-in

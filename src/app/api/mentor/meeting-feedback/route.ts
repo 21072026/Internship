@@ -5,6 +5,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { mentorMeetingQuality } from '@/lib/meetingFeedback';
 import { effectiveMinResponses } from '@/lib/surveyPrivacy';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // How a mentor's meetings were rated (#1896) — the AGGREGATE only, and only
 // above the response floor: `{ n, avgHelpfulness, happenedRate }` or `null`.
@@ -18,6 +19,9 @@ export async function GET(request: Request) {
   const gate = await requireRoleOrPermission(['MENTOR'], 'analytics.read', { request });
   if ('error' in gate) return gate.error;
   const { session, admin } = gate;
+  // Feedback on mentorship meetings (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return withTenantScope(session, async () => {
     let mentorId = session.user.id;
     if (admin) {

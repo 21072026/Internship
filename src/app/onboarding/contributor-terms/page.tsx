@@ -6,6 +6,7 @@ import { getActiveTerms, hasAcceptedContributorTerms } from '@/lib/contributorTe
 import { templateToHtml } from '@/lib/renderTemplate';
 import { formatDate } from '@/lib/relativeTime';
 import { ContributorTermsAccept } from '@/components/ContributorTermsAccept';
+import { gateCapability } from '@/lib/pageCapabilityGate';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +24,8 @@ export default async function ContributorTermsStepPage({
 }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/auth/signin?callbackUrl=/onboarding/contributor-terms');
+  // The contributor terms gate joining a project — the projects module (MKT-6a).
+  await gateCapability('projects');
 
   const { next } = await searchParams;
   const nextHref = next && next.startsWith('/') && !next.startsWith('//') ? next : '/portal/projects';

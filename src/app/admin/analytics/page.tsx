@@ -19,6 +19,7 @@ import { ProgramBenchmark } from '@/components/admin/ProgramBenchmark';
 import { SourceConversion } from '@/components/admin/SourceConversion';
 import { MatchQuality } from '@/components/admin/MatchQuality';
 import { TrialConversionCard, type TrialConversionData } from '@/components/admin/TrialConversionCard';
+import { GoLiveMetricsCard, type GoLiveMetricsData } from '@/components/admin/GoLiveMetricsCard';
 import { DealValueCard } from '@/components/admin/DealValueCard';
 import { BarChart, LineChart } from '@/components/charts';
 import { useT } from '@/i18n/client';
@@ -165,6 +166,11 @@ interface FunnelKpi {
   // `bySource` is null while the premium tier is off.
   trialConversion?: TrialConversionData | null;
   journeys: number;
+  // The go-live week numbers (#2578) — present for a MARKETING org only; an
+  // INTERNSHIP payload does not carry the keys and the card is not drawn.
+  medianFirstContactHours?: GoLiveMetricsData['medianFirstContactHours'];
+  firstContact?: GoLiveMetricsData['firstContact'];
+  trialEndCoverage?: GoLiveMetricsData['trialEndCoverage'];
 }
 
 export default function AdminAnalyticsPage() {
@@ -319,7 +325,11 @@ export default function AdminAnalyticsPage() {
           )}
           <Button variant="outline" size="sm" onClick={exportExcel} disabled={!data || !canExport} title={entitlements && !canExport ? t.common.exportLocked : undefined}>{t.analytics.exportExcel}</Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}>{t.analytics.print}</Button>
-          {/* First destination (#1912) is a compliance report, not an upsell. */}
+          {/* First destination (#1912) is a compliance report, not an upsell.
+              It, the closure report and the ROI screen are the internship
+              product's (#2348): hidden — and their pages and APIs closed — in a
+              vertical without `mentorship`. */}
+          {showMentorship && (<>
           <Link href="/admin/analytics/outcomes" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="outcomes-link">
             {t.outcomes.link}
           </Link>
@@ -327,15 +337,18 @@ export default function AdminAnalyticsPage() {
           <Link href="/admin/analytics/closure" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="closure-link">
             {t.closure.link}
           </Link>
+          </>)}
           {premium && (
             <>
               <Button variant="outline" size="sm" onClick={exportFullExcel} disabled={!data || !canExport} title={entitlements && !canExport ? t.common.exportLocked : undefined} data-testid="full-report-excel">{t.analytics.fullReportExcel}</Button>
               <Link href="/admin/analytics/report" className="inline-flex items-center px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors" data-testid="full-report-link">
                 {t.analytics.fullReport}
               </Link>
-              <Link href="/admin/analytics/roi" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="roi-link">
-                {t.roi.screen.openFromAnalytics}
-              </Link>
+              {showMentorship && (
+                <Link href="/admin/analytics/roi" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="roi-link">
+                  {t.roi.screen.openFromAnalytics}
+                </Link>
+              )}
               <Link href="/admin/analytics/executive" className="inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800 transition-colors" data-testid="executive-link">
                 {t.executive.openFromAnalytics}
               </Link>
@@ -703,6 +716,14 @@ export default function AdminAnalyticsPage() {
       {/* Trial → paid (#2556) — only for a tenant whose stage set has a trial
           stage; the route returns null for everyone else. */}
       {kpi?.trialConversion && <TrialConversionCard data={kpi.trialConversion} />}
+
+      {/* Go-live week (#2578) — MARKETING only: the route sends these keys for
+          no other vertical. */}
+      {kpi && kpi.medianFirstContactHours !== undefined && kpi.firstContact && kpi.trialEndCoverage && (
+        <GoLiveMetricsCard
+          data={{ medianFirstContactHours: kpi.medianFirstContactHours, firstContact: kpi.firstContact, trialEndCoverage: kpi.trialEndCoverage }}
+        />
+      )}
 
       {/* The estimated value of won deals (#2422) — MARKETING only: the route
           answers `enabled: false` for any other vertical and the card then

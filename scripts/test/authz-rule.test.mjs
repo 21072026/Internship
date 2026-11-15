@@ -144,3 +144,26 @@ test('authz.ts stays server-only and the vertical gate keeps its own name', () =
   const gate = readFileSync(new URL('../../src/lib/capabilityGate.ts', import.meta.url), 'utf8');
   assert.match(gate, /export async function requireCapability\(/);
 });
+
+// ── The sales dispatcher (#3656) ─────────────────────────────────────────────
+
+test('a sales dispatcher is an owner on its own org\u2019s records, never an admin', async () => {
+  const { dispatcherCovers } = await import('../../src/lib/authzRule.ts');
+  const rep = actor({ role: 'MENTOR', adminLevel: null, orgId: 'org-a', salesDispatcher: true });
+  // decide() grants a dispatcher NOTHING: routes read its answers as "is an
+  // admin" (admin-only fields, stage gates, relation creation).
+  for (const p of ['program.read', 'relation.write', 'pipeline.transition', 'user.write']) {
+    assert.deepEqual(decide({ actor: rep, permission: p, subject: { orgId: 'org-a' } }), { allow: false, reason: 'no_tier' }, p);
+  }
+  // The owner-level check: its own org only.
+  assert.equal(dispatcherCovers(rep, 'org-a', true), true);
+  assert.equal(dispatcherCovers(rep, 'org-a', false), true);
+  assert.equal(dispatcherCovers(rep, 'org-b', false), false);
+  assert.equal(dispatcherCovers(rep, null, false), false);
+  assert.equal(dispatcherCovers({ ...rep, orgId: null }, 'org-a', false), false);
+  // Impersonated: reads only.
+  assert.equal(dispatcherCovers({ ...rep, impersonatorId: 'admin-1' }, 'org-a', true), false);
+  assert.equal(dispatcherCovers({ ...rep, impersonatorId: 'admin-1' }, 'org-a', false), true);
+  // Without the effective flag, nothing.
+  assert.equal(dispatcherCovers({ ...rep, salesDispatcher: false }, 'org-a', false), false);
+});

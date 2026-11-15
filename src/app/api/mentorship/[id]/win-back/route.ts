@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { actorFromSession, can } from '@/lib/authz';
+import { actorFromSession, can, dispatcherMay } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -38,7 +38,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         select: { id: true, orgId: true, status: true, mentorId: true, pipelineStatus: true },
       });
       if (!relation) return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
-      if (!isAdmin && relation.mentorId !== session.user.id) {
+      // The owner, or the org's sales dispatcher on this record (#3656).
+      if (!isAdmin && relation.mentorId !== session.user.id && !dispatcherMay(actor, 'relation.write', relation.orgId)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
       const parsed = bodySchema.safeParse(await request.json().catch(() => null));

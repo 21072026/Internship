@@ -76,9 +76,17 @@ Until this runs, the marketing landing's form is closed — by design.
   referrer on our own host is not a source (`src/lib/inquiryAttribution.ts`). Stored raw;
   when the enquiry becomes a lead, its lead person is bound to the org's `Source`
   named by `leadSourceName()` (#2570, `src/lib/leadSourceName.ts`):
-  `utm:<source>/<medium>/<campaign>`, created in the org when missing. No
-  `utm_source` = unknown = no Source (the attribution report's `unsourced` bucket).
-  The referrer is not mapped yet.
+  `utm:<source>/<medium>/<campaign>`, created in the org when missing. Without
+  `utm_source`, the stored referrer's **host** names it instead (#2578): `ref:<host>`,
+  lower-cased, no port, path or query, so every page of one site is one Source. A referrer
+  on any host this deployment serves (`servedHosts()`, not only the one the request came
+  in on), an empty one or one that does not parse is no Source. Neither = unknown = no
+  Source (the attribution report's `unsourced` bucket). The order is affiliate >
+  `utm_source` > `ref:<host>` > vendor > `acquisition_source` > unknown. **Rows stored
+  before #2578 are not backfilled:** a lead keeps the Source it was given when it was
+  created, and only enquiries converted from now on take the referrer into account.
+  What the form stores is unchanged; only the mapping is, so the privacy text version
+  stays as it is.
 - **No IP address** — neither on the row nor in the activity log of an automatic placement.
 - `receivedHost`, the hostname the request arrived on.
 

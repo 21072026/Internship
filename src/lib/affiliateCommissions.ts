@@ -1,7 +1,9 @@
 // Reading the programme's commissions for the admin screen (docs/affiliate-module.md,
 // #3116). Every write is in src/lib/affiliatePaymentWriter.ts.
 
+import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { commissionOrderBy, listDateRange, type ListQuery } from '@/lib/affiliateListQueryRule';
 
 export const COMMISSIONS_PER_PAGE = 50;
 export const COMMISSION_STATUSES = ['PENDING', 'APPROVED', 'PAID', 'REJECTED'] as const;
@@ -20,24 +22,42 @@ export interface CommissionRow {
   customerRef: string;
   /** The admin-written label the partner sees (#3352); null when none. */
   customerLabel: string | null;
-  payment: { amountMinor: number; externalPaymentRef: string };
+  payment: { amountMinor: number; transactionCount: number | null; unitPriceMinor: number | null; externalPaymentRef: string };
   paidAt: string | null;
 }
 
 export async function listCommissions(
   orgId: string,
-  opts: { status?: CommissionStatus | null; partnerId?: string | null; page?: number } = {},
+  opts: {
+    status?: CommissionStatus | null;
+    partnerId?: string | null;
+    page?: number;
+    /** The admin list's filters and sort (#3539, src/lib/affiliateListQueryRule.ts). */
+    kind?: CommissionRow['kind'] | null;
+    from?: string | null;
+    to?: string | null;
+    sort?: ListQuery['sort'];
+    dir?: ListQuery['dir'];
+  } = {},
 ): Promise<{ rows: CommissionRow[]; total: number; page: number; perPage: number; totals: Record<CommissionStatus, { count: number; amountMinor: number }> }> {
   // Bounded: a huge or non-finite page would overflow Prisma's `skip`.
   const raw = Math.floor(opts.page ?? 1);
   const page = Number.isFinite(raw) ? Math.min(10_000, Math.max(1, raw)) : 1;
-  const scope = { orgId, ...(opts.partnerId ? { partnerId: opts.partnerId } : {}) };
+  const dueAt = listDateRange({ from: opts.from ?? null, to: opts.to ?? null });
+  // Every filter but the status: the totals per status are those of the filtered list.
+  const scope = {
+    orgId,
+    ...(opts.partnerId ? { partnerId: opts.partnerId } : {}),
+    ...(opts.kind ? { kind: opts.kind } : {}),
+    ...(dueAt ? { dueAt } : {}),
+  };
   const where = { ...scope, ...(opts.status ? { status: opts.status } : {}) };
   const [rows, total, sums] = await Promise.all([
     prisma.affiliateCommission.findMany({
       where,
-      // Oldest due first: the order a payer works through them.
-      orderBy: [{ dueAt: 'asc' }, { id: 'asc' }],
+      // Default: oldest due first, the order a payer works through them.
+      // Built from the rule's constant table; the cast only names Prisma's type.
+      orderBy: commissionOrderBy({ sort: opts.sort ?? 'due', dir: opts.dir ?? 'asc' }) as Prisma.AffiliateCommissionOrderByWithRelationInput[],
       skip: (page - 1) * COMMISSIONS_PER_PAGE,
       take: COMMISSIONS_PER_PAGE,
       select: {
@@ -52,7 +72,7 @@ export async function listCommissions(
         paidAt: true,
         partner: { select: { id: true, code: true, displayName: true } },
         customer: { select: { externalRef: true, partnerLabel: true } },
-        payment: { select: { amountMinor: true, externalPaymentRef: true } },
+        payment: { select: { amountMinor: true, transactionCount: true, unitPriceMinor: true, externalPaymentRef: true } },
       },
     }),
     prisma.affiliateCommission.count({ where }),

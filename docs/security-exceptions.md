@@ -219,6 +219,32 @@ desenin bu olmasına dayanıyor. Security → Code scanning'de kural/satır bund
 başkasını gösteriyorsa bu bölüm yanlıştır: o zaman doğru hamle bu maddeyi
 silip uyarıyı gerçekten adıyla ele almak.
 
+### CSP: `style-src 'unsafe-inline'` ve yalnız geliştirmede `'unsafe-eval'` (#1552)
+
+**Ne:** Sıkı CSP'de (`src/lib/cspPolicy.cjs`, [`csp.md`](csp.md)) `script-src`
+nonce + `'strict-dynamic'` taşıyor, `'unsafe-inline'` yok. İki taviz kaldı:
+
+- **`'unsafe-eval'` yalnız `next dev`'de.** Bağımlılık: **React'in geliştirme
+  çalışma zamanı** ve Next.js'in dev webpack runtime'ı (`eval` ile kaynak harita
+  sarmalayan modüller). Üretim build'i (`NODE_ENV=production`) bunu **hiç
+  almıyor**; `scripts/test/csp-policy.test.mjs` ikisini de sabitliyor.
+  Üretimde eval isteyen tek kod zod 4'ün JIT yoklamasıydı (`allowsEval`:
+  `try { Function("") } catch {}`, `zod/v4/core/util.js`) — rapor akışındaki
+  tek ihlaldi. Kaldırılmadı, **kapatıldı** (#3642): `src/lib/zodBrowserConfig.ts`
+  (`src/instrumentation-client.ts`'ten) tarayıcıda `jitless` açıyor, zod yoklamayı ve `new Function`
+  derlemesini atlıyor. Sunucu tarafı JIT'i koruyor (orada CSP yok).
+- **`style-src 'unsafe-inline'`.** React `style` özniteliği yazıyor, Next.js ve
+  Tailwind stil enjekte ediyor; bir nonce öznitelikleri kapsayamaz. #1552'nin
+  kapsamı `script-src`; stil enjeksiyonu betik çalıştırmaz.
+
+**Nerede açık:** Deploy'larda sıkı politika **varsayılan olarak report-only**;
+zorunlu mod `CSP_ENFORCE=1` ile açılıyor (yeniden build gerekmez, env +
+yeniden başlatma). E2E sunucuları onu **zorunlu** koşuyor, yani PR kapısı ve
+zamanlanmış tam suite her sayfayı zorunlu politika altında açıyor.
+
+**Ne zaman kapanır:** Prod'da `CSP_ENFORCE=1` açılıp `csp.violation`
+akışı sessiz kaldığında bu madde yalnız `style-src`'ye iner.
+
 ## Yeni bir istisna eklerken
 
 0. Bulgu kod taramasından mı geliyor (bağımlılık değil)? Üstteki "Kod taraması"

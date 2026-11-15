@@ -17,6 +17,9 @@ import type { AccountState } from '@/lib/accountState';
 import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { SavedViews } from '@/components/SavedViews';
 import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
+import { useVertical } from '@/lib/verticalClient';
+import { verticalCapabilities } from '@/lib/verticals';
+import { hasSalesSurface } from '@/lib/salesSurface';
 
 interface AdminUser {
   id: string;
@@ -28,6 +31,8 @@ interface AdminUser {
   accountState?: AccountState;
   // Break-glass exemption from enforced SSO (#1950). Only admins can hold one.
   ssoExempt?: boolean;
+  // The sales dispatcher (#3656): sees and works the whole sales book.
+  salesDispatcher?: boolean;
   // Does this account have an authenticator enrolled (#1543)? The reset action
   // is only offered where there is a factor to clear.
   twoFactorEnabled?: boolean;
@@ -52,6 +57,7 @@ type RoleLabel = 'admin' | 'mentor' | 'mentee' | 'company' | 'source';
 
 export default function AdminUsersPage() {
   const t = useT();
+  const vertical = useVertical();
   const router = useRouter();
   const { data: session } = useSession();
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -250,6 +256,32 @@ export default function AdminUsersPage() {
   // confirmation is not ceremony: an exemption is a password door into a tenant
   // that has told its auditors it has none, and revoking the last one while
   // enforcement is on is refused server-side for the opposite reason.
+  // The sales dispatcher (#3656, POST /api/admin/users/[id]/sales-dispatcher):
+  // offered on active sales reps of a vertical with the sales board only.
+  const salesBoard = hasSalesSurface('MENTOR', verticalCapabilities(vertical));
+  const toggleSalesDispatcher = async (u: AdminUser) => {
+    if (busyId) return;
+    const next = !u.salesDispatcher;
+    const question = (next ? t.usersAdmin.salesDispatcherGrantConfirm : t.usersAdmin.salesDispatcherRevokeConfirm).replace('{name}', u.fullName);
+    if (!window.confirm(question)) return;
+    setBusyId(u.id);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/sales-dispatcher`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? t.common.error);
+      await load();
+    } catch (e) {
+      setActionError({ userId: u.id, message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const toggleSsoExempt = async (u: AdminUser) => {
     if (busyId) return;
     const next = !u.ssoExempt;
@@ -495,6 +527,9 @@ export default function AdminUsersPage() {
                   {lockedIds.has(u.id) && (
                     <Badge variant="danger" data-testid={`locked-badge-${u.id}`}>{t.usersAdmin.locked}</Badge>
                   )}
+                  {u.salesDispatcher && (
+                    <Badge variant="info" data-testid={`sales-dispatcher-badge-${u.id}`}>{t.usersAdmin.salesDispatcherBadge}</Badge>
+                  )}
                   {u.participantState === 'BENCHED' && (
                     <Badge variant="warning" data-testid={`benched-badge-${u.id}`}>{t.bench.badge}</Badge>
                   )}
@@ -554,6 +589,19 @@ export default function AdminUsersPage() {
                     </Button>
                   )}
                   <RoleConvertButton userId={u.id} fullName={u.fullName} role={u.role} onDone={load} />
+                  {/* Offered to grant on an active rep; offered to REVOKE on any row still carrying it. */}
+                  {salesBoard && ((u.role === 'MENTOR' && u.isActive) || u.salesDispatcher) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      loading={busyId === u.id}
+                      disabled={!!busyId}
+                      data-testid={`sales-dispatcher-toggle-${u.id}`}
+                      onClick={() => toggleSalesDispatcher(u)}
+                    >
+                      {u.salesDispatcher ? t.usersAdmin.salesDispatcherRevoke : t.usersAdmin.salesDispatcherGrant}
+                    </Button>
+                  )}
                   {/* Only an active admin may hold the exemption — the endpoint
                       enforces that; the button simply does not offer it to
                       anyone else. */}

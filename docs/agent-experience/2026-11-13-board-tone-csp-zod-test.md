@@ -1,0 +1,7 @@
+# 2026-11-13 — #3675 follow-ups: board tone and the CSP/zod test
+
+- **A CSP regression test needs a negative control, and the build itself is the control.** Commenting out `installBrowserZodConfig();` failed `next build` on lint, because the import was now unused. `void installBrowserZodConfig;` keeps the import used and drops the call. The spec was red without the call in both `E2E_CSP_MODE=enforce` (the suite default, `CSP_ENFORCE=1`) and `report`, with exactly `{"blocked":"eval","directive":"script-src"}`, and green with it.
+- **e2e runs the strict CSP ENFORCED**, so a page carries `content-security-policy` with the nonce, not the `-report-only` header a local `next start` shows. Read whichever of the two holds `'nonce-`. A refused eval fires `securitypolicyviolation` in both modes.
+- **Collect CSP violations from the first byte with `page.addInitScript`** and a `securitypolicyviolation` listener on `document`. Module-load code (zod building schemas) runs before any `page.evaluate` could attach one.
+- **zod 4 probes `new Function` in the `$ZodObject` initializer** (`allowsEval.value` in `zod/v4/core/schemas.js`), not on the first parse. That is why only `src/instrumentation-client.ts` is early enough.
+- **The accent remap in `globals.css` covers named utilities one by one.** `ring-blue-500` had only its `focus:` and `focus-visible:` variants mapped, so a plain ring stayed blue in an accented org. Add the bare class next to its variants.

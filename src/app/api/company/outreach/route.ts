@@ -52,6 +52,10 @@ const POOL_RATE_LIMIT = { limit: 20, windowMs: 24 * 60 * 60 * 1000 };
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // The company portal is the internship product's (#2348 MKT-2): the reads are
+  // gated like the writes, so a vertical without `placements` gets nothing here.
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
   const orgId = resolveOrgId(session);
   if (!orgId) return NextResponse.json({ requests: [] });
   const scope = outreachActorWhere({ role: session.user.role, userId: session.user.id, orgId, companyId: session.user.companyId });

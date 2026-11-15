@@ -3,6 +3,9 @@ import { test, expect } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
 import { signInAndSettle, gotoSettled, MARKETING_HOST, asHost } from './helpers/auth';
 import { partnerFunnels, partnerThresholds } from '../src/lib/affiliateFunnel';
+import { affiliateFunnelBoard } from '../src/lib/affiliateFunnelBoard';
+import { formatMinorAmount } from '../src/lib/money';
+import { monthKey } from '../src/lib/affiliateTrendRule';
 import { formatDate } from '../src/lib/relativeTime';
 
 /**
@@ -15,7 +18,9 @@ import { formatDate } from '../src/lib/relativeTime';
  * threshold), and the customer list carries a status badge and a status filter.
  * Another partner of the same org has customers and clicks too: none of them
  * reach this partner's numbers. The portal's numbers equal what the shared
- * aggregate returns for the admin side (every partner, no narrowing).
+ * aggregate returns for the admin side (every partner, no narrowing). The last
+ * test pins the earnings per click, the campaign table and the 12-month trend
+ * (#3545) the same way.
  *
  * SYNTHETIC ONLY: a throwaway MARKETING org per run, invented references, currency XTS.
  */
@@ -102,6 +107,7 @@ test.afterAll(async () => {
   if (orgId) {
     const where = { orgId };
     await prisma.affiliateClickDaily.deleteMany({ where }).catch(() => {});
+    await prisma.affiliateClickCampaignDaily.deleteMany({ where }).catch(() => {});
     await prisma.affiliateCommission.deleteMany({ where }).catch(() => {});
     await prisma.affiliatePayment.deleteMany({ where }).catch(() => {});
     await prisma.affiliateCustomer.deleteMany({ where }).catch(() => {});
@@ -189,4 +195,62 @@ test('the customer list carries a status badge and filters by status, own custom
   // An unknown status is no filter at all.
   await gotoSettled(page, '/affiliate/customers?status=BOGUS');
   await expect(table.locator('tbody tr')).toHaveCount(7);
+});
+
+test('earnings per click, campaigns and the 12-month trend: own numbers, same as the admin board (#3545)', async ({ page }) => {
+  const payment = async (ref: string, receivedAt?: Date) =>
+    prisma.affiliatePayment.findFirstOrThrow({
+      where: { orgId, customer: { externalRef: `${ref}-${STAMP}` }, ...(receivedAt ? { receivedAt } : {}) },
+      orderBy: { receivedAt: 'asc' },
+      select: { id: true, customerId: true, customer: { select: { partnerId: true } } },
+    });
+  const commission = async (p: Awaited<ReturnType<typeof payment>>, amountMinor: number, accruedAt: Date, status: 'PENDING' | 'APPROVED' | 'PAID' | 'REJECTED') =>
+    prisma.affiliateCommission.create({
+      data: { orgId, partnerId: p.customer.partnerId, customerId: p.customerId, paymentId: p.id, kind: 'TIER', amountMinor, currency: 'XTS', accruedAt, dueAt: accruedAt, planVersion: 1, status },
+    });
+  // This month: 300 pending + 500 approved earned, 900 rejected never was. 90 days ago: 400 paid.
+  await commission(await payment('NEWPAY'), 300, thisMonth, 'PENDING');
+  await commission(await payment('OLDACTIVE', ago(10)), 500, thisMonth, 'APPROVED');
+  await commission(await payment('ANCIENT', ago(5)), 900, thisMonth, 'REJECTED');
+  await commission(await payment('OLDACTIVE', ago(150)), 400, ago(90), 'PAID');
+  // Another partner's money and campaign: never in these numbers.
+  await commission(await payment('THEIRS1'), 7_000, thisMonth, 'APPROVED');
+  await prisma.affiliateClickCampaignDaily.createMany({
+    data: [
+      { orgId, partnerId: ids.mine, day: utcDay(thisMonth), campaign: 'newsletter', clicks: 5, uniqueClicks: 4 },
+      { orgId, partnerId: ids.mine, day: utcDay(thisMonth), campaign: 'video', clicks: 2, uniqueClicks: 2 },
+      { orgId, partnerId: ids.mine, day: utcDay(ago(90)), campaign: 'newsletter', clicks: 10, uniqueClicks: 9 },
+      { orgId, partnerId: ids.theirs, day: utcDay(thisMonth), campaign: 'secret', clicks: 50, uniqueClicks: 50 },
+    ],
+  });
+
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mineEmail, PW, '/affiliate');
+
+  // Month: 800 earned over 8 clicks.
+  await expect(page.getByTestId('affiliate-epc-value')).toHaveText(`${formatMinorAmount(100, 'XTS', 'en')} per click`);
+  const rows = page.getByTestId('affiliate-campaign-row');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0).locator('td')).toHaveText(['newsletter', '5', '4']);
+  await expect(rows.nth(1).locator('td')).toHaveText(['video', '2', '2']);
+  await expect(page.getByTestId('affiliate-campaign-untagged').locator('td').nth(1)).toHaveText('1');
+  await expect(page.getByTestId('affiliate-campaigns')).not.toContainText('secret');
+
+  // The trend: this month and the month 90 days ago, from the funnel's definitions.
+  await page.getByTestId('affiliate-trend').locator('summary').click();
+  const cellsOf = (month: string) => page.getByTestId(`affiliate-trend-row-${month}`).locator('td');
+  await expect(cellsOf(monthKey(now))).toHaveText([/.+/, '8', '3', '1']);
+  await expect(cellsOf(monthKey(ago(90))).nth(1)).toHaveText('20');
+  await expect(page.getByTestId('affiliate-trend-table').locator('tbody tr')).toHaveCount(12);
+
+  // Year: 1 200 over 28 clicks = 42.86 → 43; the newsletter has 15 clicks in it.
+  await gotoSettled(page, '/affiliate?period=year');
+  await expect(page.getByTestId('affiliate-epc-value')).toHaveText(`${formatMinorAmount(43, 'XTS', 'en')} per click`);
+  await expect(rows.nth(0).locator('td')).toHaveText(['newsletter', '15', '13']);
+
+  // The admin board reads the same aggregate.
+  const board = await affiliateFunnelBoard(orgId, { period: 'month' });
+  expect(board.currency).toBe('XTS');
+  expect(board.rows.find((r) => r.partnerId === ids.mine)).toMatchObject({ earnedMinor: 800, earningsPerClick: 100 });
+  expect(board.rows.find((r) => r.partnerId === ids.theirs)).toMatchObject({ earnedMinor: 7_000, earningsPerClick: 71 });
 });

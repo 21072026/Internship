@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { logActivity } from '@/lib/activity';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // Programme cost ledger (#1892) — the cost side of the ROI report.
 //
@@ -80,6 +81,9 @@ export async function GET(request: Request) {
   const gate = await requirePermission('analytics.read', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // The programme cost ledger belongs to the programme (mentorship) module (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'No organization' }, { status: 400 });
@@ -109,6 +113,9 @@ export async function POST(request: Request) {
   const gate = await requirePermission('org.settings.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // The programme cost ledger belongs to the programme (mentorship) module (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'No organization' }, { status: 400 });
@@ -161,6 +168,9 @@ export async function PATCH(request: Request) {
   const gate = await requirePermission('org.settings.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // The programme cost ledger belongs to the programme (mentorship) module (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'No organization' }, { status: 400 });
@@ -221,6 +231,9 @@ export async function DELETE(request: Request) {
   const gate = await requirePermission('org.settings.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // The programme cost ledger belongs to the programme (mentorship) module (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const orgId = resolveOrgId(session);
     if (!orgId) return NextResponse.json({ error: 'No organization' }, { status: 400 });

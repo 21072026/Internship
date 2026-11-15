@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireCapability } from '@/lib/capabilityGate';
 import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
@@ -33,6 +34,9 @@ const bodySchema = z.strictObject({ action: z.enum(['approve', 'decline', 'revok
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Outreach is a placement feature (the request route is gated the same way, #2348 MKT-2).
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
   const orgId = resolveOrgId(session);
   if (!orgId) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const parsed = bodySchema.safeParse(await request.json().catch(() => null));

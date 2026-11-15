@@ -29,6 +29,8 @@ import { TrialEndChip } from '@/components/TrialEndPanel';
 import { SavedViews } from '@/components/SavedViews';
 import { isWipSaturated, type WipColumn } from '@/lib/boardWip';
 import { HelpTip } from '@/components/guidance/HelpTip';
+import { HandoffCardButton, useLeadHandoff } from '@/components/board/LeadHandoff';
+import { BoardOwnerFilter, useOwnerOptions } from '@/components/board/BoardOwnerFilter';
 
 interface Relation {
   id: string;
@@ -77,6 +79,22 @@ export default function AdminBoardPage() {
   const [loading, setLoading] = useState(true);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const { search, setSearch, hideEmpty, setHideEmpty } = useBoardFilters();
+  // The owner filter (#3658): which owners' records the board shows. Kept in
+  // the URL (`?owners=`) so a filtered board can be bookmarked and shared, and
+  // sent to the server so counts and paging match what is on screen.
+  const ownerOptions = useOwnerOptions();
+  const [owners, setOwnersState] = useState<string[]>([]);
+  useEffect(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get('owners');
+    if (fromUrl) setOwnersState(fromUrl.split(',').filter(Boolean));
+  }, []);
+  const setOwners = useCallback((ids: string[]) => {
+    setOwnersState(ids);
+    const url = new URL(window.location.href);
+    if (ids.length) url.searchParams.set('owners', ids.join(','));
+    else url.searchParams.delete('owners');
+    window.history.replaceState(window.history.state, '', url);
+  }, []);
   const [mobileStage, setMobileStage] = useState('');
   // The groups the VIEWER actually has (#828) — built from the resolved stages,
   // so a customized pipeline is not silently dropped on the desktop board.
@@ -95,9 +113,10 @@ export default function AdminBoardPage() {
     (extra: Record<string, string> = {}) => {
       const params = new URLSearchParams({ view: 'board', ...extra });
       if (serverSearch) params.set('search', serverSearch);
+      if (owners.length) params.set('owners', owners.join(','));
       return `/api/mentorship?${params}`;
     },
-    [serverSearch]
+    [serverSearch, owners]
   );
 
   const fetchRelations = useCallback(async () => {
@@ -201,6 +220,15 @@ export default function AdminBoardPage() {
   // Gate for drag-and-drop and the per-card stage select: a move into a
   // negative/off-path stage collects a reason first (#810); everything else
   // goes straight to moveTo as before.
+  // The colleague strip (LeadHandoff.tsx): a MARKETING board only — the team
+  // endpoint answers 403 in every other vertical, which leaves it disabled. An
+  // admin may also take a record onto their own book, so they are on it too.
+  const leadHandoff = useLeadHandoff({
+    includeSelf: true,
+    nameOf: useCallback((id: string) => relationsRef.current.find((r) => r.id === id)?.mentee.fullName, []),
+    onHandedOff: fetchRelations,
+  });
+
   const [pendingMove, setPendingMove] = useState<{ relationId: string; toStatus: string } | null>(null);
   const requestMove = (relationId: string, toStatus: string) => {
     if (stages.find((s) => s.key === toStatus)?.isOffPath) {
@@ -232,6 +260,7 @@ export default function AdminBoardPage() {
   const itemsFor = (status: string) =>
     relations.filter(
       (r) => r.pipelineStatus === status &&
+        (owners.length === 0 || owners.includes(r.mentor.id)) &&
         (!q || r.mentee.fullName.toLowerCase().includes(q) || r.mentor.fullName.toLowerCase().includes(q))
     );
 
@@ -289,8 +318,14 @@ export default function AdminBoardPage() {
           <p className="text-xs text-gray-500 truncate mt-0.5">{r.mentee.university}</p>
         )}
         <div className="flex items-center gap-3 text-xs text-gray-400 mt-2">
-          <span className="flex items-center gap-1 truncate">
-            <User className="h-3 w-3 flex-shrink-0" />
+          <span className="flex items-center gap-1 truncate" data-testid="board-card-owner">
+            {/* Whose record it is, at a glance (#3658): the owner's initials. */}
+            <span
+              aria-hidden="true"
+              className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-gray-200 text-[9px] font-semibold text-gray-700 dark:bg-gray-700 dark:text-gray-200"
+            >
+              {r.mentor.fullName.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]!.toUpperCase()).join('') || <User className="h-3 w-3" />}
+            </span>
             {/* stopPropagation lives in the card itself, so opening it does not
                 also open the mentee behind the card's click-through. */}
             <PersonHoverCard personId={r.mentor.id} name={r.mentor.fullName} role="MENTOR" className="truncate" />
@@ -308,6 +343,7 @@ export default function AdminBoardPage() {
         </div>
         {r.nextActionAt && <div className="mt-1"><FollowUpChip at={r.nextActionAt} /></div>}
         <div className="mt-1 empty:hidden"><TrialEndChip pipelineStatus={r.pipelineStatus} trialEndsAt={r.trialEndsAt} /></div>
+        {leadHandoff.enabled && <HandoffCardButton onClick={() => leadHandoff.openFor(r.id)} />}
       </div>
     );
   };
@@ -336,8 +372,10 @@ export default function AdminBoardPage() {
         // handle is the header text, which also matches every card's "Move to
         // stage" <option> and trips strict mode (#828).
         data-testid={`board-column-${status}`}
-        // The drop target is highlighted with bg-blue-50, which forced-colors
-        // discards; this attribute lets globals.css outline it instead (#2045).
+        // The drop target keeps its stage tone and gains an accent ring
+        // (ring-blue-500, remapped to the org accent in globals.css), which
+        // forced-colors discards; this attribute lets globals.css outline it
+        // instead (#2045).
         data-drop-active={dragOver === status ? 'true' : undefined}
         onDragOver={(e) => { e.preventDefault(); setDragOver(status); }}
         onDragLeave={() => setDragOver((s) => (s === status ? null : s))}
@@ -366,6 +404,7 @@ export default function AdminBoardPage() {
   return (
     <div>
       {gateDialog}
+      {leadHandoff.dialog}
       <div className="mb-6">
         <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-gray-100">
           {t.nav.board}
@@ -373,6 +412,7 @@ export default function AdminBoardPage() {
         </h1>
         <p className="text-gray-500 mt-1">{t.adminBoard.subtitle}</p>
       </div>
+      {leadHandoff.strip}
 
       <div className="flex flex-wrap items-center gap-3 mb-4">
         <input
@@ -383,6 +423,7 @@ export default function AdminBoardPage() {
           placeholder={t.adminBoard.searchPlaceholder}
           className="flex-1 min-w-[180px] max-w-sm rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
         />
+        <BoardOwnerFilter options={ownerOptions} selected={owners} onChange={setOwners} />
         <label className="flex items-center gap-2 text-sm text-gray-600">
           <input type="checkbox" checked={hideEmpty} onChange={(e) => setHideEmpty(e.target.checked)} />
           {t.adminBoard.hideEmpty}
@@ -392,10 +433,11 @@ export default function AdminBoardPage() {
         <SavedViews
           storageKey="board-views"
           surface="board"
-          current={{ search, hideEmpty: hideEmpty ? 'true' : 'false' }}
+          current={{ search, hideEmpty: hideEmpty ? 'true' : 'false', owners: owners.join(',') }}
           onApply={(f) => {
             setSearch(f.search || '');
             setHideEmpty(f.hideEmpty === 'true');
+            setOwners((f.owners || '').split(',').filter(Boolean));
           }}
         />
       </div>

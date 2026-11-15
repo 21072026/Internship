@@ -31,6 +31,8 @@ import { tenantWhere, withinTenant, type TenantWhere } from '@/lib/tenantFilter'
 import { relationProgramWhere, resolveProgramFilter } from '@/lib/programFilter';
 import { programRelationWhere } from '@/lib/programScopeRule';
 import { funnelStartedAt } from '@/lib/placement';
+import { verticalFor } from '@/lib/verticalContext';
+import { goLiveMetrics } from '@/lib/goLiveMetrics';
 
 // Hiring-funnel KPIs (#815): the two numbers HR reports upward — stage-to-stage
 // conversion and time-to-hire — plus mentor capacity, all from the StatusChange
@@ -367,6 +369,16 @@ export async function GET(request: Request) {
     // screen's "no capacity section".
     const capacity = capabilities.includes('mentorship') && !grants ? await mentorCapacity(tenant) : [];
 
+    // The go-live week numbers (#2578, docs/marketing-vertical/go-live-checklist.md
+    // §3) — a MARKETING org's only: the time a lead waited for a first contact
+    // and how many live trials carry an end date. Counts over the same window
+    // and the same relation filter as the card; no person, no record. An
+    // INTERNSHIP payload does not carry the keys at all.
+    const goLive =
+      orgId && (await verticalFor(orgId)) === 'MARKETING'
+        ? await goLiveMetrics({ tenant, scope: programWhere, from: rangeOk ? from : null, to: rangeOk ? to : null })
+        : null;
+
     return NextResponse.json({
       order,
       conversions,
@@ -380,6 +392,13 @@ export async function GET(request: Request) {
       // The entry-keyed population: what every number on the card but the
       // retention triangle is computed over.
       journeys: journeys.length,
+      ...(goLive
+        ? {
+            medianFirstContactHours: goLive.firstContact.medianHours,
+            firstContact: goLive.firstContact,
+            trialEndCoverage: goLive.trialEndCoverage,
+          }
+        : {}),
     });
   });
 }

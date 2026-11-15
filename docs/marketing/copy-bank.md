@@ -1230,7 +1230,7 @@ Bu bölümde **soğuk e-posta şablonu yoktur ve olmayacaktır.** Almanya'da:
 | Faks | Yasak (e-posta rejimi) | UWG § 7 |
 | Soğuk arama | Çok dar şartlı; listeyle kampanya yapılamaz | UWG § 7 Abs. 2 Nr. 1, BVerwG 6 C 3.23 |
 | **Fiziki mektup** | **Serbest** (+ Art. 14 DSGVO bilgi notu, Art. 21(2) itiraz hakkı) | UWG § 7 yasak kataloğunda değil |
-| **Muhatabın kendi iletişim formu** | Serbest — kanalı karşı taraf açmış | — |
+| **Muhatabın kendi web iletişim formu** | **E-postayla aynı rejim** — reklam mesajı için `EMAIL` dayanağı (`DOI_CONFIRMED`, `EXISTING_CUSTOMER_7_3`, `INQUIRY_REPLY`) gerekir. Tek dar istisna: form **açıkça ve herkese açık olarak** tam bu tür teklifleri davet ediyorsa (ör. "Kooperationsanfragen / Anbieter bitte hier"); davetin bağlantısı, metni ve tarihi gönderimden önce kayda geçirilir. Müşteri hizmetleri formu ve "Keine Werbung" / "nur Bewerbungen" diyen form hiçbir zaman yetmez | UWG § 7 Abs. 2 Nr. 2 (en dar yorum) — [`outreach-compliance.md` §2](../marketing-vertical/outreach-compliance.md#2-kanal--dayanak-tablosu), açık soru 12; #3694 |
 | **Yüz yüze / etkinlik** | Serbest; rıza orada alınır ve **yazıya geçirilir** | — |
 | **Referansla tanıştırma** | Serbest — teması üçüncü kişi başlatır | — |
 | **Double-opt-in bülten / webinar kaydı** | Serbest; rıza metni ve zamanı loglanır | Art. 7 DSGVO, VG Düsseldorf |
@@ -1244,8 +1244,15 @@ tarih, menfaat dengelemesi notu ve itirazlar kayıt altında tutulur (Art. 5(2) 
 
 ### 9.1 [DE] Persona B — kurumun kendi "iş birliği" formuna yazılacak metin
 
-Kullanım: kariyer merkezi / dual-study koordinatörlüğü / mentorluk programı **kendi sitesinde**
-"Unternehmen, schreiben Sie uns" türü bir form yayımlamışsa. Kanalı karşı taraf açmıştır.
+Kullanım — **yalnızca** §9.0'daki dar istisna geçerliyse ([`outreach-compliance.md` §2](../marketing-vertical/outreach-compliance.md#2-kanal--dayanak-tablosu),
+#3694): kariyer merkezi / dual-study koordinatörlüğü / mentorluk programı kendi sitesindeki formla
+**açıkça ve herkese açık olarak** işletmelerden veya sağlayıcılardan iş birliği / araç teklifi
+davet ediyor (ör. "Kooperationsanfragen von Unternehmen und Anbietern bitte über dieses
+Formular"). Genel bir "Kontakt" formu, öğrenci danışma formu veya "nur Bewerbungen" diyen form
+**yetmez** — o durumda bu metin gönderilmez; kanal fiziki mektuptur (§9.2) ya da etkinliktir (§9.3).
+
+Göndermeden önce kayda geçirilir (CRM'de hesabın notu ya da iletişim izni kanıtı): formun URL'si,
+daveti içeren cümlenin birebir alıntısı ve görüldüğü tarih. Kanıt yoksa gönderim yoktur.
 
 ```text
 [DE]
@@ -1253,7 +1260,8 @@ Betreff: Praktikums- und Mentoring-Programme — Werkzeug und Praxisaustausch
 
 Guten Tag,
 
-ich schreibe über Ihr Kontaktformular für die Zusammenarbeit mit Unternehmen und Programmen.
+Sie laden auf Ihrer Website Unternehmen und Anbieter ausdrücklich ein, Kooperationsangebote über
+dieses Formular zu senden — darauf antworte ich hiermit.
 
 Ich entwickle InternCRM, eine Open-Source-Anwendung für Praktikums- und Mentoring-Programme. Sie
 begleitet Teilnehmende in einer Pipeline vom Erstkontakt über die Betreuung und das Praktikum bis
@@ -1282,7 +1290,8 @@ Mehmet Erşahin
 InternCRM · https://interncrm.com · Impressum: https://interncrm.com/imprint
 ```
 
-*Neden bu metin:* kanalı karşı tarafın açtığını ilk cümlede yazıyor (hukuki bağlamı kayda geçirir),
+*Neden bu metin:* ilk cümle formun **kendi davetine** atıf yapıyor — gönderimin dayandığı tek
+istisnayı metnin içinde de kayda geçirir (davetin kanıtı yine ayrıca saklanır; bkz. yukarı),
 satış talebi yerine **bir soru** soruyor (Persona B'de kabul gören tek giriş), ve Impressum linkiyle
 bitiyor — § 5 DDG ile uyumun görünür hâli.
 

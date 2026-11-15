@@ -21,10 +21,22 @@ import { analyticsCspHosts as cspHosts } from '@/lib/analyticsCsp.cjs';
 
 export type ProviderId = 'plausible' | 'ga4' | 'posthog';
 
+/** The globals the providers' loaders define, as far as `init` touches them. */
+export type AnalyticsWindow = {
+  dataLayer?: unknown[];
+  gtag?: (...args: unknown[]) => void;
+  posthog?: { init?: (key: string, options: Record<string, unknown>) => void };
+};
+
 export interface AnalyticsProvider {
   id: ProviderId;
-  /** The <script> to inject once consent is given. */
-  snippet: { src?: string; inline?: string; attrs?: Record<string, string> };
+  /**
+   * The <script> to inject once consent is given, and what to call once it has
+   * loaded. `init` is a function, never script text: under the strict CSP
+   * (#1552, docs/csp.md) an inline <script> we insert carries no nonce and is
+   * blocked — 'strict-dynamic' trusts inserted EXTERNAL scripts only.
+   */
+  snippet: { src?: string; init?: (w: AnalyticsWindow) => void; attrs?: Record<string, string> };
 }
 
 /**
@@ -54,7 +66,17 @@ export function configuredProviders(env: Record<string, string | undefined> = pr
       id: 'ga4',
       snippet: {
         src: `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(ga4)}`,
-        inline: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config',${JSON.stringify(ga4)},{anonymize_ip:true});`,
+        init: (w) => {
+          const dataLayer = (w.dataLayer = w.dataLayer || []);
+          // gtag.js reads `arguments` objects off the data layer, not arrays —
+          // the same function as Google's snippet, without the inline <script>.
+          w.gtag = function gtag() {
+            // eslint-disable-next-line prefer-rest-params
+            dataLayer.push(arguments);
+          };
+          w.gtag('js', new Date());
+          w.gtag('config', ga4, { anonymize_ip: true });
+        },
       },
     });
   }
@@ -70,7 +92,14 @@ export function configuredProviders(env: Record<string, string | undefined> = pr
         // click and keep an id in localStorage; on a CRM that is mentee
         // behaviour and mentee identity going to a third party. Growth
         // measurement needs pageviews on public pages, not that.
-        inline: `window.posthog&&window.posthog.init(${JSON.stringify(posthogKey)},{api_host:${JSON.stringify(host)},autocapture:false,persistence:'memory',disable_session_recording:true,capture_pageview:true});`,
+        init: (w) =>
+          w.posthog?.init?.(posthogKey, {
+            api_host: host,
+            autocapture: false,
+            persistence: 'memory',
+            disable_session_recording: true,
+            capture_pageview: true,
+          }),
       },
     });
   }

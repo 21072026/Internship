@@ -28,6 +28,10 @@ export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (session.user.role !== 'COMPANY') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  // The company portal is the internship product's (#2348 MKT-2): the reads are
+  // gated like the writes, so a vertical without `placements` gets nothing here.
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
   if (!session.user.companyId) return NextResponse.json({ error: 'Company assignment is required', code: 'company_not_assigned' }, { status: 403 });
   const companyId = session.user.companyId;
   const orgId = resolveOrgId(session);

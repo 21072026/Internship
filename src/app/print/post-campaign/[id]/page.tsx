@@ -8,7 +8,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { tenantWhere } from '@/lib/tenantFilter';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { getServerDictionary } from '@/i18n/server';
-import { operatorIdentity } from '@/lib/imprint';
+import { marketingOperatorConfigured, operatorIdentity } from '@/lib/imprint';
 import { originForWorld } from '@/lib/hostWorld';
 import { worldOfOrg } from '@/lib/userWorld';
 import { findCampaign } from '@/lib/postCampaign';
@@ -50,6 +50,18 @@ export default async function PrintPostCampaign({ params }: { params: Promise<{ 
   const { campaign, recipients } = data;
 
   const world = await worldOfOrg(campaign.orgId);
+  // A marketing letter names the marketing product's own sender, never the
+  // core fallback (#2578): without MARKETING_OPERATOR_* there are no letters.
+  if (world === 'MARKETING' && !marketingOperatorConfigured()) {
+    const { t } = await getServerDictionary();
+    const o = t.postCampaignOperator;
+    return (
+      <div role="alert" data-testid="post-campaign-operator-missing" className="mx-auto my-10 max-w-xl rounded-lg border border-red-300 bg-red-50 p-6 text-red-700">
+        <h1 className="text-lg font-semibold">{o.printBlockedTitle}</h1>
+        <p className="mt-2 text-sm">{o.printBlockedBody}</p>
+      </div>
+    );
+  }
   const operator = operatorIdentity(process.env, world);
   const link = campaignShortLink(originForWorld(world), campaign.code);
   const linkLabel = link.replace(/^https?:\/\//, '');

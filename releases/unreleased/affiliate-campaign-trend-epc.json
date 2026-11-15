@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Affiliate: campaign tags on the tracked link (`/r/<code>?c=<tag>`, `[a-z0-9_-]{1,32}`, an invalid tag ignored while the click still counts; new counter table `AffiliateClickCampaignDaily`, per partner × UTC day × tag, at most 50 tags per partner and day), a 12-month trend of clicks, registrations and paying customers in the partner portal, and earnings per click (commission in the period ÷ clicks) in the portal and as a sortable column of the admin funnel board. The rules are pure in `src/lib/affiliateTrendRule.ts` and `parseCampaignTag()`; registrations are not split by campaign yet (#3545).",
+  "notes": {
+    "en": ["Partners can tag their link with ?c= to compare channels, and the partner portal now shows earnings per click and a 12-month trend of clicks, registrations and paying customers."],
+    "tr": ["Partnerler kanallarını karşılaştırmak için linklerine ?c= ile kampanya etiketi ekleyebiliyor; partner portalı artık tıklama başına kazancı ve tıklama, kayıt ve ödeme yapan müşterilerin 12 aylık trendini gösteriyor."],
+    "de": ["Partner können ihren Link mit ?c= markieren, um Kanäle zu vergleichen, und das Partnerportal zeigt jetzt den Verdienst pro Klick und einen 12-Monats-Verlauf von Klicks, Registrierungen und zahlenden Kunden."]
+  }
+}

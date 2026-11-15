@@ -11,6 +11,7 @@ import { enforceRateLimit } from '@/lib/rateLimit';
 import { AI_RATE_LIMITS } from '@/lib/ai/limits';
 import { settingsOrgOf } from '@/lib/settingsOrg';
 import { hashInput, latestArtifact, toArtifactDto } from '@/lib/ai/artifacts';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // AI interview-prep assistant (Faz 2, #536) — mentee-facing and FREE for the
 // mentee: cost is metered on the org's AI quota; quota exhaustion surfaces as
@@ -23,6 +24,9 @@ import { hashInput, latestArtifact, toArtifactDto } from '@/lib/ai/artifacts';
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Interview practice for a mentee's placement (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const latest = await latestArtifact({ orgId: await settingsOrgOf(session), taskId: 'interview_prep', subjectUserId: session.user.id });
     return NextResponse.json({ configured: isAiConfigured(), latest: latest ? toArtifactDto(latest, session.user.id) : null });
@@ -39,6 +43,9 @@ const schema = z.object({
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Interview practice for a mentee's placement (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
   if (session.user.role !== 'MENTEE') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const userLimited = enforceRateLimit(request, 'ai:interview_prep', {

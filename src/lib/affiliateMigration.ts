@@ -147,6 +147,8 @@ async function writeMigration(
           orgId,
           customerId: customerId.get(sameKey(c.customerRef))!,
           amountMinor: c.paymentAmountMinor,
+          transactionCount: c.transactionCount,
+          unitPriceMinor: c.unitPriceMinor,
           currency,
           receivedAt: c.receivedAt,
           source: 'IMPORT' as const,

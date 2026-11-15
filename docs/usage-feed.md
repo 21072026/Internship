@@ -38,7 +38,7 @@ bulunulan** kararlar.
 | `src/lib/importPreview.ts` | Paylaşılan ayrıştırıcı ve `runImport` motoru | Var (#2072) |
 | `src/lib/jobs/lease.ts`, `src/app/api/cron/route.ts` | Ortam başına tek koşan iş | Var (#1701) |
 | Gecelik kullanım beslemesi işi | Çekme, eşleştirme, upsert, raporlama | **Yok — #2447** |
-| Kullanım sparkline'ı / churn filtresi | Okuma yüzeyleri | #2448 / #2449 |
+| `src/lib/usageRule.ts`, `src/lib/usageSignals.ts` | Okuma yüzeyleri: hesap sayfasındaki kullanım sparkline'ı (#2448) ve dikkat kuyruğundaki kullanım sinyalleri (#2449) — kural bağımlılıksız ve birim testli, Prisma yarısı ayrı | **Var** |
 
 Bu dilim **tablo ve sözleşmedir**; tabloya yazan ilk kod #2447.
 

@@ -34,7 +34,19 @@ export interface ContactPermissionEditorLabels {
   bases: Record<ContactBasis, string>;
 }
 
-export function ContactPermissionEditor({ companyId, labels }: { companyId: string; labels: ContactPermissionEditorLabels }) {
+// `lockedChannels`: the channels whose row the address owner withdrew themselves
+// (`ownerObjected()` — the opt-out link or a recorded objection). The rule refuses
+// every admin write there (`owner_objected`); the editor says so BEFORE anyone
+// types, instead of answering a save with a refusal after the fact.
+export function ContactPermissionEditor({
+  companyId,
+  labels,
+  lockedChannels = [],
+}: {
+  companyId: string;
+  labels: ContactPermissionEditorLabels;
+  lockedChannels?: readonly ContactChannel[];
+}) {
   const router = useRouter();
   const [channel, setChannel] = useState<ContactChannel>('EMAIL');
   const [basis, setBasis] = useState<ContactBasis>('EXISTING_CUSTOMER_7_3');
@@ -70,6 +82,7 @@ export function ContactPermissionEditor({ companyId, labels }: { companyId: stri
   };
 
   const effectiveBasis = bases.includes(basis) ? basis : bases[0];
+  const locked = lockedChannels.includes(channel);
 
   return (
     <form
@@ -128,15 +141,25 @@ export function ContactPermissionEditor({ companyId, labels }: { companyId: stri
         </label>
       )}
       <p className="text-xs text-gray-500">{labels.doiHint}</p>
+      {locked && (
+        <p
+          className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700"
+          role="status"
+          data-testid="contact-permission-locked"
+          data-channel={channel}
+        >
+          {labels.objected}
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" size="sm" loading={busy} data-testid="contact-permission-save">
+        <Button type="submit" size="sm" loading={busy} disabled={locked} data-testid="contact-permission-save">
           {labels.save}
         </Button>
         <Button
           type="button"
           size="sm"
           variant="outline"
-          disabled={busy}
+          disabled={busy || locked}
           data-testid="contact-permission-revoke"
           onClick={() => void send({ action: 'revoke', channel })}
         >

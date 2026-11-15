@@ -95,8 +95,22 @@ MARKETING_OPERATOR_VAT_ID="DE…"
 MARKETING_OPERATOR_RESPONSIBLE="<Geschäftsführer>"
 ```
 
-Bu yapılmadan marketing host'unun Impressum'u ve mektuplar InternCRM operatörünü gösterir —
-outreach-compliance § 6'daki sert blokaj.
+Bu yapılmadan marketing host'unun Impressum'u InternCRM operatörünü gösterir — outreach-compliance
+§ 6'daki sert blokaj. Mektup tarafında bu blokaj kodda uygulanır (#2578):
+
+- **Ret.** Bir MARKETING org'unun kampanyası, `MARKETING_OPERATOR_NAME`, `_EMAIL` ve `_ADDRESS`'in
+  üçü de dolu olmadıkça basılmaz ve postalanmaz (`marketingOperatorConfigured()`,
+  `src/lib/imprint.ts`). `/print/post-campaign/<id>` mektup yerine engelleyici bir uyarı gösterir;
+  "Postalandı olarak işaretle" (`POST /api/admin/post-campaigns/<id>/send`) 409
+  `{ code: 'operator_missing' }` döner ve kampanya taslak kalır. Impressum'un aksine burada
+  `OPERATOR_*`'a **düşülmez**: mektup ilk reklam temasıdır ve göndereni yanlış şirketi gösteremez;
+  dönüş adresi bastığı için posta adresi de tabanın parçasıdır. Değerleri çekirdek `OPERATOR_*`
+  ile aynı olan bir `MARKETING_OPERATOR_*` seti de geçerlidir — aynı şirket iki ürünü de sunabilir,
+  önemli olan bunun açıkça yazılmasıdır. INTERNSHIP org'ları hiç sorulmaz.
+- **Hazırlık satırı.** Deploy log'unda `prisma/check-marketing-orgs.mjs`, `MARKETING_HOSTS` ayarlı ama
+  bu üç değişkenden biri eksikse org satırlarından önce bir
+  `WARNING marketing operator: … not set` satırı basar — admin rete çarpmadan önce. Rapor eder,
+  hiçbir şeyi engellemez; satır yoksa set tamamdır (ya da bu kurulum marketing ürününü sunmuyordur).
 
 ## Ne YAPMAZ
 
@@ -104,9 +118,23 @@ outreach-compliance § 6'daki sert blokaj.
   partiler önerilir (`copy-bank.md` § 9.2).
 - E-posta göndermez; kampanya listesi bir e-posta listesi değildir.
 - "Keine Werbung" levhasını bilemez — süreç.
-- Saklama süresi (Art. 14 notundaki 24 ay, `PROSPECT_RETENTION_MONTHS`) henüz otomatik
-  uygulanmıyor; ilk silme turu elle (#2559 yüzeyi). Gönderilmiş kampanya kaydı için öneri:
-  kampanya + 3 yıl.
+- Saklama süresini (Art. 14 notundaki 24 ay, `PROSPECT_RETENTION_MONTHS`) kendiliğinden
+  uygulamaz. Süreyi aşan hesapları `/admin/retention` sayfasındaki "Saklama süresi dolan
+  potansiyel müşteriler" listesi gösterir (#3676). Listeden çıkanlar:
+  - müşteri geçmişi olanlar;
+  - geçerli izni olanlar (DOI veya § 7(3));
+  - son 24 ayda teması olanlar (ilişki, mektup veya talep).
+
+  Hiç teması olmayan bir hesap için süre hesabın oluşturulma tarihinden başlar; böyle bir hesap
+  oluşturulduktan 24 ay sonra listeye girer.
+
+  Silmeyi admin yapar, satır başına "İletişim verisini sil" ile. Bu işlem hesabın iletişim
+  sütunlarını, talep kişisel alanlarını ve adres defterini temizler. Bu hesabın mektup anlık
+  görüntülerinde de `recipientName` boşalır, `addressBlock` `[erased]` olur. Company satırı ve
+  engelleme listesi (`ContactSuppression`) kalır. Zamanlanmış silme yoktur.
+
+  Gönderilmiş kampanya kaydı için önerilen "kampanya + 3 yıl" saklama süresi henüz verilmiş
+  bir karar değildir. Bu süre, mektubun 24 ay sözünü aşan anlık görüntüleri tutmaz.
 
 ## Veri modeli
 

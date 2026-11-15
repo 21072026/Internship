@@ -11,12 +11,17 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import {
   API_SCOPES,
   apiKeyStatus,
+  effectiveScopes,
+  ignoredScopes,
   isApiScope,
   maxApiKeyExpiry,
   parseScopes,
   publicApiScopes,
+  scopeAvailable,
+  scopesForCapabilities,
   serializeScopes,
 } from '@/lib/apiScopes';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import { integrationsLocked } from '@/lib/integrationsGate';
 import { currentUsage } from '@/lib/apiKeyQuota';
 import { parseQuotaInput } from '@/lib/apiKeyQuotaRules';
@@ -67,12 +72,16 @@ export async function GET(request: Request) {
   const now = new Date();
   // Requests this period (#2010): the key's quota period, or the month for a key without one.
   const usage = await currentUsage(keys, now);
+  // The catalogue of THIS org's product (MKT-6b): a MARKETING org is never
+  // offered an internship-only scope. A stored one is listed apart, as ignored.
+  const capabilities = await shellCapabilities(resolveOrgId(session));
   return NextResponse.json({
-    availableScopes: API_SCOPES,
+    availableScopes: scopesForCapabilities(capabilities),
     keys: keys.map((k) => ({
       id: k.id,
       name: k.name,
-      scopes: parseScopes(k.scopes),
+      scopes: effectiveScopes(parseScopes(k.scopes), capabilities),
+      ignoredScopes: ignoredScopes(parseScopes(k.scopes), capabilities),
       expiresAt: k.expiresAt,
       revokedAt: k.revokedAt,
       lastUsedAt: k.lastUsedAt,
@@ -110,6 +119,17 @@ export async function POST(request: Request) {
   const scopes = parsed.data.scopes.filter(isApiScope);
   if (scopes.length === 0) {
     return NextResponse.json({ error: 'At least one valid scope is required' }, { status: 400 });
+  }
+
+  // A scope of a module this org's product lacks is REFUSED, never dropped
+  // silently (MKT-6b): the admin asked for something this product cannot give.
+  const capabilities = await shellCapabilities(resolveOrgId(session));
+  const unavailable = scopes.filter((sc) => !scopeAvailable(sc, capabilities));
+  if (unavailable.length) {
+    return NextResponse.json(
+      { error: 'Scope not available in this product', code: 'scope_unavailable', scopes: unavailable },
+      { status: 400 },
+    );
   }
 
   // A key that can read the public API is the paid feature (#1744); a key for

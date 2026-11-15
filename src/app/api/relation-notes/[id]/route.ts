@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { actorFromSession, can } from '@/lib/authz';
 import { resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
+import { requireCapability } from '@/lib/capabilityGate';
 
 const patchSchema = z.object({ body: z.string().min(1).max(5000) });
 
@@ -14,6 +15,9 @@ const patchSchema = z.object({ body: z.string().min(1).max(5000) });
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // A mentor's private notes on a mentorship (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   // Admin reach from the permission rule, not the role string (#1571).
   const actor = await actorFromSession(session);
   const isAdmin = !!actor && (await can(actor, 'relation.write', undefined, session));
@@ -47,6 +51,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // A mentor's private notes on a mentorship (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   // Admin reach from the permission rule, not the role string (#1571).
   const actor = await actorFromSession(session);
   const isAdmin = !!actor && (await can(actor, 'relation.write', undefined, session));

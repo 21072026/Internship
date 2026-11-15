@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/authz';
 import { decide } from '@/lib/authzRule';
 import { requireCapability } from '@/lib/capabilityGate';
 import { prisma } from '@/lib/prisma';
+import { PAYMENT_LIST, parseListQuery } from '@/lib/affiliateListQueryRule';
 import { listPayments } from '@/lib/affiliatePayments';
 import { parseCalendarDay } from '@/lib/calendarDay';
 import { AffiliateWriteError, recordAffiliatePayment, type AffiliateWriteErrorCode } from '@/lib/affiliatePaymentWriter';
@@ -12,7 +13,9 @@ import { AffiliateWriteError, recordAffiliatePayment, type AffiliateWriteErrorCo
 // GET: `affiliate.read`, newest first, paged. POST: `affiliate.write` — a manual
 // entry, recorded by the ONE writer (src/lib/affiliatePaymentWriter.ts), which
 // also decides the commission. The currency is the plan's; the received date is
-// a calendar day (UTC midnight) and never in the future.
+// a calendar day (UTC midnight) and never in the future. The commission base
+// comes as `amountMinor`, as `transactionCount` × `unitPriceMinor`, or as both
+// when they agree — the writer's resolvePaymentBase() decides (#3552/#3553).
 export async function GET(request: Request) {
   const auth = await requirePermission('affiliate.read', { request });
   if ('error' in auth) return auth.error;
@@ -21,15 +24,20 @@ export async function GET(request: Request) {
   const refusal = await requireCapability(orgId, 'affiliate');
   if (refusal) return refusal;
 
-  const url = new URL(request.url);
-  const result = await listPayments(orgId, { partnerId: url.searchParams.get('partnerId'), page: Number(url.searchParams.get('page') ?? 1) || 1 });
+  // Filters and sort (#3539): `partnerId`, `q` (customer number, label or payment reference), `from`/`to`
+  // (received days), `sort` = date | amount, `dir`. A value outside the allowlist is a 400.
+  const parsed = parseListQuery(PAYMENT_LIST, new URL(request.url).searchParams);
+  if (!parsed.ok) return NextResponse.json({ code: 'invalid_query', field: parsed.field }, { status: 400 });
+  const result = await listPayments(orgId, parsed.query);
   return NextResponse.json({ ...result, canWrite: decide({ actor: auth.actor, permission: 'affiliate.write' }).allow });
 }
 
 const schema = z.object({
   partnerId: z.string().min(1).nullable().optional(),
   customerExternalRef: z.string(),
-  amountMinor: z.number(),
+  amountMinor: z.number().nullable().optional(),
+  transactionCount: z.number().nullable().optional(),
+  unitPriceMinor: z.number().nullable().optional(),
   receivedOn: z.string(),
   externalPaymentRef: z.string(),
 });
@@ -73,6 +81,8 @@ export async function POST(request: Request) {
       partnerId: parsed.data.partnerId ?? null,
       customerExternalRef: parsed.data.customerExternalRef,
       amountMinor: parsed.data.amountMinor,
+      transactionCount: parsed.data.transactionCount,
+      unitPriceMinor: parsed.data.unitPriceMinor,
       currency,
       receivedAt,
       externalPaymentRef: parsed.data.externalPaymentRef,

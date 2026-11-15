@@ -33,7 +33,7 @@ export function CardStageSelect({
   return (
     <span
       title={t.board.moveTo}
-      className="relative -my-1 ml-auto inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded text-gray-400 hover:text-gray-700 focus-within:text-gray-700 focus-within:ring-2 focus-within:ring-blue-300 md:h-7 md:w-7"
+      className="relative -my-2 ml-auto inline-flex h-11 w-11 flex-shrink-0 items-center justify-center rounded text-gray-400 hover:text-gray-700 focus-within:text-gray-700 focus-within:ring-2 focus-within:ring-blue-300 md:-my-1 md:h-7 md:w-7"
     >
       <ArrowRightLeft className="h-3.5 w-3.5" aria-hidden="true" />
       <select

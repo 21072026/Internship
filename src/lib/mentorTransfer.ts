@@ -20,6 +20,7 @@ import { ENDED_REASSIGNED, effectiveLifecycleState, type AdminEndReasonCode } fr
 import { raiseLifecycleChanged } from '@/lib/lifecycleEvents';
 import { emit } from '@/lib/events/emit';
 import { carriedOverFields, hasRelationHistory } from '@/lib/relationHistory';
+import { SALES_HANDOFF_REASON } from '@/lib/leadHandoffRule';
 
 // ---------------------------------------------------------------------------
 // CHANGE THIS MENTEE'S MENTOR — one operation (#2289).
@@ -78,7 +79,11 @@ const PARTICIPANT_ROLES = ['ADMIN', 'MENTOR', 'MENTEE'];
 export async function transferMentorship(opts: {
   relationId: string;
   toMentorId: string;
-  reasonCode: AdminEndReasonCode;
+  /**
+   * An admin's reason, or the sales hand-off's own code (src/lib/leadHandoffRule.ts)
+   * — the one caller outside the admin routes, which never offers it in a form.
+   */
+  reasonCode: AdminEndReasonCode | typeof SALES_HANDOFF_REASON;
   reasonNote?: string | null;
   actorId: string;
   actorEmail?: string | null;
@@ -110,10 +115,19 @@ export async function transferMentorship(opts: {
    * row. This only decides who is told, and how often.
    */
   batched?: boolean;
+  /**
+   * Tell the MENTEE nothing — neither the in-app row nor the mail. Only the
+   * sales hand-off sets it: there the mentee is a LEAD (a prospect, often with
+   * no login at all), and which rep works the deal inside the seller's team is
+   * not something to announce to them. Every mentorship caller leaves it off,
+   * because there telling somebody their mentor changed is not optional.
+   */
+  quietMentee?: boolean;
 }): Promise<TransferResult> {
   const { relationId, toMentorId, reasonCode, actorId, actorEmail, request } = opts;
   const reasonNote = opts.reasonNote?.trim() || null;
   const batched = opts.batched === true;
+  const quietMentee = opts.quietMentee === true;
 
   const relation = await prisma.mentorshipRelation.findUnique({
     where: { id: relationId },
@@ -360,12 +374,14 @@ export async function transferMentorship(opts: {
   // The mentee. Told who their mentor is now — never the reason, which is the
   // admin's operational note and (in the `wrong_assignment` case) about the
   // admin's own slip.
-  await notify(
-    mentee.id,
-    'mentorship.mentorChanged',
-    { mentorName: incoming.fullName },
-    '/portal'
-  );
+  if (!quietMentee) {
+    await notify(
+      mentee.id,
+      'mentorship.mentorChanged',
+      { mentorName: incoming.fullName },
+      '/portal'
+    );
+  }
   // The incoming mentor gets the standard "a mentee was assigned to you" row —
   // the same one a direct assignment sends, because from their side that is
   // exactly what happened. No echo when the admin assigned themself (#886), and
@@ -387,6 +403,7 @@ export async function transferMentorship(opts: {
   }
 
   if (
+    !quietMentee &&
     mentee.email &&
     emailAllowed(mentee, 'mentorship') &&
     emailGroupAllowedForCategory(mentee, 'mentor-assigned')

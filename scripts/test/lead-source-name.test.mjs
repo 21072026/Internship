@@ -4,6 +4,7 @@ import {
   ACQUISITION_SOURCES,
   SOURCE_NAME_MAX,
   leadSourceName,
+  referrerHost,
   typedSourceName,
 } from '../../src/lib/leadSourceName.ts';
 
@@ -102,4 +103,60 @@ test('a typed source is kept as written, cleaned and capped; blank is null', () 
   assert.equal(typedSourceName('   '), null);
   assert.equal(typedSourceName(undefined), null);
   assert.equal(typedSourceName('y'.repeat(300)).length, SOURCE_NAME_MAX);
+});
+
+// #2578: the referrer is a source too, between the UTM and the vendor.
+// THE PRIORITY: affiliate > utm_source > ref:<host> > vendor > acquisition_source > unknown.
+const SERVED = ['crm.example', 'marketing.example'];
+
+test('a referrer without utm_source becomes ref:<host> — host only, lower-cased, no port, path or query', () => {
+  assert.deepEqual(
+    leadSourceName({ referrer: 'https://Blog.Partner.example:8443/posts/why-crm', servedHosts: SERVED }),
+    { kind: 'referrer', name: 'ref:blog.partner.example' },
+  );
+  // Two pages of one site are one Source.
+  assert.equal(
+    leadSourceName({ referrer: 'https://news.example/a', servedHosts: SERVED }).name,
+    leadSourceName({ referrer: 'https://news.example/b', servedHosts: SERVED }).name,
+  );
+  assert.equal(referrerHost('https://news.example./x?q=1#f'), 'news.example');
+});
+
+test('utm_source keeps the UTM Source when a referrer is there too', () => {
+  assert.deepEqual(
+    leadSourceName({ utmSource: 'newsletter', utmMedium: 'email', referrer: 'https://mail.example/', servedHosts: SERVED }),
+    { kind: 'utm', name: 'utm:newsletter/email/-' },
+  );
+});
+
+test('an affiliate code beats both the UTM and the referrer', () => {
+  assert.deepEqual(
+    leadSourceName({ reference: 'PARTNER-7', utmSource: 'google', referrer: 'https://news.example/', servedHosts: SERVED }),
+    { kind: 'affiliate', name: 'affiliate:PARTNER-7' },
+  );
+});
+
+test('a referrer beats the vendor and the self-reported channel', () => {
+  assert.deepEqual(
+    leadSourceName({ referrer: 'https://news.example/', vendor: { name: 'klaviyo', detail: 'form' }, acquisitionSource: 'other' }),
+    { kind: 'referrer', name: 'ref:news.example' },
+  );
+});
+
+test('a referrer on one of our served hosts, an empty or an unparseable one is not a source', () => {
+  for (const referrer of ['https://MARKETING.example/pricing', 'https://crm.example', '', '   ', 'not a url', 'ftp://files.example/x', null]) {
+    assert.deepEqual(leadSourceName({ referrer, servedHosts: SERVED }), { kind: 'unknown' }, String(referrer));
+  }
+  // …and falls through to what is left, rather than stopping there.
+  assert.deepEqual(
+    leadSourceName({ referrer: 'https://crm.example/', acquisitionSource: 'youtube', servedHosts: SERVED }),
+    { kind: 'channel', name: 'channel:youtube' },
+  );
+});
+
+test('the ref: name stays within SOURCE_NAME_MAX', () => {
+  const long = `https://${'a'.repeat(60)}.${'b'.repeat(60)}.example/`;
+  const r = leadSourceName({ referrer: long });
+  assert.equal(r.kind, 'referrer');
+  assert.ok(r.name.length <= SOURCE_NAME_MAX);
 });

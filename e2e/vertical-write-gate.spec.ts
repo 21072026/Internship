@@ -61,6 +61,37 @@ const GATED = [
   { path: '/api/interview-panels/00000000-0000-0000-0000-000000000000', cap: 'placements', method: 'PATCH' },
   { path: '/api/interview-panels/00000000-0000-0000-0000-000000000000/close', cap: 'placements' },
   { path: '/api/interview-panels/00000000-0000-0000-0000-000000000000/reopen', cap: 'placements' },
+  // P3 (MKT-6, #2348): the mentorship-relation side routes and the programme
+  // journey builder. Each gate runs right after the session, before the
+  // relation/programme lookup, so a dummy id reaches it — and the INTERNSHIP
+  // test below walks the same rows as their no-op.
+  { path: '/api/mentorship/00000000-0000-0000-0000-000000000000/certificate', cap: 'mentorship' },
+  { path: '/api/mentorship/00000000-0000-0000-0000-000000000000/extend', cap: 'mentorship' },
+  { path: '/api/mentorship/00000000-0000-0000-0000-000000000000/cadence', cap: 'mentorship', method: 'GET' },
+  { path: '/api/mentorship/00000000-0000-0000-0000-000000000000/agreement/accept', cap: 'mentorship' },
+  { path: '/api/admin/programs/00000000-0000-0000-0000-000000000000/journey', cap: 'mentorship', method: 'GET' },
+  { path: '/api/admin/programs/00000000-0000-0000-0000-000000000000/journey', cap: 'mentorship' },
+  { path: '/api/admin/programs/00000000-0000-0000-0000-000000000000/journey', cap: 'mentorship', method: 'PATCH' },
+  { path: '/api/admin/programs/00000000-0000-0000-0000-000000000000/journey/00000000-0000-0000-0000-000000000000', cap: 'mentorship', method: 'PATCH' },
+  { path: '/api/admin/programs/00000000-0000-0000-0000-000000000000/journey/00000000-0000-0000-0000-000000000000', cap: 'mentorship', method: 'DELETE' },
+  { path: '/api/admin/programs/00000000-0000-0000-0000-000000000000/journey/preview', cap: 'mentorship', method: 'GET' },
+  // P3, part 2: admin, mentor-shell, portal and cohort routes. The cohort gate
+  // runs before the programme lookup (unlike /clone, which needs a real row).
+  { path: '/api/admin/evaluation-templates', cap: 'evaluations', method: 'GET' },
+  { path: '/api/admin/evaluation-templates', cap: 'evaluations', method: 'PUT' },
+  { path: '/api/admin/program-costs', cap: 'mentorship', method: 'GET' },
+  { path: '/api/admin/program-costs', cap: 'mentorship' },
+  { path: '/api/admin/program-costs', cap: 'mentorship', method: 'PATCH' },
+  { path: '/api/admin/program-costs', cap: 'mentorship', method: 'DELETE' },
+  { path: '/api/admin/mentor-suggest/feedback', cap: 'mentorship' },
+  { path: '/api/mentor/applications', cap: 'mentorship', method: 'GET' },
+  { path: '/api/mentor/applications', cap: 'mentorship', method: 'PUT' },
+  { path: '/api/mentor/mentees', cap: 'mentorship' },
+  { path: '/api/mentor/analytics', cap: 'mentorship', method: 'GET' },
+  { path: '/api/mentor/meeting-feedback', cap: 'mentorship', method: 'GET' },
+  { path: '/api/portal/insights', cap: 'mentorship', method: 'GET' },
+  { path: '/api/cohorts/00000000-0000-0000-0000-000000000000', cap: 'mentorship', method: 'PATCH' },
+  { path: '/api/cohorts/00000000-0000-0000-0000-000000000000', cap: 'mentorship', method: 'DELETE' },
 ];
 
 async function adminIn(vertical: 'INTERNSHIP' | 'MARKETING') {

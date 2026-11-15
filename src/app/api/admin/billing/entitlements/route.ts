@@ -5,6 +5,7 @@ import { isSuperAdmin, isSuperAdminFor, logCrossTenantDenial } from '@/lib/super
 import { logActivity } from '@/lib/activity';
 import { KNOWN_GRANTABLE_FEATURES } from '@/lib/plans';
 import { requirePermission } from '@/lib/authz';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // POST — grant or revoke a feature for an organization OUTSIDE its plan (#1734):
 // one `OrgEntitlement` row (a pilot, the AI pack, a contractual exception).
@@ -33,6 +34,9 @@ export async function POST(request: Request) {
   const gate = await requirePermission('org.settings.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // The billing page is a mentorship-tagged destination (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   if (!(await isSuperAdmin(session))) {
     await logCrossTenantDenial(session, 'POST /api/admin/billing/entitlements', null);
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });

@@ -10,6 +10,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { emailTakenInOrgWorld } from '@/lib/userWorld';
 import { requirePermission } from '@/lib/authz';
 import { createUser } from '@/lib/userCreate';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 
 const schema = z.object({
   companyId: z.string().min(1),
@@ -23,6 +24,16 @@ export async function POST(request: Request) {
   const gate = await requirePermission('company.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // No company logins in a vertical without the company portal (#2348 MKT-2).
+  // In MARKETING a company is the customer, and the portal it would land on
+  // (/company) reads the funnel — lead names, owners, stages. `capability_missing`
+  // is the code the admin form branches on.
+  if (!(await shellCapabilities(session.user.orgId)).includes('placements')) {
+    return NextResponse.json(
+      { error: 'Company logins are not part of your organization\'s product.', code: 'capability_missing', capability: 'placements' },
+      { status: 403 },
+    );
+  }
 
   return await withTenantScope(session, async () => {
   const parsed = schema.safeParse(await request.json());

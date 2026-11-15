@@ -129,30 +129,54 @@ function pageRouting(pathname: string): PageRouting | null {
 }
 
 /**
- * The strict CSP, report-only, on every page request (#1552,
- * src/lib/cspPolicy.cjs). A fresh nonce per request goes into the policy and
- * into `x-nonce`; the policy rides on the REQUEST too, because that is where
- * Next.js reads the nonce to stamp its own <script> tags (it accepts the
- * report-only header for that). The browser enforces nothing from it — the
- * enforced policy is still next.config.js's — it only reports to
- * /api/csp-report what the strict one would block. `CSP_REPORT_ONLY=0` turns it
- * off. The analytics variables are named one by one: the edge bundle inlines a
- * NEXT_PUBLIC_* read only when it is spelled out.
+ * The strict CSP on every page request (#1552, src/lib/cspPolicy.cjs,
+ * docs/csp.md). A fresh nonce per request goes into the policy and into
+ * `x-nonce`; the policy rides on the REQUEST too, because that is where Next.js
+ * reads the nonce to stamp its own <script> tags (the enforced header first,
+ * then the report-only one). Three modes, read per request:
+ *
+ *   report  (default)  — Content-Security-Policy-Report-Only. The browser
+ *                        enforces nothing from it, it reports to /api/csp-report
+ *                        what it would block; next.config.js's permissive policy
+ *                        is the one enforced.
+ *   enforce (CSP_ENFORCE=1) — the strict policy IS the page's
+ *                        Content-Security-Policy: no 'unsafe-inline', no
+ *                        'unsafe-eval' in production. It still reports.
+ *   off     (CSP_REPORT_ONLY=0, and CSP_ENFORCE not 1) — no strict policy.
+ *
+ * CSP_ENFORCE wins over CSP_REPORT_ONLY. Both are runtime switches: turning
+ * enforcement off is an env change and a restart, not a rebuild. The analytics
+ * variables are named one by one: the edge bundle inlines a NEXT_PUBLIC_* read
+ * only when it is spelled out.
  */
 const CSP_NONCE_HEADER = 'x-nonce';
 const REPORT_ONLY_HEADER = 'content-security-policy-report-only';
+const ENFORCED_HEADER = 'content-security-policy';
 
-function reportOnlyPolicy(): { nonce: string; policy: string } | null {
-  if (process.env.CSP_REPORT_ONLY === '0') return null;
-  const nonce = btoa(crypto.randomUUID());
-  const env = {
+type StrictCsp = { nonce: string; header: typeof ENFORCED_HEADER | typeof REPORT_ONLY_HEADER };
+
+function analyticsEnv() {
+  return {
     NEXT_PUBLIC_PLAUSIBLE_DOMAIN: process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN,
     NEXT_PUBLIC_PLAUSIBLE_HOST: process.env.NEXT_PUBLIC_PLAUSIBLE_HOST,
     NEXT_PUBLIC_GA4_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID,
     NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
     NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
   };
-  return { nonce, policy: buildCsp(env, { nonce, dev: process.env.NODE_ENV !== 'production' }) };
+}
+
+function strictCsp(): StrictCsp | null {
+  const enforce = process.env.CSP_ENFORCE === '1';
+  if (!enforce && process.env.CSP_REPORT_ONLY === '0') return null;
+  return { nonce: btoa(crypto.randomUUID()), header: enforce ? ENFORCED_HEADER : REPORT_ONLY_HEADER };
+}
+
+function strictPolicy(csp: StrictCsp, frameAncestors?: readonly string[]): string {
+  return buildCsp(analyticsEnv(), {
+    nonce: csp.nonce,
+    dev: process.env.NODE_ENV !== 'production',
+    ...(frameAncestors ? { frameAncestors: [...frameAncestors] } : {}),
+  });
 }
 
 /**
@@ -181,16 +205,18 @@ function isEmbedPath(pathname: string): boolean {
   return pathname === '/embed' || pathname.startsWith('/embed/');
 }
 
-function applyEmbedFraming(res: NextResponse): void {
+function applyEmbedFraming(res: NextResponse, csp: StrictCsp | null): void {
   const on = isEmbedSessionEnabled();
-  const env = {
-    NEXT_PUBLIC_PLAUSIBLE_DOMAIN: process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN,
-    NEXT_PUBLIC_PLAUSIBLE_HOST: process.env.NEXT_PUBLIC_PLAUSIBLE_HOST,
-    NEXT_PUBLIC_GA4_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID,
-    NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
-    NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
-  };
-  res.headers.set('content-security-policy', buildCsp(env, on ? { frameAncestors: TEAMS_FRAME_ANCESTORS } : {}));
+  const frameAncestors = on ? TEAMS_FRAME_ANCESTORS : undefined;
+  // Enforcing: the strict policy (set by the caller) is the one that frames, with
+  // the Teams hosts when they apply. Otherwise the permissive policy is enforced
+  // here as before, and the report-only one only gains the frame-ancestors.
+  if (csp?.header === ENFORCED_HEADER) {
+    res.headers.set(ENFORCED_HEADER, strictPolicy(csp, frameAncestors ?? ["'none'"]));
+  } else {
+    res.headers.set(ENFORCED_HEADER, buildCsp(analyticsEnv(), frameAncestors ? { frameAncestors: [...frameAncestors] } : {}));
+    if (csp && frameAncestors) res.headers.set(REPORT_ONLY_HEADER, strictPolicy(csp, frameAncestors));
+  }
   if (on) res.headers.delete('x-frame-options');
   else res.headers.set('x-frame-options', 'DENY');
 }
@@ -211,12 +237,13 @@ function nextWithRequestId(req: NextRequest, requestId: string, page: PageRoutin
   // header, the enforced one first, so a client-sent one must not survive.
   headers.delete(CSP_NONCE_HEADER);
   headers.delete(REPORT_ONLY_HEADER);
-  headers.delete('content-security-policy');
+  headers.delete(ENFORCED_HEADER);
   let res: NextResponse;
-  const csp = page ? reportOnlyPolicy() : null;
-  if (csp) {
+  const csp = page ? strictCsp() : null;
+  const policy = csp ? strictPolicy(csp) : null;
+  if (csp && policy) {
     headers.set(CSP_NONCE_HEADER, csp.nonce);
-    headers.set(REPORT_ONLY_HEADER, csp.policy);
+    headers.set(csp.header, policy);
   }
   if (page) {
     headers.set(LOCALE_PATH_HEADER, page.path);
@@ -229,8 +256,8 @@ function nextWithRequestId(req: NextRequest, requestId: string, page: PageRoutin
   } else {
     res = NextResponse.next({ request: { headers } });
   }
-  if (csp) res.headers.set(REPORT_ONLY_HEADER, csp.policy);
-  if (isEmbedPath(req.nextUrl.pathname)) applyEmbedFraming(res);
+  if (csp && policy) res.headers.set(csp.header, policy);
+  if (isEmbedPath(req.nextUrl.pathname)) applyEmbedFraming(res, csp);
   return res;
 }
 

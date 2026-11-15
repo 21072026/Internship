@@ -40,38 +40,51 @@ test('home page still renders without console errors under CSP', async ({ page }
   expect(errors).toEqual([]);
 });
 
-// ── The strict CSP, report-only (#1552) ─────────────────────────────────────
-// src/middleware.ts sends a nonce policy as Content-Security-Policy-Report-Only
-// on every page request: script-src with a per-request nonce and no
-// 'unsafe-inline'. Nothing is enforced from it yet — the enforced header above
-// is unchanged — but every script Next.js renders and our one inline script
-// must already carry the nonce, or the report stream would be all noise.
+// ── The strict CSP (#1552, docs/csp.md) ─────────────────────────────────────
+// src/middleware.ts sends a nonce policy on every page request: script-src with
+// a per-request nonce, 'strict-dynamic' and no 'unsafe-inline'. The e2e server
+// ENFORCES it (CSP_ENFORCE=1 in playwright.config.ts) so every spec runs under
+// the policy production will get; E2E_CSP_MODE=report runs the suite with it
+// report-only, which is the deployments' default until the flag is flipped.
+const ENFORCING = process.env.E2E_CSP_MODE !== 'report';
+const STRICT_HEADER = ENFORCING ? 'content-security-policy' : 'content-security-policy-report-only';
 const nonceOf = (policy: string | undefined) => /'nonce-([^']+)'/.exec(policy ?? '')?.[1] ?? null;
+// Case-insensitive: an upper-case <SCRIPT> must not slip past the check.
+const scriptTags = (html: string) => html.match(/<script\b[^>]*>/gi) ?? [];
+const executableScripts = (html: string) => scriptTags(html).filter((t) => !/application\/ld\+json/i.test(t));
 
-test('pages carry a strict report-only CSP with a fresh nonce; the enforced one is unchanged', async ({ request }) => {
+test('pages carry the strict CSP with a fresh nonce', async ({ request }) => {
   const [a, b] = await Promise.all([request.get('/features'), request.get('/features')]);
-  const ro = a.headers()['content-security-policy-report-only'];
-  const scriptSrc = ro?.split('; ').find((d) => d.startsWith('script-src '));
+  const strict = a.headers()[STRICT_HEADER];
+  const scriptSrc = strict?.split('; ').find((d) => d.startsWith('script-src '));
   expect(scriptSrc).toContain("'strict-dynamic'");
   expect(scriptSrc).not.toContain("'unsafe-inline'");
-  expect(ro).toContain('report-uri /api/csp-report');
-  expect(nonceOf(ro)).toBeTruthy();
-  expect(nonceOf(ro)).not.toBe(nonceOf(b.headers()['content-security-policy-report-only']));
-  // The enforced policy still allows inline scripts — swapping it is a later step.
-  expect(a.headers()['content-security-policy']).toMatch(/script-src 'self' 'unsafe-inline'/);
-  // API responses are not documents; they get no report-only policy.
+  // 'unsafe-eval' only under `next dev` (React's dev runtime); CI serves a production build.
+  if (process.env.CI) expect(scriptSrc).not.toContain("'unsafe-eval'");
+  expect(strict).toContain('report-uri /api/csp-report');
+  expect(nonceOf(strict)).toBeTruthy();
+  expect(nonceOf(strict)).not.toBe(nonceOf(b.headers()[STRICT_HEADER]));
+  if (ENFORCING) {
+    // ONE enforced policy on a page: the middleware's replaces next.config.js's,
+    // and no report-only twin is left behind.
+    expect(a.headersArray().filter((h) => h.name.toLowerCase() === 'content-security-policy')).toHaveLength(1);
+    expect(a.headers()['content-security-policy-report-only']).toBeUndefined();
+  } else {
+    expect(a.headers()['content-security-policy']).toMatch(/script-src 'self' 'unsafe-inline'/);
+  }
+  // API responses are not documents; they get no strict policy.
   const api = await request.get('/api/health');
   expect(api.headers()['content-security-policy-report-only']).toBeUndefined();
+  expect(api.headers()['content-security-policy'] ?? '').not.toContain("'nonce-");
 });
 
 test('every script tag the server renders carries the request nonce', async ({ request }) => {
   // The served HTML, not the live DOM: scripts Next.js adds after load are
   // trusted through 'strict-dynamic' and need no nonce of their own.
   const res = await request.get('/features');
-  const nonce = nonceOf(res.headers()['content-security-policy-report-only']);
+  const nonce = nonceOf(res.headers()[STRICT_HEADER]);
   expect(nonce).toBeTruthy();
-  const tags = (await res.text()).match(/<script\b[^>]*>/g) ?? [];
-  const executable = tags.filter((t) => !t.includes('application/ld+json'));
+  const executable = executableScripts(await res.text());
   expect(executable.length).toBeGreaterThan(0);
   expect(executable.filter((t) => !t.includes(`nonce="${nonce}"`))).toEqual([]);
 });
@@ -109,10 +122,10 @@ test("a real browser's violation report reaches the endpoint and is accepted", a
   );
   await page.goto('/features');
   const report = page.waitForRequest((r) => r.url().endsWith('/api/csp-report') && r.method() === 'POST');
-  // An inline event handler: the strict policy would block it (script-src-attr;
-  // 'strict-dynamic' trusts inserted <script>s, never handler attributes), the
-  // enforced one still runs it — so the page is unharmed and a report goes out.
-  // The report is sent by the browser itself, through the cross-site write gate.
+  // An inline event handler: the strict policy blocks it (script-src-attr;
+  // 'strict-dynamic' trusts inserted <script>s, never handler attributes). When
+  // enforcing, the handler does not run; report-only, it runs. Either way a
+  // report goes out, sent by the browser itself through the cross-site write gate.
   const violation = await page.evaluate(
     () =>
       new Promise<{ directive: string; disposition: string } | null>((resolve) => {
@@ -126,8 +139,8 @@ test("a real browser's violation report reaches the endpoint and is accepted", a
         setTimeout(() => resolve(null), 5000);
       }),
   );
-  expect(violation).toEqual({ directive: 'script-src-attr', disposition: 'report' });
-  expect(await page.evaluate(() => (window as unknown as { __cspProbe?: number }).__cspProbe)).toBe(1);
+  expect(violation).toEqual({ directive: 'script-src-attr', disposition: ENFORCING ? 'enforce' : 'report' });
+  expect(await page.evaluate(() => (window as unknown as { __cspProbe?: number }).__cspProbe)).toBe(ENFORCING ? undefined : 1);
   const res = await (await report).response();
   expect(res?.status()).toBe(204);
 });
@@ -157,10 +170,9 @@ test('/auth/* pages carry the nonce and are never redirected, even for a remembe
       headers: { cookie: 'internship.remember=1; internship.remember-token=probe' },
     });
     expect(res.status(), path).toBeLessThan(300);
-    const nonce = nonceOf(res.headers()['content-security-policy-report-only']);
+    const nonce = nonceOf(res.headers()[STRICT_HEADER]);
     expect(nonce, path).toBeTruthy();
-    const tags = (await res.text()).match(/<script\b[^>]*>/g) ?? [];
-    const executable = tags.filter((t) => !t.includes('application/ld+json'));
+    const executable = executableScripts(await res.text());
     expect(executable.filter((t) => !t.includes(`nonce="${nonce}"`)), path).toEqual([]);
   }
   // The control: the same browser on a page outside /auth IS sent through the resume.

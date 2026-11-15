@@ -28,10 +28,14 @@ import { logActivity } from '@/lib/activity';
 import { superAdminWorld } from '@/lib/superAdmin';
 import { superAdminReaches } from '@/lib/superAdminWorld';
 import { worldOfOrg } from '@/lib/userWorld';
+import { shellCapabilities } from '@/lib/shellCapabilities';
+import { effectiveSalesDispatcher } from '@/lib/salesDispatcher';
 import {
   adminTierFor,
   decide,
+  dispatcherCovers,
   isPermission,
+  isReadPermission,
   isPlatformPermission,
   type Actor,
   type Decision,
@@ -64,7 +68,7 @@ export async function actorFromSession(session: Session | null | undefined): Pro
   if (!id) return null;
   const user = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, role: true, adminLevel: true, orgId: true, companyId: true, isActive: true },
+    select: { id: true, role: true, adminLevel: true, orgId: true, companyId: true, isActive: true, salesDispatcher: true },
   });
   if (!user || !user.isActive) return null;
   return {
@@ -74,6 +78,12 @@ export async function actorFromSession(session: Session | null | undefined): Pro
     orgId: user.orgId,
     companyId: user.companyId,
     impersonatorId: session?.user?.impersonatorId ?? null,
+    // Only a MENTOR on a sales vertical can be one (#3656); the capability read
+    // is skipped for everybody whose flag is off.
+    salesDispatcher:
+      user.salesDispatcher && user.role === 'MENTOR'
+        ? effectiveSalesDispatcher({ ...user, capabilities: await shellCapabilities(user.orgId) })
+        : false,
   };
 }
 
@@ -239,4 +249,13 @@ export async function requireRoleOrPermission(
     };
   }
   return { actor, session, admin: true, grants };
+}
+
+/**
+ * The sales dispatcher's owner powers on ONE record (#3656): `dispatcherCovers()`
+ * in src/lib/authzRule.ts. Routes ask it next to their OWNER check, never in
+ * place of an admin check. `permission` only says read or write.
+ */
+export function dispatcherMay(actor: Actor | null | undefined, permission: Permission, orgId: string | null | undefined): boolean {
+  return dispatcherCovers(actor, orgId, !isReadPermission(permission));
 }

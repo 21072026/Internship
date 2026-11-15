@@ -5,11 +5,18 @@ import { requireCapability } from '@/lib/capabilityGate';
 import { requirePermission, type Permission } from '@/lib/authz';
 import { tenantWhere } from '@/lib/tenantFilter';
 import { findCampaign, markCampaignSent } from '@/lib/postCampaign';
+import { marketingOperatorConfigured } from '@/lib/imprint';
+import { worldOfOrg } from '@/lib/userWorld';
 
 /**
  * POST — "the letters are in the post" (#2697). Locks the campaign (DRAFT →
  * SENT, once) and stamps every recipient whose account may still be written
  * to; an account objected to since printing is skipped and counted.
+ *
+ * A MARKETING org cannot post a campaign while the marketing world has no
+ * sender identity of its own (#2578, `marketingOperatorConfigured()`): the
+ * letters would name the internship product's operator. 409 `operator_missing`,
+ * and the campaign stays a draft. An INTERNSHIP org is never asked.
  */
 async function gate(permission: Permission, request: Request) {
   const authz = await requirePermission(permission, { request });
@@ -30,6 +37,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const tenant = await tenantWhere(session);
       const campaign = await findCampaign(tenant, id);
       if (!campaign) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 });
+      if ((await worldOfOrg(campaign.orgId)) === 'MARKETING' && !marketingOperatorConfigured()) {
+        return NextResponse.json(
+          { error: 'The marketing sender identity (MARKETING_OPERATOR_*) is not configured.', code: 'operator_missing' },
+          { status: 409 },
+        );
+      }
       const outcome = await markCampaignSent({
         campaign,
         tenant,

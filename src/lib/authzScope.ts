@@ -125,7 +125,11 @@ const BUILDERS: {
     // widens reads only — every caller of `scopeForRole` is a GET — and only ever
     // to rows the user is personally named in, so it grants no one anybody else's
     // mentorship.
-    MENTOR: async (u) => ({ OR: [{ mentorId: u.id }, { menteeId: u.id }] }),
+    // …except a sales dispatcher (#3656, src/lib/salesDispatcher.ts): the whole
+    // tenant's sales book, like an ORG_ADMIN — `scopeForRole` still adds the org.
+    // Dynamic import: salesDispatcher is server-only, and this module is unit-tested
+    // under plain Node, where a static server-only import throws at load.
+    MENTOR: async (u) => ((await (await import('@/lib/salesDispatcher')).isSalesDispatcher(u.id)) ? {} : { OR: [{ mentorId: u.id }, { menteeId: u.id }] }),
     MENTEE: async (u) => ({ OR: [{ menteeId: u.id }, { mentorId: u.id }] }),
     // Read-only: only relations linked to this company.
     COMPANY: async (u) => ({ companyId: u.companyId ?? NO_MATCH }),

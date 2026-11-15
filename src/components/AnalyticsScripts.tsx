@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { configuredProviders } from '@/lib/analytics';
+import { configuredProviders, type AnalyticsWindow } from '@/lib/analytics';
 import { COOKIE_CONSENT_EVENT, hasConsent } from '@/lib/cookieConsent';
 
 /**
@@ -41,14 +41,11 @@ export function AnalyticsScripts() {
         for (const [k, v] of Object.entries(provider.snippet.attrs ?? {})) s.setAttribute(k, v);
         document.head.appendChild(s);
         added.push(s);
-        if (provider.snippet.inline) {
-          // After the loader, so `gtag`/`posthog` exist when it runs.
-          s.addEventListener('load', () => {
-            const i = document.createElement('script');
-            i.dataset.analyticsInit = provider.id;
-            i.textContent = provider.snippet.inline!;
-            document.head.appendChild(i);
-          });
+        const init = provider.snippet.init;
+        if (init) {
+          // After the loader, so `gtag`/`posthog` exist when it runs. A call,
+          // not an inline <script>: the strict CSP blocks un-nonced inline code.
+          s.addEventListener('load', () => init(window as unknown as AnalyticsWindow));
         }
       }
     }

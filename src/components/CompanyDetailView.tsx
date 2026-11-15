@@ -292,6 +292,10 @@ export function CompanyDetailView({
           <ContactPermissionEditor
             companyId={company.id}
             labels={{ ...p.editor, channels: p.channels, bases: p.bases }}
+            lockedChannels={CONTACT_CHANNELS.filter((channel) => {
+              const row = permissionFor(channel);
+              return !!row && !!row.revokedAt && ownerObjected(row);
+            })}
           />
         )}
       </Card>

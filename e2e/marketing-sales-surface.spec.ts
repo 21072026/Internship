@@ -99,6 +99,7 @@ test.beforeAll(async () => {
   const lf = await user(foreignLeadEmail, 'MENTEE', NAMES.foreign, orgB);
   ids.ownLeadId = l1;
   ids.repId = rep;
+  ids.colleagueRepId = colleague;
   leadIds.followUp = l3;
 
   ids.ownCompanyId = await company(orgA, `Own Account ${STAMP}`);
@@ -193,7 +194,7 @@ async function signInRep(page: Page) {
   await signInAndSettle(page, repEmail, PASSWORD, '/sales');
 }
 
-test('a MARKETING sales rep lands on the sales surface and sees only their own records', async ({ page }) => {
+test('a MARKETING sales rep lands on the sales surface and sees only their own records', { tag: '@smoke' }, async ({ page }) => {
   test.slow();
   await signInRep(page);
 
@@ -254,7 +255,7 @@ test('a MARKETING sales rep lands on the sales surface and sees only their own r
   );
 });
 
-test('the rep works their own record: the follow-up moves it out of the queue', async ({ page }) => {
+test('the rep works their own record: the follow-up moves it out of the queue', { tag: '@smoke' }, async ({ page }) => {
   test.slow();
   await signInRep(page);
   await gotoSettled(page, `/sales/leads/${ids.followUpRelationId}`);
@@ -290,7 +291,7 @@ test('the rep works their own record: the follow-up moves it out of the queue', 
   await expect(page.getByTestId('attention-queue')).not.toContainText(NAMES.undated);
 });
 
-test('the rep logs the call they just made from the lead page', async ({ page }) => {
+test('the rep logs the call they just made from the lead page', { tag: '@smoke' }, async ({ page }) => {
   test.slow();
   await signInRep(page);
   await gotoSettled(page, `/sales/leads/${ids.followUpRelationId}`);
@@ -298,15 +299,18 @@ test('the rep logs the call they just made from the lead page', async ({ page })
   // #3652/#3654: what each part is for is said on the page; the date is "assigned to you", not the trial.
   await expect(page.getByTestId('follow-up-purpose')).toBeVisible();
   await expect(page.getByTestId('sales-lead-since')).toContainText('Assigned to you on');
-  // #3653: the last interaction sits under the follow-up — empty until the first one is logged.
-  await expect(page.getByTestId('sales-lead-last-interaction-empty')).toBeVisible();
+  // #3737: the interactions sit beside the follow-up at the top — empty until the first one is logged.
+  const strip = page.getByTestId('sales-lead-action-strip');
+  await expect(strip.getByTestId('follow-up-panel')).toBeVisible();
+  await expect(strip.getByTestId('sales-lead-interactions-empty')).toBeVisible();
   const form = page.getByTestId('sales-lead-log-interaction');
   await form.getByRole('button', { name: /Log interaction|Add/i }).first().click();
   await form.getByRole('combobox').selectOption('Call');
   await form.locator('textarea').fill(note);
   await form.locator('button[type="submit"]').click();
-  await expect(page.getByTestId('sales-lead-interactions')).toContainText(note);
-  await expect(page.getByTestId('sales-lead-last-interaction')).toContainText(note);
+  await expect(strip.getByTestId('sales-lead-interactions')).toContainText(note);
+  // The separate one-line "Last interaction" box is gone: the newest entry is the card's first row.
+  await expect(page.getByTestId('sales-lead-last-interaction')).toHaveCount(0);
   const logged = await prisma.interactionLog.findMany({ where: { relationId: ids.followUpRelationId } });
   expect(logged.map((l) => [l.type, l.notes])).toEqual([['Call', note]]);
   // A MARKETING lead is a record, not a portal user: no "your mentor logged
@@ -314,7 +318,62 @@ test('the rep logs the call they just made from the lead page', async ({ page })
   expect(await prisma.notification.count({ where: { userId: leadIds.followUp, type: 'interaction.logged' } })).toBe(0);
 });
 
-test("a rep's stage-deadline reminder deep-links to their lead page", async ({ page }) => {
+test('the action strip: quick dates, complete a follow-up, call or mail the contact, the N key (#3737)', async ({ page }) => {
+  test.slow();
+  await prisma.company.update({ where: { id: ids.ownCompanyId }, data: { contactPhone: '+49 30 1234-567', contactEmail: `buyer-${STAMP}@shop.example` } });
+  await signInRep(page);
+  await gotoSettled(page, `/sales/leads/${ids.ownRelationId}`);
+  const form = page.getByTestId('sales-lead-log-interaction');
+  const type = form.getByRole('combobox');
+  const notes = form.locator('textarea');
+
+  // Quick dates fill the field only; Save stores it (#3739). Same local-day rule as the page.
+  const inAWeek = (() => {
+    const d = new Date();
+    const x = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7);
+    return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  })();
+  await page.getByTestId('follow-up-quick-7').click();
+  await expect(page.getByTestId('follow-up-date')).toHaveValue(inAWeek);
+  const step = `Ask about pricing ${STAMP}`;
+  await page.getByTestId('follow-up-note').fill(step);
+  await page.getByTestId('follow-up-save').click();
+  await expect.poll(async () => (await prisma.mentorshipRelation.findUnique({ where: { id: ids.ownRelationId } }))?.nextActionNote).toBe(step);
+
+  // Complete: the follow-up is cleared and the form opens as a call with its note — nothing is logged yet (#3740).
+  await page.reload();
+  await page.getByTestId('follow-up-complete').click();
+  await expect.poll(async () => (await prisma.mentorshipRelation.findUnique({ where: { id: ids.ownRelationId } }))?.nextActionAt ?? null).toBeNull();
+  await expect(type).toHaveValue('Call');
+  await expect(notes).toHaveValue(step);
+  expect(await prisma.interactionLog.count({ where: { relationId: ids.ownRelationId } })).toBe(0);
+  await form.getByRole('button', { name: /Cancel/i }).click();
+
+  // The phone and e-mail are the device's own tel:/mailto: links, and a click opens a draft of that type (#3741).
+  // The browser's navigation to the scheme is stopped here; the page's own handler still runs.
+  await page.evaluate(() =>
+    document.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('a[href^="tel:"], a[href^="mailto:"]')) e.preventDefault();
+    }, true),
+  );
+  await expect(page.getByTestId('sales-lead-phone-link')).toHaveAttribute('href', 'tel:+49301234567');
+  await expect(page.getByTestId('sales-lead-email-link')).toHaveAttribute('href', `mailto:buyer-${STAMP}@shop.example`);
+  await page.getByTestId('sales-lead-phone-link').click();
+  await expect(type).toHaveValue('Call');
+  await page.getByTestId('sales-lead-email-link').click();
+  await expect(type).toHaveValue('Email');
+  await form.getByRole('button', { name: /Cancel/i }).click();
+
+  // N opens the form — but not while typing in another field (#3742).
+  await page.getByTestId('follow-up-note').fill('');
+  await page.getByTestId('follow-up-note').pressSequentially('n');
+  await expect(notes).toHaveCount(0);
+  await page.getByTestId('sales-lead-name').click();
+  await page.keyboard.press('n');
+  await expect(notes).toBeFocused();
+});
+
+test("a rep's stage-deadline reminder deep-links to their lead page", { tag: '@smoke' }, async ({ page }) => {
   test.slow();
   await signInAndSettle(page, ADMIN_EMAIL, ADMIN_PASSWORD, '/admin');
   const res = await page.request.get('/api/cron?job=stage-deadlines');
@@ -323,7 +382,7 @@ test("a rep's stage-deadline reminder deep-links to their lead page", async ({ p
   expect(bell?.link).toBe(`/sales/leads/${ids.ownRelationId}`);
 });
 
-test('the rep cannot re-point their record at another account', async ({ page }) => {
+test('the rep cannot re-point their record at another account', { tag: '@smoke' }, async ({ page }) => {
   test.slow();
   await signInRep(page);
   // Same tenant, somebody else's account: re-pointing is an ADMIN decision in
@@ -338,7 +397,7 @@ test('the rep cannot re-point their record at another account', async ({ page })
   await expect(page.getByTestId('sales-accounts-table')).not.toContainText(`Colleague Account ${STAMP}`);
 });
 
-test('admin-only endpoints refuse the rep', async ({ page }) => {
+test('admin-only endpoints refuse the rep', { tag: '@smoke' }, async ({ page }) => {
   test.slow();
   await signInRep(page);
   for (const probe of MARKETING_MENTOR_ADMIN_ONLY) {
@@ -353,7 +412,7 @@ test('admin-only endpoints refuse the rep', async ({ page }) => {
   expect(await prisma.user.count({ where: { id: ids.ownLeadId } })).toBe(1);
 });
 
-test("another rep's and another org's records are out of reach, by id and by page", async ({ page }) => {
+test("another rep's and another org's records are out of reach, by id and by page", { tag: '@smoke' }, async ({ page }) => {
   test.slow();
   await signInRep(page);
   for (const probe of MARKETING_MENTOR_ROWS) {

@@ -160,3 +160,74 @@ The alternative — a `Contact` table plus a nullable `contactId` on the relatio
 carrier for the person half of the funnel and was rejected for the same reason as a second
 pipeline carrier. `Company.contactName/contactEmail/contactPhone` (#2407) still land, so an
 account **without** a funnel record keeps its "who do we call" without any `User` at all.
+
+## The lead's contact (#3655)
+
+The lead page's contact card shows the **account's primary contact** — the four
+`Company.contact*` columns (name, position, e-mail, phone) — never the lead row's
+`@import.local` stand-in address (`shownEmail()`, `src/lib/leadEmail.ts`). With no
+account contact it falls back to the lead row's name and phone, and shows no address.
+
+The record's rep corrects it in place (`PATCH /api/sales/leads/[id]/contact`, one
+writer: `src/lib/salesLeadContact.ts`):
+
+- **Who:** the record's own rep (MENTOR, or an ADMIN in sales mode); an admin
+  holding `company.write` for any record of the tenant. Another rep's record,
+  another tenant's and an unknown id are the same 404; an OBSERVER is 403.
+- **What moves:** the account's four contact columns, and in the same transaction
+  the lead row's `fullName` and `phone` (the page heading, the board card and the
+  Klaviyo phone matcher read them). **Never `User.email`** — a login address is not
+  a rep's to change.
+- **One writer for the account's columns:** `writePrimaryContactTx()` in
+  `src/lib/companyContacts.ts`, inside the request's transaction — the same row
+  lock as a concurrent "make primary" (#2442) and the same duplicate test against
+  the account's address book: an address another contact holds is
+  `409 duplicate_email`. The admin address-book route's primary edit goes
+  through the same function.
+- **Audit:** `sales.lead.contact.update` with the account id, the names of the
+  changed account fields (`changed`) and of the synced lead-row fields
+  (`leadRow`), never their values. The lead row is compared on its own: a
+  contact that was already right still brings a stale heading back in step. A
+  save that changes neither writes nothing.
+- **Nothing is sent.** Phase 1 of the sales CRM manages lead data only; a
+  correction mails nobody. Contact permission stays bound to its address
+  (`docs/contact-permission.md`): a new address starts with no basis.
+- **Feeds:** the Klaviyo sync and the account import fill an empty contact column
+  but do not overwrite a typed-in one (`src/lib/externalSyncPolicy.ts`), so a
+  correction survives the next sync.
+- A record without an account has no contact to correct: no editor, `409 no_account`.
+
+## The sales dispatcher (#3656)
+
+A sales team lead who is not an org admin. An ORG_ADMIN marks a sales rep as
+**lead dispatcher** on `/admin/users` (`POST /api/admin/users/[id]/sales-dispatcher`,
+`user.write`, never while impersonating, audited `sales.dispatcher_granted` /
+`sales.dispatcher_revoked`). From then on that rep works the **whole tenant's
+sales book** as each record's owner would.
+
+- **One rule, owner-level.** `User.salesDispatcher` is effective only for an
+  active MENTOR of an org whose vertical has the sales surface
+  (`effectiveSalesDispatcher()`, `src/lib/salesDispatcher.ts`); on an INTERNSHIP
+  mentor, an admin or a lead it is inert. `actorFromSession()` carries the
+  effective value, and `dispatcherCovers()` (`src/lib/authzRule.ts`, via
+  `dispatcherMay()` in `src/lib/authz.ts`) answers "may act on a record of this
+  org as its owner" — own org only, impersonated → reads only.
+- **An owner, never an admin.** The dispatcher is deliberately NOT in
+  `decide()`: routes read `can(…, 'relation.write' | 'program.read' |
+  'pipeline.transition')` as "is an admin" — admin-only fields (record kind,
+  re-pointing a record at an account), stage gates set to `pipeline.transition`,
+  relation creation, the admin timeline view. Those stay admin-only. Routes add
+  `dispatcherMay(actor, permission, relation.orgId)` next to their OWNER check:
+  `PUT /api/mentorship/[id]`, interactions, trial, contract end, win-back, value,
+  the hand-off and the lead contact (`PATCH /api/sales/leads/[id]/contact`).
+- **Reads.** The relation scope (`src/lib/authzScope.ts`) gives a dispatcher the
+  whole tenant, like an ORG_ADMIN; `scopeForRole` still adds the org. The sales
+  board then shows every rep's records, each card naming its owner, and the
+  hand-off strip lets the dispatcher take a lead too. `/sales/leads/[id]` opens
+  any record of the tenant for a dispatcher. `/sales` and `/sales/accounts` stay
+  the dispatcher's own book.
+- **Ends with the account.** Deactivating the user or changing their role
+  clears the flag (`PATCH /api/users/[id]`), so a reactivation brings nothing
+  back; the users list offers "remove" on any row still carrying it.
+- **Live.** The flag is read on every request: a revoke takes effect on the
+  dispatcher's next request; no session is revoked.

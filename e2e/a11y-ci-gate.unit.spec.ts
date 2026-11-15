@@ -15,7 +15,9 @@ test('PR CI runs the accessibility scan outside the smoke grep', { tag: '@smoke'
 
   const smokeStep = workflow.slice(smokeIndex, gateIndex);
   const gateStep = workflow.slice(gateIndex, uploadIndex);
-  expect(smokeStep).toContain('npx playwright test --grep "$E2E_GREP"');
+  // The smoke shards filter on @smoke (optionally narrowed to the core files
+  // on a PR, #3673) — the a11y scan below must not depend on that filter.
+  expect(smokeStep).toMatch(/npx playwright test (?:"\$\{files\[@\]\}" )?--grep "\$E2E_GREP"/);
   // The gate is its own matrix row (#2811), so it is skipped on a manual grep
   // AND on every smoke shard — but never on the a11y row of a normal run.
   expect(gateStep).toContain("if: ${{ matrix.suite == 'a11y' && !inputs.grep }}");

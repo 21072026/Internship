@@ -7,6 +7,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { getLocale } from '@/i18n/server';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { acceptAgreement, AgreementWriteError } from '@/lib/mentoringAgreement';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // POST { version } — the caller accepts the mentoring agreement for their own
 // side of this pairing (#1792). Only the relation's mentor or mentee: an ADMIN
@@ -18,6 +19,9 @@ const schema = z.strictObject({ version: z.string().min(1).max(32) });
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // The mentoring agreement is the mentorship module (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: 'Invalid input', code: 'invalid' }, { status: 400 });
   return withTenantScope(session, async () => {

@@ -391,7 +391,7 @@ export async function GET(request: Request) {
         BadRequest: { description: '`validation_failed` — a parameter is malformed (see `fields`).', content: problem },
         Unauthorized: { description: '`invalid_api_key` — missing, unknown, expired or revoked API key.', content: problem },
         Forbidden: {
-          description: '`insufficient_scope` — the key lacks the operation’s scope; `org_unbound` — the key is not bound to an organisation; `feature_locked` — the organisation’s plan does not include API access.',
+          description: '`insufficient_scope` — the key lacks the operation’s scope; `org_unbound` — the key is not bound to an organisation; `feature_locked` — the organisation’s plan does not include API access; `capability_unavailable` — the endpoint belongs to a module the organisation’s product does not have (internship hiring in a marketing organisation).',
           content: problem,
         },
         TooManyRequests: {

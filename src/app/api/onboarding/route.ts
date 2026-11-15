@@ -6,6 +6,7 @@ import { withTenantScope } from '@/lib/orgContext';
 import { orgScoped, resolveOrgId } from '@/lib/orgScope';
 import { checklistGuidanceKey, isGuidanceDismissed } from '@/lib/guidance';
 import { actorFromSession, can } from '@/lib/authz';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 
 // GET — role-aware first-run checklist state for the current user.
 // Returns ordered steps with { key, done, href, optional?, guideKey } plus the
@@ -86,6 +87,13 @@ export async function GET() {
       // not tenant-anchored by the central middleware, so they are scoped here
       // the way their own admin routes do it (resolveOrgId + an explicit where).
       const orgId = resolveOrgId(session);
+      // The steps follow the org's vertical (#2348): a vertical without
+      // `mentorship` has no /admin/mentorship (gatePage closes it — the step
+      // was a 404), so its pairing steps point at the deal board; one without
+      // `evaluations` has no evaluation framework to set up at all.
+      const capabilities = await shellCapabilities(session.user.orgId);
+      const relationsHref = capabilities.includes('mentorship') ? '/admin/mentorship' : '/admin/board';
+      const hasEvaluations = capabilities.includes('evaluations');
       const [
         stages,
         slas,
@@ -131,15 +139,15 @@ export async function GET() {
           },
           { key: 'setStageSlas', done: slas > 0, href: '/admin/settings' },
           { key: 'documentRequirements', done: documentRequirements > 0, href: '/admin/documents' },
-          { key: 'evaluationTemplate', done: evaluationTemplates > 0, href: '/admin/settings' },
+          ...(hasEvaluations ? [{ key: 'evaluationTemplate', done: evaluationTemplates > 0, href: '/admin/settings' }] : []),
           { key: 'inviteMentors', done: mentors > 0, href: '/admin/invite' },
           { key: 'inviteMentees', done: mentees > 0, href: '/admin/invite' },
           { key: 'addCompany', done: companies > 0, href: '/admin/companies' },
-          { key: 'assignMentorship', done: relations > 0, href: '/admin/mentorship' },
+          { key: 'assignMentorship', done: relations > 0, href: relationsHref },
           // Optional for the same reason the mentor's "schedule a meeting" is:
           // the first logged conversation is a milestone, not a setup task, and
           // it must never keep the card open once the setup is finished.
-          { key: 'firstInteraction', done: interactions > 0, href: '/admin/mentorship', optional: true },
+          { key: 'firstInteraction', done: interactions > 0, href: relationsHref, optional: true },
         ]),
       });
     }

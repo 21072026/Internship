@@ -5,7 +5,11 @@
 // Run: npm run test:unit
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import {
+import { register } from 'node:module';
+
+// The rule module imports the shared code rule (#3550): extensionless, so the resolve hook goes first.
+register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
+const {
   parseLanding,
   readStoredLanding,
   canonicalLanding,
@@ -20,7 +24,7 @@ import {
   needsLiveStats,
   STAT_LIVE_MIN_PARTNERS,
   legalLinks,
-} from '../../src/lib/affiliateLandingRule.ts';
+} = await import('../../src/lib/affiliateLandingRule.ts');
 
 const fields = (r) => (r.ok ? [] : r.issues.map((i) => `${i.field}:${i.code}`));
 
@@ -251,14 +255,14 @@ test('a partner link sends the visitor to the sign-up page with that code only',
   }
   assert.equal(customerSignupRedirect(null, 'demo-partner'), null);
   assert.equal(customerSignupRedirect('http://app.acme.example/', 'demo-partner'), null);
-  // The same shape as the partner code (src/lib/affiliatePartners.ts imports Prisma, so it is read as text).
-  const { readFileSync } = await import('node:fs');
-  const partners = readFileSync(new URL('../../src/lib/affiliatePartners.ts', import.meta.url), 'utf8');
-  assert.ok(partners.includes(`PARTNER_CODE_RE = /${REFERRAL_CODE_RE.source}/;`), 'REFERRAL_CODE_RE must match PARTNER_CODE_RE');
+  // The one rule (#3550): the page reads the partner code's shape, it does not copy it.
+  const { PARTNER_CODE_RE } = await import('../../src/lib/affiliateCodeRule.ts');
+  assert.equal(REFERRAL_CODE_RE, PARTNER_CODE_RE);
+  assert.equal(customerSignupRedirect(signup, 'ada@example'), 'https://app.acme.example/register?ref=ada%40example');
 });
 
 // ── The page's look (#3535) ──────────────────────────────────────────────────
-import {
+const {
   DEFAULT_THEME,
   FONT_KEYS,
   THEME_OPTIONS,
@@ -270,7 +274,7 @@ import {
   changedLandingFields,
   themeMediaKind,
   themeMediaUrl,
-} from '../../src/lib/affiliateLandingRule.ts';
+} = await import('../../src/lib/affiliateLandingRule.ts');
 
 const ID = 'clx0example0asset0id0001';
 

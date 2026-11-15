@@ -501,6 +501,9 @@ html[data-accent] .hover\:border-blue-400:hover { border-color: var(--accent-400
 html[data-accent] .focus\:border-blue-400:focus { border-color: var(--accent-400); }
 /* Focus rings (Tailwind ring utilities set --tw-ring-color) */
 html[data-accent] .ring-blue-100 { --tw-ring-color: var(--accent-100); }
+/* The board's drop target (#3675): a column keeps its stage tone and gains this
+   ring, which must follow the org accent like every other blue here. */
+html[data-accent] .ring-blue-500 { --tw-ring-color: var(--accent-500); }
 html[data-accent] .focus\:ring-blue-100:focus { --tw-ring-color: var(--accent-100); }
 html[data-accent] .focus\:ring-blue-500:focus { --tw-ring-color: var(--accent-500); }
 html[data-accent] .focus-visible\:ring-blue-500:focus-visible { --tw-ring-color: var(--accent-500); }

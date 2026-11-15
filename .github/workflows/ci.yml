@@ -231,6 +231,11 @@ jobs:
       # every route behind it.
       - name: the public API is entered through one door (#1546)
         run: npm run check:api-key-routes
+      # Every API key scope and every /api/v1 prefix maps to a product module
+      # (src/lib/apiScopes.ts), so a MARKETING org is neither offered nor served
+      # an internship-only part of the API. An unmapped new one fails here.
+      - name: API scopes and /api/v1 prefixes map to a vertical capability (MKT-6b)
+        run: npm run check:api-scope-capabilities
       # The line that makes an API handler private — getServerSession() and the
       # 401 under it — is one you add by remembering to, and nothing fails when
       # it is missing: the route compiles, the test that exercises it signs in

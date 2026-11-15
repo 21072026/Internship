@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireCapability } from '@/lib/capabilityGate';
 import { requirePermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { entitled } from '@/lib/entitlements';
@@ -31,6 +32,9 @@ export async function GET(request: Request) {
   const gate = await requirePermission('analytics.read', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // The internship product's report (#2348): refused in a vertical without `mentorship`.
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   const settingsOrg = await settingsOrgOf(session);
   if (!(await entitled(settingsOrg, 'ADVANCED_ANALYTICS'))) {
     return NextResponse.json({ error: 'feature_locked', code: 'feature_locked', feature: 'ADVANCED_ANALYTICS' }, { status: 403 });

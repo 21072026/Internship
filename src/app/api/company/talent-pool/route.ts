@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireCapability } from '@/lib/capabilityGate';
 import { requireCompanySeat } from '@/lib/companySeatGate';
 import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
@@ -19,6 +20,10 @@ export async function GET(request: Request) {
   const gate = await requireRoleOrPermission(['COMPANY'], 'user.read', { request });
   if ('error' in gate) return gate.error;
   const { session, admin } = gate;
+  // The company portal is the internship product's (#2348 MKT-2): a vertical
+  // without `placements` has no company portal, its COMPANY logins included.
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
   // The seat AND the entitlement (#1870): orthogonal, both required.
   const seatGate = await requireCompanySeat(session, 'talentPool.search');
   if (seatGate) return seatGate;

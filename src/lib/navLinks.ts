@@ -253,7 +253,7 @@ export const MENTOR_NAV_LINKS: NavLink[] = [
   { href: '/mentor/email', icon: Mail, key: 'email' },
   { href: '/mentor/meetings', icon: CalendarClock, key: 'meetings' },
   { href: '/mentor/interview-requests', icon: CalendarDays, key: 'interviewRequests' },
-  { href: '/interviews', icon: ClipboardCheck, key: 'interviewPanels' },
+  { href: '/interviews', icon: ClipboardCheck, key: 'interviewPanels', capability: 'placements' },
   { href: '/mentor/availability', icon: CalendarRange, key: 'availability' },
   { href: '/mentor/calendar', icon: CalendarDays, key: 'calendar' },
   { href: '/mentor/events', icon: Presentation, key: 'groupEvents', capability: 'mentorship' },

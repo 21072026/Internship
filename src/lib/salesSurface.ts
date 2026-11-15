@@ -15,9 +15,13 @@
 // redirect branch that points here never runs for a vertical with mentorship.
 //
 // WHO. A MENTOR only. The leads of a MARKETING tenant are MENTEE rows (the
-// person on the record, not an operator) and a COMPANY user is the customer:
-// both keep landing on `/account`. An ADMIN keeps the admin shell as home and
-// reaches this one through the mode switch when they also work a book.
+// person on the record, not an operator) and land on `/account`. A COMPANY row
+// is the customer: no new COMPANY login can be created in such a vertical
+// (POST /api/admin/company-users answers 403 `capability_missing`), and one
+// that already exists is sent from `/company` — roleHome('COMPANY') — to
+// `/account` by the company layout, which checks `placements` (#2348 MKT-2).
+// An ADMIN keeps the admin shell as home and reaches this one through the mode
+// switch when they also work a book.
 //
 // Pure and dependency-free (type import only), so the unit runner can load it.
 

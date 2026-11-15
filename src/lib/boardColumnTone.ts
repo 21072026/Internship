@@ -10,7 +10,9 @@
 // last stage is not in it.
 //
 // Only the column surface is tinted; cards stay white, and the header text
-// keeps its gray, which holds AA on every -100 tint. Full class strings, since
+// keeps its gray, which holds AA on every -100 tint. A collapsed empty-stage
+// strip prints its label at 10px, where gray-500 does NOT hold on a tint —
+// MentorBoard uses gray-700 there (#3675). Full class strings, since
 // Tailwind only generates classes it can read literally (this folder is in its
 // `content` globs). Two utilities are deliberately avoided because globals.css
 // repaints them: blue is the org's ACCENT (`html[data-accent] .bg-blue-100`),

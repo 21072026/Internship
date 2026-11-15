@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { requireRoleOrPermission } from '@/lib/authz';
+import { requireCapability } from '@/lib/capabilityGate';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { ONBOARDING_STEPS, loadOnboardingState, pendingOnboardings } from '@/lib/menteeOnboarding';
@@ -21,6 +22,9 @@ export async function GET(request: Request) {
   const gate = await requireRoleOrPermission(['MENTOR'], 'program.read', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // A mentor's checklist for a new mentee — the mentorship module (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
 
   return await withTenantScope(session, async () => {
     const menteeId = new URL(request.url).searchParams.get('menteeId');
@@ -37,6 +41,9 @@ export async function PATCH(request: Request) {
   const gate = await requireRoleOrPermission(['MENTOR'], 'program.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // A mentor's checklist for a new mentee — the mentorship module (MKT-6a).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
 
   return await withTenantScope(session, async () => {
     const parsed = patchSchema.safeParse(await request.json().catch(() => null));

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 import { requireCompanySeat } from '@/lib/companySeatGate';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -76,7 +77,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // reaches a company through one relation must not read the other mentors'
     // mentees at that company. ADMIN's `{}` and COMPANY's `companyId = own`
     // leave the payload exactly as it was.
-    const relationScope = (await scopeForRole(session.user, 'relation')) ?? { id: NO_MATCH };
+    //
+    // A COMPANY reader in a vertical without `placements` (MARKETING, #2348
+    // MKT-2) gets its company and none of its relations: there they are the
+    // funnel — the lead, its owner, its stage — and the company is the
+    // customer. The same rule as the COMPANY branch of GET /api/mentorship.
+    const funnelHidden =
+      session.user.role === 'COMPANY' && !(await shellCapabilities(session.user.orgId)).includes('placements');
+    const relationScope = funnelHidden
+      ? { id: NO_MATCH }
+      : ((await scopeForRole(session.user, 'relation')) ?? { id: NO_MATCH });
 
     return await withTenantScope(session, async () => {
     const company = await prisma.company.findFirst({

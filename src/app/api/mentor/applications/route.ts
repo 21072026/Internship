@@ -5,6 +5,7 @@ import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { decideMentorshipRequest } from '@/lib/mentorshipDecision';
 import { withTenantScope } from '@/lib/orgContext';
+import { requireCapability } from '@/lib/capabilityGate';
 
 // The mentor's own application inbox (#1188): public /apply/[mentorId]
 // submissions now land here as PENDING MentorshipRequests naming this mentor,
@@ -18,6 +19,9 @@ export async function GET(request: Request) {
   const gate = await requireRoleOrPermission(['MENTOR'], 'program.read', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // A mentor's inbox of mentee applications (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const requests = await prisma.mentorshipRequest.findMany({
       // `replacesRelationId: null` keeps re-match requests (#1801) out of a
@@ -54,6 +58,9 @@ export async function PUT(request: Request) {
   const gate = await requireRoleOrPermission(['MENTOR'], 'program.write', { request });
   if ('error' in gate) return gate.error;
   const { session } = gate;
+  // A mentor's inbox of mentee applications (P3, MKT-6).
+  const capGate = await requireCapability(session.user.orgId, 'mentorship');
+  if (capGate) return capGate;
   return await withTenantScope(session, async () => {
     const parsed = decideSchema.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });

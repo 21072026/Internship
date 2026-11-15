@@ -5,6 +5,7 @@ import { parseGateBody, type GateInfo } from '@/lib/upgradePrompt';
 
 import { useCallback, useRef, useState, useEffect } from 'react';
 import Link from 'next/link';
+import { verticalHasCapability } from '@/lib/verticals';
 import { Card, CardHeader, CardTitle, CardDescription } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -51,7 +52,9 @@ export default function CompaniesPage() {
   // The manual lead form is the MARKETING product's (#2562): an INTERNSHIP
   // tenant's "lead" is an applicant, with its own intake paths. The route
   // refuses a non-marketing org as well; this only keeps the button honest.
-  const isMarketing = useVertical() === 'MARKETING';
+  const vertical = useVertical();
+  const isMarketing = vertical === 'MARKETING';
+  const canProvisionLogins = verticalHasCapability(vertical, 'placements');
   const [showNewLead, setShowNewLead] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
   // The company <select> below provisions a login and must offer EVERY company,
@@ -389,8 +392,10 @@ export default function CompaniesPage() {
         </div>
       )}
 
-      {/* Provision a read-only company login */}
-      <Card className="mb-6">
+      {/* Provision a read-only company login — only where the company portal exists
+          (#2348 MKT-2): in a vertical without `placements` the API refuses it too. */}
+      {canProvisionLogins && (
+      <Card className="mb-6" data-testid="company-login-card">
         <CardHeader>
           <CardTitle>{t.companiesPage.addLogin}</CardTitle>
           <CardDescription>{t.companiesPage.addLoginHint}</CardDescription>
@@ -437,6 +442,7 @@ export default function CompaniesPage() {
           </Button>
         </div>
       </Card>
+      )}
 
       {/* Create/Edit Modal */}
       {(showForm || editingCompany) && (

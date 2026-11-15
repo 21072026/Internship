@@ -90,6 +90,12 @@ const nextConfig = {
   // web-push is Node-only too (node:crypto, node:https) and does its own
   // dynamic requires, so it stays out of the webpack server bundle (#1464).
   serverExternalPackages: ['@prisma/client', 'bcryptjs', 'pdf-parse', 'mammoth', 'imapflow', 'mailparser', 'web-push'],
+  // The E2E workflows build only to have something to test; ci.yml runs
+  // `npm run lint` and `npx tsc --noEmit` on the same commit, so repeating both
+  // inside `next build` there only lengthens the critical path of the gate.
+  // Every other build (ci.yml, the Docker image, local) still checks.
+  typescript: { ignoreBuildErrors: process.env.NEXT_SKIP_BUILD_CHECKS === '1' },
+  eslint: { ignoreDuringBuilds: process.env.NEXT_SKIP_BUILD_CHECKS === '1' },
   async headers() {
     return [
       // Every path but the Teams tab: frame-ancestors 'none' + X-Frame-Options DENY.

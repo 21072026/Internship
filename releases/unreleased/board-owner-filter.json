@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Admin board: an \"Owner\" filter narrows the board to one or more owners' records — applied on the server (`?owners=` on `GET /api/mentorship`, ANDed with the caller's scope so it narrows but never widens), so counts and paging match; kept in the URL and in saved views. Each card shows its owner's initials beside the name (#3658).",
+  "notes": {
+    "en": ["Board: filter by owner to see one colleague's records, and see at a glance whose each card is."],
+    "tr": ["Pano: sorumluya göre filtreleyerek bir iş arkadaşının kayıtlarını görün; her kartın kime ait olduğu bir bakışta belli."],
+    "de": ["Board: Nach Zuständigen filtern, um die Datensätze einer Kollegin oder eines Kollegen zu sehen; jede Karte zeigt auf einen Blick, wem sie gehört."]
+  }
+}

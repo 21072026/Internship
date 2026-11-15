@@ -6,6 +6,8 @@ import { apiError, apiOk } from '@/lib/api/v1';
 import { apiWrite, writeOk } from '@/lib/api/v1Write';
 import { assertPublicHttpsUrl, SsrfBlockedError } from '@/lib/ssrfGuard';
 import { MAX_HOOKS_PER_KEY, WEBHOOK_EVENTS } from '@/lib/webhooks';
+import { webhookEventAvailable } from '@/lib/webhookEventCapability';
+import { shellCapabilities } from '@/lib/shellCapabilities';
 
 // REST-hook subscriptions a connector manages for itself (#2002) — the
 // platform side of "turn the Zap on / off". A subscription is OWNED by the key
@@ -46,6 +48,13 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   return withApiKey(request, 'hooks:write', (key) =>
     apiWrite(request, key, subscribeSchema, async (body) => {
+      // An event of a module this org's product lacks (MKT-6b) is refused like
+      // any other invalid event name, never subscribed to.
+      if (!webhookEventAvailable(body.event, await shellCapabilities(key.orgId))) {
+        return apiError(422, 'validation_failed', 'The request body is invalid', undefined, {
+          errors: [{ path: 'event', code: 'event_unavailable', message: 'this event is not part of your organization’s product' }],
+        });
+      }
       try {
         await assertPublicHttpsUrl(body.targetUrl);
       } catch (e) {

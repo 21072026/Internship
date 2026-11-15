@@ -27,6 +27,7 @@ import { foldSearchText, matchesMenteeQuery } from '@/lib/menteeFilter';
 import { FollowUpChip } from '@/components/FollowUpPanel';
 import { TrialEndChip } from '@/components/TrialEndPanel';
 import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
+import { HandoffCardButton, useLeadHandoff } from '@/components/board/LeadHandoff';
 
 interface Mentee {
   id: string;
@@ -38,6 +39,10 @@ interface Mentee {
 interface Relation {
   id: string;
   status?: string;
+  // The record's owner (GET /api/mentorship includes it). Shown on the card only
+  // when the board holds more than one owner's records — a sales dispatcher's
+  // board (#3656); a rep's own board is all theirs and shows no name.
+  mentor?: { id: string; fullName: string };
   pipelineStatus: string;
   // The stage clock (#1724), both served by GET /api/mentorship inside the
   // caller's existing scope. `stageDeadline` is the org's per-stage SLA once
@@ -62,7 +67,9 @@ interface Relation {
 // PUT /api/mentorship/[id], which lets only the owner (or an ADMIN) write.
 // `detailBase` is the page a card opens; the default keeps the mentor board
 // exactly what it was.
-export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: string }) {
+// `handoff` (the sales board only) adds the colleague strip above the columns:
+// drop a lead on a teammate to hand it over with its next step (LeadHandoff.tsx).
+export function MentorBoard({ detailBase = '/mentor/mentees', handoff = false }: { detailBase?: string; handoff?: boolean }) {
   const t = useT();
   const label = useStageLabel();
   const { show: showGate, dialog: gateDialog } = useStageGateDialog();
@@ -117,6 +124,19 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
   useEffect(() => {
     relationsRef.current = relations;
   }, [relations]);
+
+  // Off on the mentor board: the hook still runs (hooks are unconditional) but
+  // only `handoff` boards render what it returns. The rep's own leads are
+  // already theirs, so they are not on their own strip.
+  // A sales dispatcher's board holds the whole team's records (#3656): then the
+  // card names its owner, and the dispatcher may also take a lead themself.
+  const manyOwners = useMemo(() => new Set(relations.map((r) => r.mentor?.id).filter(Boolean)).size > 1, [relations]);
+  const leadHandoff = useLeadHandoff({
+    includeSelf: manyOwners,
+    nameOf: useCallback((id: string) => relationsRef.current.find((r) => r.id === id)?.mentee.fullName, []),
+    onHandedOff: fetchRelations,
+  });
+  const showHandoff = handoff && leadHandoff.enabled;
 
   useEffect(() => {
     fetchRelations();
@@ -282,6 +302,9 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
       {r.mentee.university && (
         <p className="text-xs text-gray-500 truncate mt-0.5">{r.mentee.university}</p>
       )}
+      {manyOwners && r.mentor && (
+        <p className="mt-1 truncate text-xs text-gray-500" data-testid="board-card-owner">{r.mentor.fullName}</p>
+      )}
       <div className="flex items-center gap-1 text-xs text-gray-400 mt-2">
         <GraduationCap className="h-3 w-3" />
         {r._count.interactions} {t.mentor.interactions}
@@ -293,6 +316,7 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
       </div>
       {r.nextActionAt && <div className="mt-1"><FollowUpChip at={r.nextActionAt} /></div>}
       <div className="mt-1 empty:hidden"><TrialEndChip pipelineStatus={r.pipelineStatus} trialEndsAt={r.trialEndsAt} /></div>
+      {showHandoff && <HandoffCardButton onClick={() => leadHandoff.openFor(r.id)} />}
     </div>
   );
 
@@ -307,6 +331,7 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
   return (
     <div>
       {gateDialog}
+      {handoff && leadHandoff.dialog}
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           {t.nav.board}
@@ -320,6 +345,8 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
           {t.mentor.boardSubtitle}
         </p>
       </div>
+
+      {showHandoff && relations.length > 0 && leadHandoff.strip}
 
       {relations.length > 0 && (
         <div className="flex flex-wrap items-center gap-3 mb-4">
@@ -441,14 +468,20 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
                       title={t.mentor.boardEmptyStage.replace('{stage}', label(status))}
                       aria-label={t.mentor.boardEmptyStage.replace('{stage}', label(status))}
                       {...dropHandlersFor(status)}
-                      className={`h-28 overflow-hidden rounded-lg border border-dashed py-2 flex flex-col items-center gap-1 transition-colors ${
-                        dragOver === status ? 'border-blue-400 bg-blue-50' : 'border-gray-200 bg-gray-50'
+                      // The same stage tone as an open column (src/lib/boardColumnTone.ts,
+                      // #3675), dashed to say "empty"; a drop target gains the
+                      // accent ring, exactly like an open column.
+                      className={`h-28 overflow-hidden rounded-lg border border-dashed py-2 flex flex-col items-center gap-1 transition-colors ${boardColumnTone(status, stageKeys)}${
+                        dragOver === status ? ' ring-2 ring-blue-500 ring-offset-1' : ''
                       }`}
                     >
-                      <span data-testid={`board-column-count-${status}`} className="text-[10px] text-gray-400 opacity-60">
+                      <span data-testid={`board-column-count-${status}`} className="text-[10px] text-gray-600">
                         0
                       </span>
-                      <span className="min-h-0 overflow-hidden text-ellipsis text-[10px] font-medium text-gray-500 [writing-mode:vertical-rl] rotate-180 whitespace-nowrap">
+                      {/* gray-700, not -500: the strip carries the stage tone since #3692, and
+                          10px gray-500 on a -100 tint is under AA (4.5:1). gray-700 holds
+                          on every tint; dark mode maps it light (globals.css). */}
+                      <span className="min-h-0 overflow-hidden text-ellipsis text-[10px] font-medium text-gray-700 [writing-mode:vertical-rl] rotate-180 whitespace-nowrap">
                         {label(status)}
                       </span>
                     </div>
@@ -463,8 +496,8 @@ export function MentorBoard({ detailBase = '/mentor/mentees' }: { detailBase?: s
                 key={status}
                 ref={(el) => { columnRefs.current[status] = el; }}
                 data-testid={`board-column-${status}`}
-                // See the admin board: forced-colors drops the bg-blue-50 drop
-                // target highlight, so mark the state for globals.css (#2045).
+                // See the admin board: forced-colors drops the drop-target ring,
+                // so mark the state for globals.css to outline instead (#2045).
                 data-drop-active={dragOver === status ? 'true' : undefined}
                 {...dropHandlersFor(status)}
                 // Each stage its own color (src/lib/boardColumnTone.ts); the drop

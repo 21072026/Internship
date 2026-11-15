@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireCapability } from '@/lib/capabilityGate';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -21,6 +22,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (session.user.role !== 'COMPANY' || !session.user.companyId) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  // The company portal is the internship product's (#2348 MKT-2): a vertical
+  // without `placements` has no company portal, its COMPANY logins included.
+  const capGate = await requireCapability(session.user.orgId, 'placements');
+  if (capGate) return capGate;
 
   return await withTenantScope(session, async () => {
   const { id } = await params;

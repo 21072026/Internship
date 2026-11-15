@@ -131,6 +131,28 @@ test('a plan change freezes what exists and pays nothing retroactively', { tag: 
   expect((await commissions()).at(-1)).toBe('inv-10:PERCENT:160:PENDING:v2');
 });
 
+test('a breakdown is resolved to the base by the writer and stored beside it (#3552)', async () => {
+  const at = d('2026-03-12T10:00:00Z');
+  // 20 transactions × 40 = 800, the same base as a bare 800 — the same commission (v2, 20 %).
+  const r = await recordAffiliatePayment({ ...base(), partnerId, customerExternalRef: 'c-b', transactionCount: 20, unitPriceMinor: 40, receivedAt: at, externalPaymentRef: 'inv-12' });
+  expect(r.created).toBe(1);
+  expect((await commissions()).at(-1)).toBe('inv-12:PERCENT:160:PENDING:v2');
+  const row = await prisma.affiliatePayment.findUniqueOrThrow({ where: { id: r.paymentId }, select: { amountMinor: true, transactionCount: true, unitPriceMinor: true } });
+  expect(row).toEqual({ amountMinor: 800, transactionCount: 20, unitPriceMinor: 40 });
+  // A bare amount keeps no breakdown.
+  const bare = await prisma.affiliatePayment.findFirstOrThrow({ where: { orgId, externalPaymentRef: 'inv-10' }, select: { transactionCount: true, unitPriceMinor: true } });
+  expect(bare).toEqual({ transactionCount: null, unitPriceMinor: null });
+
+  // Refused before any write: disagreeing shapes, half a breakdown, nothing at all.
+  const before = await prisma.affiliatePayment.count({ where: { orgId } });
+  const pay = (fields: object, ref: string) => codeOf(recordAffiliatePayment({ ...base(), partnerId, customerExternalRef: 'c-b', receivedAt: at, externalPaymentRef: ref, ...fields }));
+  expect(await pay({ amountMinor: 700, transactionCount: 20, unitPriceMinor: 40 }, 'inv-13')).toBe('invalid_input:amount_mismatch');
+  expect(await pay({ transactionCount: 20 }, 'inv-14')).toBe('invalid_input:incomplete_breakdown');
+  expect(await pay({}, 'inv-15')).toBe('invalid_input:amount_required');
+  expect(await pay({ transactionCount: 3, unitPriceMinor: 0 }, 'inv-16')).toBe('invalid_input:amount_range');
+  expect(await prisma.affiliatePayment.count({ where: { orgId } })).toBe(before);
+});
+
 test('a suspended partner gets no new payments', { tag: '@smoke' }, async () => {
   await prisma.affiliatePartner.update({ where: { id: partnerId }, data: { status: 'SUSPENDED' } });
   expect(await codeOf(recordAffiliatePayment({ ...base(), customerExternalRef: 'c-a', amountMinor: 800, receivedAt: d('2026-03-11T00:00:00Z'), externalPaymentRef: 'inv-11' }))).toBe('partner_suspended');

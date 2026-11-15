@@ -138,7 +138,7 @@ These are **not secrets**. They are listed so nobody has to wonder.
   `STATUS_SLA_TARGET`, `TENANT_HARD_DELETE_ENABLED` and `TENANT_HARD_DELETE_WAIT_HOURS` (irreversible
   tenant deletion — off unless set, [`tenant-lifecycle.md`](tenant-lifecycle.md)),
   `KLAVIYO_REVISION`, `KLAVIYO_EVENT_METRICS`, `KLAVIYO_CONVERSION_METRIC`.
-- Security headers: `CSP_REPORT_ONLY` (the report-only nonce CSP, [`csp.md`](csp.md)).
+- Security headers: `CSP_REPORT_ONLY` (the report-only nonce CSP) and `CSP_ENFORCE` (enforce it), [`csp.md`](csp.md).
 - Model selection: `ANTHROPIC_CV_MODEL`, `ANTHROPIC_SUMMARY_MODEL`, `AI_MODEL_TIER_FAST`,
   `AI_MODEL_TIER_BALANCED`, `AI_MODEL_TIER_STRONG`, `AI_MODEL_CV_EXTRACT`,
   `AI_MODEL_CV_FEEDBACK`, `AI_MODEL_ANALYTICS_NARRATIVE`, `AI_MODEL_EVALUATION_INSIGHTS`,

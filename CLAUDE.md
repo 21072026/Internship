@@ -64,7 +64,7 @@ role scoping, tenant isolation, session revocation, API-key/upload/mail enforcem
 browserless `*.unit.spec.ts` checks, which cost ~nothing. Feature specs do **not** get the tag:
 the scheduled full suite covers them. It had drifted to 213 tests and was pruned to ~107 in
 #2811 — when you add a spec for a *critical* flow or a security boundary, tag it `@smoke`;
-anything else stays untagged. Locally `test:e2e`
+anything else stays untagged. **On a PR the gate runs only a CORE subset of @smoke** (`E2E_SCOPE` in `e2e.yml`: smoke/auth/health/authz-matrix/role-scoping/invite/pipeline/free-core-regression + every `*.unit.spec.ts`, 2026-11-13) — 25 browser tests instead of ~384; push to `main` and dispatches still run all of @smoke. Repo variable `E2E_SMOKE_SCOPE=full` restores the whole set on PRs without a code change. Locally `test:e2e`
 boots the dev server; set `BASE_URL=https://preview.interncrm.com` to run against a
 deployed env instead.
 After switching branches, run `npx prisma generate` so the client matches the schema —

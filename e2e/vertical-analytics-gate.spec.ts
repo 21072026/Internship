@@ -53,6 +53,9 @@ const KEPT = [
   'cohort-kpi-card',
 ];
 
+// The internship-only analytics reports (#2348) — page and API share the path.
+const INTERNSHIP_REPORTS = ['outcomes', 'closure', 'roi'];
+
 type Vertical = 'INTERNSHIP' | 'MARKETING';
 
 /**
@@ -142,6 +145,18 @@ test('an INTERNSHIP admin keeps every analytics card — the gate is a no-op', a
     for (const id of [...KEPT, ...MENTORSHIP_ONLY]) {
       await expect(page.getByTestId(id), `INTERNSHIP must keep ${id}`).toBeVisible({ timeout: 20_000 });
     }
+
+    // The internship-only reports (#2348) are unchanged here: linked, served, answered.
+    await expect(page.getByTestId('outcomes-link')).toBeVisible();
+    await expect(page.getByTestId('closure-link')).toBeVisible();
+    for (const path of INTERNSHIP_REPORTS) {
+      expect((await page.goto(`/admin/analytics/${path}`))?.status(), `/admin/analytics/${path}`).toBe(200);
+      // ROI is also a premium report, so a 403 `feature_locked` is fine here —
+      // what must not come back is the vertical's refusal.
+      const api = await page.request.get(`/api/admin/analytics/${path}`);
+      expect(api.status(), `/api/admin/analytics/${path}`).toBeLessThan(500);
+      expect((await api.json()).code, `/api/admin/analytics/${path}`).not.toBe('capability_unavailable');
+    }
   } finally {
     await cleanupVerticalOrg(seeded);
   }
@@ -211,6 +226,33 @@ test('a MARKETING admin sees the funnel cards and none of the mentorship ones', 
     // absence here is the gate rather than a slow fetch.
     for (const id of MENTORSHIP_ONLY) {
       await expect(page.getByTestId(id), `MARKETING must not render ${id}`).toHaveCount(0);
+    }
+
+    // The outcomes, closure and ROI reports are the internship product's
+    // (#2348): no link to them, a 404 at their address, and a capability
+    // refusal from every one of their API handlers, reads and writes alike.
+    for (const id of ['outcomes-link', 'closure-link', 'roi-link']) {
+      await expect(page.getByTestId(id), `MARKETING must not link ${id}`).toHaveCount(0);
+    }
+    // The page renders the not-found screen. Its HTTP status stays 200: the
+    // parent admin/analytics layout wraps its children in the async
+    // <I18nScope>, so the response is already streaming when the nested
+    // layout's notFound() runs — the 404 is what the person sees, not the status.
+    for (const path of INTERNSHIP_REPORTS) {
+      await page.goto(`/admin/analytics/${path}`);
+      await expect(page.getByRole('heading', { level: 1, name: 'Page not found' }), `/admin/analytics/${path}`).toBeVisible();
+    }
+    const refusals: Array<[string, Promise<import('@playwright/test').APIResponse>]> = [
+      ['GET outcomes', page.request.get('/api/admin/analytics/outcomes')],
+      ['POST outcomes', page.request.post('/api/admin/analytics/outcomes', { data: {} })],
+      ['GET closure', page.request.get('/api/admin/analytics/closure')],
+      ['POST closure', page.request.post('/api/admin/analytics/closure', { data: {} })],
+      ['GET roi', page.request.get('/api/admin/analytics/roi')],
+    ];
+    for (const [name, call] of refusals) {
+      const res = await call;
+      expect(res.status(), name).toBe(403);
+      expect(await res.json(), name).toMatchObject({ code: 'capability_unavailable', capability: 'mentorship' });
     }
   } finally {
     await cleanupVerticalOrg(seeded);

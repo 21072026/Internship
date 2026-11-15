@@ -33,6 +33,7 @@ import {
   type MarketingImportOwner,
 } from '@/lib/marketingImportStore';
 import { leadSourceName } from '@/lib/leadSourceName';
+import { servedHosts } from '@/lib/servedHosts';
 
 export const CLAIM_STALE_MS = 10 * 60 * 1000;
 
@@ -69,6 +70,7 @@ export async function convertInquiryToMarketingLead(input: {
         utmSource: true,
         utmMedium: true,
         utmCampaign: true,
+        referrer: true,
         convertedCompanyId: true,
         convertedCompany: { select: { name: true } },
       },
@@ -130,15 +132,18 @@ export async function convertInquiryToMarketingLead(input: {
           source: inquiry.utmSource ?? WEB_FORM_SOURCE,
         },
         // The `Source` row is decided by the ONE attribution rule (#2570,
-        // src/lib/leadSourceName.ts) — `utm:<source>/<medium>/<campaign>`, or
-        // unknown (no Source, the report's `unsourced` bucket) when the visitor
-        // carried no utm_source. "Website demo form" says HOW they reached us,
-        // not which channel sent them, so it is not a Source.
+        // src/lib/leadSourceName.ts) — `utm:<source>/<medium>/<campaign>`;
+        // without utm_source, `ref:<host>` of the referring site (#2578); a
+        // referrer on one of our own served hosts, or none, is unknown (no
+        // Source, the report's `unsourced` bucket). "Website demo form" says HOW
+        // they reached us, not which channel sent them, so it is not a Source.
         leadSourceName: (() => {
           const r = leadSourceName({
             utmSource: inquiry.utmSource,
             utmMedium: inquiry.utmMedium,
             utmCampaign: inquiry.utmCampaign,
+            referrer: inquiry.referrer,
+            servedHosts: servedHosts(),
           });
           return r.kind === 'unknown' ? null : r.name;
         })(),

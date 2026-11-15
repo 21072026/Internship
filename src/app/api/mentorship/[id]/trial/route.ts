@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { z } from 'zod';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
-import { actorFromSession, can } from '@/lib/authz';
+import { actorFromSession, can, dispatcherMay } from '@/lib/authz';
 import { withTenantScope } from '@/lib/orgContext';
 import { withRequestScope } from '@/lib/requestContext';
 import { requireCapability } from '@/lib/capabilityGate';
@@ -80,7 +80,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         });
         if (!relation) return NextResponse.json({ error: 'Relation not found' }, { status: 404 });
 
-        const isOwner = relation.mentorId === session.user.id;
+        // The owner, or the org's sales dispatcher on this record (#3656).
+        const isOwner = relation.mentorId === session.user.id || dispatcherMay(actor, 'relation.write', relation.orgId);
         if (!isAdmin && !isOwner) {
           return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
         }
