@@ -126,9 +126,9 @@ test('on /sales/board an org admin sees only their own card, and it opens', asyn
   await expect(cards.filter({ hasText: `Book lead-a1 ${STAMP}` })).toHaveCount(1, { timeout: 20_000 });
   await expect(cards.filter({ hasText: `Book lead-r1 ${STAMP}` })).toHaveCount(0);
   await expect(cards.filter({ hasText: `Book lead-r2 ${STAMP}` })).toHaveCount(0);
-  const nav = page.waitForResponse((r) => new URL(r.url()).pathname === `/sales/leads/${ids['rel-a1']}` && r.request().isNavigationRequest());
+  // A client-side navigation (next/link): the lead page renders, not the 404.
   await cards.filter({ hasText: `Book lead-a1 ${STAMP}` }).getByRole('link').click();
-  expect((await nav).status()).toBe(200);
+  await page.waitForURL((u) => u.pathname === `/sales/leads/${ids['rel-a1']}`, { timeout: 20_000 });
   await expect(page.getByTestId('sales-lead-stage')).toBeVisible({ timeout: 20_000 });
 });
 
