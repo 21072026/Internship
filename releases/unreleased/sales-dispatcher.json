@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "Sales: the lead dispatcher — an org admin marks a sales rep on `/admin/users`, and that rep (not an admin) sees every sales record of the org on the board, opens any lead page, moves stages, logs interactions and hands any lead to any rep. One rule: `User.salesDispatcher` is effective only for an active MENTOR on a sales vertical (`src/lib/salesDispatcher.ts`); `decide()` grants `program.read`/`relation.write`/`pipeline.transition` only on a named record of the own org; audited, read live (#3656).",
-  "notes": {
-    "en": ["Sales: an admin can make a rep the lead dispatcher, who then sees the whole team's leads and can assign and work them without being an admin."],
-    "tr": ["Satış: admin bir temsilciyi lead dağıtıcısı yapabilir; bu kişi admin olmadan ekibin bütün lead'lerini görür, dağıtır ve üzerinde çalışabilir."],
-    "de": ["Vertrieb: Eine Administratorin kann einen Vertriebler zum Lead-Verteiler machen, der dann ohne Adminrechte alle Leads des Teams sieht, verteilt und bearbeitet."]
-  }
-}

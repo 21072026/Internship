@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Sales lead page hand-off (#3657 follow-up):** the \"Hand over\" button is offered only to whom `POST /api/sales/leads/[id]/handoff` lets through — the owner, the org's sales dispatcher or an admin with `relation.write` — decided on the server by `canHandOffLead()` / `actorMayHandOff()` (`src/lib/leadHandoff.ts`), the same check the hand-off itself now calls. A dispatcher under impersonation (who may read but not write) no longer sees a button the route would refuse.",
+  "notes": {
+    "en": ["The lead page shows \"Hand over\" only to people who are allowed to hand the lead over."],
+    "tr": ["Müşteri adayı sayfasındaki \"Devret\" düğmesi artık yalnızca adayı devretmeye yetkisi olanlara görünüyor."],
+    "de": ["Die Lead-Seite zeigt „Übergeben“ nur noch denen, die den Lead auch übergeben dürfen."]
+  }
+}

@@ -116,6 +116,11 @@ test.beforeAll(async () => {
   // Active when the UI dialog opens, deactivated while it is open.
   await person('rep4', 'MENTOR', orgA);
   await person('admin', 'ADMIN', orgA);
+  // The org's sales dispatcher (#3656): may hand any lead of the org, but not
+  // under impersonation's write rules — the case the lead page's button (#3657)
+  // must not be offered in.
+  await person('disp', 'MENTOR', orgA);
+  await prisma.user.update({ where: { id: ids.disp }, data: { salesDispatcher: true } });
   await person('mentee', 'MENTEE', orgA);
   const account = await prisma.company.create({ data: { orgId: orgA, name: `Handoff Login Co ${STAMP}` } });
   companyIds.push(account.id);
@@ -136,6 +141,8 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   const userIds = Object.entries(ids).filter(([k]) => !k.startsWith('rel-') && k !== 'orgA').map(([, v]) => v);
   await prisma.notification.deleteMany({ where: { userId: { in: userIds } } }).catch(() => {});
+  await prisma.impersonationGrant.deleteMany({ where: { targetId: { in: userIds } } }).catch(() => {});
+  await prisma.auditLog.deleteMany({ where: { targetId: { in: userIds } } }).catch(() => {});
   await prisma.activityLog.deleteMany({ where: { orgId: { in: orgIds } } }).catch(() => {});
   await prisma.mentorshipRelation.deleteMany({ where: { orgId: { in: orgIds } } }).catch(() => {});
   for (const email of emails) await cleanupByEmail(email);
@@ -327,5 +334,58 @@ test('the lead page hands the record over too (#3657): same dialog, then back to
   });
   expect(moved?.mentorId).toBe(ids.rep2);
   expect(moved?.nextActionAt).not.toBeNull();
+  // The new owner is told, through the same bell as the board's hand-off.
+  await expect
+    .poll(() => prisma.notification.count({ where: { userId: ids.rep2, type: 'lead.handedOff', link: `/sales/leads/${ids['rel-page']}` } }))
+    .toBe(1);
+});
+
+// #3657 follow-up: the button is offered only to whom the hand-off route lets
+// through — asked of the data on the server (canHandOffLead, src/lib/leadHandoff.ts).
+test('a colleague opening another rep’s lead page gets a 404, not the page', async ({ page }) => {
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mail.rep2, PW, '/sales');
+  const path = `/sales/leads/${ids['rel-refusals']}`;
+  const nav = page.waitForResponse((r) => new URL(r.url()).pathname === path && r.request().isNavigationRequest());
+  await gotoSettled(page, path);
+  expect((await nav).status()).toBe(404);
+  await expect(page.getByTestId('sales-lead-handoff')).toHaveCount(0);
+});
+
+test('the dispatcher gets the button; the same dispatcher under impersonation, who may not write, does not', async ({ page }) => {
+  test.slow();
+  const path = `/sales/leads/${ids['rel-colleague']}`;
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+
+  // Signed in as themselves: a colleague's lead, with the hand-off on it.
+  await signInAndSettle(page, mail.disp, PW, '/sales');
+  await gotoSettled(page, path);
+  await expect(page.getByTestId('sales-lead-stage')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('sales-lead-handoff')).toBeVisible({ timeout: 20_000 });
+  await page.context().clearCookies();
+
+  // The org admin looks over the dispatcher's shoulder (impersonation): the
+  // page still reads, but a dispatcher's write under impersonation is refused
+  // (dispatcherCovers), so no button is offered.
+  await signInAndSettle(page, mail.admin, PW, '/admin');
+  const start = await page.request.post('/api/admin/impersonate', { data: { targetUserId: ids.disp, reason: 'support' } });
+  expect(start.ok(), await start.text()).toBe(true);
+  const { grant } = await start.json();
+  const csrf = await (await page.request.get('/api/auth/csrf')).json();
+  await page.request.post('/api/auth/callback/impersonate', { form: { csrfToken: csrf.csrfToken, grant, json: 'true' }, maxRedirects: 0 });
+  const session = await (await page.request.get('/api/auth/session')).json();
+  expect(session?.user?.id).toBe(ids.disp);
+  expect(session?.user?.impersonatorId).toBeTruthy();
+
+  await gotoSettled(page, path);
+  await expect(page.getByTestId('sales-lead-stage')).toBeVisible({ timeout: 20_000 });
+  // The button would appear only after the client's team request returns, so
+  // an immediate "count 0" proves nothing: let the page's requests finish first.
+  await page.waitForLoadState('networkidle');
+  await expect(page.getByTestId('sales-lead-handoff')).toHaveCount(0);
+  // …and the route agrees: the same session cannot hand it off either.
+  const refused = await page.request.post(handoffPath(ids['rel-colleague']), { data: { toUserId: ids.rep1, action: 'call' } });
+  expect(refused.status()).not.toBe(200);
+  expect(await owner(ids['rel-colleague'])).toBe(ids.rep2);
 });
 

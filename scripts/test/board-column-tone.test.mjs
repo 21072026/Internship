@@ -63,5 +63,6 @@ test('no stage tone uses a utility globals.css repaints (bg-blue-* = accent, bg-
 
 test('the drop-target ring follows the org accent', () => {
   const css = readFileSync(new URL('../../src/app/globals.css', import.meta.url), 'utf8');
-  assert.match(css, /html\[data-accent\] \.ring-blue-500 \{ --tw-ring-color: var\(--accent-500\); \}/);
+  // The dark-mode guard (#3745) may sit between the utility and the brace.
+  assert.match(css, /html\[data-accent\] \.ring-blue-500(?::not\(:where\(\.dark \[class\*="dark:ring-"\]\)\))? \{ --tw-ring-color: var\(--accent-500\); \}/);
 });

@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Accessibility:** the collapsed empty-stage strip on the board prints its vertical label in `text-gray-700` (was `-500`) and its count in `text-gray-600` without opacity, so both hold WCAG AA on the stage tint the strip took in #3692; the overdue badge reads `text-red-700` on `bg-red-50` (was `-600`, 4.4:1 at 10px). Fixes the red a11y baseline on `/mentor/board` (#3675)."
-}

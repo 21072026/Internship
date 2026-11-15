@@ -19,6 +19,7 @@ import { SalesInteractionsCard } from '@/components/sales/SalesInteractionsCard'
 import { LeadContactEditor } from '@/components/sales/LeadContactEditor';
 import { shownEmail } from '@/lib/leadEmail';
 import { LeadPageHandoff } from '@/components/sales/LeadPageHandoff';
+import { canHandOffLead } from '@/lib/leadHandoff';
 
 // One of the rep's own records (#2580): who the lead is, the account behind it,
 // its stage, the follow-up, trial-end and estimated-value (#2422) editors, what happened last and a
@@ -76,6 +77,9 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
     },
   });
   if (!relation) notFound();
+  // The hand-off button (#3657) only for whom the hand-off route would let
+  // through — the same check, asked of the data here (src/lib/leadHandoff.ts).
+  const canHandOff = session.user.orgId ? await canHandOffLead(session, session.user.orgId, relation.id) : false;
 
   const [company, interactions] = await Promise.all([
     relation.companyId
@@ -138,7 +142,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {/* Hand the record to a colleague from here too (#3657); only an open record moves. */}
-          {relation.status === 'ACTIVE' && <LeadPageHandoff relationId={relation.id} leadName={relation.mentee.fullName} />}
+          {canHandOff && <LeadPageHandoff relationId={relation.id} leadName={relation.mentee.fullName} />}
           <Badge variant="info" data-testid="sales-lead-stage">{stageLabel(stages, relation.pipelineStatus, locale)}</Badge>
           <Badge variant={relation.status === 'ACTIVE' ? 'success' : 'default'}>
             {relation.status === 'ACTIVE' ? s.statusActive : s.statusCompleted}
