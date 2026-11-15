@@ -8,6 +8,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { hasSalesSurface } from '@/lib/salesSurface';
 import { isSalesDispatcher } from '@/lib/salesDispatcher';
+import { actorFromSession, can } from '@/lib/authz';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { formatDate } from '@/lib/relativeTime';
 import { getServerDictionary } from '@/i18n/server';
@@ -51,11 +52,13 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   if (!hasSalesSurface(session.user.role, capabilities)) notFound();
 
   const tenant = await tenantWhere(session);
+  const dispatcher = await isSalesDispatcher(session.user.id);
   const relation = await prisma.mentorshipRelation.findFirst({
     // A sales dispatcher (#3656) opens any record of the tenant; a rep their own.
-    where: withinTenant((await isSalesDispatcher(session.user.id)) ? { id } : { id, mentorId: session.user.id }, tenant),
+    where: withinTenant(dispatcher ? { id } : { id, mentorId: session.user.id }, tenant),
     select: {
       id: true,
+      mentorId: true,
       status: true,
       pipelineStatus: true,
       startDate: true,
@@ -108,6 +111,14 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
     phone: company?.contactPhone ?? relation.mentee.phone,
     position: company?.contactPosition ?? null,
   };
+  // Who may log a contact here (#3748) — the rule POST /api/interactions applies,
+  // from the data: the record's owner, the org's sales dispatcher, or an admin
+  // holding relation.write. The phone link's "Did you reach them?" is offered only
+  // to them; the route still checks on every write.
+  const actor = await actorFromSession(session);
+  const canLog =
+    relation.status === 'ACTIVE' &&
+    (relation.mentorId === session.user.id || dispatcher || (!!actor && (await can(actor, 'relation.write', undefined, session))));
 
   return (
     <div data-testid="sales-lead">
@@ -156,7 +167,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
         interactions={
           <SalesInteractionsCard
             relationId={relation.id}
-            canLog={relation.status === 'ACTIVE'}
+            canLog={canLog}
             interactions={interactions.map((i) => ({ id: i.id, date: i.date.toISOString(), type: i.type, subject: i.subject, notes: i.notes }))}
           />
         }
@@ -166,8 +177,9 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
               <CardTitle>{s.contact}</CardTitle>
             </CardHeader>
             {/* The person — editable by the record's rep (#3655); the account and the date below are not.
-                The phone and e-mail are tel:/mailto: links that also open an interaction draft (#3741). */}
-            <LeadContactEditor relationId={relation.id} initial={contact} canEdit={!!company} logOnContact={relation.status === 'ACTIVE'} />
+                The phone and e-mail are tel:/mailto: links that also log the contact: the e-mail opens an
+                interaction draft (#3741), the phone asks "Did you reach them?" (#3748). */}
+            <LeadContactEditor relationId={relation.id} initial={contact} canEdit={!!company} logOnContact={canLog} />
             <dl className="mt-4 grid grid-cols-1 gap-4 border-t border-gray-100 pt-4 dark:border-gray-800" data-testid="sales-lead-contact">
               <Field label={s.company} value={company?.name} />
               <Field label={s.since} value={date(relation.startDate)} hint={s.sinceHint} testId="sales-lead-since" />
