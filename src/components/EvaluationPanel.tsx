@@ -183,7 +183,7 @@ export function EvaluationPanel({
 
   return (
     <>
-    <Card>
+    <Card data-testid="evaluation-panel">
       <CardHeader><CardTitle>{audience === 'MENTOR' ? t.evaluation.titleMentor : t.evaluation.title}</CardTitle></CardHeader>
 
       {!readOnly && (
