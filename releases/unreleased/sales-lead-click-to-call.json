@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Click-to-call on a MARKETING lead (#3748):** the mentor page's `ContactActions` is reused on `/sales/leads/[id]` and, in a MARKETING org, on the admin's lead view `/admin/candidates/[id]`. Call or WhatsApp opens `tel:`/wa.me, then asks \"Did you reach them?\". Yes logs a Call or WhatsApp interaction through `POST /api/interactions`, so its owner check, the first-contact rule and the meter all apply, and the page's list refreshes. No logs nothing.\n- The buttons are drawn only for someone that route would accept: the record's owner, the org's sales dispatcher, or an admin holding `relation.write`. The lead page computes this on the server. `GET /api/users/[id]` carries `canLogInteraction` for the admin view, so an OBSERVER admin gets no buttons.\n- The \"yes\" link keeps a readable colour in dark mode.",
+  "notes": {
+    "en": ["Call or WhatsApp a lead from its page; say whether you reached them and the contact is logged for you."],
+    "tr": ["Lead'i sayfasından arayın ya da WhatsApp'tan yazın; ulaşıp ulaşmadığınızı seçin, temas sizin için kaydedilsin."],
+    "de": ["Rufen Sie einen Lead direkt von seiner Seite an oder schreiben Sie per WhatsApp; geben Sie an, ob Sie ihn erreicht haben, und der Kontakt wird für Sie protokolliert."]
+  }
+}

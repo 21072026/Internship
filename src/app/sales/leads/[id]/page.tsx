@@ -8,6 +8,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { hasSalesSurface } from '@/lib/salesSurface';
 import { isSalesDispatcher } from '@/lib/salesDispatcher';
+import { actorFromSession, can } from '@/lib/authz';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { formatDate } from '@/lib/relativeTime';
 import { getServerDictionary } from '@/i18n/server';
@@ -52,11 +53,13 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   if (!hasSalesSurface(session.user.role, capabilities)) notFound();
 
   const tenant = await tenantWhere(session);
+  const dispatcher = await isSalesDispatcher(session.user.id);
   const relation = await prisma.mentorshipRelation.findFirst({
     // A sales dispatcher (#3656) opens any record of the tenant; a rep their own.
-    where: withinTenant((await isSalesDispatcher(session.user.id)) ? { id } : { id, mentorId: session.user.id }, tenant),
+    where: withinTenant(dispatcher ? { id } : { id, mentorId: session.user.id }, tenant),
     select: {
       id: true,
+      mentorId: true,
       status: true,
       pipelineStatus: true,
       startDate: true,
@@ -107,6 +110,13 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
     position: company?.contactPosition ?? null,
   };
   const last = interactions[0] ?? null;
+  // Who may log a contact here (#3748) — the rule POST /api/interactions applies,
+  // from the data: the record's owner, the org's sales dispatcher, or an admin
+  // holding relation.write. The click-to-call buttons are drawn only for them;
+  // the route still checks on every write.
+  const actor = await actorFromSession(session);
+  const canLog =
+    relation.mentorId === session.user.id || dispatcher || (!!actor && (await can(actor, 'relation.write', undefined, session)));
 
   // The newest interaction, right under the follow-up (#3653); the full list stays below.
   const lastInteraction = (
@@ -208,7 +218,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
           </CardHeader>
           {relation.status === 'ACTIVE' && (
             <div className="mb-3">
-              <SalesLogInteraction relationId={relation.id} />
+              <SalesLogInteraction relationId={relation.id} phone={canLog ? contact.phone : null} />
             </div>
           )}
           {interactions.length === 0 ? (

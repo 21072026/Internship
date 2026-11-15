@@ -7,9 +7,12 @@ import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { apiErrorMessage } from '@/lib/apiErrorMessage';
 
-// Quick contact channels for a mentee's number. Opens tel:/wa.me, then asks the
-// mentor whether they reached the mentee — a "yes" logs a Call/WhatsApp
-// interaction so the contact history builds up automatically.
+// Quick contact channels for a person's number. Opens tel:/wa.me, then asks
+// whether they were reached — a "yes" logs a Call/WhatsApp interaction through
+// POST /api/interactions (owner-checked there), so the contact history builds up
+// automatically. Used on a mentor's mentee page and on a sales rep's lead page
+// (#3748); whoever renders it decides on the server whether the viewer may log.
+// A "no" logs nothing.
 export function ContactActions({ relationId, phone, onLogged }: { relationId: string; phone: string; onLogged?: () => void }) {
   const t = useT();
   const toast = useToast();
@@ -66,18 +69,21 @@ export function ContactActions({ relationId, phone, onLogged }: { relationId: st
   return (
     <div className="inline-flex flex-col gap-2">
       <div className="inline-flex gap-2">
-        <Button size="sm" variant="outline" onClick={() => open('Call')}>
+        <Button size="sm" variant="outline" onClick={() => open('Call')} data-testid="contact-call">
           <Phone className="h-4 w-4 mr-1" />{t.contact.call}
         </Button>
-        <Button size="sm" variant="outline" onClick={() => open('WhatsApp')}>
+        <Button size="sm" variant="outline" onClick={() => open('WhatsApp')} data-testid="contact-whatsapp">
           <MessageCircle className="h-4 w-4 mr-1" />WhatsApp
         </Button>
       </div>
       {ask && (
-        <div className="flex items-center gap-2 text-sm bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5">
+        // The blue-50 box is retinted dark by globals.css, which also lightens the
+        // gray texts; the green "yes" has no such rule, so it carries its own
+        // dark-mode colour or it goes dark-on-dark (#3748).
+        <div className="flex items-center gap-2 text-sm bg-blue-50 border border-blue-100 rounded-lg px-3 py-1.5 dark:border-blue-900" data-testid="contact-reached">
           <span className="text-gray-700">{t.contact.reachedQ}</span>
-          <button disabled={saving} onClick={() => log(true)} className="text-green-700 font-medium hover:underline">{t.contact.yes}</button>
-          <button disabled={saving} onClick={() => log(false)} className="text-gray-500 hover:underline">{t.contact.no}</button>
+          <button disabled={saving} onClick={() => log(true)} className="text-green-700 dark:text-green-300 font-medium hover:underline" data-testid="contact-reached-yes">{t.contact.yes}</button>
+          <button disabled={saving} onClick={() => log(false)} className="text-gray-500 hover:underline" data-testid="contact-reached-no">{t.contact.no}</button>
         </div>
       )}
     </div>
