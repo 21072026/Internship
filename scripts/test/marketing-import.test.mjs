@@ -1444,3 +1444,26 @@ test('contract_ends_at on a row that is not DEAL_WON is an ERROR, never a silent
   assert.match(report.rows[0].reason, /contract_ends_at is only for a DEAL_WON row/);
   assert.equal(store.relations.length, 0);
 });
+
+// ── A phone-only lead, typed by a rep (#3647) ───────────────────────────────
+
+const { leadContactKey, leadStandInEmail: phoneStandIn } = await import('../../src/lib/marketingImport.ts');
+
+test('the lead key: the address first; the phone only when the caller allows it', () => {
+  // An address always wins, fallback or not.
+  assert.equal(leadContactKey({ contactEmail: 'Buyer@Acme.example', contactPhone: '+49 30 1234567' }, true), 'buyer@acme.example');
+  assert.equal(leadContactKey({ contactEmail: 'buyer@acme.example' }, false), 'buyer@acme.example');
+  // The file import keeps its contract: no address, no key (the row warns "no primary contact e-mail").
+  assert.equal(leadContactKey({ contactPhone: '+49 30 1234567' }, false), '');
+  // A rep's typed lead: the normalized phone — formatting does not make a second lead.
+  const a = leadContactKey({ contactPhone: '+49 30 1234567' }, true);
+  const b = leadContactKey({ contactPhone: '0049 (30) 123-4567' }, true);
+  assert.ok(a.startsWith('tel.'));
+  assert.equal(a, b);
+  assert.equal(phoneStandIn(a, 'org-1'), phoneStandIn(b, 'org-1'));
+  // A stand-in is per org, like an address's.
+  assert.notEqual(phoneStandIn(a, 'org-1'), phoneStandIn(a, 'org-2'));
+  // Too short to be a phone, or nothing at all: no key.
+  assert.equal(leadContactKey({ contactPhone: '12' }, true), '');
+  assert.equal(leadContactKey({}, true), '');
+});
