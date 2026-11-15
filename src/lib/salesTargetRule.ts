@@ -39,8 +39,8 @@
 // leaderboard (names and counts only), and nothing that rewards logging
 // activity — the billing meter counts relations with logged activity
 // (docs/metering.md), so a game built on activity would inflate the customer's
-// bill. The leaderboard is opt-in for reps (`salesLeaderboardForReps`, default
-// off) and always visible to the org's admins.
+// bill. The leaderboard for reps is a setting (`salesLeaderboardForReps`, default
+// on since 2026-11-15) and always visible to the org's admins.
 
 import type { VerticalCapability } from './verticals';
 

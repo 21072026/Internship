@@ -95,6 +95,11 @@ test.beforeAll(async () => {
   await lead('meet', ids.rep, orgA);
   await lead('follow', ids.rep, orgA, { nextActionAt: utcMidnight(todayKey), nextActionNote: 'Send the price sheet' });
   await lead('trial', ids.rep, orgA, { pipelineStatus: 'TRIAL_ACTIVE', trialStartedAt: new Date(Date.now() - 10 * DAY), trialEndsAt: utcMidnight(todayKey) });
+  // Overdue: yesterday's follow-up, never done.
+  await lead('overdue', ids.rep, orgA, { nextActionAt: utcMidnight(localDay(new Date(today.getTime() - DAY))), nextActionNote: 'Chase the signature' });
+  // An open to-do of the rep's own.
+  const todo = await prisma.projectTask.create({ data: { title: `Prepare the demo deck ${STAMP}`, assigneeId: ids.rep, createdById: ids.rep } });
+  ids.todo = todo.id;
   // A colleague's record with the same kinds of items — must never show.
   await lead('colleague', ids.colleague, orgA, { nextActionAt: utcMidnight(todayKey), nextActionNote: 'Colleague step' });
 
@@ -111,6 +116,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   const relIds = Object.entries(ids).filter(([k]) => k.startsWith('rel-')).map(([, v]) => v);
   await prisma.meeting.deleteMany({ where: { relationId: { in: relIds } } }).catch(() => {});
+  await prisma.projectTask.deleteMany({ where: { id: ids.todo } }).catch(() => {});
   await prisma.mentorshipRelation.deleteMany({ where: { orgId: { in: orgIds } } }).catch(() => {});
   for (const email of emails) await cleanupByEmail(email);
   await prisma.pipelineStage.deleteMany({ where: { orgId: { in: orgIds } } }).catch(() => {});
@@ -219,4 +225,44 @@ test('an INTERNSHIP user cannot open the sales calendar', async ({ page }) => {
   const api = await page.request.get(`/api/sales/calendar?from=${todayKey}&to=${todayKey}`);
   expect(api.status()).toBe(403);
   expect((await api.json()).code).toBe('vertical_unavailable');
+});
+
+test('"Today" on /sales lists the follow-ups due and overdue, today\'s meetings and open to-dos, each a link', async ({ page }) => {
+  test.slow();
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mail.rep, PW, '/sales');
+  await gotoSettled(page, '/sales');
+  const card = page.getByTestId('sales-today');
+  await expect(card).toBeVisible();
+
+  // Follow-ups: today's and the overdue one (flagged), never the colleague's.
+  const due = card.getByTestId(`sales-today-followup-${ids['rel-follow']}`);
+  await expect(due).toContainText(`Cal lead-follow ${STAMP}`);
+  await expect(due).toContainText('Send the price sheet');
+  await expect(due).toHaveAttribute('data-overdue', 'false');
+  const late = card.getByTestId(`sales-today-followup-${ids['rel-overdue']}`);
+  await expect(late).toHaveAttribute('data-overdue', 'true');
+  await expect(late).toContainText('Overdue');
+  await expect(card.getByTestId(`sales-today-followup-${ids['rel-colleague']}`)).toHaveCount(0);
+  await expect(card).not.toContainText('Colleague step');
+
+  // Today's meeting, at its time on the rep's clock.
+  const meeting = card.getByTestId(`sales-today-meeting-${ids.meeting}`);
+  await expect(meeting).toContainText(`Discovery call ${STAMP}`);
+  await expect(meeting).toHaveAttribute('href', `/sales/leads/${ids['rel-meet']}`);
+  await expect(card).not.toContainText(`Colleague call ${STAMP}`);
+
+  // The open to-do.
+  const todo = card.getByTestId(`sales-today-todo-${ids.todo}`);
+  await expect(todo).toContainText(`Prepare the demo deck ${STAMP}`);
+  await expect(todo).toHaveAttribute('href', '/todos');
+
+  // Each line goes where the work is done.
+  await late.click();
+  await page.waitForURL(`**/sales/leads/${ids['rel-overdue']}`);
+  await expect(page.getByTestId('sales-lead-name')).toHaveText(`Cal lead-overdue ${STAMP}`);
+  await gotoSettled(page, '/sales');
+  await page.getByTestId(`sales-today-todo-${ids.todo}`).click();
+  await page.waitForURL('**/todos');
+  await expect(page.getByText(`Prepare the demo deck ${STAMP}`).first()).toBeVisible({ timeout: 20_000 });
 });

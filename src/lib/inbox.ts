@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { conversationForRelation, createOrGetProjectConversation } from '@/lib/conversations';
+import { conversationForRelation, createOrGetProjectConversation, salesTeamRoomFor, salesTeamStaffIds } from '@/lib/conversations';
 import { isArchived, isMuted, sortInbox } from '@/lib/conversationState';
 
 // The message inbox, read once for every surface that lists it: the /messages
@@ -10,7 +10,7 @@ import { isArchived, isMuted, sortInbox } from '@/lib/conversationState';
 export interface InboxThread {
   conversationId: string;
   type: 'DIRECT' | 'GROUP';
-  /** The other person (1:1), or the project's name (group room). */
+  /** The other person (1:1), the project's name (group room), or the team room's label. */
   name: string;
   /** Who a 1:1 row is about; null for a group room. */
   otherId: string | null;
@@ -34,8 +34,16 @@ export interface Inbox {
 /**
  * @param groupName renders a project room's name (the caller's dictionary,
  *   `t.messages.projectGroup`), so this stays free of i18n.
+ * @param team the viewer's org and the team room's label
+ *   (`t.messages.salesTeamRoom`): on the sales surface the org's one team room
+ *   is listed and the "new chat" picker offers the sales colleagues
+ *   (src/lib/salesTeamMessagingRule.ts). Anywhere else both are no-ops.
  */
-export async function loadInbox(me: string, groupName: (projectName: string) => string): Promise<Inbox> {
+export async function loadInbox(
+  me: string,
+  groupName: (projectName: string) => string,
+  team: { orgId?: string | null; roomName: string } = { roomName: '' },
+): Promise<Inbox> {
   const supportUnread = await prisma.supportMessage.count({
     where: { ticket: { requesterId: me }, senderId: { not: me }, readAt: null },
   });
@@ -60,16 +68,21 @@ export async function loadInbox(me: string, groupName: (projectName: string) => 
   // conversations together so the project chat is reachable from the inbox.
   const projectGroupIds = (await Promise.all(myProjectIds.map(createOrGetProjectConversation)))
     .flatMap((conversation) => conversation ? [conversation.id] : []);
+  // The sales team room, created on first visit; null for anyone who is not
+  // sales staff of their org right now (the rule is read live).
+  const teamRoom = await salesTeamRoomFor({ id: me, orgId: team.orgId });
+  const groupIds = teamRoom ? [...projectGroupIds, teamRoom.id] : projectGroupIds;
   const conversations = await prisma.conversation.findMany({
     where: {
       OR: [
         { type: 'DIRECT', participants: { some: { userId: me } } },
-        ...(projectGroupIds.length ? [{ type: 'GROUP' as const, id: { in: projectGroupIds } }] : []),
+        ...(groupIds.length ? [{ type: 'GROUP' as const, id: { in: groupIds } }] : []),
       ],
     },
     select: {
       id: true,
       type: true,
+      teamKey: true,
       project: { select: { name: true } },
       participants: {
         select: { userId: true, archivedAt: true, mutedUntil: true, pinnedAt: true, user: { select: { fullName: true } } },
@@ -107,7 +120,7 @@ export async function loadInbox(me: string, groupName: (projectName: string) => 
       return {
         conversationId: c.id,
         type: c.type as InboxThread['type'],
-        name: c.type === 'GROUP' ? groupName(c.project?.name ?? '—') : other?.user.fullName ?? '—',
+        name: c.teamKey ? team.roomName : c.type === 'GROUP' ? groupName(c.project?.name ?? '—') : other?.user.fullName ?? '—',
         otherId: other?.userId ?? null,
         last,
         unread: c._count.messages,
@@ -137,6 +150,21 @@ export async function loadInbox(me: string, groupName: (projectName: string) => 
         .map((row) => [row.userId, { id: row.userId, fullName: row.user.fullName, projectName: row.project.name }]),
     ).values(),
   ].sort((a, b) => a.fullName.localeCompare(b.fullName));
+
+  // On the sales surface the colleagues are who a rep writes to (there are no
+  // projects). The same live team the room is built from; canMessage() decides
+  // again when the chat is opened.
+  if (teamRoom && team.orgId) {
+    const offered = new Set(candidates.map((c) => c.id));
+    const colleagueIds = (await salesTeamStaffIds(team.orgId)).filter(
+      (id) => id !== me && !existingDmPartnerIds.has(id) && !offered.has(id),
+    );
+    const colleagues = colleagueIds.length
+      ? await prisma.user.findMany({ where: { id: { in: colleagueIds } }, select: { id: true, fullName: true } })
+      : [];
+    candidates.push(...colleagues.map((u) => ({ id: u.id, fullName: u.fullName, projectName: team.roomName })));
+    candidates.sort((a, b) => a.fullName.localeCompare(b.fullName));
+  }
 
   return { threads, candidates, supportUnread };
 }

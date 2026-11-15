@@ -14,22 +14,39 @@ import { CandidateOutreachPanel } from '@/components/CandidateOutreachPanel';
 import { loadInbox } from '@/lib/inbox';
 import { ThreadStateMenu } from '@/components/ThreadStateMenu';
 import { INBOX_FILTERS, filterInbox, parseInboxFilter } from '@/lib/conversationState';
+import { findOrCreateDirectConversation } from '@/lib/conversations';
 
 // Unified message inbox for every role: lists the viewer's conversation
 // threads (mentor side or mentee side) with the other participant, a preview
 // of the latest message, and an unread count — reachable from the header icon.
-export default async function MessagesInboxPage({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
+export default async function MessagesInboxPage({ searchParams }: { searchParams: Promise<{ filter?: string; to?: string }> }) {
   const session = await getServerSession(authOptions);
   if (!session) redirect('/auth/signin?callbackUrl=/messages');
   const { t } = await getServerDictionary();
   const me = session.user.id;
   // Inbox filter chips (#1609): a URL parameter, so a filter survives a reload
   // and the back button, and the page stays a server render.
-  const filter = parseInboxFilter((await searchParams).filter);
+  const params = await searchParams;
+  const filter = parseInboxFilter(params.filter);
+
+  // `?to=<userId>` opens the 1:1 chat with that person, creating it on first
+  // use — e.g. "write to the owner" on a lead page. The same create-or-get the
+  // "new chat" picker posts to, so the same rule decides (canMessage(): on the
+  // sales surface, active sales staff of the caller's own org). A refusal
+  // leaves the caller on the inbox with a notice, never on someone's thread.
+  const to = typeof params.to === 'string' ? params.to.trim() : '';
+  let toRefused = false;
+  if (to && to !== me) {
+    const conversation = await findOrCreateDirectConversation(me, to);
+    if (conversation) redirect(`/messages/c/${conversation.id}`);
+    toRefused = true;
+  }
 
   // One read of the inbox for the page and the native app (src/lib/inbox.ts).
-  const { threads: rows, candidates, supportUnread } = await loadInbox(me, (name) =>
-    t.messages.projectGroup.replace('{name}', name),
+  const { threads: rows, candidates, supportUnread } = await loadInbox(
+    me,
+    (name) => t.messages.projectGroup.replace('{name}', name),
+    { orgId: session.user.orgId, roomName: t.messages.salesTeamRoom },
   );
   const threads = filterInbox(rows, filter).map((th) => ({
     key: `conv-${th.conversationId}`,
@@ -58,6 +75,11 @@ export default async function MessagesInboxPage({ searchParams }: { searchParams
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.messages.title}</h1>
         <p className="text-gray-500 mt-1">{t.messages.inboxSubtitle}</p>
       </div>
+      {toRefused && (
+        <p role="alert" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800" data-testid="messages-to-refused">
+          {t.messages.startNotAllowed}
+        </p>
+      )}
       {/* Search across the viewer's own threads (#1609). */}
       <MessageSearch />
       {/* Company → candidate message requests (#1840): the deciders' queue, the

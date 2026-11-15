@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { getThreadIfAllowed } from '@/lib/messaging';
 import { projectInCallerTenant } from '@/lib/projectAccess';
+import { shellCapabilities } from '@/lib/shellCapabilities';
+import { hasSalesSurface } from '@/lib/salesSurface';
+import { isSalesStaffOf, orgOfSalesTeamKey, salesColleaguesMayMessage, salesTeamKey } from '@/lib/salesTeamMessagingRule';
 
 interface SessionUser {
   id: string;
@@ -87,7 +90,11 @@ export async function hasMentorship(userAId: string, userBId: string): Promise<b
 //   true  — they are members of the same project, OR a mentorship links them,
 //           OR an approved company outreach links them (#1840),
 //           OR either of them is an ADMIN (admins can reach anyone, mirroring
-//           the admin bypass in getThreadIfAllowed).
+//           the admin bypass in getThreadIfAllowed),
+//           OR they are sales colleagues: active sales staff of the SAME org in
+//           a vertical with the sales surface (src/lib/salesTeamMessagingRule.ts).
+//           Never a lead or a customer login, never across orgs, and never in
+//           an INTERNSHIP org, whose vertical has no sales surface.
 //   false — no shared project and no mentorship (unrelated users), or either id
 //           does not resolve to a user.
 // Self-messaging is not a thing, so a === b is false.
@@ -96,11 +103,19 @@ export async function canMessage(userAId: string, userBId: string): Promise<bool
 
   const users = await prisma.user.findMany({
     where: { id: { in: [userAId, userBId] } },
-    select: { id: true, role: true },
+    select: { id: true, role: true, orgId: true, isActive: true },
   });
   // Both ids must resolve to real users.
-  if (!users.some((u) => u.id === userAId) || !users.some((u) => u.id === userBId)) return false;
+  const a = users.find((u) => u.id === userAId);
+  const b = users.find((u) => u.id === userBId);
+  if (!a || !b) return false;
   if (users.some((u) => u.role === 'ADMIN')) return true;
+
+  // Sales colleagues (two MENTORs here: an ADMIN returned above). The vertical
+  // is read only for a same-org pair, so other pairs cost nothing extra.
+  if (a.orgId && a.orgId === b.orgId && a.role === 'MENTOR' && b.role === 'MENTOR') {
+    if (salesColleaguesMayMessage(a, b, await shellCapabilities(a.orgId))) return true;
+  }
 
   if (await sharesProject(userAId, userBId)) return true;
   if (await hasMentorship(userAId, userBId)) return true;
@@ -154,6 +169,21 @@ export async function getConversationIfAllowed(user: SessionUser, conversationId
   });
   if (!conversation) return null;
   const isParticipant = conversation.participants.some((p) => p.userId === user.id);
+  if (conversation.type === 'GROUP' && conversation.teamKey) {
+    // The sales team room: membership is the live rule, never the stored
+    // participant list — a new rep opens it at once, a deactivated one never.
+    if (!(await salesTeamRoomOpensFor(user.id, conversation.teamKey))) return null;
+    if (!isParticipant) {
+      // First visit since they joined the team: give them the participant row
+      // their read marker and mute state live on. Idempotent.
+      await prisma.conversationParticipant.createMany({
+        data: [{ conversationId: conversation.id, userId: user.id }],
+        skipDuplicates: true,
+      });
+      return getConversationAfterJoin(conversation.id);
+    }
+    return conversation;
+  }
   if (conversation.type === 'GROUP') {
     if (!conversation.projectId || !isParticipant) return null;
     return (await groupRoomOpensFor(user, conversation.projectId)) ? conversation : null;
@@ -193,10 +223,14 @@ export async function mutedParticipants(conversationId: string | null | undefine
 // The participants to notify when someone posts to a conversation (everyone but
 // the sender). The conversation-layer counterpart of otherParticipant().
 export async function otherConversationParticipants(
-  conversation: { type?: string; projectId?: string | null; participants: { userId: string }[] },
+  conversation: { type?: string; projectId?: string | null; teamKey?: string | null; participants: { userId: string }[] },
   senderId: string,
 ): Promise<string[]> {
   const participantIds = [...new Set(conversation.participants.map((p) => p.userId))].filter((id) => id !== senderId);
+  // The sales team room: whoever is on the team NOW, whether or not they have
+  // opened the room yet — and nobody who has left it.
+  const teamOrgId = orgOfSalesTeamKey(conversation.teamKey);
+  if (teamOrgId) return (await salesTeamStaffIds(teamOrgId)).filter((id) => id !== senderId);
   if (conversation.type !== 'GROUP' || !conversation.projectId || participantIds.length === 0) return participantIds;
   const activeMembers = await prisma.projectMember.findMany({
     where: { projectId: conversation.projectId, userId: { in: participantIds } },
@@ -414,8 +448,10 @@ export async function removeProjectConversationParticipant(projectId: string, us
 // is the rule there.
 export async function canPostToConversation(
   user: SessionUser,
-  conversation: { id: string; type: string; projectId?: string | null; participants: { userId: string }[] },
+  conversation: { id: string; type: string; projectId?: string | null; teamKey?: string | null; participants: { userId: string }[] },
 ): Promise<boolean> {
+  // The sales team room follows the live team rule, for reading and writing.
+  if (conversation.type === 'GROUP' && conversation.teamKey) return salesTeamRoomOpensFor(user.id, conversation.teamKey);
   // An admin viewing someone else's conversation isn't a participant and has
   // nothing to post; participants are what matter here.
   if (!conversation.participants.some((p) => p.userId === user.id)) return false;
@@ -441,4 +477,102 @@ export async function canAccessMessage(
   if (message.relationId && (await getThreadIfAllowed(user, message.relationId))) return true;
   if (message.conversationId && (await getConversationIfAllowed(user, message.conversationId))) return true;
   return false;
+}
+
+// ---------------------------------------------------------------------------
+// The sales team room: one GROUP conversation per organisation, keyed by the
+// unique `Conversation.teamKey` (src/lib/salesTeamMessagingRule.ts). It reuses
+// the group thread end to end (messages, reactions, read markers, mute, the
+// bell and push); only who is in it differs — the org's active sales staff,
+// read live on every request rather than from the stored participant rows.
+// ---------------------------------------------------------------------------
+
+/** The org's active sales staff; empty for a vertical without the sales surface. */
+export async function salesTeamStaffIds(orgId: string): Promise<string[]> {
+  if (!orgId) return [];
+  const capabilities = await shellCapabilities(orgId);
+  if (!hasSalesSurface('MENTOR', capabilities)) return [];
+  const rows = await prisma.user.findMany({
+    where: { orgId, isActive: true, role: { in: ['ADMIN', 'MENTOR'] } },
+    select: { id: true },
+  });
+  return rows.map((r) => r.id);
+}
+
+/** May this user open (read and write) the team room behind `teamKey` right now? */
+export async function salesTeamRoomOpensFor(userId: string, teamKey: string | null | undefined): Promise<boolean> {
+  const orgId = orgOfSalesTeamKey(teamKey);
+  if (!userId || !orgId) return false;
+  const me = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, orgId: true, isActive: true },
+  });
+  return isSalesStaffOf(me, orgId, await shellCapabilities(orgId));
+}
+
+async function getConversationAfterJoin(conversationId: string) {
+  return prisma.conversation.findUnique({
+    where: { id: conversationId },
+    include: {
+      participants: {
+        select: {
+          userId: true,
+          lastReadAt: true,
+          user: { select: { id: true, fullName: true, preferredLanguage: true } },
+        },
+      },
+    },
+  });
+}
+
+/**
+ * The caller's team room, created on first use. Null when the caller is not
+ * sales staff of their org right now. The current team is reconciled into the
+ * participant rows (added, never removed: access is the live rule above), and
+ * the common case — room there, everyone in it — writes nothing.
+ */
+export async function salesTeamRoomFor(user: { id: string; orgId?: string | null }) {
+  const orgId = user.orgId ?? null;
+  if (!orgId) return null;
+  const teamKey = salesTeamKey(orgId);
+  if (!(await salesTeamRoomOpensFor(user.id, teamKey))) return null;
+  const staff = await salesTeamStaffIds(orgId);
+  const existing = await prisma.conversation.findUnique({ where: { teamKey }, include: CONVERSATION_INCLUDE });
+  if (existing) {
+    const present = new Set(existing.participants.map((p) => p.userId));
+    if (staff.every((id) => present.has(id))) return existing;
+  }
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await upsertTeamRoom(teamKey, staff);
+    } catch (error) {
+      // Two renders racing on the participant insert can deadlock (see the
+      // project room above); the write is retried.
+      if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2034') || attempt >= 3) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 25 * attempt));
+    }
+  }
+}
+
+async function upsertTeamRoom(teamKey: string, staff: string[]) {
+  try {
+    return await prisma.conversation.upsert({
+      where: { teamKey },
+      update: staff.length
+        ? { participants: { createMany: { data: staff.map((userId) => ({ userId })), skipDuplicates: true } } }
+        : {},
+      create: {
+        type: 'GROUP',
+        teamKey,
+        ...(staff.length ? { participants: { create: staff.map((userId) => ({ userId })) } } : {}),
+      },
+      include: CONVERSATION_INCLUDE,
+    });
+  } catch (error) {
+    // Lost the race to create it: the unique teamKey kept it to one room.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return prisma.conversation.findUnique({ where: { teamKey }, include: CONVERSATION_INCLUDE });
+    }
+    throw error;
+  }
 }

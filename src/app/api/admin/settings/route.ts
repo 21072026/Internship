@@ -161,6 +161,7 @@ const schema = z.object({
   // leaderboard switch (leaderboards are a non-goal there).
   salesMonthlyWonTarget: z.string().regex(/^\d{1,4}$/).or(z.literal('')).optional(),
   salesLeaderboardForReps: z.enum(['true', 'false']).optional(),
+  salesTeamBookForReps: z.enum(['true', 'false']).optional(),
   // Outbound approval (#2960): hold automated mail to leads and customers for
   // an operator. The sales vertical only — refused below anywhere else, and
   // the rule reads it as 'off' there regardless.
@@ -199,7 +200,7 @@ function isCalendarDate(s: string): boolean {
 // Keys that only exist in a vertical with the sales surface (pipeline, no
 // mentorship): the sales target and leaderboard, and the marketing import's
 // extra header aliases. Refused for any other vertical.
-const SALES_TARGET_KEYS = ['salesMonthlyWonTarget', 'salesLeaderboardForReps', 'importExternalIdAliases'] as const;
+const SALES_TARGET_KEYS = ['salesMonthlyWonTarget', 'salesLeaderboardForReps', 'salesTeamBookForReps', 'importExternalIdAliases'] as const;
 
 // PUT — write one or more settings for the CALLER'S OWN tenant.
 //
