@@ -476,6 +476,10 @@ export const MARKETING_MENTOR_ROWS: SalesProbe[] = [
   // The rest of the hand-off's answers are pinned by e2e/sales-lead-handoff.spec.ts.
   { method: 'POST', path: '/api/sales/leads/:colleagueRelationId/handoff', body: { toUserId: ':colleagueRepId', action: 'call' }, expect: 'notFound', why: "hand off a colleague's lead" },
   { method: 'POST', path: '/api/sales/leads/:foreignRelationId/handoff', body: { toUserId: ':colleagueRepId', action: 'call' }, expect: 'notFound', why: "hand off another org's lead" },
+  // Scheduling a meeting (#3778, the sales calendar's "New meeting"): only on a
+  // record the caller may write. Out of reach is a 404 — never "200, created 0".
+  { method: 'POST', path: '/api/meetings', body: { relationIds: [':colleagueRelationId'], title: 'x' }, expect: 'notFound', why: "a meeting on a colleague's lead" },
+  { method: 'POST', path: '/api/meetings', body: { relationIds: [':foreignRelationId'], title: 'x' }, expect: 'notFound', why: "a meeting on another org's lead" },
   // Team messaging (src/lib/salesTeamMessagingRule.ts): a colleague of the same
   // org yes; a lead the rep does not own and another org's rep never. (The
   // rep's OWN lead stays messageable through the record, as before.) The rest —
