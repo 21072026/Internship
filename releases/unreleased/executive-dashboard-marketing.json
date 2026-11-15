@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Executive dashboard in MARKETING (#3706):** a vertical without `mentorship` no longer sees the skills-growth Capability block or the programme-cohort selector on `/admin/analytics/executive`; the capability is resolved on the server (`page.tsx` is now a server parent of `ExecutiveDashboard`). MARKETING overlay copy (EN/TR/DE) names the third score \"Won deals\", the forecast \"Wins by the horizon\" and the subtitle three scores. Metrics unchanged; INTERNSHIP unchanged.",
-  "notes": {
-    "en": ["The executive dashboard in a marketing workspace speaks sales: \"Won deals\" and \"Wins by the horizon\", without the internship-only skills block and cohort filter."],
-    "tr": ["Marketing çalışma alanındaki yönetici panosu artık satış dilinde: \"Kazanılan anlaşmalar\" ve \"Ufka kadar kazanımlar\"; staja özgü beceri bloğu ve kohort filtresi yok."],
-    "de": ["Das Executive-Dashboard in einem Marketing-Arbeitsbereich spricht jetzt Vertrieb: „Gewonnene Deals“ und „Abschlüsse bis zum Horizont“, ohne den praktikumsspezifischen Kompetenzblock und den Kohortenfilter."]
-  }
-}

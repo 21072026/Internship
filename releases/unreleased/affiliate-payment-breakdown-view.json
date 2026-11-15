@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "Affiliate payments: a payment entered as transactions × unit price shows its breakdown under the commission base in the admin payment list and on the partner portal's commissions page (#3554).",
-  "notes": {
-    "en": ["A payment entered as transactions × price now shows that breakdown under the amount, for admins and for the partner."],
-    "tr": ["İşlem sayısı × fiyat olarak girilen bir ödemenin dökümü artık tutarın altında görünüyor; hem admin hem partner için."],
-    "de": ["Eine als Transaktionen × Preis erfasste Zahlung zeigt diese Aufschlüsselung jetzt unter dem Betrag – für Admins und für den Partner."]
-  }
-}

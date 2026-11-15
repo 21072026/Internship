@@ -10,13 +10,20 @@
 // name as plain text rather than a link that 404s or 403s.
 export function personHref(
   viewerRole: string | null | undefined,
-  person: { id: string; role?: string | null; relationId?: string | null }
+  person: { id: string; role?: string | null; relationId?: string | null },
+  // What the viewer's vertical carries (#2348), passed in so this stays pure —
+  // a client caller reads it from `useCapabilities()`. Without `mentorship`
+  // the mentor pages (/admin/mentors/<id>, /mentor/mentees/<relationId>) are
+  // closed by the vertical gate, so the answer is "no page" rather than a
+  // link that 404s. Omitted = the base product, where every page exists.
+  capabilities: { mentorship: boolean } = { mentorship: true },
 ): string | null {
   const role = person.role ?? 'MENTEE';
 
   if (viewerRole === 'ADMIN') {
     if (role === 'MENTEE') return `/admin/candidates/${person.id}`;
-    if (role === 'MENTOR') return `/admin/mentors/${person.id}`;
+    // A MARKETING rep has no per-user admin page (there is no /admin/users/<id>).
+    if (role === 'MENTOR') return capabilities.mentorship ? `/admin/mentors/${person.id}` : null;
     // Admins have no per-user page for COMPANY/SOURCE accounts; the user list is
     // the closest thing, and sending them to a 404 would be worse than nothing.
     return null;
@@ -28,7 +35,7 @@ export function personHref(
   // who owns it. Without one there is no mentor-side page for this person, and
   // a link built from the user id would land on "relation not found".
   if (viewerRole === 'MENTOR' && role === 'MENTEE') {
-    return person.relationId ? `/mentor/mentees/${person.relationId}` : null;
+    return person.relationId && capabilities.mentorship ? `/mentor/mentees/${person.relationId}` : null;
   }
 
   return null;
