@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { CalendarClock, Sparkles } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { CalendarClock, Pencil, Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
@@ -67,6 +67,13 @@ const CHIP_CLASS =
  * stage for the DATE. The stage is read for one thing only (#2875): the
  * ready-made lines offered under the field, and the AI proposal next to them.
  * Both only fill the input — the owner still presses Save.
+ *
+ * Read mode first (#3647): a saved follow-up reads as a note — the day (with
+ * its weekday, red when overdue, amber on the day) and the next step as plain
+ * text — and the form opens only on Edit. Cancel throws the edits away, a
+ * successful Save or Clear returns to reading. With nothing saved the panel
+ * says so and offers "Add follow-up". Presentation only: the same PUT, the
+ * same rules, the same suggestions inside the form.
  */
 export function FollowUpPanel({
   relationId,
@@ -86,9 +93,16 @@ export function FollowUpPanel({
   const locale = useLocale();
   const vertical = useVertical();
   const toast = useToast();
+  // What is saved, as this panel last knew it: the props, or what the last
+  // successful save wrote (so reading mode shows it before the refetch lands).
+  const [shown, setShown] = useState({ at: nextActionAt ?? null, note: nextActionNote ?? null });
+  const [editing, setEditing] = useState(false);
   const [date, setDate] = useState(followUpInputValue(nextActionAt));
   const [note, setNote] = useState(nextActionNote ?? '');
   const [saving, setSaving] = useState(false);
+  const editRef = useRef<HTMLButtonElement>(null);
+  const addRef = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
   const [error, setError] = useState('');
   const [aiLines, setAiLines] = useState<string[]>([]);
   const [aiNotice, setAiNotice] = useState('');
@@ -96,9 +110,35 @@ export function FollowUpPanel({
   const [aiHidden, setAiHidden] = useState(false);
 
   useEffect(() => {
+    setShown({ at: nextActionAt ?? null, note: nextActionNote ?? null });
     setDate(followUpInputValue(nextActionAt));
     setNote(nextActionNote ?? '');
   }, [nextActionAt, nextActionNote]);
+
+  // Leaving the form puts the keyboard back where it came from: on Edit, or on
+  // "Add follow-up" once the follow-up was cleared.
+  useEffect(() => {
+    if (editing || !returnFocus.current) return;
+    returnFocus.current = false;
+    (editRef.current ?? addRef.current)?.focus();
+  }, [editing, shown]);
+
+  const hasFollowUp = !!(shown.at || shown.note);
+
+  const startEditing = () => {
+    setDate(followUpInputValue(shown.at));
+    setNote(shown.note ?? '');
+    setError('');
+    setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setDate(followUpInputValue(shown.at));
+    setNote(shown.note ?? '');
+    setError('');
+    returnFocus.current = true;
+    setEditing(false);
+  };
 
   // The catalogue is the internship programme's; a vertical with its own
   // funnel writes its lines by hand, as before.
@@ -124,6 +164,9 @@ export function FollowUpPanel({
       });
       if (!res.ok) throw new Error();
       toast(t.followUp.saved);
+      setShown({ at: next.date || null, note: next.note.trim() || null });
+      returnFocus.current = true;
+      setEditing(false);
       await onSaved?.();
     } catch {
       toast(t.followUp.saveError, 'error');
@@ -174,105 +217,170 @@ export function FollowUpPanel({
       <div className="mb-2 flex items-center gap-2">
         <CalendarClock className="h-4 w-4 text-gray-500 dark:text-gray-400" />
         <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{t.followUp.title}</p>
-        <FollowUpStatus at={nextActionAt} className="text-xs" />
+        <FollowUpStatus at={shown.at} className="text-xs" />
+        {!editing && hasFollowUp && (
+          <button
+            ref={editRef}
+            type="button"
+            aria-label={t.followUp.editLabel}
+            onClick={startEditing}
+            data-testid="follow-up-edit"
+            className="ml-auto inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-blue-300"
+          >
+            <Pencil className="h-4 w-4" aria-hidden="true" />
+            <span>{t.followUp.edit}</span>
+          </button>
+        )}
       </div>
-      {/* The follow-up is what comes NEXT; what already happened is an interaction (#3652). */}
-      <p className="mb-2 text-xs text-gray-600 dark:text-gray-400" data-testid="follow-up-purpose">{t.followUp.purpose}</p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
-        <Input
-          id={`follow-up-date-${relationId}`}
-          type="date"
-          label={t.followUp.date}
-          value={date}
-          disabled={saving}
-          onChange={(e) => setDate(e.target.value)}
-          data-testid="follow-up-date"
-        />
-        <Input
-          id={`follow-up-note-${relationId}`}
-          label={t.followUp.note}
-          placeholder={t.followUp.notePlaceholder}
-          value={note}
-          maxLength={NEXT_ACTION_NOTE_MAX}
-          disabled={saving}
-          onChange={(e) => setNote(e.target.value)}
-          data-testid="follow-up-note"
-        />
-      </div>
-      {showSuggestionRow && (
-        <div className="mt-3" data-testid="follow-up-suggestions">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs font-medium text-gray-600 dark:text-gray-300">{t.followUp.suggestionsLabel}</p>
-            {aiOffered && (
+      {!editing && hasFollowUp && <FollowUpReading at={shown.at} note={shown.note} />}
+      {!editing && !hasFollowUp && (
+        <div className="flex flex-wrap items-center justify-between gap-2" data-testid="follow-up-empty">
+          <p className="text-sm text-gray-600 dark:text-gray-400">{t.followUp.empty}</p>
+          <Button ref={addRef} type="button" size="sm" variant="outline" className="min-h-11" onClick={startEditing} data-testid="follow-up-add">
+            <Plus className="mr-1 h-4 w-4" aria-hidden="true" /> {t.followUp.add}
+          </Button>
+        </div>
+      )}
+      {editing && (
+        <div data-testid="follow-up-form">
+          {/* The follow-up is what comes NEXT; what already happened is an interaction (#3652). */}
+          <p className="mb-2 text-xs text-gray-600 dark:text-gray-400" data-testid="follow-up-purpose">{t.followUp.purpose}</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+            <Input
+              id={`follow-up-date-${relationId}`}
+              type="date"
+              label={t.followUp.date}
+              value={date}
+              disabled={saving}
+              autoFocus
+              onChange={(e) => setDate(e.target.value)}
+              data-testid="follow-up-date"
+            />
+            <Input
+              id={`follow-up-note-${relationId}`}
+              label={t.followUp.note}
+              placeholder={t.followUp.notePlaceholder}
+              value={note}
+              maxLength={NEXT_ACTION_NOTE_MAX}
+              disabled={saving}
+              onChange={(e) => setNote(e.target.value)}
+              data-testid="follow-up-note"
+            />
+          </div>
+          {showSuggestionRow && (
+            <div className="mt-3" data-testid="follow-up-suggestions">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-300">{t.followUp.suggestionsLabel}</p>
+                {aiOffered && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    loading={aiLoading}
+                    disabled={saving}
+                    title={t.followUp.aiHint}
+                    onClick={suggestWithAi}
+                    data-testid="follow-up-ai"
+                  >
+                    <Sparkles className="mr-1 h-4 w-4" /> {t.followUp.aiButton}
+                  </Button>
+                )}
+              </div>
+              {stageLines.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {stageLines.map((line) => (
+                    <button
+                      key={line}
+                      type="button"
+                      className={CHIP_CLASS}
+                      disabled={saving}
+                      onClick={() => setNote(line)}
+                      data-testid="follow-up-suggestion"
+                    >
+                      {line}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {aiLines.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid="follow-up-ai-suggestions">
+                  <AiBadge className="mr-1" />
+                  {aiLines.map((line) => (
+                    <button
+                      key={line}
+                      type="button"
+                      className={CHIP_CLASS}
+                      disabled={saving}
+                      onClick={() => setNote(line)}
+                      data-testid="follow-up-ai-suggestion"
+                    >
+                      {line}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {aiNotice && <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">{aiNotice}</p>}
+            </div>
+          )}
+          {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button size="sm" loading={saving} onClick={() => save({ date, note })} data-testid="follow-up-save">
+              {t.followUp.save}
+            </Button>
+            <Button size="sm" variant="secondary" disabled={saving} onClick={cancelEditing} data-testid="follow-up-cancel">
+              {t.followUp.cancel}
+            </Button>
+            {hasFollowUp && (
               <Button
-                type="button"
-                variant="outline"
                 size="sm"
-                loading={aiLoading}
+                variant="ghost"
                 disabled={saving}
-                title={t.followUp.aiHint}
-                onClick={suggestWithAi}
-                data-testid="follow-up-ai"
+                onClick={() => save({ date: '', note: '' })}
+                data-testid="follow-up-clear"
               >
-                <Sparkles className="mr-1 h-4 w-4" /> {t.followUp.aiButton}
+                {t.followUp.clear}
               </Button>
             )}
           </div>
-          {stageLines.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {stageLines.map((line) => (
-                <button
-                  key={line}
-                  type="button"
-                  className={CHIP_CLASS}
-                  disabled={saving}
-                  onClick={() => setNote(line)}
-                  data-testid="follow-up-suggestion"
-                >
-                  {line}
-                </button>
-              ))}
-            </div>
-          )}
-          {aiLines.length > 0 && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5" data-testid="follow-up-ai-suggestions">
-              <AiBadge className="mr-1" />
-              {aiLines.map((line) => (
-                <button
-                  key={line}
-                  type="button"
-                  className={CHIP_CLASS}
-                  disabled={saving}
-                  onClick={() => setNote(line)}
-                  data-testid="follow-up-ai-suggestion"
-                >
-                  {line}
-                </button>
-              ))}
-            </div>
-          )}
-          {aiNotice && <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">{aiNotice}</p>}
+          {/* Who reads the note is part of writing it, so it sits with the form only. */}
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400" data-testid="follow-up-visibility">
+            {t.followUp.visibility}
+          </p>
         </div>
       )}
-      {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Button size="sm" loading={saving} onClick={() => save({ date, note })} data-testid="follow-up-save">
-          {t.followUp.save}
-        </Button>
-        {(nextActionAt || nextActionNote) && (
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={saving}
-            onClick={() => save({ date: '', note: '' })}
-            data-testid="follow-up-clear"
-          >
-            {t.followUp.clear}
-          </Button>
-        )}
-      </div>
-      <p className="mt-2 text-xs text-gray-500 dark:text-gray-400" data-testid="follow-up-visibility">
-        {t.followUp.visibility}
+    </div>
+  );
+}
+
+/**
+ * The saved follow-up as text: the day with its weekday (in UTC, the day the
+ * rule counts), coloured by the same overdue / due-today rule as the chip, and
+ * the next step as written.
+ */
+function FollowUpReading({ at, note }: { at: string | null; note: string | null }) {
+  const t = useT();
+  const locale = useLocale();
+  const now = Date.now();
+  const day = at ? new Date(at) : null;
+  const tone = !day
+    ? 'text-gray-500 dark:text-gray-400'
+    : isNextActionOverdue(day, now)
+      ? 'font-medium text-red-700 dark:text-red-400'
+      : isNextActionReminderDue({ nextActionAt: day, nextActionRemindedAt: null }, now)
+        ? 'font-medium text-amber-700 dark:text-amber-400'
+        : 'text-gray-800 dark:text-gray-100';
+  return (
+    <div className="space-y-1" data-testid="follow-up-read">
+      <p className={`text-sm ${tone}`} data-testid="follow-up-read-date">
+        {day
+          ? formatDate(day, locale, { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+          : t.followUp.noDate}
+      </p>
+      <p
+        className={`whitespace-pre-wrap break-words text-sm ${note ? 'text-gray-700 dark:text-gray-200' : 'italic text-gray-500 dark:text-gray-400'}`}
+        data-testid="follow-up-read-note"
+      >
+        {note || t.followUp.noNote}
       </p>
     </div>
   );

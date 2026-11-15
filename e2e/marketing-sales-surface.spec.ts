@@ -261,12 +261,18 @@ test('the rep works their own record: the follow-up moves it out of the queue', 
   await gotoSettled(page, `/sales/leads/${ids.followUpRelationId}`);
   await expect(page.getByTestId('sales-lead-name')).toHaveText(NAMES.followUp);
 
+  // The saved follow-up reads as a note (#3647); the form opens on Edit.
+  const followUp = page.getByTestId('follow-up-panel');
+  await expect(followUp.getByTestId('follow-up-read-note')).toHaveText('Call back');
+  await expect(followUp.getByTestId('follow-up-date')).toHaveCount(0);
   const future = new Date(Date.now() + 5 * DAY).toISOString().slice(0, 10);
-  await page.getByTestId('follow-up-date').fill(future);
-  await page.getByTestId('follow-up-save').click();
+  await followUp.getByTestId('follow-up-edit').click();
+  await followUp.getByTestId('follow-up-date').fill(future);
+  await followUp.getByTestId('follow-up-save').click();
   await expect
     .poll(async () => (await prisma.mentorshipRelation.findUnique({ where: { id: ids.followUpRelationId } }))?.nextActionAt?.toISOString().slice(0, 10))
     .toBe(future);
+  await expect(followUp.getByTestId('follow-up-read')).toBeVisible();
 
   await gotoSettled(page, '/sales');
   const queue = page.getByTestId('attention-queue');
@@ -297,7 +303,11 @@ test('the rep logs the call they just made from the lead page', { tag: '@smoke' 
   await gotoSettled(page, `/sales/leads/${ids.followUpRelationId}`);
   const note = `Discussed pricing ${STAMP}`;
   // #3652/#3654: what each part is for is said on the page; the date is "assigned to you", not the trial.
+  // The follow-up's purpose line belongs to its form, which opens on Edit (#3647).
+  await page.getByTestId('follow-up-edit').click();
   await expect(page.getByTestId('follow-up-purpose')).toBeVisible();
+  await page.getByTestId('follow-up-cancel').click();
+  await expect(page.getByTestId('follow-up-purpose')).toHaveCount(0);
   await expect(page.getByTestId('sales-lead-since')).toContainText('Assigned to you on');
   // #3653: the last interaction sits under the follow-up — empty until the first one is logged.
   await expect(page.getByTestId('sales-lead-last-interaction-empty')).toBeVisible();
