@@ -3,6 +3,7 @@ import { test, expect, type APIRequestContext, type Browser } from '@playwright/
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
 import { signInAndSettle, signInViaApi, gotoSettled, asHost, MARKETING_HOST } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
+import { freshIp } from './helpers/rateLimit';
 
 /**
  * Team messaging on the sales surface (src/lib/salesTeamMessagingRule.ts).
@@ -87,7 +88,10 @@ async function apiAs(browser: Browser, email: string, onHost: Record<string, str
   return context.request;
 }
 
-const startChat = (api: APIRequestContext, userId: string) => api.post('/api/conversations', { data: { userId } });
+// Its own address per call (freshIp, #2159): the route's 20/15min bucket is per
+// IP and every spec of a shard shares one.
+const startChat = (api: APIRequestContext, userId: string) =>
+  api.post('/api/conversations', { data: { userId }, headers: freshIp('sales-team-chat') });
 
 test('a rep cannot open a chat with a lead they do not own, a customer login or another org\'s rep', { tag: '@smoke' }, async ({ browser }) => {
   const rep = await apiAs(browser, mail.repA);
@@ -113,7 +117,8 @@ test('INTERNSHIP is unchanged: two mentors with no project or mentorship between
 });
 
 test('rep A starts a chat with rep B from the inbox picker, and B reads it', async ({ page, browser, baseURL }) => {
-  await page.context().setExtraHTTPHeaders(host);
+  // The picker POSTs to the rate-limited create-or-get: this page gets its own address (#2159).
+  await page.context().setExtraHTTPHeaders({ ...host, ...freshIp('sales-team-picker') });
   await page.context().addCookies([{ name: 'locale', value: 'en', url: baseURL! }]);
   await signInAndSettle(page, mail.repA, PW, '/sales');
   await gotoSettled(page, '/messages');

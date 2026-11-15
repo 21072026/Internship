@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "**Security — an admin's chat stays inside its own organisation (#3792):** the ADMIN branch of `canMessage()` let an admin open a 1:1 chat with any user, any organisation's included, because the user lookup is not tenant-scoped while `MT_ENFORCE_ISOLATION` is off. Org A's admin could open a chat with org B's user, write into it and be read, and B's user could do the same towards A's admin. The door now opens only inside the admin's own tenant (`src/lib/messageAdminRule.ts`, pure and unit-tested, using `sameTenant()`), for a super admin too. `POST /api/conversations` answers **404** for another tenant's user, the same as an id that does not exist, and `/messages?to=` refuses the same way. A chat that already crossed orgs takes no new message; its history stays readable to its participants. No data is changed. Pinned by `e2e/tenant-isolation.spec.ts` (@smoke) and the authz matrix's `CROSS_TENANT_WRITES`.",
+  "notes": {
+    "en": ["Security: administrators can now only start chats with people in their own organisation."],
+    "tr": ["Güvenlik: yöneticiler artık yalnızca kendi organizasyonlarındaki kişilerle sohbet başlatabiliyor."],
+    "de": ["Sicherheit: Administratoren können Chats jetzt nur noch mit Personen ihrer eigenen Organisation beginnen."]
+  }
+}
