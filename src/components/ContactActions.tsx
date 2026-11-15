@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import { useToast } from '@/components/ui/Toast';
 import { apiErrorMessage } from '@/lib/apiErrorMessage';
+import { stageAdvanceFrom, useStageAdvanceToast, type StageAdvance } from '@/components/useStageAdvanceToast';
 
 // Quick contact channels for a person's number. Opens tel:/wa.me, then asks
 // whether they were reached — a "yes" logs a Call/WhatsApp interaction through
@@ -43,6 +44,7 @@ export function ContactActions({
   const wa = digits.replace(/^\+/, '');
   const [ask, setAsk] = useState<null | Channel>(null);
   const [saving, setSaving] = useState(false);
+  const stageAdvanceToast = useStageAdvanceToast();
 
   const open = (channel: Channel) => {
     const url = channel === 'Call' ? `tel:${digits}` : `https://wa.me/${wa}`;
@@ -56,6 +58,7 @@ export function ContactActions({
     if (!reached || !channel) return;
     setSaving(true);
     let logged = false;
+    let advance: StageAdvance | null = null;
     let failure = '';
     // #1355: the response went unread, so a rejected POST still said "contact
     // logged" — and `onLogged` refetched a history that never gained the row.
@@ -70,8 +73,12 @@ export function ContactActions({
           notes: channel === 'Call' ? t.contact.loggedCall : t.contact.loggedWhatsApp,
         }),
       });
-      if (res.ok) logged = true;
-      else failure = apiErrorMessage(res, t.common, t.contact.logFailed);
+      if (res.ok) {
+        logged = true;
+        // A first contact may move the lead on (#3746): the same answer the
+        // interaction form reads, so the same toast and Undo follow.
+        advance = stageAdvanceFrom(await res.json().catch(() => null));
+      } else failure = apiErrorMessage(res, t.common, t.contact.logFailed);
     } catch {
       failure = t.contact.logFailed;
     } finally {
@@ -81,7 +88,8 @@ export function ContactActions({
     // be narrated as "the contact was not logged" once the row exists.
     if (logged) {
       onLogged?.();
-      toast(t.contact.logged);
+      if (advance) stageAdvanceToast(relationId, advance, () => onLogged?.());
+      else toast(t.contact.logged);
     } else {
       toast(failure, 'error');
     }
