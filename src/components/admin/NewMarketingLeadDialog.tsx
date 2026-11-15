@@ -24,8 +24,8 @@ export type LeadDialogSurface = 'admin' | 'sales';
 
 type Outcome =
   | { kind: 'created'; leadHref: string | null }
-  | { kind: 'exists'; companyId: string | null; leadHref: string | null }
-  | { kind: 'contact_in_funnel'; leadHref: string | null }
+  | { kind: 'exists'; companyId: string | null; leadHref: string | null; ownerName?: string | null }
+  | { kind: 'contact_in_funnel'; leadHref: string | null; ownerName?: string | null }
   | { kind: 'message'; text: string };
 
 const SURFACE = {
@@ -82,6 +82,13 @@ export function NewMarketingLeadDialog({
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    // The rep's door takes an e-mail OR a phone (#3647) — the server says the
+    // same; asking here saves a round trip. The admin form keeps its required
+    // address (its field is `required`).
+    if (isSales && !fields.contactEmail.trim() && !fields.contactPhone.trim()) {
+      setOutcome({ kind: 'message', text: sl.contactRequired });
+      return;
+    }
     setBusy(true);
     setOutcome(null);
     try {
@@ -106,9 +113,18 @@ export function NewMarketingLeadDialog({
           kind: 'exists',
           companyId: typeof data.companyId === 'string' ? data.companyId : null,
           leadHref: isSales ? null : adminLeadHref(data.leadId),
+          ownerName: typeof data.ownerName === 'string' ? data.ownerName : null,
         });
       } else if (data.code === 'contact_in_funnel') {
-        setOutcome({ kind: 'contact_in_funnel', leadHref: isSales ? salesLeadHref(data.relationId) : adminLeadHref(data.leadId) });
+        setOutcome({
+          kind: 'contact_in_funnel',
+          leadHref: isSales ? salesLeadHref(data.relationId) : adminLeadHref(data.leadId),
+          ownerName: typeof data.ownerName === 'string' ? data.ownerName : null,
+        });
+      } else if (data.code === 'contact_required') {
+        setOutcome({ kind: 'message', text: sl.contactRequired });
+      } else if (data.code === 'phone_invalid') {
+        setOutcome({ kind: 'message', text: sl.phoneInvalid });
       } else if (data.code === 'contact_is_user') {
         setOutcome({ kind: 'message', text: nl.contactIsUser });
       } else if (data.code === 'already_mentored') {
@@ -167,7 +183,13 @@ export function NewMarketingLeadDialog({
             data-testid="new-lead-exists"
             className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm flex flex-wrap items-center gap-3"
           >
-            <span>{isSales && !outcome.companyId ? sl.existsElsewhere : nl.exists}</span>
+            <span>
+              {isSales && !outcome.companyId
+                ? outcome.ownerName
+                  ? sl.existsOwner.replace('{owner}', outcome.ownerName)
+                  : sl.existsElsewhere
+                : nl.exists}
+            </span>
             {outcome.companyId && !isSales && onOpenAccount && (
               <button
                 type="button"
@@ -195,7 +217,13 @@ export function NewMarketingLeadDialog({
             data-testid="new-lead-contact-in-funnel"
             className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-sm flex flex-wrap items-center gap-3"
           >
-            <span>{isSales && !outcome.leadHref ? sl.contactInFunnelElsewhere : nl.contactInFunnel}</span>
+            <span>
+              {isSales && !outcome.leadHref
+                ? outcome.ownerName
+                  ? sl.contactInFunnelOwner.replace('{owner}', outcome.ownerName)
+                  : sl.contactInFunnelElsewhere
+                : nl.contactInFunnel}
+            </span>
             {outcome.leadHref && (
               <Link href={outcome.leadHref} className="underline font-medium">
                 {nl.openLead}
@@ -229,8 +257,8 @@ export function NewMarketingLeadDialog({
               id="new-lead-contact-email"
               type="email"
               label={nl.contactEmail}
-              hint={nl.contactEmailHint}
-              required
+              hint={isSales ? sl.contactHint : nl.contactEmailHint}
+              required={!isSales}
               value={fields.contactEmail}
               onChange={set('contactEmail')}
             />
