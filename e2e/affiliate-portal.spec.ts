@@ -169,10 +169,14 @@ test('bank details are entered in the portal and shown masked', { tag: '@smoke' 
 
   await page.getByTestId('affiliate-iban').fill('DE89 3704 0044 0532 0130 00');
   await page.getByTestId('affiliate-holder').fill('Mine Partner');
+  // #3734: no 2FA on this account, so the save asks for the current password.
+  await expect(page.getByTestId('affiliate-save-details')).toBeDisabled();
+  await page.getByTestId('affiliate-step-up').fill(PW);
   await page.getByTestId('affiliate-save-details').click();
   await expect(page.getByTestId('affiliate-payout-current')).toContainText('3000', { timeout: 20_000 });
   await expect(page.getByTestId('affiliate-payout-current')).not.toContainText('370400440532');
   await expect(page.getByTestId('affiliate-iban')).toHaveValue('');
+  await expect(page.getByTestId('affiliate-step-up')).toHaveValue('');
 });
 
 // #3349: the partner reads its own organisation's current plan — read-only, behind the contract gate.

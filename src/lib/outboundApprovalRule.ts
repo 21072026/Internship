@@ -11,6 +11,13 @@
 // THE SETTING. `outboundApproval`, per org through the settings chain:
 //   'off'       — default; mail behaves exactly as it always has.
 //   'lead_mail' — automated mail to a lead or a customer is held.
+//   'lead_mail_blocked' — NO mail reaches a non-staff recipient (#3771): never
+//               sent, never drafted, never queued; recorded SKIPPED in the
+//               EmailLog. Same audience as 'lead_mail' (lead, customer, contact,
+//               other) but WITHOUT the exemptions below: in a MARKETING org a
+//               lead is a record the reps track, not a person who signs in, so
+//               there is no password reset or confirmation of theirs to protect
+//               — the decision is "no mail to leads at all". Staff are untouched.
 // Only a vertical with the sales surface (pipeline, no mentorship — MARKETING)
 // can turn it on: anywhere else the mode reads 'off' whatever a row says, so an
 // internship tenant can never stop its own mail by a stray setting.
@@ -41,12 +48,12 @@
 
 import type { VerticalCapability } from '@/lib/verticals';
 
-export const OUTBOUND_APPROVAL_MODES = ['off', 'lead_mail'] as const;
+export const OUTBOUND_APPROVAL_MODES = ['off', 'lead_mail', 'lead_mail_blocked'] as const;
 export type OutboundApprovalMode = (typeof OUTBOUND_APPROVAL_MODES)[number];
 
 /**
- * The stored setting as a mode. Blank and 'off' are off; 'lead_mail' is on.
- * Anything else — a value written by hand that the API would have refused — is
+ * The stored setting as a mode. Blank and 'off' are off; 'lead_mail' holds,
+ * 'lead_mail_blocked' blocks. Anything else — a value written by hand that the API would have refused — is
  * read as ON: whoever wrote it meant to change the default, and the safe side
  * of a misspelt switch is a draft, not a mail.
  */
@@ -54,6 +61,7 @@ export function parseOutboundApprovalMode(value: unknown): OutboundApprovalMode 
   if (value === undefined || value === null) return 'off';
   const v = String(value).trim();
   if (v === '' || v === 'off') return 'off';
+  if (v === 'lead_mail_blocked') return 'lead_mail_blocked';
   return 'lead_mail';
 }
 
@@ -206,10 +214,17 @@ export type OutboundDecisionCode =
   | 'held_lead'
   | 'held_customer'
   | 'held_contact'
-  | 'held_other';
+  | 'held_other'
+  | 'blocked_lead'
+  | 'blocked_customer'
+  | 'blocked_contact'
+  | 'blocked_other';
 
 export interface OutboundDecision {
+  /** Wait in the outbox as a draft ('lead_mail'). */
   hold: boolean;
+  /** Never leave at all ('lead_mail_blocked'). Never true together with `hold`. */
+  block: boolean;
   code: OutboundDecisionCode;
 }
 
@@ -224,25 +239,35 @@ export interface OutboundDecisionInput {
   recipient: RecipientKind;
 }
 
-/** The whole decision, in this order: switch, org, category, recipient. */
+const PASS = (code: OutboundDecisionCode): OutboundDecision => ({ hold: false, block: false, code });
+
+/**
+ * The whole decision. `lead_mail`: switch, org, category, recipient — an exempt
+ * category leaves, staff mail leaves, everything else (an unknown category
+ * included) is held. `lead_mail_blocked`: switch, org, recipient — staff mail
+ * leaves, EVERY other mail is blocked, whatever its category (#3771: no
+ * exemption, the security group and the DOI confirmation included).
+ */
 export function outboundDecision(input: OutboundDecisionInput): OutboundDecision {
-  if (!input.applies || input.mode === 'off') return { hold: false, code: 'approval_off' };
+  if (!input.applies || input.mode === 'off') return PASS('approval_off');
   // A mail no organization owns (an operator alert to the server's alert
-  // address) has no outbox to wait in.
-  if (!input.hasOrg) return { hold: false, code: 'no_org' };
+  // address) has no outbox to wait in, and no lead behind it.
+  if (!input.hasOrg) return PASS('no_org');
+  const who = input.recipient === 'lead' || input.recipient === 'customer' || input.recipient === 'contact' ? input.recipient : 'other';
+  if (input.mode === 'lead_mail_blocked') {
+    if (input.recipient === 'staff') return PASS('staff_recipient');
+    return { hold: false, block: true, code: `blocked_${who}` };
+  }
   const entry = input.category ? OUTBOUND_CATEGORIES[input.category] : undefined;
-  if (entry?.exempt) return { hold: false, code: 'exempt_category' };
-  if (input.recipient === 'staff') return { hold: false, code: 'staff_recipient' };
+  if (entry?.exempt) return PASS('exempt_category');
+  if (input.recipient === 'staff') return PASS('staff_recipient');
   // An unknown category falls through to here on purpose: held.
-  const code: OutboundDecisionCode =
-    input.recipient === 'lead'
-      ? 'held_lead'
-      : input.recipient === 'customer'
-        ? 'held_customer'
-        : input.recipient === 'contact'
-          ? 'held_contact'
-          : 'held_other';
-  return { hold: true, code };
+  return { hold: true, block: false, code: `held_${who}` };
+}
+
+/** The EmailLog reason a blocked mail is recorded with (status SKIPPED). */
+export function outboundBlockedReason(code: OutboundDecisionCode): string {
+  return `Blocked: outbound_blocked (${code})`;
 }
 
 // ── Draft lifecycle (pure parts) ────────────────────────────────────────────

@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
-import { signInViaApi, MARKETING_HOST, asHost } from './helpers/auth';
+import { signInViaApi, signInAndSettle, gotoSettled, MARKETING_HOST, asHost } from './helpers/auth';
+import { SETTINGS_TRANSFER_MAX_BYTES } from '../src/lib/affiliateSettingsTransferRule';
 
 /**
  * Moving a programme's settings between environments (#3622,
@@ -220,4 +221,45 @@ test('the plan lands only with its confirmation, as a new plan version', async (
   expect(b?.planVersion).toBe(1);
   expect(b?.plan).toMatchObject({ currency: 'EUR', payoutDays: 30 });
   expect(await prisma.auditLog.count({ where: { orgId: orgs.b, action: 'affiliate.plan.update' } })).toBe(1);
+});
+
+// #3728: the limit the screen names is the one that works. Before, Next cut every
+// body at 10 MB before the route read it, so a file of 10–50 MB was answered as
+// "not a settings file". Whitespace pads a real export to the size under test —
+// in FRONT of the document, so a body cut short is broken JSON, never a whole
+// document followed by fewer spaces.
+const padded = (bytes: number) => {
+  const json = JSON.stringify(exported);
+  return ' '.repeat(bytes - Buffer.byteLength(json)) + json;
+};
+const importRaw = (ctx: APIRequestContext, body: string) =>
+  ctx.post('/api/admin/affiliate/settings/import?dryRun=1', { headers: { ...host, 'content-type': 'application/json' }, data: body });
+
+test('a file just under the limit is read whole; one just over is refused as too large (#3728)', async () => {
+  test.slow();
+  const under = await importRaw(adminB, padded(SETTINGS_TRANSFER_MAX_BYTES - 1024));
+  expect(under.status()).toBe(200);
+  expect((await under.json()).sections).toEqual(expect.arrayContaining(['landing', 'plan']));
+
+  const over = await importRaw(adminB, padded(SETTINGS_TRANSFER_MAX_BYTES + 1));
+  expect(over.status()).toBe(413);
+  expect(['too_large', 'payload_too_large']).toContain((await over.json()).code);
+});
+
+test('the screen names a busy import and an oversized file for what they are (#3728)', async ({ page }) => {
+  await page.context().setExtraHTTPHeaders(host);
+  await signInAndSettle(page, emails.b, PW, '/admin');
+  await gotoSettled(page, '/admin/affiliates/settings');
+  const file = page.getByTestId('affiliate-settings-import-file');
+
+  // Another import of this programme is running: 409 busy, not "not a settings file".
+  await page.route('**/api/admin/affiliate/settings/import**', (route) => route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({ code: 'busy' }) }));
+  await file.setInputFiles({ name: 'settings.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exported)) });
+  await expect(page.getByText('Another settings file is being loaded for this programme right now.', { exact: false })).toBeVisible();
+  await expect(page.getByText('This is not a settings file this version can read.')).toHaveCount(0);
+
+  // The middleware's own 413 reads as the size refusal, naming the limit.
+  await page.route('**/api/admin/affiliate/settings/import**', (route) => route.fulfill({ status: 413, contentType: 'application/json', body: JSON.stringify({ code: 'payload_too_large' }) }));
+  await file.setInputFiles({ name: 'settings2.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exported)) });
+  await expect(page.getByText(`The file is larger than ${SETTINGS_TRANSFER_MAX_BYTES / 1024 / 1024} MB.`)).toBeVisible();
 });

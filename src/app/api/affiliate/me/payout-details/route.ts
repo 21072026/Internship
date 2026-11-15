@@ -7,6 +7,7 @@ import { settingsOrgOf } from '@/lib/settingsOrg';
 import { affiliatePartnerGate } from '@/lib/affiliateContract';
 import { PayoutDetailsError, maskedPayoutDetails, setPayoutDetails } from '@/lib/affiliatePayoutDetails';
 import { parsePayoutDetails } from '@/lib/payoutDetailsRule';
+import { verifyStepUp } from '@/lib/stepUp';
 
 // The signed-in partner's own payout details (docs/affiliate-module.md). Behind
 // the full partner gate (contract accepted). A partner never reads the full IBAN
@@ -17,6 +18,13 @@ import { parsePayoutDetails } from '@/lib/payoutDetailsRule';
 // organisation's 2FA policy holds the partner but they have not enrolled: the
 // shell's /security-setup redirect does not protect an API, and this is the one
 // write that redirects money.
+//
+// Every PUT also asks the account holder to prove themselves again (#3734,
+// src/lib/stepUp.ts): `stepUp.code` (TOTP or recovery code) when the account has
+// 2FA, else `stepUp.password`. Without it the answer is 403 `step_up_required`
+// with the `method` to ask for; a wrong one 403 `step_up_invalid`; too many
+// 429 `step_up_locked` — on the sign-in door's own counters. The input is
+// validated first, so a typo in the IBAN never costs an attempt.
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -39,8 +47,11 @@ export async function PUT(request: Request) {
   if (!me?.twoFactorEnabled && (await is2faRequiredFor(session.user.role, await settingsOrgOf(session)))) {
     return NextResponse.json({ code: 'two_factor_required' }, { status: 403 });
   }
-  const parsed = parsePayoutDetails(await request.json().catch(() => null));
+  const body = (await request.json().catch(() => null)) as { stepUp?: { code?: unknown; password?: unknown } } | null;
+  const parsed = parsePayoutDetails(body);
   if (!parsed.ok) return NextResponse.json({ code: 'invalid_input', issues: parsed.issues }, { status: 400 });
+  const stepUp = await verifyStepUp(session.user.id, body?.stepUp ?? {}, request, 'affiliate.payout_details.update');
+  if (!stepUp.ok) return NextResponse.json({ code: stepUp.code, method: stepUp.method }, { status: stepUp.status });
 
   try {
     const { masked } = await setPayoutDetails({

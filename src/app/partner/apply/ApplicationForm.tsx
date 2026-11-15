@@ -16,8 +16,10 @@ import { AFFILIATE_HEARD_FROM, APPLICATION_LIMITS, type ApplicationField } from 
 
 // The language switcher reloads the page, which used to drop a sent form back to
 // an empty one (and invite a second submit). The tab remembers that it sent — a
-// flag only, never what was typed.
+// flag only, never what was typed. "Send another application" clears it (#3731),
+// so someone applying again (another address, a colleague) needs no new tab.
 const SENT_KEY = 'affiliate-apply-sent';
+const EMPTY_FORM = { firstName: '', lastName: '', email: '', company: '', phone: '', heardFrom: '', heardFromOther: '' };
 
 export function ApplicationForm({
   accent,
@@ -37,7 +39,7 @@ export function ApplicationForm({
   const L = t.affiliateApply;
   const locale = useLocale();
   const renderedAt = useRef(Date.now());
-  const [form, setForm] = useState({ firstName: '', lastName: '', email: '', company: '', phone: '', heardFrom: '', heardFromOther: '' });
+  const [form, setForm] = useState(EMPTY_FORM);
   const [consent, setConsent] = useState(false);
   const [contract, setContract] = useState(false);
   const [website, setWebsite] = useState(''); // honeypot
@@ -51,6 +53,22 @@ export function ApplicationForm({
       // Storage blocked: the form simply starts empty.
     }
   }, []);
+
+  function applyAgain() {
+    try {
+      sessionStorage.removeItem(SENT_KEY);
+    } catch {
+      // Storage blocked: nothing was remembered either.
+    }
+    setForm(EMPTY_FORM);
+    setConsent(false);
+    setContract(false);
+    setWebsite('');
+    setInvalid(new Set());
+    // The anti-spam fill time counts from the empty form the person now sees.
+    renderedAt.current = Date.now();
+    setState('idle');
+  }
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setForm({ ...form, [k]: e.target.value });
   const err = (f: ApplicationField) => (invalid.has(f) ? L.errors[f] : undefined);
@@ -92,6 +110,9 @@ export function ApplicationForm({
           {L.sentTitle}
         </p>
         <p className="mt-2 text-sm">{L.sentBody}</p>
+        <button type="button" onClick={applyAgain} className="mt-4 text-sm font-medium underline" data-testid="affiliate-apply-again">
+          {L.applyAgain}
+        </button>
       </div>
     );
   }

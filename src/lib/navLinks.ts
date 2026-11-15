@@ -354,6 +354,8 @@ export const PORTAL_NAV_LINKS: NavLink[] = [
 export const SALES_NAV_LINKS: NavLink[] = [
   { href: '/sales', icon: LayoutDashboard, key: 'dashboard', exact: true, capability: 'pipeline' },
   { href: '/sales/board', icon: Columns3, key: 'board', capability: 'pipeline' },
+  // The rep's own meetings, follow-ups and trial ends (#3778).
+  { href: '/sales/calendar', icon: CalendarDays, key: 'calendar', capability: 'pipeline' },
   { href: '/sales/accounts', icon: Building2, key: 'myCompanies', capability: 'companies' },
   // The rep's share of the outbox (#2960): drafts for their own leads only.
   { href: '/sales/outbox', icon: MailCheck, key: 'outbox', capability: 'pipeline', withoutCapability: 'mentorship' },

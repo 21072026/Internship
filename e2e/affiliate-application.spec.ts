@@ -127,6 +127,38 @@ test('the form page exists where the programme exists', async ({ page }) => {
   expect((await page.goto('/partner/apply'))?.status()).toBe(404);
 });
 
+// #3731: a successful send writes the flag (a reload, e.g. the language switch,
+// keeps the confirmation), and "Send another application" clears it — the form
+// opens empty and stays open across a reload. The POST is answered by the test:
+// what is pinned here is the tab's memory, not the route (pinned above).
+test('after a send the tab remembers it, and "send another" clears it', async ({ page }) => {
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await page.route('**/api/partner/apply', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"ok":true}' }));
+  await page.goto('/partner/apply');
+  const sentFlag = () => page.evaluate(() => sessionStorage.getItem('affiliate-apply-sent'));
+  expect(await sentFlag()).toBeNull();
+
+  await page.getByTestId('affiliate-apply-firstName').fill('Ada');
+  await page.getByTestId('affiliate-apply-lastName').fill('Example');
+  await page.getByTestId('affiliate-apply-email').fill(`again-${stamp}@partner.example`);
+  await page.getByTestId('affiliate-apply-heardFrom').selectOption('recommendation');
+  await page.getByTestId('affiliate-apply-consent').check();
+  await page.getByTestId('affiliate-apply-form').getByRole('button', { name: 'Send application' }).click();
+  await expect(page.getByTestId('affiliate-apply-sent')).toBeVisible();
+  expect(await sentFlag()).toBe('1');
+  await page.reload();
+  await expect(page.getByTestId('affiliate-apply-sent')).toBeVisible();
+
+  await page.getByTestId('affiliate-apply-again').click();
+  await expect(page.getByTestId('affiliate-apply-form')).toBeVisible();
+  await expect(page.getByTestId('affiliate-apply-email')).toHaveValue('');
+  expect(await sentFlag()).toBeNull();
+  await page.reload();
+  await expect(page.getByTestId('affiliate-apply-form')).toBeVisible();
+  await expect(page.getByTestId('affiliate-apply-sent')).toHaveCount(0);
+  await page.context().setExtraHTTPHeaders({});
+});
+
 // #3363: with a partner contract, the applicant ticks its CURRENT version; the
 // version is stored on the application, and the form links the public terms page.
 test('with a partner contract the current version must be accepted and is recorded', async ({ request, page }) => {
