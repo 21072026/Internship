@@ -1,37 +1,20 @@
-'use client';
-
-import { useState } from 'react';
-import { CalendarView } from '@/components/CalendarView';
-import { IcsFeedCard } from '@/components/IcsFeedCard';
-import { useT } from '@/i18n/client';
-import { PlanMeetingButton } from './PlanMeetingDialog';
+import { getServerSession } from 'next-auth';
+import { notFound, redirect } from 'next/navigation';
+import { authOptions } from '@/lib/auth';
+import { shellCapabilities } from '@/lib/shellCapabilities';
+import { hasSalesSurface } from '@/lib/salesSurface';
+import { salesTeamReadAllowed } from '@/lib/salesBook';
+import { SalesCalendarClient } from './SalesCalendarClient';
 
 // The sales rep's calendar (#3778): their meetings, their records' follow-up
-// days and trial ends, from GET /api/sales/calendar — the rep's own book only.
-// The shell (src/app/sales/layout.tsx) is the door: a MARKETING sales surface,
-// nobody else; the API re-checks the same gate. Week view by default, the
-// agenda on a phone, and the subscription card so the same items reach Google
-// or Outlook. The team view waits for the shared sales-book read rule.
-export default function SalesCalendarPage() {
-  const t = useT();
-  const [refreshKey, setRefreshKey] = useState(0);
-  return (
-    <div>
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{t.salesCalendar.title}</h1>
-          <p className="mt-1 text-gray-500 dark:text-gray-400">{t.salesCalendar.subtitle}</p>
-        </div>
-        <PlanMeetingButton onCreated={() => setRefreshKey((k) => k + 1)} />
-      </div>
-      <CalendarView
-        source="/api/sales/calendar"
-        defaultView="week"
-        storageKey="crm.salesCalendar.view"
-        refreshKey={refreshKey}
-        legend={['meeting', 'followup', 'trial', 'overdue']}
-      />
-      <IcsFeedCard />
-    </div>
-  );
+// days and trial ends — and, where the shared team-read rule allows it, a
+// read-only "Team" view of their colleagues'. The shell (src/app/sales/layout.tsx)
+// is the first door; this page re-checks the surface, like the other /sales
+// pages, and asks the team rule once so the toggle is only offered to a viewer
+// it lets in. Both APIs ask their own gates again.
+export default async function SalesCalendarPage() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) redirect('/auth/signin');
+  if (!hasSalesSurface(session.user.role, await shellCapabilities(session.user.orgId))) notFound();
+  return <SalesCalendarClient teamAllowed={await salesTeamReadAllowed(session)} />;
 }

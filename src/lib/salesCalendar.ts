@@ -144,3 +144,111 @@ export async function loadSalesCalendar(opts: {
   ];
   return events.sort((a, b) => a.date.localeCompare(b.date));
 }
+
+// ---------------------------------------------------------------------------
+// The team view (#3778): what the rep's colleagues have on — READ-ONLY.
+//
+// Only a viewer the shared team-read rule lets read the org's book gets here
+// (salesTeamReadAllowed, src/lib/salesBook.ts — the caller checks it). What a
+// teammate's item carries is the short list the team book allows: the lead's
+// name, when, and whose it is (initials). Never a meeting's title (free text the
+// owner wrote) and never `nextActionNote`. A teammate's follow-up DAY is the
+// owner's working data too (canSeeNextAction: the owner and an ADMIN), so it is
+// listed only for a viewer that rule lets read it; a rep sees colleagues'
+// meetings. An item opens the colleague's lead page, which the same team-read
+// rule opens read-only (WP2b, #3793) — no write reaches it from here.
+
+export interface SalesTeamCalendarEvent {
+  id: string;
+  type: 'meeting' | 'followup';
+  title: '';
+  who: string;
+  date: string;
+  allDay?: true;
+  durationMinutes?: number | null;
+  overdue?: boolean;
+  /** The colleague's lead page — read-only for a team reader (WP2b). */
+  link: string;
+  /** The owner's initials, and their name for the tooltip / screen reader. */
+  owner: string;
+  ownerName: string;
+}
+
+/** "Ada Lovelace" → "AL"; one word → its first two letters. */
+export function initialsOf(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '?';
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[words.length - 1][0]).toUpperCase();
+}
+
+export async function loadSalesTeamCalendar(opts: {
+  orgId: string;
+  viewer: { id: string; role: string };
+  from: Date;
+  to: Date;
+  now?: number;
+}): Promise<SalesTeamCalendarEvent[]> {
+  const { orgId, viewer, from, to } = opts;
+  const now = opts.now ?? Date.now();
+  const teammates = { orgId, mentorId: { not: viewer.id } };
+  // canSeeNextAction for a record the viewer does not own: an ADMIN only.
+  const followUpDays = viewer.role === 'ADMIN';
+
+  const [meetings, followUps] = await Promise.all([
+    prisma.meeting.findMany({
+      where: { seriesId: null, status: 'SCHEDULED', scheduledAt: { gte: from, lte: to }, relation: { is: teammates } },
+      select: {
+        id: true,
+        scheduledAt: true,
+        durationMinutes: true,
+        relationId: true,
+        relation: { select: { mentee: { select: { fullName: true } }, mentor: { select: { fullName: true } } } },
+      },
+      orderBy: { scheduledAt: 'asc' },
+      take: MAX_PER_KIND,
+    }),
+    followUpDays
+      ? prisma.mentorshipRelation.findMany({
+          where: {
+            orgId,
+            mentorId: { not: viewer.id },
+            status: 'ACTIVE',
+            nextActionAt: { gte: new Date(from.getTime() - DAY_MS), lte: new Date(to.getTime() + DAY_MS) },
+          },
+          // No nextActionNote: not selected, cannot leak.
+          select: { id: true, nextActionAt: true, mentee: { select: { fullName: true } }, mentor: { select: { fullName: true } } },
+          orderBy: { nextActionAt: 'asc' },
+          take: MAX_PER_KIND,
+        })
+      : Promise.resolve([]),
+  ]);
+
+  return [
+    ...meetings
+      .filter((m) => m.scheduledAt && m.relationId && m.relation)
+      .map((m) => ({
+        id: `team-meeting-${m.id}`,
+        type: 'meeting' as const,
+        title: '' as const,
+        who: m.relation!.mentee.fullName,
+        date: m.scheduledAt!.toISOString(),
+        durationMinutes: m.durationMinutes ?? null,
+        link: salesLeadHref(m.relationId!),
+        owner: initialsOf(m.relation!.mentor.fullName),
+        ownerName: m.relation!.mentor.fullName,
+      })),
+    ...followUps.map((r) => ({
+      id: `team-followup-${r.id}`,
+      type: 'followup' as const,
+      title: '' as const,
+      who: r.mentee.fullName,
+      date: utcDay(r.nextActionAt!),
+      allDay: true as const,
+      overdue: isNextActionOverdue(r.nextActionAt!, now),
+      link: salesLeadHref(r.id),
+      owner: initialsOf(r.mentor.fullName),
+      ownerName: r.mentor.fullName,
+    })),
+  ].sort((a, b) => a.date.localeCompare(b.date));
+}
