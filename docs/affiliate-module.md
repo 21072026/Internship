@@ -592,7 +592,20 @@ exactly as they are.
   page redirect and does not protect an API (true of every role today), so the one
   write that redirects money — `PUT /api/affiliate/me/payout-details` — checks the
   policy itself and answers `403 two_factor_required` to an un-enrolled partner.
-  A step-up (password or code on every IBAN change) is a separate, later task.
+- **Step-up on every IBAN change** (#3734, `src/lib/stepUp.ts`): a signed-in
+  session is not enough to redirect money. Every `PUT` carries `stepUp.code` (a
+  TOTP or recovery code, when the account has 2FA) or `stepUp.password` (when it
+  has not); which one is the account's own, never the caller's choice. The code
+  goes through the sign-in doors' own `requireSecondFactor()` (`src/lib/auth.ts`)
+  — no second TOTP implementation — and a wrong password is charged to the
+  sign-in password counters (`login-fail:<email>` and the durable `password`
+  lockout, 10 per 15 minutes), so the step-up cannot be used to guess around the
+  sign-in limit. Refusals: 403 `step_up_required` (with the `method` to ask for),
+  403 `step_up_invalid`, 429 `step_up_locked`, and 403 `step_up_unavailable` for an
+  SSO-only account without 2FA (no password exists to ask; enrol 2FA first). The
+  input is validated first, so a typo in the IBAN never costs an attempt. The
+  first entry counts as a change too: it decides where money goes just the same.
+  A successful change is still audited and announced (`payoutDetailsChanged`).
 - While an admin impersonates a partner, the partner's own declarations and money
   writes are refused (400 `impersonating`): accepting the contract and changing
   payout details — the same rule as `/api/account`.
