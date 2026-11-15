@@ -69,7 +69,18 @@ interface Relation {
 // exactly what it was.
 // `handoff` (the sales board only) adds the colleague strip above the columns:
 // drop a lead on a teammate to hand it over with its next step (LeadHandoff.tsx).
-export function MentorBoard({ detailBase = '/mentor/mentees', handoff = false }: { detailBase?: string; handoff?: boolean }) {
+// `surface="sales"` (the /sales board): the list is the viewer's own sales book
+// (src/lib/salesBookRule.ts) — the same set /sales/leads/<id> opens — so every
+// card it shows is a card its viewer can open.
+export function MentorBoard({
+  detailBase = '/mentor/mentees',
+  handoff = false,
+  surface,
+}: {
+  detailBase?: string;
+  handoff?: boolean;
+  surface?: 'sales';
+}) {
   const t = useT();
   const label = useStageLabel();
   const { show: showGate, dialog: gateDialog } = useStageGateDialog();
@@ -110,7 +121,7 @@ export function MentorBoard({ detailBase = '/mentor/mentees', handoff = false }:
   const fetchRelations = useCallback(async () => {
     setLoadError(false);
     try {
-      const res = await fetch('/api/mentorship');
+      const res = await fetch(surface === 'sales' ? '/api/mentorship?surface=sales' : '/api/mentorship');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setRelations(data.relations ?? []);
@@ -119,7 +130,7 @@ export function MentorBoard({ detailBase = '/mentor/mentees', handoff = false }:
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [surface]);
 
   useEffect(() => {
     relationsRef.current = relations;

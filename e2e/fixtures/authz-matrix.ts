@@ -439,6 +439,10 @@ export const MARKETING_MENTOR_ADMIN_ONLY: SalesProbe[] = [
 /** The rep's own rows versus a colleague's and another org's. */
 export const MARKETING_MENTOR_ROWS: SalesProbe[] = [
   { method: 'GET', path: '/api/mentorship/:ownRelationId', expect: 'ok', why: 'own record' },
+  // The sales board's list (src/lib/salesBookRule.ts): the viewer's own book.
+  // Which records it holds per role (rep, dispatcher, ORG_ADMIN, OBSERVER), and
+  // that each one opens, is pinned by e2e/sales-book-scope.spec.ts.
+  { method: 'GET', path: '/api/mentorship?surface=sales', expect: 'ok', why: 'own sales book' },
   { method: 'GET', path: '/api/mentorship/:colleagueRelationId', expect: 'forbidden', why: "a colleague's record" },
   // Resolved inside the caller's tenant first (#2613): another org's record
   // answers like a missing one, not with a 403 that confirms it exists.

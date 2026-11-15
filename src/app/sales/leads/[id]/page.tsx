@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { hasSalesSurface } from '@/lib/salesSurface';
-import { isSalesDispatcher } from '@/lib/salesDispatcher';
+import { salesBookScope } from '@/lib/salesBook';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { formatDate } from '@/lib/relativeTime';
 import { getServerDictionary } from '@/i18n/server';
@@ -51,8 +51,10 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
 
   const tenant = await tenantWhere(session);
   const relation = await prisma.mentorshipRelation.findFirst({
-    // A sales dispatcher (#3656) opens any record of the tenant; a rep their own.
-    where: withinTenant((await isSalesDispatcher(session.user.id)) ? { id } : { id, mentorId: session.user.id }, tenant),
+    // The viewer's sales book (src/lib/salesBookRule.ts): a rep — an ADMIN
+    // included — their own records, the sales dispatcher (#3656) the tenant's.
+    // The board lists exactly this set, so every card it shows opens here.
+    where: withinTenant({ id, ...(await salesBookScope(session)) }, tenant),
     select: {
       id: true,
       status: true,
