@@ -3430,6 +3430,8 @@ export async function sendMentorApplicationUnderReviewEmail({
     // no-user-row: same recipient as the acknowledgement above — an application
     // under review still has no account behind it, so there is no preference to
     // read and no unsubscribe token to mint.
+    // The applicant's org, so the outbound rule (#3771) sees who owns the mail.
+    orgId,
     category: 'mentor-application-received',
     locale,
     fromName: brand.name,
@@ -3513,6 +3515,8 @@ export async function sendMentorApplicationRejectedEmail({
     // no-user-row: a declined application never became a User row, so there is
     // nothing to unsubscribe from — and this is the last mail it will ever
     // produce, which is the one case where that is self-evidently fine.
+    // The applicant's org, so the outbound rule (#3771) sees who owns the mail.
+    orgId,
     category: 'mentor-application',
     locale,
     fromName: brand.name,
@@ -4257,6 +4261,10 @@ export async function sendContactPermissionConfirmationEmail({
   const M = getDictionary(resolveLocale(locale)).contactPermissionEmail;
   return await sendEmail({
     to,
+    // The org the enquiry was sent to (#3771): without it the outbound rule
+    // read this mail as owned by no org, and a MARKETING org that blocks lead
+    // mail would still have sent it.
+    orgId,
     category: 'consent',
     locale,
     fromName: brand.name,
