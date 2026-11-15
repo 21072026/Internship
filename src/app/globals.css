@@ -439,13 +439,22 @@ html.dark {
 
 /* --- Utility remap (written once; references the palette vars above). --- */
 /* Backgrounds */
-html[data-accent] .bg-blue-50 { background-color: var(--accent-50); }
-html[data-accent] .bg-blue-100 { background-color: var(--accent-100); }
-html[data-accent] .bg-blue-400 { background-color: var(--accent-400); }
-html[data-accent] .bg-blue-500 { background-color: var(--accent-500); }
-html[data-accent] .bg-blue-600 { background-color: var(--accent-600); }
-html[data-accent] .bg-blue-700 { background-color: var(--accent-700); }
-html[data-accent] .bg-blue-900 { background-color: var(--accent-900); }
+/* In dark mode the remap steps aside for an element that writes its own
+   `dark:` value for the same property (#3745). The remap scores 0,2,1 and
+   Tailwind's `dark:` variant (`.dark\:bg-…:is(.dark *)`) only 0,2,0, so without
+   the guard the accent silently won: the active "My records" toggle kept its
+   light accent-100 fill under light text, and every `text-blue-700
+   dark:text-blue-300` link stayed dark blue on a dark page. `:where()` scores
+   zero, so nothing else about the cascade changes; the html.dark[data-accent]
+   legibility rules further down still apply. `check:dark-mode` fails on a
+   remap without the guard. */
+html[data-accent] .bg-blue-50:not(:where(.dark [class*="dark:bg-"])) { background-color: var(--accent-50); }
+html[data-accent] .bg-blue-100:not(:where(.dark [class*="dark:bg-"])) { background-color: var(--accent-100); }
+html[data-accent] .bg-blue-400:not(:where(.dark [class*="dark:bg-"])) { background-color: var(--accent-400); }
+html[data-accent] .bg-blue-500:not(:where(.dark [class*="dark:bg-"])) { background-color: var(--accent-500); }
+html[data-accent] .bg-blue-600:not(:where(.dark [class*="dark:bg-"])) { background-color: var(--accent-600); }
+html[data-accent] .bg-blue-700:not(:where(.dark [class*="dark:bg-"])) { background-color: var(--accent-700); }
+html[data-accent] .bg-blue-900:not(:where(.dark [class*="dark:bg-"])) { background-color: var(--accent-900); }
 html[data-accent] .hover\:bg-blue-50:hover { background-color: var(--accent-50); }
 html[data-accent] .hover\:bg-blue-700:hover { background-color: var(--accent-700); }
 html[data-accent] .hover\:bg-blue-800:hover { background-color: var(--accent-800); }
@@ -455,12 +464,12 @@ html[data-accent] .focus\:bg-blue-600:focus { background-color: var(--accent-600
 html[data-accent] .from-blue-50 { --tw-gradient-from: var(--accent-50) var(--tw-gradient-from-position); }
 html[data-accent] .from-blue-600 { --tw-gradient-from: var(--accent-600) var(--tw-gradient-from-position); }
 /* Text */
-html[data-accent] .text-blue-100 { color: var(--accent-100); }
-html[data-accent] .text-blue-200 { color: var(--accent-200); }
-html[data-accent] .text-blue-300 { color: var(--accent-300); }
-html[data-accent] .text-blue-400 { color: var(--accent-400); }
-html[data-accent] .text-blue-500 { color: var(--accent-500); }
-html[data-accent] .text-blue-600 { color: var(--accent-600); }
+html[data-accent] .text-blue-100:not(:where(.dark [class*="dark:text-"])) { color: var(--accent-100); }
+html[data-accent] .text-blue-200:not(:where(.dark [class*="dark:text-"])) { color: var(--accent-200); }
+html[data-accent] .text-blue-300:not(:where(.dark [class*="dark:text-"])) { color: var(--accent-300); }
+html[data-accent] .text-blue-400:not(:where(.dark [class*="dark:text-"])) { color: var(--accent-400); }
+html[data-accent] .text-blue-500:not(:where(.dark [class*="dark:text-"])) { color: var(--accent-500); }
+html[data-accent] .text-blue-600:not(:where(.dark [class*="dark:text-"])) { color: var(--accent-600); }
 
 /* Dark mode has to win over the accent rule above, and the ONLY reason this
    sits down here rather than with its siblings at the top is specificity:
@@ -479,9 +488,9 @@ html.dark .text-blue-600 { color: #93c5fd; } /* blue-300 — 8.6:1 on gray-950 *
    is a light shade (blue's is the same #93c5fd), so contrast holds, and the
    landing's accented hero line no longer turns blue in dark mode. */
 html.dark[data-accent] .text-blue-600 { color: var(--accent-300); }
-html[data-accent] .text-blue-700 { color: var(--accent-700); }
-html[data-accent] .text-blue-800 { color: var(--accent-800); }
-html[data-accent] .text-blue-900 { color: var(--accent-900); }
+html[data-accent] .text-blue-700:not(:where(.dark [class*="dark:text-"])) { color: var(--accent-700); }
+html[data-accent] .text-blue-800:not(:where(.dark [class*="dark:text-"])) { color: var(--accent-800); }
+html[data-accent] .text-blue-900:not(:where(.dark [class*="dark:text-"])) { color: var(--accent-900); }
 html[data-accent] .hover\:text-blue-300:hover { color: var(--accent-300); }
 html[data-accent] .hover\:text-blue-400:hover { color: var(--accent-400); }
 html[data-accent] .hover\:text-blue-600:hover { color: var(--accent-600); }
@@ -489,21 +498,21 @@ html[data-accent] .hover\:text-blue-700:hover { color: var(--accent-700); }
 html[data-accent] .hover\:text-blue-800:hover { color: var(--accent-800); }
 html[data-accent] .group:hover .group-hover\:text-blue-600 { color: var(--accent-600); }
 /* Borders */
-html[data-accent] .border-blue-100 { border-color: var(--accent-100); }
-html[data-accent] .border-blue-200 { border-color: var(--accent-200); }
-html[data-accent] .border-blue-300 { border-color: var(--accent-300); }
-html[data-accent] .border-blue-400 { border-color: var(--accent-400); }
-html[data-accent] .border-blue-800 { border-color: var(--accent-800); }
-html[data-accent] .border-blue-900 { border-color: var(--accent-900); }
+html[data-accent] .border-blue-100:not(:where(.dark [class*="dark:border-"])) { border-color: var(--accent-100); }
+html[data-accent] .border-blue-200:not(:where(.dark [class*="dark:border-"])) { border-color: var(--accent-200); }
+html[data-accent] .border-blue-300:not(:where(.dark [class*="dark:border-"])) { border-color: var(--accent-300); }
+html[data-accent] .border-blue-400:not(:where(.dark [class*="dark:border-"])) { border-color: var(--accent-400); }
+html[data-accent] .border-blue-800:not(:where(.dark [class*="dark:border-"])) { border-color: var(--accent-800); }
+html[data-accent] .border-blue-900:not(:where(.dark [class*="dark:border-"])) { border-color: var(--accent-900); }
 html[data-accent] .hover\:border-blue-200:hover { border-color: var(--accent-200); }
 html[data-accent] .hover\:border-blue-300:hover { border-color: var(--accent-300); }
 html[data-accent] .hover\:border-blue-400:hover { border-color: var(--accent-400); }
 html[data-accent] .focus\:border-blue-400:focus { border-color: var(--accent-400); }
 /* Focus rings (Tailwind ring utilities set --tw-ring-color) */
-html[data-accent] .ring-blue-100 { --tw-ring-color: var(--accent-100); }
+html[data-accent] .ring-blue-100:not(:where(.dark [class*="dark:ring-"])) { --tw-ring-color: var(--accent-100); }
 /* The board's drop target (#3675): a column keeps its stage tone and gains this
    ring, which must follow the org accent like every other blue here. */
-html[data-accent] .ring-blue-500 { --tw-ring-color: var(--accent-500); }
+html[data-accent] .ring-blue-500:not(:where(.dark [class*="dark:ring-"])) { --tw-ring-color: var(--accent-500); }
 html[data-accent] .focus\:ring-blue-100:focus { --tw-ring-color: var(--accent-100); }
 html[data-accent] .focus\:ring-blue-500:focus { --tw-ring-color: var(--accent-500); }
 html[data-accent] .focus-visible\:ring-blue-500:focus-visible { --tw-ring-color: var(--accent-500); }
