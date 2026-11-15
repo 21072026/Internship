@@ -7843,7 +7843,7 @@ const en = {
     scopeLabel: 'Whose calendar',
     scopeMe: 'Me',
     scopeTeam: 'Team',
-    teamHint: 'Your colleagues’ meetings appear read-only, with their initials. Their notes stay theirs.',
+    teamHint: 'Your colleagues’ meetings and follow-up days appear read-only, with their initials. Their notes stay theirs.',
   },
   calendar: {
     title: 'Calendar',
@@ -20328,7 +20328,7 @@ const tr: Dict = {
     scopeLabel: 'Kimin takvimi',
     scopeMe: 'Ben',
     scopeTeam: 'Ekip',
-    teamHint: 'Ekip arkadaşlarının toplantıları baş harfleriyle, salt okunur görünür. Notları kendilerine kalır.',
+    teamHint: 'Ekip arkadaşlarının toplantıları ve takip günleri baş harfleriyle, salt okunur görünür. Notları kendilerine kalır.',
   },
   calendar: {
     title: 'Takvim',
@@ -32730,7 +32730,7 @@ const de: Dict = {
     scopeLabel: 'Wessen Kalender',
     scopeMe: 'Ich',
     scopeTeam: 'Team',
-    teamHint: 'Die Termine deiner Kolleg:innen erscheinen schreibgeschützt mit ihren Initialen. Ihre Notizen bleiben ihre.',
+    teamHint: 'Die Termine und Wiedervorlage-Tage deiner Kolleg:innen erscheinen schreibgeschützt mit ihren Initialen. Ihre Notizen bleiben ihre.',
   },
   calendar: {
     title: 'Kalender',
