@@ -110,7 +110,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   const [parties, setParties] = useState<Party[]>([]);
   // Set for a project group chat: which project it belongs to, so the header can
   // name the room, list who is in it and link back to the project (#51).
-  const [group, setGroup] = useState<{ projectId: string | null; projectName: string | null } | null>(null);
+  const [group, setGroup] = useState<{ projectId: string | null; projectName: string | null; teamRoom: boolean } | null>(null);
   // Who the mentor is, when a mentorship stands behind this 1:1 thread, so an
   // empty thread can suggest a *welcome* to the mentor and a neutral opener to
   // the mentee (#1130). Answered for conversations too since the mentorship
@@ -375,7 +375,7 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
     setParties(d.participants ?? [d.mentor, d.mentee].filter(Boolean));
     setMentorId(d.mentorId ?? d.mentor?.id ?? null);
     setMentorshipId(d.mentorshipId ?? d.relationId ?? null);
-    setGroup(d.type === 'GROUP' ? { projectId: d.projectId ?? null, projectName: d.projectName ?? null } : null);
+    setGroup(d.type === 'GROUP' ? { projectId: d.projectId ?? null, projectName: d.projectName ?? null, teamRoom: Boolean(d.teamRoom) } : null);
     setCanPost(d.canPost !== false);
     setCounterpartState(d.counterpartState ?? null);
     setLoading(false);
@@ -640,7 +640,8 @@ export function MessageThreadView({ target }: { target: ThreadTarget }) {
   // Header shows the other side (the only other party in a 1:1 thread).
   const other = parties.find((p) => p.id !== myId) ?? null;
   // A group chat has no "other side" — it is named after its project.
-  const threadTitle = group ? group.projectName ?? t.messages.groupChat : other?.fullName;
+  // The sales team room has no project; it is the team's room.
+  const threadTitle = group ? (group.teamRoom ? t.messages.salesTeamRoom : group.projectName ?? t.messages.groupChat) : other?.fullName;
   // Only conversation threads can host a call (#1055): membership is derived
   // from ConversationParticipant, so either side may start one. The legacy
   // relation thread is left out — its mentee would be refused server-side

@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "**Sales team messaging (#3783):** on the sales surface, colleagues can now message each other, and each org has one team room. `canMessage()` gains one rule (`src/lib/salesTeamMessagingRule.ts`, pure and unit-tested): two **active** sales staff of the **same org** (MENTOR/ADMIN, `hasSalesSurface`) may message each other. It never applies to a lead, a customer login or another org, and never in INTERNSHIP. The team room is a project-less GROUP conversation keyed by the new nullable unique `Conversation.teamKey` (`sales-team:<orgId>`). It is created on first visit, and the unique key means two first visits at once still make one room. Who may read and post is the live rule on every request, so a new rep sees it at once and a deactivated rep is refused and dropped from the roster. Room messages go out by bell and push only, with no e-mail mirror. The sales menu gains Messages (with an unread badge), To-dos and Notifications. On the shared pages (`/messages`, `/todos`) RoleShell gives a rep the sales menu, with no command palette and no global search; the back links on `/messages` and `/notifications` go to `/sales`. The inbox's new-chat picker lists the sales team, and `/messages?to=<userId>` opens the 1:1 chat with that person, or creates it on first use, under the same rule. A refusal leaves the caller on the inbox with a notice.",
+  "notes": {
+    "en": [
+      "Sales reps can now message each other, and every team has a shared Team room. Messages, To-dos and Notifications are in the sales menu."
+    ],
+    "tr": [
+      "Satış temsilcileri artık birbirine mesaj atabiliyor ve her ekibin ortak bir Ekip odası var. Mesajlar, Yapılacaklar ve Bildirimler satış menüsünde."
+    ],
+    "de": [
+      "Vertriebsmitarbeiter können sich jetzt gegenseitig Nachrichten schreiben, und jedes Team hat einen gemeinsamen Team-Raum. Nachrichten, Aufgaben und Benachrichtigungen stehen im Vertriebsmenü."
+    ]
+  }
+}

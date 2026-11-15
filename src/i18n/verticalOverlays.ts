@@ -304,6 +304,9 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       // their `{name}` placeholder; the words are a sales conversation about a
       // product demo and trial, not an internship.
       messages: {
+        // The "new chat" picker lists the sales team (src/lib/inbox.ts), not
+        // project co-members — MARKETING has no projects.
+        newChatHint: 'Your sales team',
         openers: {
           welcome: {
             label: '👋 Welcome',
@@ -1468,6 +1471,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentor: 'Temsilci',
       },
       messages: {
+        newChatHint: 'Satış ekibin',
         openers: {
           welcome: {
             label: '👋 Hoş geldiniz',
@@ -2504,6 +2508,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
         mentor: 'Vertriebsmitarbeiter',
       },
       messages: {
+        newChatHint: 'Dein Vertriebsteam',
         openers: {
           welcome: {
             label: '👋 Willkommen',

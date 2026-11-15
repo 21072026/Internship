@@ -37,6 +37,7 @@ const ICONS: Record<string, string> = {
   mentorDirectory: 'people',
   todos: 'checkbox',
   messages: 'chatbubbles',
+  notifications: 'notifications',
   interactionLogs: 'book',
   interactions: 'book',
   myNotes: 'lock-closed',
