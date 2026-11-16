@@ -50,8 +50,9 @@ import { SALES_HANDOFF_REASON } from '@/lib/leadHandoffRule';
 //                   incoming mentor, carrying `previousRelationId` back to it.
 //
 // Why 'transferred' never re-points `mentorId` on a relation that carries
-// history: `InteractionLog` has no author column (prisma/schema.prisma) —
-// a logged meeting is attributed purely through `relation.mentorId`. Repointing
+// history: a logged meeting is attributed through `relation.mentorId`
+// (`InteractionLog.authorId`, #3818, names the person only on rows written
+// since, by a person — every older row carries none). Repointing
 // it would silently credit every meeting mentor A ran to mentor B, and any
 // per-mentor reporting built on `relation.mentorId` would report it. For the
 // same reason NOTHING is moved between the two relations: every child row stays

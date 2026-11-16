@@ -35,6 +35,8 @@ export async function createInteraction(opts: {
       subject: opts.subject || null,
       notes: opts.notes,
       type: opts.type,
+      // The person who logged it (#3818); null for an API key.
+      authorId: opts.actorId,
     },
   });
 

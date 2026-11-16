@@ -178,6 +178,8 @@ test('POST /interactions logs through the app’s write path, in the key’s org
   const rows = await prisma.interactionLog.findMany({ where: { relationId: orgA.relation.id } });
   expect(rows.map((r) => r.id)).toEqual([created.id]);
   expect(rows[0].notes).toBe(data.notes);
+  // A machine wrote it (#3818): no person is named as its author.
+  expect(rows[0].authorId).toBeNull();
   expect(await prisma.notification.count({ where: { userId: orgA.mentee.id, createdAt: { gte: before } } })).toBeGreaterThan(0);
   expect(await prisma.activityLog.count({ where: { action: 'api.interaction.create', targetId: created.id } })).toBe(1);
 });

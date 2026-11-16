@@ -127,7 +127,7 @@ export async function POST(request: Request) {
         },
       });
       const logged = await prisma.interactionLog.create({
-        data: { relationId: rel.id, date: new Date(), type: 'Email', notes: `${personalSubject} — ${personalBody}` },
+        data: { relationId: rel.id, date: new Date(), type: 'Email', notes: `${personalSubject} — ${personalBody}`, authorId: session.user.id },
       });
       // The e-mail is a first contact like a logged one (#3746).
       await advanceOnFirstContact({ relationId: rel.id, interactionId: logged.id, type: 'Email' });

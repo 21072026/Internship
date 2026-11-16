@@ -183,7 +183,7 @@ export async function routeCrmBcc(input: InboundEmail): Promise<CrmBccResult> {
       if (!relationId) continue;
       try {
         const row = await prisma.interactionLog.create({
-          data: { relationId, date, subject, notes: notesFor([...emails]), type: 'Email', autoLogged: true, sourceRef },
+          data: { relationId, date, subject, notes: notesFor([...emails]), type: 'Email', autoLogged: true, sourceRef, authorId: sender.id },
         });
         logged++;
         // A mail the rep sent to the account is a first contact too (#3746).
