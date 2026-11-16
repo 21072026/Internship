@@ -4,16 +4,21 @@
 import { chromium } from '@playwright/test';
 import sharp from 'sharp';
 import { PDFDocument } from 'pdf-lib';
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync } from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const base = new URL(process.env.BASE_URL || 'http://localhost:3000');
 if (!['http:', 'https:'].includes(base.protocol) || !['localhost', '127.0.0.1'].includes(base.hostname)) throw new Error('OG validation requires a local server');
-const output = path.resolve(process.env.CHANNEL_OUTPUT_DIR || '/tmp/interncrm-channel-assets');
+// Private, unpredictable output directory: a shared fixed /tmp path can be
+// pre-created as a symlink by another local user (CodeQL #77/#78).
+const output = process.env.CHANNEL_OUTPUT_DIR
+  ? path.resolve(process.env.CHANNEL_OUTPUT_DIR)
+  : mkdtempSync(path.join(os.tmpdir(), 'interncrm-channel-assets-'));
 const assets = path.join(root, 'public/marketing');
-mkdirSync(output, { recursive: true });
+mkdirSync(output, { recursive: true, mode: 0o700 });
 mkdirSync(assets, { recursive: true });
 const copy = readFileSync(path.join(root, 'docs/marketing/copy-bank.md'), 'utf8');
 const esc = (text) => text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;');

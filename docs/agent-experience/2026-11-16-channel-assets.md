@@ -14,3 +14,8 @@
 - **Validate the printed PDF, not only its HTML preview.** The first layout
   overflowed onto a second page. Require one A4 page and two screenshot
   elements, then render the actual PDF to inspect its typography and edges.
+- **Use a private temporary directory for generated exports.** CodeQL flagged
+  the fixed `/tmp/interncrm-channel-assets` HTML/PNG writes as insecure temporary
+  files (#77/#78). `mkdtempSync(path.join(os.tmpdir(), prefix))` prevents another
+  local user pre-creating the output path as a symlink; document the printed
+  random output path instead of assuming a fixed directory.

@@ -96,11 +96,14 @@ a publication or outreach action.
 
 Outputs (not committed):
 
-- `/tmp/interncrm-channel-assets/interncrm-one-pager-de.html`
-- `/tmp/interncrm-channel-assets/interncrm-one-pager-de.pdf`
-- `/tmp/interncrm-channel-assets/one-pager-preview.png`
+- `<output>/interncrm-one-pager-de.html`
+- `<output>/interncrm-one-pager-de.pdf`
+- `<output>/one-pager-preview.png`
 
-Override `CHANNEL_OUTPUT_DIR` to retain the output elsewhere. The generator
+The generator prints its output path: by default, a private, randomly named
+`interncrm-channel-assets-*` directory under the OS temporary directory.
+Override `CHANNEL_OUTPUT_DIR` with a directory you control to retain the output
+elsewhere; never select a shared or untrusted directory. The generator
 requires exactly one A4 PDF page and exactly two screenshot elements. Open the
 PDF and inspect its rendered page for clipping before distribution. The
 canonical text is deliberately read from the copy bank, so future changes are
