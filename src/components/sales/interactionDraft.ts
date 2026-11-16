@@ -12,6 +12,13 @@ export const INTERACTION_DRAFT_EVENT = 'sales-lead:interaction-draft';
 export interface InteractionDraftRequest {
   type?: InteractionType;
   notes?: string;
+  /**
+   * Runs once the interaction this draft opened is SAVED — never on Cancel, and
+   * not when another draft replaces this one first. "Complete follow-up" clears
+   * the follow-up here (#3803): clearing it on the click lost it whenever the rep
+   * changed their mind and cancelled the form.
+   */
+  onLogged?: () => unknown;
 }
 
 export function openInteractionDraft(draft: InteractionDraftRequest = {}): void {

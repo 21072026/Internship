@@ -83,7 +83,11 @@ export function SalesRecordPanels({
           onSaved={refresh}
           quickDates
           readOnly={readOnly}
-          onComplete={!readOnly && status === 'ACTIVE' ? (note) => openInteractionDraft({ type: 'Call', notes: note ?? '' }) : undefined}
+          onComplete={
+            !readOnly && status === 'ACTIVE'
+              ? (note, clear) => openInteractionDraft({ type: 'Call', notes: note ?? '', onLogged: clear })
+              : undefined
+          }
         />
         )}
         {interactions}

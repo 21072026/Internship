@@ -156,6 +156,16 @@ test('the rep sets the estimate on their lead page; it is stored as integer cent
   await page.getByTestId('deal-value-input').fill('1.234,50');
   await page.getByTestId('deal-value-save').click();
   await expect(page.getByTestId('deal-value-current')).toHaveText('€1,234.50');
+  // #3803: once set it reads as text — Edit (a pencil) and Remove side by side, no input until Edit.
+  await expect(page.getByTestId('deal-value-input')).toHaveCount(0);
+  await expect(page.getByTestId('deal-value-clear')).toBeVisible();
+  await page.getByTestId('deal-value-edit').click();
+  await expect(page.getByTestId('deal-value-input')).toHaveValue('1234.50');
+  await page.getByTestId('deal-value-input').fill('99');
+  await page.getByTestId('deal-value-cancel').click();
+  await expect(page.getByTestId('deal-value-input')).toHaveCount(0);
+  await expect(page.getByTestId('deal-value-current')).toHaveText('€1,234.50');
+  await expect(page.getByTestId('deal-value-edit')).toBeFocused();
 
   const row = await prisma.relationValue.findUnique({ where: { relationId: ids.openRelationId } });
   expect(row).toMatchObject({ valueMinor: 123450, currency: 'EUR', source: 'MANUAL', orgId });

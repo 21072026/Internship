@@ -8020,8 +8020,8 @@ const en = {
     quick1Week: 'In 1 week',
     quick2Weeks: 'In 2 weeks',
     complete: 'Complete follow-up',
-    completeHint: 'Clears the follow-up and opens the interaction form with its note, so you can log what you did.',
-    completed: 'Follow-up completed — log what happened',
+    completeHint: 'Opens the interaction form with the follow-up\'s note. The follow-up is cleared once you save the interaction; cancel and it stays.',
+    completed: 'Follow-up completed',
   },
   // The trial end on a funnel record (#2553): shown on the record and the board
   // card, set or extended by the owner or an admin.
@@ -8099,6 +8099,9 @@ const en = {
     saveError: 'Could not save the estimated value',
     none: 'No estimate yet',
     fromImport: 'From the account import',
+    edit: 'Edit',
+    editLabel: 'Edit estimated value',
+    cancel: 'Cancel',
     invalid_amount: 'Enter an amount such as 49,90',
     ambiguous_amount: 'Ambiguous amount — write 1234 or 1234,00 (or 49,99 for cents)',
     negative: 'The value cannot be negative',
@@ -20532,8 +20535,8 @@ const tr: Dict = {
     quick1Week: '1 hafta sonra',
     quick2Weeks: '2 hafta sonra',
     complete: 'Takibi tamamla',
-    completeHint: 'Takibi kapatır ve etkileşim formunu takip notuyla açar; ne yaptığını kaydedebilirsin.',
-    completed: 'Takip tamamlandı — ne olduğunu kaydet',
+    completeHint: 'Etkileşim formunu takip notuyla açar. Takip, etkileşimi kaydettiğinde kapanır; vazgeçersen olduğu gibi kalır.',
+    completed: 'Takip tamamlandı',
   },
   // A lost customer came back (#2842).
   winBack: {
@@ -20606,6 +20609,9 @@ const tr: Dict = {
     saveError: 'Tahmini değer kaydedilemedi',
     none: 'Henüz tahmin yok',
     fromImport: 'Hesap içe aktarımından',
+    edit: 'Düzenle',
+    editLabel: 'Tahmini değeri düzenle',
+    cancel: 'Vazgeç',
     invalid_amount: '49,90 gibi bir tutar girin',
     ambiguous_amount: 'Belirsiz tutar — 1234 ya da 1234,00 (kuruş için 49,99) yazın',
     negative: 'Değer negatif olamaz',
@@ -32976,8 +32982,8 @@ const de: Dict = {
     quick1Week: 'In 1 Woche',
     quick2Weeks: 'In 2 Wochen',
     complete: 'Wiedervorlage erledigt',
-    completeHint: 'Löscht die Wiedervorlage und öffnet das Interaktionsformular mit ihrer Notiz – dort das Erledigte erfassen.',
-    completed: 'Wiedervorlage erledigt – jetzt erfassen, was passiert ist',
+    completeHint: 'Öffnet das Interaktionsformular mit der Notiz der Wiedervorlage. Sie wird gelöscht, sobald Sie die Interaktion speichern; brechen Sie ab, bleibt sie bestehen.',
+    completed: 'Wiedervorlage erledigt',
   },
   // A lost customer came back (#2842).
   winBack: {
@@ -33050,6 +33056,9 @@ const de: Dict = {
     saveError: 'Der geschätzte Wert konnte nicht gespeichert werden',
     none: 'Noch keine Schätzung',
     fromImport: 'Aus dem Konten-Import',
+    edit: 'Bearbeiten',
+    editLabel: 'Geschätzten Wert bearbeiten',
+    cancel: 'Abbrechen',
     invalid_amount: 'Geben Sie einen Betrag wie 49,90 ein',
     ambiguous_amount: 'Mehrdeutiger Betrag — schreiben Sie 1234 oder 1234,00 (bzw. 49,99 für Cent)',
     negative: 'Der Wert darf nicht negativ sein',

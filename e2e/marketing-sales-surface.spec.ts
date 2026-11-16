@@ -367,14 +367,26 @@ test('the action strip: quick dates, complete a follow-up, call or mail the cont
   // Saved, it reads as a note; Complete sits right there, no form to open first.
   await expect(page.getByTestId('follow-up-read-note')).toHaveText(step);
 
-  // Complete: the follow-up is cleared and the form opens as a call with its note — nothing is logged yet (#3740).
+  // Complete opens the form as a call with the follow-up's note; nothing is logged and nothing is cleared yet (#3740).
   await page.reload();
+  const followUpAt = async () => (await prisma.mentorshipRelation.findUnique({ where: { id: ids.ownRelationId } }))?.nextActionAt ?? null;
   await page.getByTestId('follow-up-complete').click();
-  await expect.poll(async () => (await prisma.mentorshipRelation.findUnique({ where: { id: ids.ownRelationId } }))?.nextActionAt ?? null).toBeNull();
   await expect(type).toHaveValue('Call');
   await expect(notes).toHaveValue(step);
   expect(await prisma.interactionLog.count({ where: { relationId: ids.ownRelationId } })).toBe(0);
+  expect(await followUpAt()).not.toBeNull();
+  // #3803: Cancel leaves the follow-up exactly as it was — it is cleared only by the interaction being saved.
   await form.getByRole('button', { name: /Cancel/i }).click();
+  await expect(page.getByTestId('follow-up-read-note')).toHaveText(step);
+  expect(await followUpAt()).not.toBeNull();
+  // Complete again and save: the interaction is logged, then the follow-up is cleared.
+  await page.getByTestId('follow-up-complete').click();
+  await expect(notes).toHaveValue(step);
+  await form.locator('button[type="submit"]').click();
+  await expect.poll(followUpAt).toBeNull();
+  await expect(page.getByTestId('follow-up-read-note')).toHaveCount(0);
+  await expect.poll(() => prisma.interactionLog.count({ where: { relationId: ids.ownRelationId, notes: step } })).toBe(1);
+  const loggedSoFar = await prisma.interactionLog.count({ where: { relationId: ids.ownRelationId } });
 
   // The phone and e-mail are the device's own tel:/mailto: links (#3741). The e-mail opens a draft of that
   // type; the phone asks "Did you reach them?" first (#3748), and "Add a note" opens the call draft — nothing
@@ -389,7 +401,7 @@ test('the action strip: quick dates, complete a follow-up, call or mail the cont
   await page.getByTestId('sales-lead-phone-link').click();
   await page.getByTestId('contact-reached-note').click();
   await expect(type).toHaveValue('Call');
-  expect(await prisma.interactionLog.count({ where: { relationId: ids.ownRelationId } })).toBe(0);
+  expect(await prisma.interactionLog.count({ where: { relationId: ids.ownRelationId } })).toBe(loggedSoFar);
   await page.getByTestId('sales-lead-email-link').click();
   await expect(type).toHaveValue('Email');
   await form.getByRole('button', { name: /Cancel/i }).click();
