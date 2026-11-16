@@ -3,6 +3,8 @@ import type { Page } from '@playwright/test';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './db';
 import { MARKETING_HOST, asHost, signInAsFreshUser } from './auth';
 import { roleHome } from '../../src/lib/roleHome';
+import { landsOnSalesAfterSignIn, SALES_HOME } from '../../src/lib/salesSurface';
+import { verticalCapabilities } from '../../src/lib/verticals';
 import { defaultPipelineStages } from '../../src/lib/pipeline';
 
 /**
@@ -175,7 +177,10 @@ async function seedActor(
     where: { id: user.id },
     data: { orgId, ...(companyId ? { companyId } : {}) },
   });
-  return { id: user.id, email, fullName, role, password: TENANT_PASSWORD, landing: roleHome(role), vertical };
+  // The sign-in form's own rule (SignInClient, #3788): a MENTOR in a vertical
+  // with the sales surface (MARKETING) lands on /sales, everyone else on roleHome().
+  const landing = landsOnSalesAfterSignIn(role, verticalCapabilities(vertical)) ? SALES_HOME : roleHome(role);
+  return { id: user.id, email, fullName, role, password: TENANT_PASSWORD, landing, vertical };
 }
 
 async function seedTenant(
