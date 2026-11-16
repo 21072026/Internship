@@ -894,6 +894,16 @@ const en = {
     prev: 'Previous',
     next: 'Next',
     pageOf: 'Page {page} of {pages}',
+    // The leads this partner brought, counts only (#3647).
+    leadsTitle: 'Leads you brought',
+    leadsCount: '{n} lead(s) came in through your link.',
+    leadsByStage: 'Leads by stage',
+    leadsEmpty: 'No lead has come in through your link yet.',
+    leadsPrivacy: 'You see counts only — never a lead\'s name or contact details.',
+  },
+  // The affiliate partner behind a lead (#3647): lead page and board card.
+  affiliateSource: {
+    badge: 'Affiliate: {partner}',
   },
   affiliateApply: {
     title: 'Apply to become a partner',
@@ -13554,6 +13564,16 @@ const tr: Dict = {
     prev: 'Önceki',
     next: 'Sonraki',
     pageOf: 'Sayfa {page} / {pages}',
+    // The leads this partner brought, counts only (#3647).
+    leadsTitle: 'Getirdiğin lead\'ler',
+    leadsCount: 'Bağlantın üzerinden {n} lead geldi.',
+    leadsByStage: 'Aşamaya göre lead\'ler',
+    leadsEmpty: 'Bağlantın üzerinden henüz lead gelmedi.',
+    leadsPrivacy: 'Yalnızca sayıları görürsün; bir lead\'in adı ya da iletişim bilgisi hiçbir zaman gösterilmez.',
+  },
+  // The affiliate partner behind a lead (#3647): lead page and board card.
+  affiliateSource: {
+    badge: 'Affiliate: {partner}',
   },
   affiliateApply: {
     title: 'Partner olmak için başvurun',
@@ -25986,6 +26006,16 @@ const de: Dict = {
     prev: 'Zurück',
     next: 'Weiter',
     pageOf: 'Seite {page} von {pages}',
+    // The leads this partner brought, counts only (#3647).
+    leadsTitle: 'Von dir vermittelte Leads',
+    leadsCount: '{n} Lead(s) kamen über deinen Link.',
+    leadsByStage: 'Leads nach Phase',
+    leadsEmpty: 'Über deinen Link ist noch kein Lead gekommen.',
+    leadsPrivacy: 'Du siehst nur Zahlen — nie den Namen oder die Kontaktdaten eines Leads.',
+  },
+  // The affiliate partner behind a lead (#3647): lead page and board card.
+  affiliateSource: {
+    badge: 'Affiliate: {partner}',
   },
   affiliateApply: {
     title: 'Als Partner bewerben',

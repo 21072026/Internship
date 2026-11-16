@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { affiliatePartnerNames, affiliatePartnerNameFor } from '@/lib/affiliateLeadSource';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -209,6 +210,9 @@ export async function GET(request: Request) {
           // Only to derive `stageClockPaused` below — destructured out before
           // the response, so the pool date itself reaches no client (#1724).
           reEngageAt: true,
+          // Only to name the affiliate partner behind the lead (#3647) —
+          // destructured out too; the badge's partner name is the one output.
+          source: { select: { name: true } },
         },
       },
       company: { select: { id: true, name: true, industry: true } },
@@ -236,12 +240,18 @@ export async function GET(request: Request) {
     // see exactly the payload they saw before.
     const seesPool = isAdmin || session.user.role === 'MENTOR';
     const withStageClock = <
-      T extends { mentorId: string; startDate: Date; statusChanges: { createdAt: Date }[]; mentee: { reEngageAt: Date | null } },
+      T extends {
+        mentorId: string;
+        startDate: Date;
+        statusChanges: { createdAt: Date }[];
+        mentee: { reEngageAt: Date | null; source?: { name: string } | null };
+      },
     >(
       rows: T[]
     ) =>
       rows.map(({ statusChanges, mentee, ...rest }) => {
-        const { reEngageAt, ...menteeRest } = mentee;
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars -- stripped on purpose: read only for the affiliate badge
+        const { reEngageAt, source: _source, ...menteeRest } = mentee;
         return {
           // The owner's next action (#2563) rides along for the owner and ADMIN
           // only — the board card shows it; a MENTEE/COMPANY/SOURCE reader of
@@ -252,6 +262,21 @@ export async function GET(request: Request) {
           ...(seesPool ? { stageClockPaused: reEngageAt != null } : {}),
         };
       });
+
+    // The affiliate partner behind a lead (#3647): staff readers only (the
+    // board's audience), by (orgId, code) so a code never crosses a tenant.
+    // Reads the source from the raw rows, which still carry it.
+    const affiliateNamesFor = async (raw: { orgId: string | null; mentee: { source?: { name: string } | null } }[]) =>
+      seesPool ? affiliatePartnerNames(raw.map((r) => ({ orgId: r.orgId, sourceName: r.mentee.source?.name }))) : new Map<string, string>();
+    const withAffiliate = <T extends { id: string }>(
+      rows: T[],
+      raw: { id: string; orgId: string | null; mentee: { source?: { name: string } | null } }[],
+      names: Map<string, string>,
+    ) => {
+      if (!seesPool) return rows;
+      const byId = new Map(raw.map((r) => [r.id, affiliatePartnerNameFor(names, { orgId: r.orgId, sourceName: r.mentee.source?.name })]));
+      return rows.map((r) => ({ ...r, affiliatePartner: byId.get(r.id) ?? null }));
+    };
 
     const withAgreement = async <T extends { id: string; orgId: string | null }>(rows: T[]) => {
       if (!showsAgreement) return rows;
@@ -281,7 +306,7 @@ export async function GET(request: Request) {
         )
       );
       return NextResponse.json({
-        relations: await withAgreement(withStageClock(pages.flat())),
+        relations: await withAgreement(withAffiliate(withStageClock(pages.flat()), pages.flat(), await affiliateNamesFor(pages.flat()))),
         counts: countByStage,
         perStage: board.perStage,
         page: board.page,
@@ -310,7 +335,7 @@ export async function GET(request: Request) {
 
     if (!paged) {
       const relations = await prisma.mentorshipRelation.findMany({ where, include, orderBy: { startDate: 'desc' } });
-      return NextResponse.json({ relations: await withAgreement(withStageClock(relations)) });
+      return NextResponse.json({ relations: await withAgreement(withAffiliate(withStageClock(relations), relations, await affiliateNamesFor(relations))) });
     }
 
     const [total, relations] = await Promise.all([
@@ -324,7 +349,7 @@ export async function GET(request: Request) {
       }),
     ]);
 
-    return NextResponse.json({ relations: await withAgreement(withStageClock(relations)), total, page, pageSize });
+    return NextResponse.json({ relations: await withAgreement(withAffiliate(withStageClock(relations), relations, await affiliateNamesFor(relations))), total, page, pageSize });
     });
   } catch (error) {
     console.error('Get mentorships error:', error);

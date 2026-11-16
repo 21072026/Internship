@@ -1,5 +1,6 @@
 'use client';
 
+import { AffiliateSourceBadge } from '@/components/AffiliateSourceBadge';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -45,6 +46,8 @@ interface Relation {
   trialEndsAt?: string | null;
   mentee: { id: string; fullName: string; university?: string };
   mentor: { id: string; fullName: string };
+  /** The affiliate partner behind the lead, named by GET /api/mentorship (#3647). */
+  affiliatePartner?: string | null;
   _count: { interactions: number };
 }
 
@@ -316,6 +319,7 @@ export default function AdminBoardPage() {
         {r.mentee.university && (
           <p className="text-xs text-gray-500 truncate mt-0.5">{r.mentee.university}</p>
         )}
+        <AffiliateSourceBadge partnerName={r.affiliatePartner} className="mt-1 text-[10px]" />
         <div className="flex items-center gap-3 text-xs text-gray-400 mt-2">
           <span className="flex items-center gap-1 truncate" data-testid="board-card-owner">
             {/* Whose record it is, at a glance (#3658): the owner's initials. */}

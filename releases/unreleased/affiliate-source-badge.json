@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "**Affiliate:** a lead that came in through a partner's link (Source `affiliate:<code>`) shows an \"Affiliate: <partner>\" badge on the sales lead page and on the board card (`AffiliateSourceBadge`); the partner is resolved by (org, code) from the org's own `AffiliatePartner` (`src/lib/affiliateLeadSource.ts`, the code rule pure in `affiliateSourceRule.ts`), so a code never names another org's partner. `GET /api/mentorship` adds `affiliatePartner` for staff readers only and strips the lead's source. The partner portal (`/affiliate`) gets a \"Leads you brought\" card: the count and the stage distribution — counts only, no lead name, contact or account, never another partner's or another org's leads (#3647).",
+  "notes": {
+    "en": ["Leads that came in through an affiliate link now show which partner brought them, and partners see in their portal how many leads they brought and at which stage."],
+    "tr": ["Affiliate bağlantısıyla gelen lead'lerde artık hangi partnerin getirdiği görünüyor; partnerler de portallarında kaç lead getirdiklerini ve bu lead'lerin hangi aşamada olduğunu görüyor."],
+    "de": ["Leads, die über einen Affiliate-Link kamen, zeigen jetzt, welcher Partner sie gebracht hat, und Partner sehen in ihrem Portal, wie viele Leads sie gebracht haben und in welcher Phase diese sind."]
+  }
+}

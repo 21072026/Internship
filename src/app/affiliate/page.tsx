@@ -12,6 +12,8 @@ import { CopyLink } from './CopyLink';
 import { FunnelCard } from './FunnelCard';
 import { CampaignsCard, EarningsPerClickCard, TrendCard } from './PerformanceCard';
 import { ThresholdCard } from './ThresholdCard';
+import { partnerLeadsByStage } from '@/lib/affiliateLeadSource';
+import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 
 // The partner portal's home (docs/affiliate-module.md, #3117): the referral link
 // (the click-counting /r/<code> link with the direct one beside it, #3541),
@@ -34,12 +36,19 @@ export default async function AffiliateHomePage({ searchParams }: { searchParams
     );
   }
 
-  const [summary, plan, funnel, endingSoon] = await Promise.all([
+  const [summary, plan, funnel, endingSoon, leads, stages] = await Promise.all([
     partnerSummary(portal.partner),
     partnerPlanTerms(portal.partner),
     partnerFunnel(portal.partner, (await searchParams).period),
     partnerWindowsEndingSoon(portal.partner),
+    // The leads this partner brought, by stage (#3647): counts only — no name,
+    // contact or account reaches the partner (affiliateLeadSource.ts).
+    partnerLeadsByStage(portal.partner),
+    resolvePipelineStages(portal.partner.orgId, locale),
   ]);
+  const leadStages = stages
+    .filter((s) => (leads.byStage.get(s.key) ?? 0) > 0)
+    .map((s) => ({ key: s.key, label: stageLabel(stages, s.key, locale), count: leads.byStage.get(s.key) ?? 0 }));
   const money = (minor: number) => formatMinorAmount(minor, AFFILIATE_CURRENCIES[0], locale);
   const tiles: [string, string, string][] = [
     ['customers', L.customersCount, String(summary.customers)],
@@ -107,6 +116,28 @@ export default async function AffiliateHomePage({ searchParams }: { searchParams
           ))}
         </div>
       </section>
+
+      <Card data-testid="affiliate-leads">
+        <CardHeader>
+          <CardTitle>{L.leadsTitle}</CardTitle>
+        </CardHeader>
+        <p className="text-sm text-gray-700 dark:text-gray-300" data-testid="affiliate-leads-count">
+          {interpolate(L.leadsCount, { n: String(leads.leads) })}
+        </p>
+        {leadStages.length > 0 ? (
+          <ul className="mt-3 divide-y divide-gray-100 text-sm dark:divide-gray-800" data-testid="affiliate-leads-stages" aria-label={L.leadsByStage}>
+            {leadStages.map((st) => (
+              <li key={st.key} className="flex items-center justify-between py-1.5" data-testid={`affiliate-leads-stage-${st.key}`}>
+                <span className="text-gray-700 dark:text-gray-300">{st.label}</span>
+                <span className="font-semibold text-gray-900 dark:text-gray-100">{st.count}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-gray-500" data-testid="affiliate-leads-empty">{L.leadsEmpty}</p>
+        )}
+        <p className="mt-3 text-xs text-gray-500">{L.leadsPrivacy}</p>
+      </Card>
 
       {funnel.threshold && <ThresholdCard threshold={funnel.threshold} locale={locale} L={L} />}
 
