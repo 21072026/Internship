@@ -8,6 +8,7 @@ import { canWriteSalesRecord } from '@/lib/salesBook';
 import { findLeadOwner, LEAD_OWNER_ROLES } from '@/lib/leadOwner';
 import { transferMentorship } from '@/lib/mentorTransfer';
 import { nextActionPatch, parseNextActionDate } from '@/lib/nextActionRule';
+import { followUpEventWrite } from '@/lib/followUpEvents';
 import { notify, notifyIfAllowed } from '@/lib/notify';
 import { getDictionary } from '@/i18n/dictionaries';
 import { defaultLocale, isLocale } from '@/i18n/config';
@@ -120,14 +121,36 @@ export async function handOffLead(opts: {
 
   // The follow-up columns of the record the recipient now owns. Through the
   // shared patch, so a new day re-arms the due-day reminder.
-  const current = await prisma.mentorshipRelation.findUnique({ where: { id: newId }, select: { nextActionAt: true } });
-  await prisma.mentorshipRelation.update({
+  const current = await prisma.mentorshipRelation.findUnique({
     where: { id: newId },
-    data: nextActionPatch(current ?? { nextActionAt: null }, {
-      nextActionAt: due.value,
-      nextActionNote: composed.value,
-    }),
+    select: { nextActionAt: true, nextActionNote: true, updatedAt: true },
   });
+  const before = { at: current?.nextActionAt ?? null, note: current?.nextActionNote ?? null };
+  // ONE history line for the hand-off (#3819), carrying the follow-up it set —
+  // not a "handed off" plus an "assigned" for the same click. In the same
+  // transaction as the columns it describes.
+  await prisma.$transaction([
+    prisma.mentorshipRelation.update({
+      where: { id: newId },
+      data: nextActionPatch(current ?? { nextActionAt: null }, {
+        nextActionAt: due.value,
+        nextActionNote: composed.value,
+      }),
+    }),
+    followUpEventWrite({
+      relationId: newId,
+      facts: {
+        kind: 'HANDED_OFF',
+        fromAt: before.at,
+        toAt: due.value,
+        fromNote: before.note,
+        toNote: composed.value,
+      },
+      recordUpdatedAt: current?.updatedAt ?? new Date(0),
+      actorId,
+      owners: { from: relation.mentorId, to: recipient.id },
+    }),
+  ]);
 
   const menteeName = relation.mentee.fullName;
   if (recipient.id !== actorId) {

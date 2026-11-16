@@ -579,6 +579,8 @@ function scrubFreeTextOps(userId: string, now: Date): Prisma.PrismaPromise<unkno
     }),
     prisma.statusChange.updateMany({ where: asSubject, data: { reasonNote: null } }),
     prisma.relationLifecycleEvent.updateMany({ where: asSubject, data: { reasonNote: null } }),
+    // The owner's follow-up lines about them (#3819): the dates stay, the prose goes.
+    prisma.followUpEvent.updateMany({ where: asSubject, data: { fromNote: null, toNote: null } }),
     // The pair's agreed next steps (#1795): prose about the pairing whose subject they are.
     prisma.mentorshipRelation.updateMany({ where: { menteeId: userId }, data: { closurePlan: null } }),
     prisma.companyInterest.updateMany({ where: { menteeId: userId }, data: { note: null } }),

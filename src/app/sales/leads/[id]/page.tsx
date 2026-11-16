@@ -26,6 +26,7 @@ import { LeadContactEditor } from '@/components/sales/LeadContactEditor';
 import { shownEmail } from '@/lib/leadEmail';
 import { LeadPageHandoff } from '@/components/sales/LeadPageHandoff';
 import { earlierPeriods, currentSuccessor } from '@/lib/leadJourney';
+import { followUpEventsFor } from '@/lib/followUpEvents';
 
 // One of the rep's own records (#2580): who the lead is, the account behind it,
 // its stage, the follow-up, trial-end and estimated-value (#2422) editors, what happened last and a
@@ -102,7 +103,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   const writable = await canWriteSalesRecord(session, relation);
   const ownersView = writable || canSeeNextAction({ id: session.user.id, role: session.user.role }, relation);
 
-  const [company, lastContact, interactions, earlier, successor] = await Promise.all([
+  const [company, lastContact, interactions, earlier, successor, followUpEvents] = await Promise.all([
     relation.companyId
       ? prisma.company.findFirst({
           where: withinTenant({ id: relation.companyId }, tenant),
@@ -120,6 +121,9 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
     }),
     earlierPeriods(relation),
     relation.status === 'ACTIVE' ? null : currentSuccessor(relation),
+    // The follow-up's history (#3819) carries the owner's notes: only for the
+    // viewers who may read the follow-up itself.
+    ownersView ? followUpEventsFor(relation.id) : [],
   ]);
   // The banner's link only when this viewer may open the current record (the same read as this page).
   const successorOpens =
@@ -131,6 +135,32 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   const stages = await resolvePipelineStages(session.user.orgId, locale);
   const date = (value: Date) => formatDate(value, locale);
   const iso = (value: Date | null) => (value ? value.toISOString() : null);
+  // One follow-up as a phrase: its day, its note, or both.
+  const followUpText = (at: Date | null, note: string | null) =>
+    [at ? date(at) : null, note].filter(Boolean).join(' — ') || s.followUpEvent.noDate;
+  const systemEvents = followUpEvents.map((e) => {
+    const someone = s.followUpEvent.someone;
+    const fill = (tpl: string, from: string, to: string) => tpl.replace('{from}', () => from).replace('{to}', () => to);
+    const headline =
+      e.kind === 'ASSIGNED'
+        ? fill(s.followUpEvent.assigned, '', followUpText(e.toAt, e.toNote))
+        : e.kind === 'CHANGED'
+          ? fill(s.followUpEvent.changed, followUpText(e.fromAt, e.fromNote), followUpText(e.toAt, e.toNote))
+          : e.kind === 'COMPLETED'
+            ? s.followUpEvent.completed
+            : e.kind === 'CLEARED'
+              ? s.followUpEvent.cleared
+              : fill(s.followUpEvent.handedOff, e.fromName ?? someone, e.toName ?? someone);
+    const detail =
+      e.kind === 'HANDED_OFF'
+        ? fill(s.followUpEvent.handedOffFollowUp, '', followUpText(e.toAt, e.toNote))
+        : e.kind === 'COMPLETED' || e.kind === 'CLEARED'
+          ? e.fromAt || e.fromNote
+            ? followUpText(e.fromAt, e.fromNote)
+            : null
+          : null;
+    return { id: e.id, at: e.createdAt.toISOString(), headline, detail, by: e.actorName ?? someone };
+  });
   // Never the `@import.local` stand-in: the account's address, else none.
   const leadEmail = shownEmail(relation.mentee.email, company?.contactEmail);
   // A colleague's record: the contact's name, never their e-mail or phone.
@@ -240,6 +270,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
             relationId={relation.id}
             canLog={canLog}
             interactions={interactions.map((i) => ({ id: i.id, date: i.date.toISOString(), type: i.type, subject: i.subject, notes: i.notes }))}
+            systemEvents={systemEvents}
             earlierPeriods={earlier.map((p) => ({
               relationId: p.relationId,
               ownerName: p.ownerName,

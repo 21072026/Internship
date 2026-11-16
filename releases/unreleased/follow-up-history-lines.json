@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Follow-up history (#3819): every change to a record's follow-up — set, moved, completed, removed, handed over — writes one `FollowUpEvent` row (new model, `src/lib/followUpEvents.ts`, rule in `src/lib/followUpEventRule.ts`) in the same transaction as the follow-up columns, idempotent on `(relationId, dedupeKey)`. The sales lead page shows them as muted system lines among the interactions. Deliberately not `InteractionLog` rows: a follow-up is not a contact (last-contact rule, counters, billing meter) and its note stays hidden from the mentee.",
+  "notes": {
+    "en": ["The lead page now shows what happened to the follow-up — set, moved, completed, removed or handed over — as system lines in the interaction list."],
+    "tr": ["Lead sayfası artık takibin ne olduğunu — atandı, değişti, tamamlandı, silindi ya da devredildi — etkileşim listesinde sistem satırı olarak gösteriyor."],
+    "de": ["Die Lead-Seite zeigt jetzt in der Interaktionsliste als Systemzeilen, was mit der Wiedervorlage passiert ist — gesetzt, verschoben, erledigt, entfernt oder übergeben."]
+  }
+}

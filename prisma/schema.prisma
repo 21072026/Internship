@@ -1037,6 +1037,7 @@ model User {
   statusChanges                     StatusChange[]                 @relation("StatusChangedBy")
   relationLifecycleEvents           RelationLifecycleEvent[]       @relation("RelationLifecycleChangedBy")
   authoredInteractions              InteractionLog[]               @relation("InteractionAuthor")
+  followUpEventsActed               FollowUpEvent[]                @relation("FollowUpEventActor")
   passwordResetTokens               PasswordResetToken[]
   emailVerificationTokens           EmailVerificationToken[]
   tags                              UserTag[]                      @relation("UserTags")
@@ -4603,6 +4604,7 @@ model MentorshipRelation {
   interactions          InteractionLog[]
   statusChanges         StatusChange[]
   lifecycleEvents       RelationLifecycleEvent[]
+  followUpEvents        FollowUpEvent[]
   agreementAcceptances  MentoringAgreementAcceptance[]
   slaBreaches           SlaBreach[]
   meetings              Meeting[]
@@ -5774,6 +5776,45 @@ model RelationLifecycleEvent {
 
   @@index([relationId])
   @@index([changedById])
+}
+
+// One row per change to a relation's follow-up (#3819): assigned, moved,
+// cleared, completed, or set by a hand-off. The record's history shows these
+// as system lines next to the interactions — deliberately NOT InteractionLog
+// rows: that table is read by the mentee's own journey (the follow-up note is
+// the owner's working prose, hidden from the mentee — stripNextActionFor), by
+// the last-contact rule (a follow-up is not a contact) and by the billing meter.
+// Written ONLY through src/lib/followUpEvents.ts, in the same transaction as
+// the follow-up columns. The kind vocabulary and the diff live in
+// src/lib/followUpEventRule.ts; the row stores facts, never rendered text, so
+// each reader sees it in their own language. Tenant data reached through its
+// relation, like StatusChange: no orgId and no TENANT_MODELS entry.
+model FollowUpEvent {
+  id         String    @id @default(cuid())
+  relationId String
+  // ASSIGNED | CHANGED | CLEARED | COMPLETED | HANDED_OFF (followUpEventRule.ts).
+  kind       String    @db.VarChar(24)
+  fromAt     DateTime?
+  toAt       DateTime?
+  fromNote   String?   @db.VarChar(280)
+  toNote     String?   @db.VarChar(280)
+  // HANDED_OFF only: the owner before and after. Plain ids, no foreign key —
+  // an erased account simply no longer resolves and reads as "someone".
+  fromUserId String?
+  toUserId   String?
+  // Who did it; null once that account is erased.
+  actorId    String?
+  // Idempotency: a retried or double-clicked write produces the same key
+  // (it includes the relation's updatedAt BEFORE the write), so it is one row.
+  dedupeKey  String    @db.VarChar(191)
+  createdAt  DateTime  @default(now())
+
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  actor    User?              @relation("FollowUpEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@unique([relationId, dedupeKey])
+  @@index([relationId, createdAt])
+  @@index([actorId])
 }
 
 model InvitationToken {
