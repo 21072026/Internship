@@ -9,6 +9,7 @@ import { WinBackPanel } from '@/components/WinBackPanel';
 import { DealValuePanel, type DealValueState } from '@/components/DealValuePanel';
 import { LostTrialOpenNotice } from '@/components/LostTrialOpen';
 import { openInteractionDraft } from './interactionDraft';
+import type { InteractionType } from '@/lib/interactionTypes';
 
 // The editors a sales rep has on their own record (#2580): the follow-up
 // (#2563, PUT /api/mentorship/[id] — owner or ADMIN) and the trial end (#2553,
@@ -25,13 +26,14 @@ import { openInteractionDraft } from './interactionDraft';
 // one column in that order. A panel that does not render for the record's stage
 // is `empty:hidden`, so it leaves no gap in its column.
 // The follow-up offers quick dates (#3739) and "Complete" (#3740), which opens
-// the interaction form with the follow-up's note as a call.
+// the interaction form with the follow-up's note, typed after the hand-off's pick (#3821).
 export function SalesRecordPanels({
   relationId,
   status,
   pipelineStatus,
   nextActionAt,
   nextActionNote,
+  followUpType = 'Call',
   trialStartedAt,
   trialEndsAt,
   contractEndsAt,
@@ -48,6 +50,12 @@ export function SalesRecordPanels({
   pipelineStatus: string;
   nextActionAt: string | null;
   nextActionNote: string | null;
+  /**
+   * The type "Complete follow-up" opens the interaction form with: the board
+   * hand-off's pick when the note came from one, else a call (#3821). Read on
+   * the server, where every locale's pick labels are at hand.
+   */
+  followUpType?: InteractionType;
   trialStartedAt: string | null;
   trialEndsAt: string | null;
   contractEndsAt: string | null;
@@ -95,7 +103,7 @@ export function SalesRecordPanels({
           readOnly={readOnly}
           onComplete={
             !readOnly && status === 'ACTIVE'
-              ? (note, clear) => openInteractionDraft({ type: 'Call', notes: note ?? '', onLogged: clear })
+              ? (note, clear) => openInteractionDraft({ type: followUpType, notes: note ?? '', onLogged: clear })
               : undefined
           }
         />

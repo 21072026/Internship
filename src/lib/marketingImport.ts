@@ -964,6 +964,17 @@ export function leadContactKey(
   return phoneKey ? `tel.${phoneKey}` : '';
 }
 
+/**
+ * The lead person's name when the row names no contact (#3821): the contact
+ * e-mail key, which a person can read and search for — but never a phone key
+ * (`tel.<digits>`, see `leadContactKey`): a lead keyed on its phone is named
+ * after its account instead, and only a row with neither keeps the key.
+ */
+export function leadFallbackName(contactKey: string, accountName: string): string {
+  if (!contactKey.startsWith('tel.')) return contactKey;
+  return accountName.trim() || contactKey;
+}
+
 function blankToUndefined(value: string): string | undefined {
   return value.length > 0 ? value : undefined;
 }
@@ -1501,7 +1512,10 @@ function planFunnel(
     // A contact with no name: the merchant's own address is the only name there
     // is — the real one, not the stand-in, because `fullName` is what a person
     // reads. Better a findable lead than a blank `fullName` on a required column.
-    leadChanges = { ...incomingLead, fullName: value.contactName || emailKey };
+    // A lead keyed on its PHONE (#3647) has no address: its key is
+    // `tel.<digits>`, which is not a name, so the account's name stands in
+    // (#3821 — the board showed the phone number as the lead's name).
+    leadChanges = { ...incomingLead, fullName: value.contactName || leadFallbackName(emailKey, value.name) };
     leadChanged = Object.keys(leadChanges).filter((f) => leadChanges[f as keyof MarketingLeadWrite] !== undefined);
   }
 

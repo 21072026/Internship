@@ -9,6 +9,7 @@ import { TEXT_LIMITS } from '@/lib/textLimits';
 import { logger } from '@/lib/logger';
 import { createMarketingAccount } from '@/lib/marketingImportStore';
 import { findLeadOwner, resolveDefaultLeadOwner } from '@/lib/leadOwner';
+import { resolveNewLeadNames } from '@/lib/newLeadNameRule';
 
 // One lead / account typed in by hand (#2562) — the phone call, the trade-fair
 // badge, the LinkedIn message.
@@ -39,7 +40,8 @@ import { findLeadOwner, resolveDefaultLeadOwner } from '@/lib/leadOwner';
 // Generous caps: the import validator enforces the real per-column limits
 // (src/lib/textLimits.ts through FIELD_LIMITS) and reports the field by name.
 const bodySchema = z.object({
-  name: z.string().trim().min(1).max(TEXT_LIMITS.companyName),
+  // Company OR contact name (#3821, the dialog's rule): `resolveNewLeadNames` below.
+  name: z.string().trim().max(TEXT_LIMITS.companyName).optional(),
   country: z.string().trim().max(TEXT_LIMITS.companyCountry).optional(),
   vatId: z.string().trim().max(TEXT_LIMITS.companyVatId).optional(),
   contactName: z.string().trim().max(TEXT_LIMITS.companyContactName).optional(),
@@ -88,7 +90,12 @@ async function handlePost(request: Request) {
     );
   }
 
-  const { ownerId, ...fields } = parsed.data;
+  const names = resolveNewLeadNames(parsed.data);
+  if (!names.ok) {
+    return NextResponse.json({ code: names.code, error: 'A company name or a contact name is required' }, { status: 400 });
+  }
+  const { ownerId, ...rest } = parsed.data;
+  const fields = { ...rest, name: names.name, contactName: names.contactName };
   let owner = ownerId ? await findLeadOwner(orgId, ownerId) : null;
   if (ownerId && !owner) {
     return NextResponse.json(

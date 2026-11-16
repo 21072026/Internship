@@ -52,3 +52,29 @@ test('its own reason code, not an admin one', () => {
 test('todayIso is the UTC calendar day', () => {
   assert.equal(todayIso(Date.UTC(2026, 10, 13, 23, 59)), '2026-11-13');
 });
+
+// "Complete follow-up" opens the interaction form on the hand-off's pick (#3821).
+const { followUpInteractionType, handoffActionFromNote } = await import('../../src/lib/leadHandoffRule.ts');
+
+const LABELS = [
+  { call: 'Call', email: 'Send an e-mail', meeting: 'Book an appointment', demo: 'Give an app demo', other: 'Something else' },
+  { call: 'Telefonla aranacak', email: 'E-posta atılacak', meeting: 'Randevu yapılacak', demo: 'Uygulama demosu yapılacak', other: 'Başka bir şey' },
+];
+
+test('the follow-up type follows the hand-off pick, in any language', () => {
+  assert.equal(followUpInteractionType('Send an e-mail', LABELS), 'Email');
+  assert.equal(followUpInteractionType('Randevu yapılacak: Salı öğleden sonra', LABELS), 'Meeting');
+  assert.equal(followUpInteractionType('Uygulama demosu yapılacak', LABELS), 'Meeting');
+  assert.equal(followUpInteractionType('Call: ask about the trial', LABELS), 'Call');
+  assert.equal(handoffActionFromNote('E-posta atılacak: teklif', LABELS), 'email');
+});
+
+test('a note that names no pick opens a call', () => {
+  assert.equal(followUpInteractionType(null, LABELS), 'Call');
+  assert.equal(followUpInteractionType('', LABELS), 'Call');
+  // `other` stores the free text alone; a rep's own note is the same.
+  assert.equal(followUpInteractionType('Send the brochure next week', LABELS), 'Call');
+  // A label inside a word is not the label.
+  assert.equal(followUpInteractionType('Callback later', LABELS), 'Call');
+  assert.equal(handoffActionFromNote('Callback later', LABELS), null);
+});

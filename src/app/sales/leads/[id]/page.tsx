@@ -17,6 +17,9 @@ import { getLastContacts } from '@/lib/lastContact';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { formatDate } from '@/lib/relativeTime';
 import { getServerDictionary } from '@/i18n/server';
+import { getDictionary } from '@/i18n/dictionaries';
+import { locales } from '@/i18n/config';
+import { followUpInteractionType } from '@/lib/leadHandoffRule';
 import { Card, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { SalesRecordPanels } from '@/components/sales/SalesRecordPanels';
@@ -223,6 +226,10 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
         pipelineStatus={relation.pipelineStatus}
         nextActionAt={ownersView ? iso(relation.nextActionAt) : null}
         nextActionNote={ownersView ? relation.nextActionNote : null}
+        followUpType={followUpInteractionType(
+          relation.nextActionNote,
+          locales.map((l) => getDictionary(l).leadHandoff.actions),
+        )}
         trialStartedAt={iso(relation.trialStartedAt)}
         trialEndsAt={iso(relation.trialEndsAt)}
         contractEndsAt={ownersView ? iso(relation.contractEndsAt) : null}

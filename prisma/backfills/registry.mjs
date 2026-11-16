@@ -172,4 +172,15 @@ export const BACKFILLS = [
   // rows (skipDuplicates), so a re-run reports created=0. AFTER the push: it
   // writes the CompanyMembership table the push creates.
   { id: '0037-company-memberships', script: 'scripts/backfill-company-memberships.mjs', once: false, optional: true, why: ALWAYS_OPTIONAL },
+  // Phone-keyed leads named "tel.<digits>" before #3821 get their account's
+  // name. Only a row whose name is exactly the stand-in's own key is touched,
+  // so a re-run finds nothing.
+  {
+    id: '0038-lead-phone-names',
+    script: 'prisma/backfill-lead-phone-names.mjs',
+    args: ['--apply'],
+    once: false,
+    optional: true,
+    why: 'A display name only: a failed run leaves the old "tel.…" names, exactly as before #3821.',
+  },
 ];

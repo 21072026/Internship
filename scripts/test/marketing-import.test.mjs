@@ -1447,7 +1447,7 @@ test('contract_ends_at on a row that is not DEAL_WON is an ERROR, never a silent
 
 // ── A phone-only lead, typed by a rep (#3647) ───────────────────────────────
 
-const { leadContactKey, leadStandInEmail: phoneStandIn } = await import('../../src/lib/marketingImport.ts');
+const { leadContactKey, leadStandInEmail: phoneStandIn, leadFallbackName } = await import('../../src/lib/marketingImport.ts');
 
 test('the lead key: the address first; the phone only when the caller allows it', () => {
   // An address always wins, fallback or not.
@@ -1466,4 +1466,15 @@ test('the lead key: the address first; the phone only when the caller allows it'
   // Too short to be a phone, or nothing at all: no key.
   assert.equal(leadContactKey({ contactPhone: '12' }, true), '');
   assert.equal(leadContactKey({}, true), '');
+});
+
+test('a nameless lead keyed on its phone is named after its account, never after the number (#3821)', () => {
+  // An address key stays the name — a person can read and search for it.
+  assert.equal(leadFallbackName('buyer@acme.example', 'Acme Sales'), 'buyer@acme.example');
+  // A phone key is not a name: the account's name stands in.
+  const key = leadContactKey({ contactPhone: '+49 30 1234567' }, true);
+  assert.equal(leadFallbackName(key, 'Acme Sales'), 'Acme Sales');
+  assert.equal(leadFallbackName(key, '  Acme Sales  '), 'Acme Sales');
+  // Only with no account name at all does the key survive (a required column needs a value).
+  assert.equal(leadFallbackName(key, ''), key);
 });
