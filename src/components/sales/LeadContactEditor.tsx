@@ -23,10 +23,10 @@ export interface LeadContact {
   position: string | null;
 }
 
-function Row({ label, value, testId, href, onOpen, custom }: { label: string; value: string | null; testId: string; href?: string; onOpen?: () => void; custom?: ReactNode }) {
+function Row({ label, value, testId, href, onOpen, custom, wide }: { label: string; value: string | null; testId: string; href?: string; onOpen?: () => void; custom?: ReactNode; wide?: boolean }) {
   if (!value) return null;
   return (
-    <div data-testid={testId}>
+    <div data-testid={testId} className={wide ? 'col-span-2' : undefined}>
       <dt className="text-xs text-gray-500">{label}</dt>
       <dd className="break-words text-sm text-gray-900 dark:text-gray-100">
         {custom ? (
@@ -57,10 +57,13 @@ export function LeadContactEditor({
   initial,
   canEdit,
   logOnContact = false,
+  title,
 }: {
   relationId: string;
   initial: LeadContact;
   canEdit: boolean;
+  /** The card's heading: drawn here so "Edit contact" can sit on its line, at the right (#3803). */
+  title?: ReactNode;
   /**
    * The phone/e-mail links also log the contact (#3741). The e-mail link opens an
    * interaction draft; the phone link asks "Did you reach them?" (#3748, the
@@ -107,6 +110,14 @@ export function LeadContactEditor({
     }
   }
 
+  const header = (edit?: ReactNode) =>
+    title || edit ? (
+      <div className="mb-3 flex items-center justify-between gap-3 border-b border-gray-100 pb-3 dark:border-gray-800">
+        {title}
+        {edit}
+      </div>
+    ) : null;
+
   if (editing) {
     const field = (key: keyof typeof form, label: string, max: number, type = 'text') => (
       <Input
@@ -120,6 +131,8 @@ export function LeadContactEditor({
       />
     );
     return (
+      <div>
+      {header()}
       <div className="space-y-3" data-testid="sales-lead-contact-form">
         {field('name', s.contactName, TEXT_LIMITS.companyContactName)}
         {field('position', s.contactPosition, TEXT_LIMITS.companyContactPosition)}
@@ -148,24 +161,27 @@ export function LeadContactEditor({
           </Button>
         </div>
       </div>
+      </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div>
+      {header(
+        canEdit ? (
+          <Button size="sm" variant="secondary" onClick={() => setEditing(true)} data-testid="sales-lead-contact-edit">
+            {s.contactEdit}
+          </Button>
+        ) : undefined,
+      )}
       {empty ? (
         <p className="text-sm text-gray-500" data-testid="sales-lead-contact-empty">{s.contactEmpty}</p>
       ) : (
-        <dl className="grid grid-cols-1 gap-4" data-testid="sales-lead-contact-person">
+        // Compact (#3803): two columns — name and position, then the phone — and the
+        // e-mail on a line of its own, since it is the long one.
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-3" data-testid="sales-lead-contact-person">
           <Row label={s.contactName} value={initial.name} testId="sales-lead-contact-name" />
           <Row label={s.contactPosition} value={initial.position} testId="sales-lead-contact-position" />
-          <Row
-            label={s.email}
-            value={initial.email}
-            testId="sales-lead-email"
-            href={initial.email ? `mailto:${initial.email}` : undefined}
-            onOpen={onContact ? () => onContact('Email') : undefined}
-          />
           <Row
             label={s.phone}
             value={initial.phone}
@@ -194,12 +210,15 @@ export function LeadContactEditor({
               ) : undefined
             }
           />
+          <Row
+            wide
+            label={s.email}
+            value={initial.email}
+            testId="sales-lead-email"
+            href={initial.email ? `mailto:${initial.email}` : undefined}
+            onOpen={onContact ? () => onContact('Email') : undefined}
+          />
         </dl>
-      )}
-      {canEdit && (
-        <Button size="sm" variant="secondary" onClick={() => setEditing(true)} data-testid="sales-lead-contact-edit">
-          {s.contactEdit}
-        </Button>
       )}
     </div>
   );

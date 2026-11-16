@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useLocale } from '@/i18n/client';
-import { formatDateTime, relativeTime } from '@/lib/relativeTime';
+import { formatDate, formatDateTime, isDayOnly, relativeDay, relativeTime } from '@/lib/relativeTime';
 
 // "5 dk. önce" on the screen, "25.08.2026 16:30" on hover.
 //
@@ -50,10 +50,16 @@ interface Props {
   /** `'short'` ("5 dk. önce") unless the sentence around it wants the long form. */
   style?: Intl.RelativeTimeFormatStyle;
   className?: string;
+  /**
+   * `'day'` counts calendar days ("today", "yesterday", "3 days ago") for a list
+   * that mixes date-only values with instants (#3803); a date-only value then
+   * hovers as a date, not as midnight.
+   */
+  granularity?: 'instant' | 'day';
   'data-testid'?: string;
 }
 
-export function RelativeTime({ date, locale, title, style = 'short', className, 'data-testid': testId }: Props) {
+export function RelativeTime({ date, locale, title, style = 'short', className, granularity = 'instant', 'data-testid': testId }: Props) {
   const appLocale = useLocale();
   const lang = locale ?? appLocale;
   const [now, setNow] = useState(() => Date.now());
@@ -73,12 +79,12 @@ export function RelativeTime({ date, locale, title, style = 'short', className, 
     <time
       key={hydrated ? 'client' : 'server'}
       dateTime={d.toISOString()}
-      title={title ?? (hydrated ? formatDateTime(d, lang) : undefined)}
+      title={title ?? (hydrated ? (granularity === 'day' && isDayOnly(d) ? formatDate(d, lang) : formatDateTime(d, lang)) : undefined)}
       className={className}
       data-testid={testId}
       suppressHydrationWarning
     >
-      {relativeTime(d, lang, { style, now })}
+      {granularity === 'day' ? relativeDay(d, lang, { style, now }) : relativeTime(d, lang, { style, now })}
     </time>
   );
 }
