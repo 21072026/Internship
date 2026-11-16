@@ -327,6 +327,11 @@ test('the rep logs the call they just made from the lead page', { tag: '@smoke' 
   await form.locator('textarea').fill(note);
   await form.locator('button[type="submit"]').click();
   await expect(strip.getByTestId('sales-lead-interactions')).toContainText(note);
+  // #3803: a row says how long ago in calendar days — the form logs a day, so never "N hours ago";
+  // the exact date is one hover away. (Around midnight the form's UTC day may read as yesterday.)
+  const row = strip.getByTestId('sales-lead-interaction-row').first();
+  await expect(row.locator('time')).toHaveText(/^(today|yesterday)$/);
+  await expect(row.locator('time')).toHaveAttribute('title', /\d/);
   // The separate one-line "Last interaction" box is gone: the newest entry is the card's first row.
   await expect(page.getByTestId('sales-lead-last-interaction')).toHaveCount(0);
   const logged = await prisma.interactionLog.findMany({ where: { relationId: ids.followUpRelationId } });

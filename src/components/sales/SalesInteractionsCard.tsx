@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import { MessageSquare } from 'lucide-react';
 import { AddInteractionForm, type InteractionFormDraft } from '@/components/AddInteractionForm';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
-import { useLocale, useT } from '@/i18n/client';
-import { formatDate } from '@/lib/relativeTime';
+import { useT } from '@/i18n/client';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { contentLang } from '@/lib/contentLanguage';
 import { INTERACTION_DRAFT_EVENT, isTypingTarget, type InteractionDraftRequest } from './interactionDraft';
 
@@ -19,6 +19,12 @@ import { INTERACTION_DRAFT_EVENT, isTypingTarget, type InteractionDraftRequest }
 // The form opens pre-set from elsewhere on the page (interactionDraft.ts): the
 // follow-up's "Complete" (#3740), the contact's phone/e-mail links (#3741) and
 // the N key (#3742). Posting stays POST /api/interactions (owner-checked).
+//
+// A row is two lines (#3803): the type, the headline and how long ago on the
+// first, the note — one line, clipped — on the second; a click opens the whole
+// note. Rows are divided by a hairline, so one entry cannot run into the next.
+// The distance is in calendar days (relativeDay): the form logs a day, the
+// call prompt an instant, and "15 hours ago" would invent a time for the first.
 
 export interface LeadInteraction {
   id: string;
@@ -33,9 +39,15 @@ const FIRST_ROWS = 3;
 export function SalesInteractionsCard({ relationId, canLog, interactions }: { relationId: string; canLog: boolean; interactions: LeadInteraction[] }) {
   const t = useT();
   const s = t.sales.lead;
-  const locale = useLocale();
   const router = useRouter();
   const [showAll, setShowAll] = useState(false);
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
+  const toggle = (id: string) =>
+    setOpened((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
   const [draft, setDraft] = useState<InteractionFormDraft | null>(null);
 
   useEffect(() => {
@@ -81,17 +93,37 @@ export function SalesInteractionsCard({ relationId, canLog, interactions }: { re
         <p className="mt-3 text-sm text-gray-500" data-testid="sales-lead-interactions-empty">{s.interactionsEmpty}</p>
       ) : (
         <>
-          <ul className="mt-3 space-y-3" data-testid="sales-lead-interactions">
-            {rows.map((i) => (
-              <li key={i.id} className="text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <InteractionTypeBadge type={i.type} />
-                  <span className="text-gray-500">{formatDate(i.date, locale)}</span>
-                </div>
-                {i.subject && <p className="mt-1 font-medium text-gray-900 dark:text-gray-100">{i.subject}</p>}
-                <p lang={contentLang(i.notes)} className="mt-0.5 line-clamp-2 text-gray-600 dark:text-gray-300">{i.notes}</p>
-              </li>
-            ))}
+          <ul className="mt-3 divide-y divide-gray-100 dark:divide-gray-800" data-testid="sales-lead-interactions">
+            {rows.map((i) => {
+              // Without a subject the note is the headline, and there is no second line.
+              const headline = i.subject || i.notes;
+              const detail = i.subject ? i.notes : '';
+              const open = opened.has(i.id);
+              return (
+                <li key={i.id} className="py-2 text-sm first:pt-0 last:pb-0" data-testid="sales-lead-interaction-row">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <InteractionTypeBadge type={i.type} />
+                    <span lang={i.subject ? undefined : contentLang(i.notes)} className="min-w-0 flex-1 truncate font-medium text-gray-900 dark:text-gray-100" title={headline}>
+                      {headline}
+                    </span>
+                    <RelativeTime date={i.date} granularity="day" className="shrink-0 text-xs text-gray-500 dark:text-gray-400" />
+                  </div>
+                  {detail && (
+                    <button
+                      type="button"
+                      lang={contentLang(detail)}
+                      onClick={() => toggle(i.id)}
+                      aria-expanded={open}
+                      title={open ? undefined : detail}
+                      className={`mt-0.5 block w-full text-left text-gray-600 dark:text-gray-300 ${open ? 'whitespace-pre-line break-words' : 'truncate'}`}
+                      data-testid="sales-lead-interaction-note"
+                    >
+                      {detail}
+                    </button>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           {interactions.length > FIRST_ROWS && (
             <button

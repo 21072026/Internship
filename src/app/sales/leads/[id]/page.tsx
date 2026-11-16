@@ -17,7 +17,7 @@ import { getLastContacts } from '@/lib/lastContact';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
 import { formatDate } from '@/lib/relativeTime';
 import { getServerDictionary } from '@/i18n/server';
-import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
+import { Card, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { SalesRecordPanels } from '@/components/sales/SalesRecordPanels';
 import { PlanMeetingButton } from '@/app/sales/calendar/PlanMeetingDialog';
@@ -216,21 +216,24 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
           />
         }
         contact={
-          <Card>
-            <CardHeader>
-              <CardTitle>{s.contact}</CardTitle>
-            </CardHeader>
+          <Card padding="sm">
             {/* The person — editable by the record's rep (#3655); the account and the date below are not.
                 The phone and e-mail are tel:/mailto: links that also log the contact: the e-mail opens an
                 interaction draft (#3741), the phone asks "Did you reach them?" (#3748). */}
-            <LeadContactEditor relationId={relation.id} initial={contact} canEdit={!!company && writable} logOnContact={canLog} />
-            <dl className="mt-4 grid grid-cols-1 gap-4 border-t border-gray-100 pt-4 dark:border-gray-800" data-testid="sales-lead-contact">
+            <LeadContactEditor
+              relationId={relation.id}
+              initial={contact}
+              canEdit={!!company && writable}
+              logOnContact={canLog}
+              title={<CardTitle className="text-base">{s.contact}</CardTitle>}
+            />
+            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-gray-100 pt-3 dark:border-gray-800" data-testid="sales-lead-contact">
               <Field label={s.owner} value={relation.mentor.fullName} testId="sales-lead-owner" />
               <Field label={s.company} value={company?.name} />
               <Field label={s.lastContact} value={lastContact ? date(lastContact) : null} testId="sales-lead-last-contact" />
               <Field label={s.since} value={date(relation.startDate)} hint={s.sinceHint} testId="sales-lead-since" />
             </dl>
-            <p className="mt-4 text-sm">
+            <p className="mt-3 text-sm">
               <Link href="/sales/board" className="text-blue-600 hover:underline">{s.openBoard}</Link>
             </p>
           </Card>

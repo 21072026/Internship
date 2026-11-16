@@ -15,7 +15,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
-const { relativeTime } = await import('../../src/lib/relativeTime.ts');
+const { relativeTime, relativeDay, isDayOnly } = await import('../../src/lib/relativeTime.ts');
 const { fillTemplate } = await import('../../src/components/ui/fillTemplate.ts');
 
 const NOW = new Date('2026-10-06T12:00:00Z');
@@ -62,4 +62,32 @@ test('fillTemplate puts an element into a translated sentence and keeps unknown 
     )
   );
   assert.equal(html, '<p>Son kullanım <b>x</b> · Ayşe · {other}</p>');
+});
+
+// relativeDay (#3803): calendar days, for the lead page's interactions, which
+// mix date-only values (the form) with instants (the call prompt).
+test('relativeDay counts calendar days, not hours', () => {
+  const now = new Date('2026-11-16T09:00:00Z');
+  const opts = { now, timeZone: 'Europe/Berlin' };
+  // A date-only value logged "for today" is today, not "9 hours ago".
+  assert.equal(relativeDay('2026-11-16T00:00:00.000Z', 'en', opts), 'today');
+  assert.equal(relativeDay('2026-11-15T00:00:00.000Z', 'en', opts), 'yesterday');
+  assert.equal(relativeDay('2026-11-13T00:00:00.000Z', 'en', opts), '3 days ago');
+  assert.equal(relativeDay('2026-11-15T00:00:00.000Z', 'tr', opts), 'dün');
+  assert.equal(relativeDay('2026-11-15T00:00:00.000Z', 'de', opts), 'gestern');
+  // An instant counts by the viewer's own day: 23:30 UTC on the 15th is 00:30 on the 16th in Berlin.
+  assert.equal(relativeDay('2026-11-15T23:30:00.000Z', 'en', opts), 'today');
+  assert.equal(relativeDay('2026-11-15T23:30:00.000Z', 'en', { now, timeZone: 'UTC' }), 'yesterday');
+  // Older entries move to months and years; a future day never reads "in …".
+  assert.equal(relativeDay('2026-09-01T00:00:00.000Z', 'en', opts), '3 months ago');
+  assert.equal(relativeDay('2024-11-01T00:00:00.000Z', 'en', opts), '2 years ago');
+  assert.equal(relativeDay('2026-11-20T00:00:00.000Z', 'en', opts), 'today');
+  assert.equal(relativeDay('not a date', 'en', opts), '');
+});
+
+test('isDayOnly: exactly UTC midnight is a calendar day', () => {
+  assert.equal(isDayOnly('2026-11-15T00:00:00.000Z'), true);
+  assert.equal(isDayOnly(new Date('2026-11-15')), true);
+  assert.equal(isDayOnly('2026-11-15T14:02:11.000Z'), false);
+  assert.equal(isDayOnly('nope'), false);
 });

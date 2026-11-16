@@ -15,12 +15,14 @@ import { openInteractionDraft } from './interactionDraft';
 // The page around them is a server component, so a save refreshes it — the
 // badges and the attention queue are server-rendered.
 //
-// Layout (#3737, the "action strip"): the two things a rep uses most sit side by
-// side at the top — the follow-up (what comes next) and the interactions (what
-// already happened, `interactions`). On a phone they stack in that order. The
-// date and value panels (trial end, win-back, contract end, estimated value) and
-// the contact card (`contact`) share the grid below; a panel that does not render
-// for the record's stage is `empty:hidden`, so it leaves no hole in the grid.
+// Layout (#3737, two columns since #3803): the left column is what the rep does —
+// the follow-up (what comes next) and the interactions (what already happened,
+// `interactions`), the "action strip". The right column is what the record is —
+// the date and value panels (trial end, win-back, contract end, estimated value)
+// and the contact card (`contact`), stacked. The columns grow independently, so a
+// long interaction list leaves no hole beside the short cards. On a phone it is
+// one column in that order. A panel that does not render for the record's stage
+// is `empty:hidden`, so it leaves no gap in its column.
 // The follow-up offers quick dates (#3739) and "Complete" (#3740), which opens
 // the interaction form with the follow-up's note as a call.
 export function SalesRecordPanels({
@@ -70,8 +72,8 @@ export function SalesRecordPanels({
   const router = useRouter();
   const refresh = () => router.refresh();
   return (
-    <>
-      <div className="mb-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-2" data-testid="sales-lead-action-strip">
+    <div className="mb-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+      <div className="flex min-w-0 flex-col gap-6" data-testid="sales-lead-action-strip">
         {showFollowUp && (
         <FollowUpPanel
           relationId={relationId}
@@ -86,7 +88,7 @@ export function SalesRecordPanels({
         )}
         {interactions}
       </div>
-      <div className="mb-6 grid grid-cols-1 items-start gap-6 lg:grid-cols-2 2xl:grid-cols-3" data-testid="sales-record-panels-grid">
+      <div className="flex min-w-0 flex-col gap-6" data-testid="sales-record-panels-grid">
         {/* Nothing renders outside a trial. */}
         <div className="empty:hidden">
           <TrialEndPanel
@@ -133,6 +135,6 @@ export function SalesRecordPanels({
         )}
         {contact && <div className="empty:hidden">{contact}</div>}
       </div>
-    </>
+    </div>
   );
 }

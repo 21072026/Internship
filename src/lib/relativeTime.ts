@@ -36,6 +36,43 @@ export function relativeTime(date: Date | string, locale: string, options: Relat
   return rtf.format(-sec, 'second'); // < 1 minute → "just now"
 }
 
+/**
+ * True when a stored value is a calendar day rather than an instant: exactly UTC
+ * midnight, which is what a date-only field (`<input type="date">` sent as
+ * "2026-11-15") becomes. An instant logged by the app at that very millisecond
+ * is read as a day too — harmless at a day's resolution.
+ */
+export function isDayOnly(date: Date | string): boolean {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return Number.isFinite(d.getTime()) && d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0;
+}
+
+/**
+ * A distance in CALENDAR DAYS: "today", "yesterday", "3 days ago", then months
+ * and years — for a list whose entries are partly days ("logged for the 15th")
+ * and partly instants ("called at 14:02"), where "15 hours ago" would invent a
+ * time of day the person never gave (#3803). A day-only value counts as its own
+ * UTC date; an instant as the date it fell on in `timeZone` (the viewer's zone
+ * when absent). Never "in …" for a past list: a day after `now` reads as today.
+ */
+export function relativeDay(
+  date: Date | string,
+  locale: string,
+  options: RelativeTimeOptions & { timeZone?: string } = {},
+): string {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (!Number.isFinite(d.getTime())) return '';
+  const now = new Date(options.now === undefined ? Date.now() : +options.now);
+  const ymd = (x: Date, tz?: string) => new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(x);
+  const dayNumber = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 86_400_000;
+  const then = dayNumber(isDayOnly(d) ? d.toISOString().slice(0, 10) : ymd(d, options.timeZone));
+  const days = Math.max(0, dayNumber(ymd(now, options.timeZone)) - then);
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: options.style ?? 'long' });
+  if (days < 30) return rtf.format(-days, 'day');
+  if (days < 365) return rtf.format(-Math.round(days / 30), 'month');
+  return rtf.format(-Math.round(days / 365), 'year');
+}
+
 // Locale-aware absolute date/date-time formatting, so displayed dates follow
 // the app's selected language (TR/DE) instead of the browser's default.
 // `options` overrides the defaults below (e.g. a caller needing a long
