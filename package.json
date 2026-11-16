@@ -194,7 +194,7 @@
     "typescript": "^5"
   },
   "overrides": {
-    "postcss": "^8.5.18",
+    "postcss": "$postcss",
     "sharp": "$sharp",
     "next-auth": {
       "nodemailer": "$nodemailer"
