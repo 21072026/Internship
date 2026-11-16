@@ -25,6 +25,7 @@ import { SalesInteractionsCard } from '@/components/sales/SalesInteractionsCard'
 import { LeadContactEditor } from '@/components/sales/LeadContactEditor';
 import { shownEmail } from '@/lib/leadEmail';
 import { LeadPageHandoff } from '@/components/sales/LeadPageHandoff';
+import { earlierPeriods, currentSuccessor } from '@/lib/leadJourney';
 
 // One of the rep's own records (#2580): who the lead is, the account behind it,
 // its stage, the follow-up, trial-end and estimated-value (#2422) editors, what happened last and a
@@ -92,6 +93,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
       // Through the tenant filter too: a record pointing at another tenant's
       // company (a bad import) shows no account rather than a foreign one.
       companyId: true,
+      previousRelationId: true,
     },
   });
   if (!relation) notFound();
@@ -100,7 +102,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   const writable = await canWriteSalesRecord(session, relation);
   const ownersView = writable || canSeeNextAction({ id: session.user.id, role: session.user.role }, relation);
 
-  const [company, lastContact, interactions] = await Promise.all([
+  const [company, lastContact, interactions, earlier, successor] = await Promise.all([
     relation.companyId
       ? prisma.company.findFirst({
           where: withinTenant({ id: relation.companyId }, tenant),
@@ -116,7 +118,13 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
       take: INTERACTION_LIMIT,
       select: { id: true, date: true, type: true, subject: true, notes: true },
     }),
+    earlierPeriods(relation),
+    relation.status === 'ACTIVE' ? null : currentSuccessor(relation),
   ]);
+  // The banner's link only when this viewer may open the current record (the same read as this page).
+  const successorOpens =
+    !!successor &&
+    !!(await prisma.mentorshipRelation.findFirst({ where: withinTenant({ id: successor.relationId, ...read }, tenant), select: { id: true } }));
 
   const { locale, t } = await getServerDictionary();
   const s = t.sales.lead;
@@ -152,7 +160,21 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
         {s.back}
       </Link>
 
-      {!writable && (
+      {successor && (
+        <p
+          className="mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800"
+          role="status"
+          data-testid="sales-lead-handed-on"
+        >
+          <span>{s.handedOnBanner.replace('{owner}', successor.ownerName).replace('{date}', date(successor.since))}</span>
+          {successorOpens && (
+            <Link href={`/sales/leads/${successor.relationId}`} className="font-medium underline" data-testid="sales-lead-handed-on-link">
+              {s.handedOnOpen}
+            </Link>
+          )}
+        </p>
+      )}
+      {!writable && !successor && (
         <p
           className="mb-6 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
           role="status"
@@ -169,6 +191,11 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100" data-testid="sales-lead-name">
             {relation.mentee.fullName}
           </h1>
+          {earlier[0] && (
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400" data-testid="sales-lead-taken-over">
+              {s.takenOverFrom.replace('{owner}', earlier[0].ownerName).replace('{date}', date(earlier[0].to ?? relation.startDate))}
+            </p>
+          )}
           {company && (
             <p className="mt-1 text-gray-500">
               <Link href={`/sales/accounts/${company.id}`} className="hover:underline" data-testid="sales-lead-account">
@@ -213,6 +240,13 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
             relationId={relation.id}
             canLog={canLog}
             interactions={interactions.map((i) => ({ id: i.id, date: i.date.toISOString(), type: i.type, subject: i.subject, notes: i.notes }))}
+            earlierPeriods={earlier.map((p) => ({
+              relationId: p.relationId,
+              ownerName: p.ownerName,
+              from: date(p.from),
+              to: p.to ? date(p.to) : null,
+              interactions: p.interactions.map((i) => ({ id: i.id, date: i.date.toISOString(), type: i.type, subject: i.subject, notes: i.notes })),
+            }))}
           />
         }
         contact={
