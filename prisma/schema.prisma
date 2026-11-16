@@ -1036,6 +1036,7 @@ model User {
   menteeRelations                   MentorshipRelation[]           @relation("MenteeRelations")
   statusChanges                     StatusChange[]                 @relation("StatusChangedBy")
   relationLifecycleEvents           RelationLifecycleEvent[]       @relation("RelationLifecycleChangedBy")
+  authoredInteractions              InteractionLog[]               @relation("InteractionAuthor")
   passwordResetTokens               PasswordResetToken[]
   emailVerificationTokens           EmailVerificationToken[]
   tags                              UserTag[]                      @relation("UserTags")
@@ -5245,13 +5246,25 @@ model InteractionLog {
   // mail delivered twice is still one log per funnel record. NULL for every
   // hand-written log; MySQL lets any number of NULLs share the unique below.
   sourceRef  String?
+  // Who logged it (#3818). Until this column a log had no author of its own:
+  // attribution ran through `relation.mentorId`, which after a hand-off names
+  // the wrong person for every earlier row (docs/mentor-transfer.md). Set by the
+  // write paths that act for a signed-in person (the log form, the mentor's
+  // e-mail, a mail the rep copied to the CRM address); NULL for a machine (an
+  // API key, the meeting sweep, a migration) and for every row written before
+  // it. Nullable and never backfilled: `relation.mentorId` at the time of an old
+  // row is not known, so guessing it would be the very misattribution this
+  // column exists to stop. SetNull: removing an account keeps the history.
+  authorId   String?
 
   relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
   meeting  Meeting?           @relation(fields: [meetingId], references: [id], onDelete: SetNull)
+  author   User?              @relation("InteractionAuthor", fields: [authorId], references: [id], onDelete: SetNull)
 
   @@unique([relationId, sourceRef])
   // The /api/v1 keyset (#1990).
   @@index([updatedAt, id])
+  @@index([authorId])
 }
 
 enum RsvpStatus {

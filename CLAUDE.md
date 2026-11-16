@@ -555,8 +555,9 @@ marketing names redirect there, and their apex now serves **mail only**.
   yeri `src/lib/mentorTransfer.ts`: sonucu **veri** belirler — eşleştirmede hiçbir kayıt
   yoksa (`src/lib/relationHistory.ts`) `mentorId` **yerinde** düzeltilir (yanlış atama);
   varsa eşleştirme `ENDED_REASSIGNED` olarak kapanır ve `previousRelationId` ile zincirlenen
-  yeni ilişki **aynı aşamayı** taşır. **Hiçbir alt kayıt taşınmaz** — `InteractionLog`'un
-  yazar kolonu yok, atıf yalnızca `relation.mentorId` üzerinden kurulur, dolayısıyla geçmişi
+  yeni ilişki **aynı aşamayı** taşır. **Hiçbir alt kayıt taşınmaz** — geçmişin atfı
+  `relation.mentorId` üzerinden kurulur (`InteractionLog.authorId`, #3818, yalnızca yeni ve
+  bir kişinin yazdığı satırlarda dolu; eski satırlar boş kalır), dolayısıyla geçmişi
   olan bir ilişkinin mentörünü yerinde değiştirmek eski mentörün emeğini yenisine yazar.
   Gerekçe ilişkide **yalnızca kod** olarak durur (`endReasonCode`); serbest metin sadece
   admin'in okuduğu `ActivityLog` kaydına gider, çünkü birçok okuma yolu ilişkinin tüm

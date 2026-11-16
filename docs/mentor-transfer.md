@@ -73,8 +73,10 @@ mistake un-correctable.
 
 **Nothing moves.** Every child row stays on the relation it was written under.
 
-That is not laziness, it is attribution: `InteractionLog` has **no author
-column** — a logged meeting is attributed purely through `relation.mentorId`.
+That is not laziness, it is attribution: a logged meeting is attributed through
+`relation.mentorId`. `InteractionLog.authorId` (#3818) names the person for rows
+written since, but every older row and every machine-written one carries none,
+so the relation stays the attribution of the history.
 Re-pointing `mentorId` on a pairing that carries history would silently credit
 every meeting mentor A ran to mentor B, and any per-mentor reporting built on
 `relation.mentorId` would report it. Private `relationNotes` are the same

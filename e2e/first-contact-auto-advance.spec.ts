@@ -119,7 +119,11 @@ test('a call on a first-stage lead moves it to Contacted, shows in the activity,
   // A second contact on the same lead moves nothing: it is no longer on the first stage.
   const again = await page.request.post('/api/interactions', { data: { relationId: rel.ui, date: new Date().toISOString(), notes: 'Follow-up call', type: 'Call' } });
   expect(again.status()).toBe(201);
-  expect((await again.json()).stageAdvance).toBeNull();
+  const againBody = await again.json();
+  expect(againBody.stageAdvance).toBeNull();
+  // The person who logged it is its author (#3818), not merely "the relation's mentor".
+  const repId = (await prisma.user.findFirstOrThrow({ where: { email: repEmail, orgId: marketingOrg }, select: { id: true } })).id;
+  expect((await prisma.interactionLog.findUniqueOrThrow({ where: { id: againBody.interaction.id }, select: { authorId: true } })).authorId).toBe(repId);
 
   // Undo, from the toast of a fresh move.
   await prisma.mentorshipRelation.update({ where: { id: rel.ui }, data: { pipelineStatus: 'LEAD_NEW' } });

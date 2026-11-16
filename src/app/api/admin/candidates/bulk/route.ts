@@ -144,8 +144,8 @@ export async function POST(request: Request) {
   // relation is `transferMentorship()` (#2289, docs/mentor-transfer.md). Only a
   // pairing with NO history may be re-pointed in place; one that carries any
   // work is closed ENDED_REASSIGNED and chained to a successor, because
-  // `InteractionLog` has no author column and attribution runs purely through
-  // `relation.mentorId` — a bulk `updateMany` would silently credit every
+  // attribution of the history runs through `relation.mentorId` (older
+  // InteractionLog rows have no `authorId`, #3818) — a bulk `updateMany` would silently credit every
   // meeting the outgoing mentor ran to the incoming one, for a hundred people
   // at once. The helper also re-asks the one-active-mentor guard (#419) inside
   // its own transaction. So this loops, one relation per iteration, and is
