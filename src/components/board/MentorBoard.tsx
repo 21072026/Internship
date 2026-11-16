@@ -26,6 +26,7 @@ import { useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
 import { foldSearchText, matchesMenteeQuery } from '@/lib/menteeFilter';
 import { FollowUpChip } from '@/components/FollowUpPanel';
 import { TrialEndChip } from '@/components/TrialEndPanel';
+import { LostTrialOpenChip } from '@/components/LostTrialOpen';
 import { LoadErrorCard } from '@/components/ui/LoadErrorCard';
 import { HandoffCardButton, useLeadHandoff } from '@/components/board/LeadHandoff';
 import { BoardOwnerFilter, type OwnerOption } from '@/components/board/BoardOwnerFilter';
@@ -84,6 +85,7 @@ function teamRowToRelation(row: SalesTeamBook['rows'][number]): Relation {
     mentor: { id: row.ownerId, fullName: row.ownerName },
     pipelineStatus: row.pipelineStatus,
     daysInStage: row.daysInStage,
+    trialEndsAt: row.trialEndsAt,
     mentee: { id: row.id, fullName: row.leadName, university: row.companyName ?? undefined },
   };
 }
@@ -434,6 +436,8 @@ export function MentorBoard({
       )}
       {r.nextActionAt && <div className="mt-1"><FollowUpChip at={r.nextActionAt} /></div>}
       <div className="mt-1 empty:hidden"><TrialEndChip pipelineStatus={r.pipelineStatus} trialEndsAt={r.trialEndsAt} /></div>
+      {/* Marked lost while the trial still runs (#3813). */}
+      <div className="mt-1 empty:hidden"><LostTrialOpenChip record={r} className="text-[10px]" /></div>
       {showHandoff && movable(r) && <HandoffCardButton onClick={() => leadHandoff.openFor(r.id)} />}
     </div>
   );

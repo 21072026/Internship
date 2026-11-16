@@ -3,7 +3,9 @@
 // "Team" view and /sales/team.
 //
 // What a row carries is a short, deliberate list: who the lead is, the account,
-// the owner, the stage, how long it has sat there, when it was last in contact.
+// the owner, the stage, how long it has sat there, when it was last in contact,
+// and the trial end (the board's trial chips, #3813 — the lead page shows it to
+// a colleague too).
 // NOT the contact's e-mail or phone, the deal value or the follow-up
 // (nextAction*): those stay the owner's (canSeeNextAction, the lead page). The
 // select below is the guarantee — a field that is not selected cannot leak —
@@ -48,6 +50,8 @@ export interface SalesTeamBookRow {
   daysInStage: number;
   /** ISO; the src/lib/lastContact.ts rule. */
   lastContactAt: string | null;
+  /** The trial end, ISO; null without one. */
+  trialEndsAt: string | null;
 }
 
 export interface SalesTeamStageCount {
@@ -117,6 +121,7 @@ export async function loadSalesTeamBook(session: Session, query: SalesTeamBookQu
         pipelineStatus: true,
         status: true,
         startDate: true,
+        trialEndsAt: true,
         mentee: { select: { fullName: true } },
         mentor: { select: { fullName: true, avatarUrl: true } },
         company: { select: { id: true, name: true } },
@@ -152,6 +157,7 @@ export async function loadSalesTeamBook(session: Session, query: SalesTeamBookQu
       status: r.status,
       daysInStage: Math.max(0, Math.floor((now.getTime() - entered.getTime()) / DAY)),
       lastContactAt: lastContacts.get(r.id)?.at.toISOString() ?? null,
+      trialEndsAt: r.trialEndsAt?.toISOString() ?? null,
     };
   });
 

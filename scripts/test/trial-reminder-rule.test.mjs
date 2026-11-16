@@ -293,3 +293,26 @@ test('the automatic expiry is dated when the trial ended, in order, never in the
   // Both floors: the later one wins (strictly after the previous row).
   assert.equal(expiryRecordedAt(at('2026-06-01T00:00:00Z'), { startDate: at('2026-05-01T00:00:00Z'), previousMoveAt: at('2026-07-01T00:00:00Z') }, now).toISOString(), '2026-07-01T00:00:00.001Z');
 });
+
+// ── #3813: lost while the trial is still running ──────────────────────────
+import { lostWhileTrialOpen } from '../../src/lib/trialReminderRule.ts';
+
+test('lostWhileTrialOpen: a lost, open record with a trial ending today or later', () => {
+  const now = new Date('2026-11-16T22:30:00Z');
+  const lost = { pipelineStatus: 'DEAL_LOST', status: 'ACTIVE' };
+  assert.equal(lostWhileTrialOpen({ ...lost, trialEndsAt: '2026-11-25T00:00:00Z' }, now), 9);
+  // The last day still counts (calendar days, not hours).
+  assert.equal(lostWhileTrialOpen({ ...lost, trialEndsAt: new Date('2026-11-16T00:00:00Z') }, now), 0);
+  // Ran out yesterday: a real loss as far as the trial goes.
+  assert.equal(lostWhileTrialOpen({ ...lost, trialEndsAt: '2026-11-15T23:59:00Z' }, now), null);
+  assert.equal(lostWhileTrialOpen({ ...lost, trialEndsAt: null }, now), null);
+  assert.equal(lostWhileTrialOpen({ ...lost, trialEndsAt: 'not a date' }, now), null);
+});
+
+test('lostWhileTrialOpen: only DEAL_LOST, only an open record', () => {
+  const now = new Date('2026-11-16T09:00:00Z');
+  const ends = '2026-11-30T00:00:00Z';
+  assert.equal(lostWhileTrialOpen({ pipelineStatus: 'TRIAL_ACTIVE', status: 'ACTIVE', trialEndsAt: ends }, now), null);
+  assert.equal(lostWhileTrialOpen({ pipelineStatus: 'TRIAL_EXPIRED', status: 'ACTIVE', trialEndsAt: ends }, now), null);
+  assert.equal(lostWhileTrialOpen({ pipelineStatus: 'DEAL_LOST', status: 'COMPLETED', trialEndsAt: ends }, now), null);
+});

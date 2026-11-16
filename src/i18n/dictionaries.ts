@@ -8083,6 +8083,15 @@ const en = {
     lockedInfoLabel: 'Why can\'t this be changed?',
     lockedNotInTrial: 'The trial end can only be changed while the lead is in a trial stage (Trial active / Trial expired). This record is currently in the \'{stage}\' stage.',
     lockedClosed: 'The trial end cannot be changed because the record is closed.',
+    // Marked lost while the trial still runs (#3813, lostWhileTrialOpen()): the board
+    // chip and the lead page notice. Nothing moves on its own; the rep decides.
+    lostOpenChip: 'Still in trial',
+    lostOpenTitle: 'Marked lost, but the trial is still running',
+    lostOpenBody: 'The trial ends on {date}. If the customer is still trying the product, this lead is not lost yet.',
+    lostOpenRestore: 'Back to trial',
+    lostOpenHint: 'Waiting for an answer from us? Put that in the follow-up instead of marking the lead lost.',
+    lostOpenRestored: 'The lead is back in the trial stage',
+    lostOpenError: 'Could not move the lead back to the trial',
   },
   // The estimated monthly value of a funnel record (#2422). ALWAYS "estimated":
   // pricing is usage-based, so the real monthly revenue moves every month and
@@ -20596,6 +20605,15 @@ const tr: Dict = {
     lockedInfoLabel: 'Neden değiştirilemiyor?',
     lockedNotInTrial: 'Deneme bitişi yalnızca lead deneme aşamasındayken (Deneme aktif / Deneme bitti) değiştirilebilir. Bu kayıt şu an \'{stage}\' aşamasında.',
     lockedClosed: 'Kayıt kapalı olduğu için deneme bitişi değiştirilemez.',
+    // Marked lost while the trial still runs (#3813, lostWhileTrialOpen()): the board
+    // chip and the lead page notice. Nothing moves on its own; the rep decides.
+    lostOpenChip: 'Deneme sürüyor',
+    lostOpenTitle: 'Kaybedildi işaretli, ama deneme süresi devam ediyor',
+    lostOpenBody: 'Deneme {date} tarihinde bitiyor. Müşteri ürünü hâlâ deniyorsa bu lead henüz kaybedilmedi.',
+    lostOpenRestore: 'Denemeye geri al',
+    lostOpenHint: 'Bizden bir cevap mı bekleniyor? Lead\'i kaybedildi işaretlemek yerine bunu takibe yazın.',
+    lostOpenRestored: 'Lead tekrar deneme aşamasında',
+    lostOpenError: 'Lead denemeye geri alınamadı',
   },
   dealValue: {
     title: 'Tahmini aylık değer',
@@ -33043,6 +33061,15 @@ const de: Dict = {
     lockedInfoLabel: 'Warum lässt sich das nicht ändern?',
     lockedNotInTrial: 'Das Testende lässt sich nur ändern, solange der Lead in einer Testphase ist (Test aktiv / Test abgelaufen). Dieser Datensatz ist derzeit in der Phase „{stage}“.',
     lockedClosed: 'Das Testende lässt sich nicht ändern, weil der Datensatz geschlossen ist.',
+    // Marked lost while the trial still runs (#3813, lostWhileTrialOpen()): the board
+    // chip and the lead page notice. Nothing moves on its own; the rep decides.
+    lostOpenChip: 'Testphase läuft noch',
+    lostOpenTitle: 'Als verloren markiert, aber die Testphase läuft noch',
+    lostOpenBody: 'Die Testphase endet am {date}. Wenn der Kunde das Produkt noch testet, ist dieser Lead noch nicht verloren.',
+    lostOpenRestore: 'Zurück in die Testphase',
+    lostOpenHint: 'Wartet der Kunde auf eine Antwort von uns? Halte das in der Wiedervorlage fest, statt den Lead als verloren zu markieren.',
+    lostOpenRestored: 'Der Lead ist wieder in der Testphase',
+    lostOpenError: 'Der Lead konnte nicht in die Testphase zurückgesetzt werden',
   },
   dealValue: {
     title: 'Geschätzter Monatswert',
