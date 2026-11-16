@@ -137,35 +137,46 @@ export async function recordFailedAttempt(opts: {
   const email = normalize(opts.email);
   const windowMs = opts.windowMs ?? LOCKOUT_WINDOW_MS;
   const now = new Date();
+  const key = { email, reason: opts.reason };
+  const who = { userId: opts.userId ?? null, orgId: opts.orgId ?? null, lastIp: opts.ip ?? null };
+  // Every count below is ONE conditional UPDATE, never a read and a write-back
+  // (#3799): concurrent failures against the same address all land, and the
+  // first insert of a row cannot make a second one disappear. InnoDB re-reads
+  // the row under its lock before applying a WHERE, so two contenders for the
+  // same transition cannot both win it.
   try {
-    const key = { email, reason: opts.reason };
-    const existing = await prisma.accountLockout.findUnique({ where: { email_reason: key } });
-    const stillLocked = !!existing?.lockedUntil && existing.lockedUntil.getTime() > now.getTime();
-    // A counting window that has run out starts a fresh count — otherwise one
-    // fumbled password a week would eventually lock an account nobody attacked.
-    const freshWindow =
-      !stillLocked && (!existing || existing.windowStart.getTime() + windowMs <= now.getTime());
-    const failedCount = freshWindow ? 1 : (existing?.failedCount ?? 0) + 1;
-    const lockedUntil =
-      failedCount >= opts.limit
-        ? new Date(now.getTime() + windowMs)
-        : (existing?.lockedUntil ?? null);
-
-    const data = {
-      userId: opts.userId ?? null,
-      orgId: opts.orgId ?? null,
-      reason: opts.reason,
-      failedCount,
-      windowStart: freshWindow ? now : (existing?.windowStart ?? now),
-      lockedUntil,
-      lastIp: opts.ip ?? null,
-    };
-    const row = await prisma.accountLockout.upsert({
-      where: { email_reason: key },
-      create: { email, ...data },
-      update: data,
+    // A counting window that has run out (and is not holding a lock) starts a
+    // fresh count — otherwise one fumbled password a week would eventually
+    // lock an account nobody attacked. Only one contender can reset it: the
+    // reset moves windowStart, and the next one's WHERE no longer matches.
+    const reset = await prisma.accountLockout.updateMany({
+      where: {
+        ...key,
+        windowStart: { lte: new Date(now.getTime() - windowMs) },
+        OR: [{ lockedUntil: null }, { lockedUntil: { lte: now } }],
+      },
+      data: { ...who, failedCount: 1, windowStart: now },
     });
-    return toActive(row);
+    const counted = reset.count > 0 || (await increment(key, who));
+    if (!counted) {
+      // No row yet: the first failure for this address and stage. An insert
+      // that skips a duplicate rather than throwing on it — a concurrent first
+      // failure may have created the row a moment ago, and then this one
+      // counts on top of it.
+      const created = await prisma.accountLockout.createMany({
+        data: [{ email, reason: opts.reason, ...who, failedCount: 1, windowStart: now }],
+        skipDuplicates: true,
+      });
+      if (created.count === 0) await increment(key, who);
+    }
+    // Lock once the count reaches the limit. Every further failure while it
+    // holds pushes the end out again, as it always did.
+    await prisma.accountLockout.updateMany({
+      where: { ...key, failedCount: { gte: opts.limit } },
+      data: { lockedUntil: new Date(now.getTime() + windowMs) },
+    });
+    const row = await prisma.accountLockout.findUnique({ where: { email_reason: key } });
+    return row ? toActive(row) : null;
   } catch (e) {
     logger.error('Lockout write failed', { error: String(e) });
     return null;
@@ -195,6 +206,15 @@ export async function clearLockoutForUser(userId: string, email: string): Promis
     where: { OR: [{ userId }, { email: normalize(email) }] },
   });
   return count;
+}
+
+/** One more failure on an existing row; false when there is no row. */
+async function increment(
+  key: { email: string; reason: LockoutReason },
+  who: { userId: string | null; orgId: string | null; lastIp: string | null },
+): Promise<boolean> {
+  const { count } = await prisma.accountLockout.updateMany({ where: key, data: { ...who, failedCount: { increment: 1 } } });
+  return count > 0;
 }
 
 /** Currently-locked accounts, for the admin user list. Expired rows are ignored. */
