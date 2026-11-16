@@ -20,6 +20,8 @@ export interface InteractionFormDraft {
   nonce: number;
   type?: InteractionType;
   notes?: string;
+  /** Called after the interaction this draft opened is saved; dropped on Cancel or by the next draft. */
+  onLogged?: () => unknown;
 }
 
 export function AddInteractionForm({
@@ -44,9 +46,18 @@ export function AddInteractionForm({
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The open draft's "after saving" step, if it has one (#3803). Held in a ref:
+  // it belongs to this draft only, and Cancel or a newer draft discards it.
+  const afterLogged = useRef<(() => unknown) | null>(null);
+
+  const close = () => {
+    afterLogged.current = null;
+    setOpen(false);
+  };
 
   useEffect(() => {
     if (!draft) return;
+    afterLogged.current = draft.onLogged ?? null;
     setOpen(true);
     setError(null);
     if (draft.type) setType(draft.type);
@@ -71,7 +82,9 @@ export function AddInteractionForm({
         setSubject('');
         setNotes('');
         setType('Meeting');
-        setOpen(false);
+        const after = afterLogged.current;
+        close();
+        await after?.();
         onAdded();
         // A first contact moved the lead on (#3746): say so, with an Undo that
         // moves it back through the same stage write path a board drag uses.
@@ -147,7 +160,7 @@ export function AddInteractionForm({
       {error && <p className="text-xs text-red-600" role="alert">{error}</p>}
       <div className="flex gap-2">
         <Button type="submit" size="sm" loading={busy} disabled={!notes.trim()}>{t.logInteraction.add}</Button>
-        <Button type="button" size="sm" variant="outline" onClick={() => setOpen(false)}>{t.common.cancel}</Button>
+        <Button type="button" size="sm" variant="outline" onClick={close}>{t.common.cancel}</Button>
       </div>
     </form>
   );

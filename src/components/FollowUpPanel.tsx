@@ -107,11 +107,13 @@ export function FollowUpPanel({
   /** Offer "Tomorrow · 3 days · 1 week · 2 weeks" next to the date (#3739, sales lead page). */
   quickDates?: boolean;
   /**
-   * Offer "Complete follow-up" (#3740): clears the follow-up, then hands the
-   * note it had to the caller (the sales lead page opens its interaction form
-   * with it). Absent everywhere else, so those pages keep only Save / Clear.
+   * Offer "Complete follow-up" (#3740): hands the follow-up's note to the caller
+   * (the sales lead page opens its interaction form with it) together with
+   * `clear`, which the caller runs once the interaction is SAVED (#3803) — so a
+   * rep who cancels the form keeps the follow-up. Absent everywhere else, so
+   * those pages keep only Save / Clear.
    */
-  onComplete?: (note: string | null) => void;
+  onComplete?: (note: string | null, clear: () => Promise<boolean>) => void;
   /** Reading only (the sales team view, a colleague's record): no edit, add or complete control. */
   readOnly?: boolean;
 }) {
@@ -208,9 +210,10 @@ export function FollowUpPanel({
     }
   };
 
-  const complete = async () => {
-    const note = shown.note;
-    if (await save({ date: '', note: '' }, t.followUp.completed, { returnFocus: false })) onComplete?.(note);
+  // Nothing is written on the click: the follow-up stays until the interaction
+  // it opens is saved, and Cancel leaves it as it was (#3803).
+  const complete = () => {
+    onComplete?.(shown.note, () => save({ date: '', note: '' }, t.followUp.completed, { returnFocus: false }));
   };
 
   // One click, one call (#2875): the gate's denials become a line under the
@@ -275,7 +278,7 @@ export function FollowUpPanel({
           <FollowUpReading at={shown.at} note={shown.note} />
           {!readOnly && onComplete && (
             <div className="mt-3">
-              <Button size="sm" variant="secondary" disabled={saving} title={t.followUp.completeHint} onClick={() => void complete()} data-testid="follow-up-complete">
+              <Button size="sm" variant="secondary" disabled={saving} title={t.followUp.completeHint} onClick={complete} data-testid="follow-up-complete">
                 {t.followUp.complete}
               </Button>
             </div>

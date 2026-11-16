@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Coins } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Coins, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
@@ -31,6 +31,11 @@ export interface DealValueState {
  * server). `initial` omitted → the panel asks the route itself, and renders
  * nothing when the route says the record's vertical has no deal values (404) —
  * which is how the shared admin record page shows it for MARKETING only.
+ *
+ * Read first (#3803), like the trial end: once an estimate exists the panel shows
+ * it as text, with "Edit" (a pencil) and "Remove estimate" side by side; the form
+ * opens on Edit and closes again on Save or Cancel. With no estimate yet there is
+ * nothing to read, so the form is open from the start.
  */
 export function DealValuePanel({
   relationId,
@@ -50,6 +55,17 @@ export function DealValuePanel({
   const [currency, setCurrency] = useState(initial?.currency ?? DEFAULT_DEAL_VALUE_CURRENCY);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [editing, setEditing] = useState(false);
+  const editRef = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
+
+  // Back to reading after Save or Cancel: the keyboard returns to the pencil.
+  useEffect(() => {
+    if (!editing && returnFocus.current) {
+      returnFocus.current = false;
+      editRef.current?.focus();
+    }
+  }, [editing]);
 
   useEffect(() => {
     if (initial) return;
@@ -97,6 +113,9 @@ export function DealValuePanel({
       }
       setState(data.value);
       setAmount(dealValueInputText(data.value?.valueMinor));
+      if (data.value?.currency) setCurrency(data.value.currency);
+      returnFocus.current = parsed.valueMinor !== null;
+      setEditing(false);
       toast(parsed.valueMinor === null ? d.cleared : d.saved);
       await onSaved?.();
     } catch {
@@ -106,52 +125,88 @@ export function DealValuePanel({
     }
   };
 
+  const hasValue = state.valueMinor != null && !!state.currency;
+  const formOpen = !hasValue || editing;
+  const cancel = () => {
+    setAmount(dealValueInputText(state.valueMinor));
+    setCurrency(state.currency ?? DEFAULT_DEAL_VALUE_CURRENCY);
+    setError('');
+    returnFocus.current = true;
+    setEditing(false);
+  };
+
   return (
     <div className="rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="deal-value-panel">
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <Coins className="h-4 w-4 text-gray-500 dark:text-gray-400" />
         <p className="text-sm font-semibold text-gray-700 dark:text-gray-200">{d.title}</p>
         <span className="text-sm text-gray-700 dark:text-gray-200" data-testid="deal-value-current">
-          {state.valueMinor != null && state.currency
-            ? formatMinorAmount(state.valueMinor, state.currency, locale)
-            : d.none}
+          {hasValue ? formatMinorAmount(state.valueMinor!, state.currency!, locale) : d.none}
         </span>
         {state.source === 'IMPORT' && <span className="text-xs text-gray-500 dark:text-gray-400">{d.fromImport}</span>}
-      </div>
-      <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">{d.hint}</p>
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="w-44">
-          <Input
-            id={`deal-value-amount-${relationId}`}
-            label={d.amount}
-            inputMode="decimal"
-            placeholder="49,90"
-            value={amount}
-            disabled={saving}
-            onChange={(e) => setAmount(e.target.value)}
-            data-testid="deal-value-input"
-          />
-        </div>
-        <div className="w-28">
-          <Select
-            id={`deal-value-currency-${relationId}`}
-            label={d.currency}
-            options={DEAL_VALUE_CURRENCIES.map((c) => ({ value: c, label: c }))}
-            value={currency}
-            disabled={saving}
-            onChange={(e) => setCurrency(e.target.value)}
-            data-testid="deal-value-currency"
-          />
-        </div>
-        <Button size="sm" loading={saving} disabled={!amount.trim()} onClick={() => save(amount)} data-testid="deal-value-save">
-          {d.save}
-        </Button>
-        {state.valueMinor != null && (
-          <Button size="sm" variant="ghost" disabled={saving} onClick={() => save('')} data-testid="deal-value-clear">
-            {d.clear}
-          </Button>
+        {hasValue && !editing && (
+          <span className="ml-auto flex items-center gap-1">
+            <button
+              ref={editRef}
+              type="button"
+              aria-label={d.editLabel}
+              onClick={() => setEditing(true)}
+              disabled={saving}
+              data-testid="deal-value-edit"
+              className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-lg px-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-blue-300"
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+              <span>{d.edit}</span>
+            </button>
+            <Button size="sm" variant="ghost" loading={saving} onClick={() => save('')} data-testid="deal-value-clear">
+              {d.clear}
+            </Button>
+          </span>
         )}
       </div>
+      {formOpen && (
+        <>
+          <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">{d.hint}</p>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="w-44">
+              <Input
+                id={`deal-value-amount-${relationId}`}
+                label={d.amount}
+                inputMode="decimal"
+                placeholder="49,90"
+                value={amount}
+                disabled={saving}
+                autoFocus={editing}
+                onChange={(e) => setAmount(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && amount.trim()) void save(amount);
+                  if (e.key === 'Escape' && editing) cancel();
+                }}
+                data-testid="deal-value-input"
+              />
+            </div>
+            <div className="w-28">
+              <Select
+                id={`deal-value-currency-${relationId}`}
+                label={d.currency}
+                options={DEAL_VALUE_CURRENCIES.map((c) => ({ value: c, label: c }))}
+                value={currency}
+                disabled={saving}
+                onChange={(e) => setCurrency(e.target.value)}
+                data-testid="deal-value-currency"
+              />
+            </div>
+            <Button size="sm" loading={saving} disabled={!amount.trim()} onClick={() => save(amount)} data-testid="deal-value-save">
+              {d.save}
+            </Button>
+            {editing && (
+              <Button size="sm" variant="ghost" disabled={saving} onClick={cancel} data-testid="deal-value-cancel">
+                {d.cancel}
+              </Button>
+            )}
+          </div>
+        </>
+      )}
       {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400" data-testid="deal-value-error">{error}</p>}
     </div>
   );
