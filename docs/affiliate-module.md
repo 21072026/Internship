@@ -17,7 +17,7 @@ per organisation, and every number in tests and examples here is synthetic.
 |---|---|---|
 | 1 | Where it runs | A module of the CRM, gated by the `affiliate` capability (MARKETING vertical). Every row carries `orgId`. |
 | 2 | Commission rules | **A per-organisation commission plan (data)**, evaluated by one pure engine. The engine has no defaults that mirror a real contract. |
-| 3 | Payment source | **Manual entry by an ADMIN** is the only source in the first milestone. It goes through the one payment writer that a later API import will also use (`source` = `MANUAL` / `API`). No commission is written anywhere else — except the one-off migration (`IMPORT`, below), which takes a previous system's history as recorded. |
+| 3 | Payment source | **Manual entry by an ADMIN** (`source` = `MANUAL`) and the account event `payment_received` from the source system (`API`, [#3355](#payments-from-the-source-system-3355)) both go through the one payment writer, `recordAffiliatePayment()`. Both carry the [commission base](#commission-base-35513552): the undiscounted gross amount for the period's transaction count, never the discounted amount paid. No commission is written anywhere else — except the one-off migration (`IMPORT`, below), which takes a previous system's history as recorded. Refunds and cancellations are not handled yet (#3475). |
 | 4 | Attribution | A customer (the customer's id on the product side, opaque here) is linked to a partner **automatically** when an account event carries a matching `referral_code` ([Automatic attribution](#automatic-attribution-3354)), or by an ADMIN on the first manual payment entry. One partner per customer, first link wins. |
 | 5 | Identity | Existing CRM sign-in, new `AFFILIATE` role. Partners moved from a previous system are **invited** (invitation / sign-in link); no password hash from another system is ever imported. |
 | 6 | Referral codes | Permanent once issued, unique per organisation. A migrated partner keeps the exact code the previous system used (a number, a custom slug, or a user name with `.` and `@`, #3550). One rule: `src/lib/affiliateCodeRule.ts` — a letter or digit, then letters, digits, `.`, `@`, `-`, `_`, at most 100. A code with a space is reported by the migration as needing a new code. `/r/ada%40example` and `/r/ada@example` are one code; links carry `@` as `%40`. |
@@ -1196,5 +1196,10 @@ run only after a clean dry run of exactly the files it checked.
 | 7 | Migration screen with reconciliation. |
 | 8 | Release fragment, `features.ts`, `@smoke` security specs, review, PR. |
 
-Out of scope for this milestone: automatic payment import,
-automatic bank transfer, multi-level partners, click analytics.
+Shipped since this plan was written: payments through the account-event feed
+([#3355](#payments-from-the-source-system-3355)), automatic attribution
+([#3354](#automatic-attribution-3354)), link clicks and the funnel
+([#3541](#link-clicks-3541), [#3543/#3544](#the-funnel-35433544), [#3545](#trend-and-earnings-per-click-3545)).
+
+Still out of scope: automatic bank transfer (payouts stay manual, decision 7),
+multi-level partners, and refunds or cancelled payments from the source system (#3475).
