@@ -90,7 +90,7 @@ test.afterAll(async () => {
   await prisma.$disconnect();
 });
 
-const ROW_KEYS = ['companyId', 'companyName', 'daysInStage', 'id', 'lastContactAt', 'leadName', 'ownerAvatarUrl', 'ownerId', 'ownerName', 'pipelineStatus', 'status'];
+const ROW_KEYS = ['companyId', 'companyName', 'daysInStage', 'id', 'lastContactAt', 'leadName', 'ownerAvatarUrl', 'ownerId', 'ownerName', 'pipelineStatus', 'status', 'trialEndsAt'];
 const NEVER = /email|phone|value|nextAction|contact(?!At)/i;
 
 test('a rep reads the whole team book of their org — nothing of another org, no contact, value or follow-up', { tag: '@smoke' }, async ({ playwright, baseURL }) => {

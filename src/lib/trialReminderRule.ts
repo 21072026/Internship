@@ -313,6 +313,33 @@ export function isTrialEndEditableStage(pipelineStatus: string | null | undefine
   return pipelineStatus === TRIAL_ACTIVE_STAGE_KEY || pipelineStatus === TRIAL_EXPIRED_STAGE_KEY;
 }
 
+/**
+ * A record marked lost while its trial is still running (#3813): the stage is
+ * `DEAL_LOST`, the record is open, and the trial end is today or later (UTC
+ * calendar days, like every other trial check here).
+ *
+ * Almost always a wrong mark — a list imported "lost" for "waiting for our
+ * reply", or a lead closed while the account is still trying the product. The
+ * feed cannot repair it: a trial event from inside the old window does not
+ * reopen a lost record (accountEventRule). So the board card and the lead page
+ * point it out, from this one predicate, and the rep decides; nothing moves on
+ * its own. Returns the whole days left (0 on the last day), or null.
+ */
+// Kept local: this module loads under plain node (no relative imports); the
+// same key as winBackRule's LOST_STAGE_KEY.
+const LOST_STAGE = 'DEAL_LOST';
+
+export function lostWhileTrialOpen(
+  record: { pipelineStatus: string | null | undefined; status: string | null | undefined; trialEndsAt: TrialEndValue },
+  now: Date,
+): number | null {
+  if (record.pipelineStatus !== LOST_STAGE || record.status !== 'ACTIVE') return null;
+  const end = asDate(record.trialEndsAt);
+  if (!end) return null;
+  const days = daysUntilUtcDay(end, now);
+  return days >= 0 ? days : null;
+}
+
 export type TrialEndLockReason = 'closed' | 'not_in_trial';
 
 /**
