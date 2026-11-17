@@ -79,7 +79,7 @@
  *   EmailVerificationToken, ImpersonationGrant, SsoLoginGrant, ApiKey,
  *   Webhook, MeetingRoomState, PageView, RosterRowResult (the roster-feed run
  *   log: one row per person per run, keyed by their address),
- *   GoogleCalendarConnection, SignInDevice
+ *   GoogleCalendarConnection, SignInDevice, Subscriber
  *
  * Left alone on purpose (structure, not people — this is the test value):
  *   Organization, PipelineStage, StageSla, UserConsent, MentorshipRelation,
@@ -222,6 +222,7 @@ async function run() {
     // Its provider-neutral successor (#1989): the same grants, sealed the same way.
     ['calendarConnection', () => prisma.calendarConnection.deleteMany({})],
     ['signInDevice', () => prisma.signInDevice.deleteMany({})],
+    ['subscriber', () => prisma.subscriber.deleteMany({})], // consent credentials and external contact PII (#1406)
   ];
   for (const [label, fn] of deletions) {
     const { count } = await fn();
@@ -341,6 +342,9 @@ async function run() {
  */
 async function verify() {
   const problems = [];
+
+  const subscribers = await prisma.subscriber.count();
+  if (subscribers > 0) problems.push(`${subscribers} subscriber addresses/consent credentials remain`);
 
   const guestEmails = await prisma.meetingGuest.count({
     where: { NOT: { email: { endsWith: `@${DEMO_DOMAIN}` } } },

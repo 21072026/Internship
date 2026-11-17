@@ -88,6 +88,10 @@ const DESTRUCTIVE = new Set([
 const VERIFY_EXEMPT = [
   '/api/auth/',
   '/api/register',
+  // Public interest signup and signed consent/withdrawal credentials (#1406).
+  '/api/subscribe',
+  '/api/subscribe/confirm',
+  '/api/subscribe/unsubscribe',
   '/api/impersonate/stop',
   '/api/rsvp',
   // An external document reviewer's link (#1859): the token is the credential.
