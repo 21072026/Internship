@@ -479,47 +479,49 @@ export function MentorBoard({
         </p>
       </div>
 
-      {teamAllowed && (
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          <SalesViewToggle view={view} onChange={setView} />
-          {teamView && <BoardOwnerFilter options={ownerOptions} selected={owners} onChange={setOwners} />}
+      {/* One toolbar row (#3838): Mine/Team and the owner filter on the left,
+          "show empty stages" and then the search at the far right; it wraps on
+          a narrow screen. */}
+      {(teamAllowed || relations.length > 0) && (
+        <div className="mb-4 flex flex-wrap items-center gap-3" data-testid="board-toolbar">
+          {teamAllowed && <SalesViewToggle view={view} onChange={setView} />}
+          {teamAllowed && teamView && <BoardOwnerFilter options={ownerOptions} selected={owners} onChange={setOwners} />}
+          {relations.length > 0 && (
+            <div className="flex w-full flex-wrap items-center gap-3 sm:ml-auto sm:w-auto">
+              {q && matchCount === 0 && (
+                <span className="text-sm text-gray-500 dark:text-gray-400" data-testid="mentor-board-no-match">
+                  {t.mentor.noMatchingMentees}
+                </span>
+              )}
+              {!narrow && (
+                <label className="inline-flex min-h-11 items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    data-testid="board-show-empty"
+                    checked={showEmpty}
+                    onChange={(e) => setHideEmpty(!e.target.checked)}
+                  />
+                  {t.mentor.boardShowEmpty}
+                </label>
+              )}
+              <div className="relative w-full sm:w-80">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="search"
+                  data-testid="mentor-board-search"
+                  aria-label={t.mentor.menteeBoardSearchPlaceholder}
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t.mentor.menteeBoardSearchPlaceholder}
+                  className="min-h-11 w-full rounded-lg border border-gray-300 pl-9 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {showHandoff && relations.length > 0 && leadHandoff.strip}
-
-      {relations.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          <div className="relative w-full sm:w-80">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-            <input
-              type="search"
-              data-testid="mentor-board-search"
-              aria-label={t.mentor.menteeBoardSearchPlaceholder}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={t.mentor.menteeBoardSearchPlaceholder}
-              className="min-h-11 w-full rounded-lg border border-gray-300 pl-9 pr-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
-            />
-          </div>
-          {!narrow && (
-            <label className="inline-flex min-h-11 items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
-              <input
-                type="checkbox"
-                data-testid="board-show-empty"
-                checked={showEmpty}
-                onChange={(e) => setHideEmpty(!e.target.checked)}
-              />
-              {t.mentor.boardShowEmpty}
-            </label>
-          )}
-          {q && matchCount === 0 && (
-            <span className="text-sm text-gray-500 dark:text-gray-400" data-testid="mentor-board-no-match">
-              {t.mentor.noMatchingMentees}
-            </span>
-          )}
-        </div>
-      )}
 
       {relations.length === 0 ? (
         /* Day one for a mentor: no assignment yet, so no board. Deliberately no
@@ -610,8 +612,10 @@ export function MentorBoard({
                       {...dropHandlersFor(status)}
                       // The same stage tone as an open column (src/lib/boardColumnTone.ts,
                       // #3675), dashed to say "empty"; a drop target gains the
-                      // accent ring, exactly like an open column.
-                      style={paintFor(status).style}
+                      // accent ring, exactly like an open column. No 4px top
+                      // stripe here (#3838): a thick dashed edge breaks into
+                      // blocks — the colour stays, at the frame's own width.
+                      style={paintFor(status).style ? { ...paintFor(status).style, borderTopWidth: 1 } : undefined}
                       className={`h-28 overflow-hidden rounded-lg border border-dashed py-2 flex flex-col items-center gap-1 transition-colors ${paintFor(status).className}${
                         dragOver === status ? ' ring-2 ring-blue-500 ring-offset-1' : ''
                       }`}
