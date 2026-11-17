@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { randomBytes } from 'crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
-import { settleStreamedSuspense } from './helpers/auth';
+import { gotoSettled, settleStreamedSuspense } from './helpers/auth';
 
 // Story #874: meetings become visible to mentees. #913 opens GET /api/meetings
 // to MENTEE (fail-closed for unlisted roles, own relations only), #914 puts an
@@ -121,7 +121,9 @@ test('portal card: mentee sees the meeting, RSVPs in-app, downloads the .ics (#9
 
 test('/portal/calendar renders the mentee calendar (#915)', async ({ page }) => {
   await signIn(page, menteeEmail, '/portal');
-  await page.goto('/portal/calendar');
+  // Streamed Suspense parks a hidden second copy of the page for up to ~300ms;
+  // the strict-mode check on calendar-view-month resolved to 2 elements (#2479 class).
+  await gotoSettled(page, '/portal/calendar');
   await expect(page.getByTestId('portal-tab-calendar')).toBeVisible();
   // The shared CalendarView mounts (view switcher present)…
   await expect(page.getByTestId('calendar-view-month')).toBeVisible();
