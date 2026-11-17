@@ -317,10 +317,13 @@ test('the rep logs the call they just made from the lead page', { tag: '@smoke' 
   await page.getByTestId('follow-up-cancel').click();
   await expect(page.getByTestId('follow-up-purpose')).toHaveCount(0);
   await expect(page.getByTestId('sales-lead-since')).toContainText('Assigned to you on');
-  // #3737: the interactions sit beside the follow-up at the top — empty until the first one is logged.
+  // #3737: the interactions sit beside the follow-up at the top — no interaction until the first one is logged.
+  // The previous test edited this record's follow-up, which since #3819 leaves a "Sistem" line in the same
+  // list, so the card is not empty: assert on interaction rows, not on the empty state.
   const strip = page.getByTestId('sales-lead-action-strip');
   await expect(strip.getByTestId('follow-up-panel')).toBeVisible();
-  await expect(strip.getByTestId('sales-lead-interactions-empty')).toBeVisible();
+  await expect(strip.getByTestId('sales-lead-interactions-card')).toBeVisible();
+  await expect(strip.getByTestId('sales-lead-interaction-row')).toHaveCount(0);
   const form = page.getByTestId('sales-lead-log-interaction');
   await form.getByRole('button', { name: /Log interaction|Add/i }).first().click();
   await form.getByRole('combobox').selectOption('Call');
