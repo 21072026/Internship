@@ -4,7 +4,7 @@ import { subscriberToken, subscriberTokenId } from '@/lib/subscriberTokens';
 
 process.env.NEXTAUTH_SECRET ||= 'synthetic-subscriber-token-tests';
 
-test('subscriber credentials reject tampering and cannot cross purposes or recipient IDs', () => {
+test('subscriber credentials reject tampering and cannot cross purposes or recipient IDs', { tag: '@smoke' }, () => {
   const id = randomUUID();
   const confirmation = subscriberToken(id, 'confirm');
   const unsubscribe = subscriberToken(id, 'unsubscribe');

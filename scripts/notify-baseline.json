@@ -5,6 +5,10 @@
     "allowed: a raw send that stays by decision — { count, reason }."
   ],
   "allowed": {
+    "src/lib/subscriberMail.ts": {
+      "count": 2,
+      "reason": "Public Subscriber requests have no User recipient for the notification ledger/router. Like newsletterDispatch, this separate consent model uses purpose-bound double opt-in, custom RFC 8058 opt-out and subscriberId gates at preparation, queue drain and final transport; existing account prefs and delivery suppression also veto sends (#1406, docs/interest-signup.md)."
+    },
     "src/app/api/admin/email-test/route.ts": {
       "count": 1,
       "reason": "The admin's explicit test mail to an address they typed — a transport check, not a notification."

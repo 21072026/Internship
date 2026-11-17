@@ -20,6 +20,9 @@ included in admin exports or logs. Unsubscribe credentials have no expiry.
 
 `sendSubscriberMail` is the entry point for any future product update. It reuses
 `sendEmail`, delivery suppression, outbound approval and the sealed mail queue.
+The notification-router baseline documents exactly two direct transport calls,
+following the existing newsletter/applicant exception: a Subscriber has no User
+recipient for that ledger. All transport/suppression checks still apply.
 There is no new campaign scheduler or parallel newsletter preference system.
 `subscriberId` travels in the sealed envelope. Preparation, queue drain and the
 final transport boundary check the persisted consent, confirmation, expiry and

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
+import { locales } from '@/i18n/config';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { enforceRateLimit } from '@/lib/rateLimit';
@@ -14,7 +15,7 @@ const value = z.string().max(300).optional();
 const schema = z.object({
   email: z.string().trim().toLowerCase().pipe(z.email().max(191)),
   role: z.enum(['MENTEE', 'MENTOR', 'COMPANY', 'OTHER']),
-  locale: z.enum(['en', 'tr', 'de']),
+  locale: z.enum(locales),
   consent: z.literal(true),
   website: z.string().max(500).optional(),
   renderedAt: z.number().int(),
