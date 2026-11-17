@@ -17,7 +17,7 @@ import { useFilterAnnouncement } from '@/hooks/useFilterAnnouncement';
 import { BoardStageFilter } from '@/components/board/BoardStageFilter';
 import { BoardPhaseGroups } from '@/components/board/BoardPhaseGroups';
 import { BoardColumnHeader } from '@/components/board/BoardColumnHeader';
-import { boardColumnTone } from '@/lib/boardColumnTone';
+import { boardColumnPaint } from '@/lib/boardColumnTone';
 import { OverdueBadge } from '@/components/board/OverdueBadge';
 import { useBoardFilters } from '@/components/board/useBoardFilters';
 import { useBoardWipLimits } from '@/components/board/useBoardWipLimits';
@@ -57,6 +57,12 @@ export default function AdminBoardPage() {
   const t = useT();
   const stages = useResolvedStages();
   const stageKeys = useMemo(() => [...stages].sort((a, b) => a.order - b.order).map((s) => s.key), [stages]);
+  // A column wears its stage's own color when it has one (#3661), else the
+  // positional tone — one rule, src/lib/boardColumnTone.ts.
+  const paintFor = useMemo(() => {
+    const colors = new Map(stages.map((s) => [s.key, s.color]));
+    return (key: string) => boardColumnPaint(key, stageKeys, colors.get(key));
+  }, [stages, stageKeys]);
   const label = useStageLabel();
   const { show: showGate, dialog: gateDialog } = useStageGateDialog();
   const router = useRouter();
@@ -382,9 +388,10 @@ export default function AdminBoardPage() {
           const id = e.dataTransfer.getData('relationId');
           if (id) requestMove(id, status);
         }}
-        // Each stage its own color (src/lib/boardColumnTone.ts); the drop
+        // Each stage its own color (src/lib/boardColumnTone.ts, #3661); the drop
         // target keeps it and gains a ring instead of turning blue.
-        className={`flex-shrink-0 w-64 rounded-xl border p-3 transition-colors ${boardColumnTone(status, stageKeys)}${
+        style={paintFor(status).style}
+        className={`flex-shrink-0 w-64 rounded-xl border p-3 transition-colors ${paintFor(status).className}${
           dragOver === status ? ' ring-2 ring-blue-500 ring-offset-1' : ''
         }`}
       >

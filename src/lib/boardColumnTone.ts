@@ -1,5 +1,16 @@
 // A board column's background color, so neighbouring stages can never be
-// mistaken for one another. Colors follow the stage's place in the pipeline:
+// mistaken for one another.
+//
+// The stage's OWN color comes first (#3661): an admin picks it per stage on
+// the pipeline editor, and the template presets carry one (the sales funnel
+// does). `boardColumnPaint()` tints the column with it — a light wash of the
+// color, a stronger top stripe — as an inline style, because the color is
+// data and Tailwind cannot generate a class for it. Only a strict hex is
+// accepted (the column is free text in the DB); anything else, and a stage
+// with no color at all (the internship defaults), falls back to the
+// positional tone below.
+//
+// Positional tone (#3666): Colors follow the stage's place in the pipeline:
 // first blue, then orange, purple, yellow, red, green (and on past six, more
 // contrasting hues); the LAST stage is always gray. For the sales funnel that
 // reads New lead → blue … Trial expired → red, Won → green, Lost → gray.
@@ -46,4 +57,37 @@ export function boardColumnTone(key: string, orderedKeys: readonly string[]): st
   if (i < 0) return UNKNOWN;
   if (orderedKeys.length > 1 && i === orderedKeys.length - 1) return LAST;
   return CYCLE[i % CYCLE.length];
+}
+
+const HEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+
+/**
+ * The stage color as `#rrggbb`, or null when it is missing or not a plain hex
+ * color — never pass a stored value into a style unchecked.
+ */
+export function stageColorHex(color: string | null | undefined): string | null {
+  const c = color?.trim() ?? '';
+  if (!HEX.test(c)) return null;
+  const hex = c.length === 4 ? `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}` : c;
+  return hex.toLowerCase();
+}
+
+export type ColumnPaint = {
+  className: string;
+  style?: { backgroundColor: string; borderColor: string; borderTopColor: string; borderTopWidth: number };
+};
+
+/**
+ * How to paint the column for `key`: the stage's own color when it has a
+ * valid one, otherwise the positional tone. Translucent, so the same wash
+ * reads on the light page and on the dark one; the header text keeps its
+ * gray, which holds AA on a 14% tint of any color.
+ */
+export function boardColumnPaint(key: string, orderedKeys: readonly string[], color: string | null | undefined): ColumnPaint {
+  const hex = stageColorHex(color);
+  if (!hex) return { className: boardColumnTone(key, orderedKeys) };
+  return {
+    className: '',
+    style: { backgroundColor: `${hex}24`, borderColor: `${hex}66`, borderTopColor: hex, borderTopWidth: 4 },
+  };
 }
