@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ChevronRight, MessageSquare } from 'lucide-react';
+import { CalendarClock, ChevronRight, MessageSquare } from 'lucide-react';
 import { AddInteractionForm, type InteractionFormDraft } from '@/components/AddInteractionForm';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { useT } from '@/i18n/client';
@@ -32,6 +32,12 @@ import { INTERACTION_DRAFT_EVENT, isTypingTarget, type InteractionDraftRequest }
 // list, collapsed by default and named by its owner and dates, so the earlier
 // work is reachable without being re-attributed to the current owner. Whether
 // they are open is remembered in this browser (a convenience, never relied on).
+//
+// Follow-up history (#3819): what happened to the follow-up — set, moved,
+// completed, removed, handed over — joins the list as muted system lines
+// (FollowUpEvent, src/lib/followUpEvents.ts). They are not interactions: they
+// never count as a contact, and the page passes them only to viewers who may
+// read the follow-up.
 
 export interface LeadInteraction {
   id: string;
@@ -40,6 +46,17 @@ export interface LeadInteraction {
   subject: string | null;
   notes: string;
 }
+
+/** A follow-up history line (#3819), already worded by the page in the viewer's language. */
+export interface LeadSystemEvent {
+  id: string;
+  at: string;
+  headline: string;
+  detail: string | null;
+  by: string;
+}
+
+type Entry = { kind: 'interaction'; at: number; row: LeadInteraction } | { kind: 'system'; at: number; row: LeadSystemEvent };
 
 export interface EarlierPeriodView {
   relationId: string;
@@ -98,15 +115,40 @@ function InteractionRow({ row, open, onToggle }: { row: LeadInteraction; open: b
   );
 }
 
+// A system line is muted and says so: it records what happened to the
+// follow-up, not a contact with the lead.
+function SystemRow({ row, badge }: { row: LeadSystemEvent; badge: string }) {
+  return (
+    <li className="py-2 text-sm text-gray-500 first:pt-0 last:pb-0 dark:text-gray-400" data-testid="sales-lead-system-row">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="inline-flex shrink-0 items-center gap-1 rounded border border-gray-200 px-1.5 py-0.5 text-[11px] font-medium dark:border-gray-700">
+          <CalendarClock className="h-3 w-3" aria-hidden="true" />
+          {badge}
+        </span>
+        <span className="min-w-0 flex-1 truncate" title={row.headline} data-testid="sales-lead-system-headline">
+          {row.headline}
+        </span>
+        <RelativeTime date={row.at} className="shrink-0 text-xs" />
+      </div>
+      <p className="mt-0.5 truncate text-xs" title={row.detail ?? undefined}>
+        {row.detail ? <span lang={contentLang(row.detail)}>{row.detail} · </span> : null}
+        <span>{row.by}</span>
+      </p>
+    </li>
+  );
+}
+
 export function SalesInteractionsCard({
   relationId,
   canLog,
   interactions,
+  systemEvents = [],
   earlierPeriods = [],
 }: {
   relationId: string;
   canLog: boolean;
   interactions: LeadInteraction[];
+  systemEvents?: LeadSystemEvent[];
   earlierPeriods?: EarlierPeriodView[];
 }) {
   const t = useT();
@@ -148,7 +190,12 @@ export function SalesInteractionsCard({
     };
   }, [canLog]);
 
-  const rows = showAll ? interactions : interactions.slice(0, FIRST_ROWS);
+  // One timeline, newest first: the interactions and the follow-up's history lines.
+  const entries: Entry[] = [
+    ...interactions.map((row): Entry => ({ kind: 'interaction', at: Date.parse(row.date), row })),
+    ...systemEvents.map((row): Entry => ({ kind: 'system', at: Date.parse(row.at), row })),
+  ].sort((a, b) => b.at - a.at);
+  const rows = showAll ? entries : entries.slice(0, FIRST_ROWS);
 
   return (
     <div id="sales-lead-interactions-card" className="scroll-mt-20 rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="sales-lead-interactions-card">
@@ -169,16 +216,20 @@ export function SalesInteractionsCard({
           <AddInteractionForm relationId={relationId} onAdded={() => router.refresh()} draft={draft} />
         </div>
       )}
-      {interactions.length === 0 ? (
+      {entries.length === 0 ? (
         <p className="mt-3 text-sm text-gray-500" data-testid="sales-lead-interactions-empty">{s.interactionsEmpty}</p>
       ) : (
         <>
           <ul className="mt-3 divide-y divide-gray-100 dark:divide-gray-800" data-testid="sales-lead-interactions">
-            {rows.map((i) => (
-              <InteractionRow key={i.id} row={i} open={opened.has(i.id)} onToggle={() => toggle(i.id)} />
-            ))}
+            {rows.map((e) =>
+              e.kind === 'system' ? (
+                <SystemRow key={`s-${e.row.id}`} row={e.row} badge={s.followUpEvent.badge} />
+              ) : (
+                <InteractionRow key={e.row.id} row={e.row} open={opened.has(e.row.id)} onToggle={() => toggle(e.row.id)} />
+              ),
+            )}
           </ul>
-          {interactions.length > FIRST_ROWS && (
+          {entries.length > FIRST_ROWS && (
             <button
               type="button"
               className="mt-3 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
@@ -186,7 +237,7 @@ export function SalesInteractionsCard({
               onClick={() => setShowAll((v) => !v)}
               data-testid="sales-lead-interactions-toggle"
             >
-              {showAll ? s.showFewer : s.showAll.replace('{n}', String(interactions.length))}
+              {showAll ? s.showFewer : s.showAll.replace('{n}', String(entries.length))}
             </button>
           )}
         </>

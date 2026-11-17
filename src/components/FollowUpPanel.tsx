@@ -177,7 +177,8 @@ export function FollowUpPanel({
     next: { date: string; note: string },
     savedMessage: string = t.followUp.saved,
     // Complete hands the keyboard to the interaction form it opens; it must not be pulled back here.
-    opts: { returnFocus?: boolean } = {},
+    // `completed` marks a clear made by Complete, so the history says so (#3819).
+    opts: { returnFocus?: boolean; completed?: boolean } = {},
   ): Promise<boolean> => {
     setError('');
     if (!parseNextActionDate(next.date).ok) {
@@ -193,7 +194,11 @@ export function FollowUpPanel({
       const res = await fetch(`/api/mentorship/${relationId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nextActionAt: next.date || null, nextActionNote: next.note || null }),
+        body: JSON.stringify({
+          nextActionAt: next.date || null,
+          nextActionNote: next.note || null,
+          ...(opts.completed ? { nextActionCompleted: true } : {}),
+        }),
       });
       if (!res.ok) throw new Error();
       toast(savedMessage);
@@ -213,7 +218,7 @@ export function FollowUpPanel({
   // Nothing is written on the click: the follow-up stays until the interaction
   // it opens is saved, and Cancel leaves it as it was (#3803).
   const complete = () => {
-    onComplete?.(shown.note, () => save({ date: '', note: '' }, t.followUp.completed, { returnFocus: false }));
+    onComplete?.(shown.note, () => save({ date: '', note: '' }, t.followUp.completed, { returnFocus: false, completed: true }));
   };
 
   // One click, one call (#2875): the gate's denials become a line under the

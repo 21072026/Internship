@@ -21,6 +21,8 @@ import { isStageTransition, validateDropoffReason, validateEmploymentAttribution
 import { canTransition } from '@/lib/stageGate';
 import { funnelEnteredAtForKindChange, isEmploymentAttribution, isRelationKind } from '@/lib/placementKind';
 import { nextActionPatch, parseNextActionDate, parseNextActionNote, stripNextActionFor } from '@/lib/nextActionRule';
+import { followUpEventFor } from '@/lib/followUpEventRule';
+import { followUpEventWrite } from '@/lib/followUpEvents';
 
 // No `status` here any more (#1770): a pairing's state moves only through
 // POST /api/mentorship/[id]/lifecycle, which derives `status` from it. A body
@@ -44,6 +46,9 @@ const updateRelationSchema = z.object({
   // and are applied below, so this route and any later writer share them.
   nextActionAt: z.string().nullable().optional(),
   nextActionNote: z.string().nullable().optional(),
+  // Sent with a clearing write by the panel's "Complete" (#3819): the history
+  // line says "completed" rather than "cleared". Ignored on any other write.
+  nextActionCompleted: z.boolean().optional(),
   // The pair's promised meeting cadence, in weeks (#2014); null clears it.
   // Read by src/lib/meetingCadence.ts — "on cadence" means met within it.
   expectedMeetingIntervalWeeks: z.number().int().min(1).max(52).nullable().optional(),
@@ -234,7 +239,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }
 
       const {
-        stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote,
+        stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote, nextActionCompleted,
         kind, employmentAttribution, expectedEndDate, ...rest
       } = parsed.data;
 
@@ -365,12 +370,19 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       // Independent of the stage SLA (#2563): a stage change in this same
       // request neither reads nor clears these, and moving the date re-arms
       // its one reminder (nextActionPatch).
-      Object.assign(
-        data,
-        nextActionPatch(relation, {
-          nextActionAt: parsedNextAt?.ok ? parsedNextAt.value : undefined,
-          nextActionNote: parsedNextNote?.ok ? parsedNextNote.value : undefined,
-        })
+      const followUp = nextActionPatch(relation, {
+        nextActionAt: parsedNextAt?.ok ? parsedNextAt.value : undefined,
+        nextActionNote: parsedNextNote?.ok ? parsedNextNote.value : undefined,
+      });
+      Object.assign(data, followUp);
+      // The history line of this follow-up edit (#3819), if it changed one.
+      const followUpEvent = followUpEventFor(
+        { at: relation.nextActionAt, note: relation.nextActionNote },
+        {
+          at: followUp.nextActionAt !== undefined ? followUp.nextActionAt : relation.nextActionAt,
+          note: followUp.nextActionNote !== undefined ? followUp.nextActionNote : relation.nextActionNote,
+        },
+        { completed: nextActionCompleted === true }
       );
 
       // A stage-only request that selects the current value is a successful
@@ -380,7 +392,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         return NextResponse.json({ relation, changed: false });
       }
 
-      const updated = await prisma.mentorshipRelation.update({
+      const update = prisma.mentorshipRelation.update({
         where: { id },
         data,
         include: {
@@ -389,6 +401,19 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
           company: { select: { id: true, name: true } },
         },
       });
+      // One transaction: the follow-up columns and their history line land
+      // together or not at all.
+      const [updated] = followUpEvent
+        ? await prisma.$transaction([
+            update,
+            followUpEventWrite({
+              relationId: id,
+              facts: followUpEvent,
+              recordUpdatedAt: relation.updatedAt,
+              actorId: session.user.id,
+            }),
+          ])
+        : [await update];
 
       // The audit row, activity entry and notification/webhook/SLA effects,
       // through the shared write path (#2658). `relation` still holds the
