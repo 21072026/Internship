@@ -7,6 +7,8 @@ import { ArrowLeft } from 'lucide-react';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
+import { formatInTimeZone } from '@/lib/timezone';
+import { intlLocaleFor } from '@/lib/interviewRequests';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { hasSalesSurface } from '@/lib/salesSurface';
 import { isSalesDispatcher } from '@/lib/salesDispatcher';
@@ -106,7 +108,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   const writable = await canWriteSalesRecord(session, relation);
   const ownersView = writable || canSeeNextAction({ id: session.user.id, role: session.user.role }, relation);
 
-  const [company, lastContact, interactions, earlier, successor, followUpEvents, stageMoves] = await Promise.all([
+  const [company, lastContact, interactions, earlier, successor, followUpEvents, stageMoves, meetings, viewer] = await Promise.all([
     relation.companyId
       ? prisma.company.findFirst({
           where: withinTenant({ id: relation.companyId }, tenant),
@@ -136,6 +138,18 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
       take: INTERACTION_LIMIT,
       select: { id: true, fromStatus: true, toStatus: true, createdAt: true, changedBy: { select: { fullName: true } } },
     }),
+    // Meetings planned on this record (#3837), read from the Meeting rows the
+    // planner already writes — no InteractionLog row: planning a meeting is
+    // not a contact (the last-contact rule, the counters and the billing meter
+    // read that log; same reasoning as #3819).
+    prisma.meeting.findMany({
+      where: { relationId: relation.id },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: INTERACTION_LIMIT,
+      select: { id: true, title: true, scheduledAt: true, createdAt: true, createdById: true, status: true, cancelledAt: true, cancelledById: true },
+    }),
+    // A meeting's time reads in the viewer's own zone.
+    prisma.user.findUnique({ where: { id: session.user.id }, select: { timezone: true } }),
   ]);
   // The banner's link only when this viewer may open the current record (the same read as this page).
   const successorOpens =
@@ -184,6 +198,40 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
       detail: null,
       by: m.changedBy?.fullName ?? t.common.systemActor,
     });
+  }
+  // Who planned / cancelled each meeting: plain ids on the row, one lookup.
+  const meetingPeople = new Map(
+    (
+      await prisma.user.findMany({
+        where: withinTenant({ id: { in: [...new Set(meetings.flatMap((m) => [m.createdById, m.cancelledById ?? '']).filter(Boolean))] } }, tenant),
+        select: { id: true, fullName: true },
+      })
+    ).map((u) => [u.id, u.fullName]),
+  );
+  const meetingWhen = (at: Date | null) =>
+    at ? formatInTimeZone(at, viewer?.timezone, undefined, intlLocaleFor(locale)) : null;
+  for (const m of meetings) {
+    const when = meetingWhen(m.scheduledAt);
+    // The title is the owner's wording: on a colleague's record only the time.
+    const detail = ownersView ? m.title : null;
+    systemEvents.push({
+      id: `meeting-${m.id}`,
+      source: 'meeting',
+      at: m.createdAt.toISOString(),
+      headline: when ? s.followUpEvent.meetingPlanned.replace('{when}', () => when) : s.followUpEvent.meetingPlannedNoTime,
+      detail,
+      by: meetingPeople.get(m.createdById) ?? t.common.systemActor,
+    });
+    if (m.status === 'CANCELLED' && m.cancelledAt) {
+      systemEvents.push({
+        id: `meeting-cancel-${m.id}`,
+        source: 'meeting',
+        at: m.cancelledAt.toISOString(),
+        headline: when ? s.followUpEvent.meetingCancelled.replace('{when}', () => when) : s.followUpEvent.meetingCancelledNoTime,
+        detail,
+        by: (m.cancelledById && meetingPeople.get(m.cancelledById)) || t.common.systemActor,
+      });
+    }
   }
   // Never the `@import.local` stand-in: the account's address, else none.
   const leadEmail = shownEmail(relation.mentee.email, company?.contactEmail);

@@ -2313,6 +2313,10 @@ const en = {
         noDate: 'no date',
         someone: 'someone',
         stageMoved: 'Stage: {from} → {to}',
+        meetingPlanned: 'Meeting scheduled for {when}',
+        meetingPlannedNoTime: 'Meeting planned (no time set)',
+        meetingCancelled: 'Meeting on {when} cancelled',
+        meetingCancelledNoTime: 'Meeting cancelled',
       },
       // The interaction list's filter (#3820); the choice is kept in this browser.
       interactionFilter: {
@@ -15010,6 +15014,10 @@ const tr: Dict = {
         noDate: 'tarihsiz',
         someone: 'biri',
         stageMoved: 'Aşama: {from} → {to}',
+        meetingPlanned: 'Toplantı planlandı: {when}',
+        meetingPlannedNoTime: 'Toplantı planlandı (saat belirtilmedi)',
+        meetingCancelled: '{when} toplantısı iptal edildi',
+        meetingCancelledNoTime: 'Toplantı iptal edildi',
       },
       interactionFilter: {
         label: 'Göster',
@@ -27493,6 +27501,10 @@ const de: Dict = {
         noDate: 'ohne Datum',
         someone: 'jemand',
         stageMoved: 'Phase: {from} → {to}',
+        meetingPlanned: 'Termin vereinbart: {when}',
+        meetingPlannedNoTime: 'Termin geplant (ohne Uhrzeit)',
+        meetingCancelled: 'Termin am {when} abgesagt',
+        meetingCancelledNoTime: 'Termin abgesagt',
       },
       interactionFilter: {
         label: 'Anzeigen',

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarClock, ChevronRight, GitCommitHorizontal, MessageSquare } from 'lucide-react';
+import { CalendarClock, ChevronRight, GitCommitHorizontal, MessageSquare, Video } from 'lucide-react';
 import { AddInteractionForm, type InteractionFormDraft } from '@/components/AddInteractionForm';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { useT } from '@/i18n/client';
@@ -57,8 +57,8 @@ export interface LeadInteraction {
 /** A follow-up history line (#3819), already worded by the page in the viewer's language. */
 export interface LeadSystemEvent {
   id: string;
-  /** A follow-up line (#3819) or a stage move read from StatusChange (#3820). */
-  source: 'followUp' | 'stage';
+  /** A follow-up line (#3819), a stage move read from StatusChange (#3820) or a meeting read from Meeting (#3837). */
+  source: 'followUp' | 'stage' | 'meeting';
   at: string;
   headline: string;
   detail: string | null;
@@ -129,7 +129,7 @@ function InteractionRow({ row, open, onToggle }: { row: LeadInteraction; open: b
 // One line (#3820): icon, what happened, the detail and who, then when. The
 // whole text is the hover title, since a narrow card clips it.
 function SystemRow({ row, badge }: { row: LeadSystemEvent; badge: string }) {
-  const Icon = row.source === 'stage' ? GitCommitHorizontal : CalendarClock;
+  const Icon = row.source === 'stage' ? GitCommitHorizontal : row.source === 'meeting' ? Video : CalendarClock;
   const text = [row.headline, row.detail, row.by].filter(Boolean).join(' · ');
   return (
     <li
