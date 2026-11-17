@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Lead page interaction filter and stage history (#3820): the sales lead page's interaction list gains an \"All · Interactions · System\" segmented filter (default All, remembered per browser) and shows the record's stage moves, read from the existing `StatusChange` rows, as one-line system entries next to the follow-up history (#3819).",
+  "notes": {
+    "en": ["The lead page shows stage changes in the interaction list, and a filter switches between all entries, interactions only and system lines."],
+    "tr": ["Lead sayfası aşama değişikliklerini etkileşim listesinde gösteriyor; bir filtreyle tüm kayıtlar, yalnızca görüşmeler ve sistem satırları arasında geçilebiliyor."],
+    "de": ["Die Lead-Seite zeigt Phasenwechsel in der Interaktionsliste, und ein Filter wechselt zwischen allen Einträgen, nur Interaktionen und Systemzeilen."]
+  }
+}

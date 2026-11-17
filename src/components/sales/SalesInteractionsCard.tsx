@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarClock, ChevronRight, MessageSquare } from 'lucide-react';
+import { CalendarClock, ChevronRight, GitCommitHorizontal, MessageSquare } from 'lucide-react';
 import { AddInteractionForm, type InteractionFormDraft } from '@/components/AddInteractionForm';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { useT } from '@/i18n/client';
@@ -38,6 +38,13 @@ import { INTERACTION_DRAFT_EVENT, isTypingTarget, type InteractionDraftRequest }
 // (FollowUpEvent, src/lib/followUpEvents.ts). They are not interactions: they
 // never count as a contact, and the page passes them only to viewers who may
 // read the follow-up.
+//
+// Stage history and the filter (#3820): the record's stage moves (StatusChange,
+// the audit row every move writes) are system lines too, and a segmented
+// "All · Interactions · System" control above the list narrows it without
+// splitting the chronology into tabs. All is the default; the choice is
+// remembered in this browser (a convenience, never relied on). The control
+// appears only once there is a system line to filter.
 
 export interface LeadInteraction {
   id: string;
@@ -50,6 +57,8 @@ export interface LeadInteraction {
 /** A follow-up history line (#3819), already worded by the page in the viewer's language. */
 export interface LeadSystemEvent {
   id: string;
+  /** A follow-up line (#3819) or a stage move read from StatusChange (#3820). */
+  source: 'followUp' | 'stage';
   at: string;
   headline: string;
   detail: string | null;
@@ -117,25 +126,47 @@ function InteractionRow({ row, open, onToggle }: { row: LeadInteraction; open: b
 
 // A system line is muted and says so: it records what happened to the
 // follow-up, not a contact with the lead.
+// One line (#3820): icon, what happened, the detail and who, then when. The
+// whole text is the hover title, since a narrow card clips it.
 function SystemRow({ row, badge }: { row: LeadSystemEvent; badge: string }) {
+  const Icon = row.source === 'stage' ? GitCommitHorizontal : CalendarClock;
+  const text = [row.headline, row.detail, row.by].filter(Boolean).join(' · ');
   return (
-    <li className="py-2 text-sm text-gray-500 first:pt-0 last:pb-0 dark:text-gray-400" data-testid="sales-lead-system-row">
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="inline-flex shrink-0 items-center gap-1 rounded border border-gray-200 px-1.5 py-0.5 text-[11px] font-medium dark:border-gray-700">
-          <CalendarClock className="h-3 w-3" aria-hidden="true" />
-          {badge}
-        </span>
-        <span className="min-w-0 flex-1 truncate" title={row.headline} data-testid="sales-lead-system-headline">
-          {row.headline}
-        </span>
-        <RelativeTime date={row.at} className="shrink-0 text-xs" />
-      </div>
-      <p className="mt-0.5 truncate text-xs" title={row.detail ?? undefined}>
-        {row.detail ? <span lang={contentLang(row.detail)}>{row.detail} · </span> : null}
-        <span>{row.by}</span>
-      </p>
+    <li
+      className="flex min-w-0 items-center gap-2 py-1.5 text-xs text-gray-500 first:pt-0 last:pb-0 dark:text-gray-400"
+      data-testid="sales-lead-system-row"
+      data-source={row.source}
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0" aria-label={badge} />
+      <span className="min-w-0 flex-1 truncate" title={text} data-testid="sales-lead-system-headline">
+        {row.headline}
+        {row.detail ? <span lang={contentLang(row.detail)}> · {row.detail}</span> : null}
+        <span> · {row.by}</span>
+      </span>
+      <RelativeTime date={row.at} className="shrink-0" />
     </li>
   );
+}
+
+type Filter = 'all' | 'interactions' | 'system';
+const FILTERS: readonly Filter[] = ['all', 'interactions', 'system'];
+const FILTER_KEY = 'sales.lead.interactionFilter';
+
+function readFilter(): Filter {
+  try {
+    const v = window.localStorage.getItem(FILTER_KEY);
+    return (FILTERS as readonly string[]).includes(v ?? '') ? (v as Filter) : 'all';
+  } catch {
+    return 'all';
+  }
+}
+
+function writeFilter(f: Filter) {
+  try {
+    window.localStorage.setItem(FILTER_KEY, f);
+  } catch {
+    /* private window or blocked storage: the filter simply starts at All */
+  }
 }
 
 export function SalesInteractionsCard({
@@ -163,6 +194,13 @@ export function SalesInteractionsCard({
       return next;
     });
   const [draft, setDraft] = useState<InteractionFormDraft | null>(null);
+  // All on the server and on first paint; the remembered choice applies after hydration.
+  const [filter, setFilter] = useState<Filter>('all');
+  useEffect(() => setFilter(readFilter()), []);
+  const pick = (f: Filter) => {
+    setFilter(f);
+    writeFilter(f);
+  };
   // Collapsed on the server and on first paint; the remembered choice applies after hydration.
   const [earlierOpen, setEarlierOpen] = useState(false);
   useEffect(() => setEarlierOpen(readEarlierOpen()), []);
@@ -194,8 +232,12 @@ export function SalesInteractionsCard({
   const entries: Entry[] = [
     ...interactions.map((row): Entry => ({ kind: 'interaction', at: Date.parse(row.date), row })),
     ...systemEvents.map((row): Entry => ({ kind: 'system', at: Date.parse(row.at), row })),
-  ].sort((a, b) => b.at - a.at);
+  ]
+    .filter((e) => filter === 'all' || (filter === 'system') === (e.kind === 'system'))
+    .sort((a, b) => b.at - a.at);
   const rows = showAll ? entries : entries.slice(0, FIRST_ROWS);
+  const anything = interactions.length + systemEvents.length > 0;
+  const f = s.interactionFilter;
 
   return (
     <div id="sales-lead-interactions-card" className="scroll-mt-20 rounded-lg border border-gray-200 p-3 dark:border-gray-700" data-testid="sales-lead-interactions-card">
@@ -216,8 +258,30 @@ export function SalesInteractionsCard({
           <AddInteractionForm relationId={relationId} onAdded={() => router.refresh()} draft={draft} />
         </div>
       )}
+      {systemEvents.length > 0 && (
+        <div role="group" aria-label={f.label} className="mt-3 inline-flex rounded-md border border-gray-200 p-0.5 text-xs dark:border-gray-700" data-testid="sales-lead-interaction-filter">
+          {FILTERS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={filter === key}
+              onClick={() => pick(key)}
+              className={`rounded px-2 py-1 font-medium ${
+                filter === key
+                  ? 'bg-gray-800 text-white dark:bg-gray-200 dark:text-gray-900'
+                  : 'text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100'
+              }`}
+              data-testid={`sales-lead-interaction-filter-${key}`}
+            >
+              {f[key]}
+            </button>
+          ))}
+        </div>
+      )}
       {entries.length === 0 ? (
-        <p className="mt-3 text-sm text-gray-500" data-testid="sales-lead-interactions-empty">{s.interactionsEmpty}</p>
+        <p className="mt-3 text-sm text-gray-500" data-testid="sales-lead-interactions-empty">
+          {anything ? f.empty : s.interactionsEmpty}
+        </p>
       ) : (
         <>
           <ul className="mt-3 divide-y divide-gray-100 dark:divide-gray-800" data-testid="sales-lead-interactions">
