@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Affiliate commission engine (#3845): a plan can be month-aligned (`monthAligned`, `timeZone`, default Europe/Berlin) — the percent phase then starts at the beginning of the month the switch customer first paid in, and a customer's window runs whole calendar months from its first paying month (`monthStartInZone()`, `customerWindowEndsAt()`). A first payment's tier is chosen by the new `AffiliatePayment.listAmountMinor` (the price list's price, set for list-priced counts) when present; the percent earns on the paid `amountMinor`. Stored plans read as not month-aligned until saved; the plan form, the partner's terms box and the settings transfer carry the new fields.",
+  "notes": {
+    "en": ["Affiliate plan: commissions can be counted in calendar months — the percentage starts at the beginning of the month the switch customer arrives in, and each customer's period runs from the beginning of its first paying month. The one-off commission follows the price-list price."],
+    "tr": ["Affiliate planı: komisyon takvim ayına göre sayılabilir — yüzde, geçiş müşterisinin geldiği ayın başından başlar ve her müşterinin süresi ilk ödeme ayının başından sayılır. Tek seferlik komisyon fiyat listesi fiyatına göre belirlenir."],
+    "de": ["Affiliate-Plan: Provisionen können in Kalendermonaten gezählt werden — der Prozentsatz beginnt am Anfang des Monats, in dem der Wechselkunde hinzukommt, und die Laufzeit jedes Kunden zählt ab Beginn seines ersten Zahlungsmonats. Die Einmalprovision richtet sich nach dem Preislistenpreis."]
+  }
+}
