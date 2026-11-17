@@ -10,6 +10,7 @@ import { recordOrgWrite } from '@/lib/orgAudit';
 import { isDefaultLabel, isPipelinePhase, removedStagesInUse } from '@/lib/pipeline';
 import { isPermission } from '@/lib/authzRule';
 import { onlyGatesChanged } from '@/lib/stageGateRule';
+import { MAX_STAGE_DESCRIPTION_LENGTH, isCuratedStageDescription } from '@/lib/programTemplates';
 import { requirePermission, type Permission } from '@/lib/authz';
 
 // Per-tenant pipeline-stage management (#747). Admin-only; premium-gated (custom
@@ -76,6 +77,9 @@ const stageSchema = z.object({
   isTerminal: z.boolean().optional(),
   isOffPath: z.boolean().optional(),
   color: z.string().optional().nullable(),
+  // What the stage means (#3660), shown behind the board header's info icon.
+  // Left out = keep the stored one; blank = the curated one (if any).
+  description: z.string().max(MAX_STAGE_DESCRIPTION_LENGTH).optional().nullable(),
   // Board phase (#1637): one of PIPELINE_PHASES, or null/omitted for "derive
   // it" (canonical keys keep their built-in phase, others the custom group).
   // z.string() + the whitelist below, never z.enum (repo convention).
@@ -104,10 +108,10 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
   // The plan gate covers the stage set's look and shape only (#1590): a FREE
   // tenant may save entry gates — a compliance control is never paywalled —
-  // as long as every key, label, order, flag, colour and phase is unchanged.
+  // as long as every key, label, description, order, flag, colour and phase is unchanged.
   if (gate.org.plan === 'FREE') {
     const current = await resolvePipelineStages(id, await getLocale());
-    if (!onlyGatesChanged(current, stages, isDefaultLabel, isPipelinePhase)) {
+    if (!onlyGatesChanged(current, stages, isDefaultLabel, isPipelinePhase, isCuratedStageDescription)) {
       return NextResponse.json({ error: 'Custom pipeline stages require a paid plan', code: 'plan_required' }, { status: 403 });
     }
   }

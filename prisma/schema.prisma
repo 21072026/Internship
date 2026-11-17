@@ -779,6 +779,12 @@ model PipelineStage {
   /// the column existed, which is why it is nullable rather than defaulted.
   phase          String?      @db.VarChar(16)
   color          String?
+  /// What the stage means, shown behind an info icon on the board header
+  /// (#3660). Same rule as `label` (#2268): a text the tenant typed,
+  /// shown verbatim in every language — or NULL/"" meaning "use the curated,
+  /// localized description of this key" (src/lib/programTemplates.ts), which
+  /// only curated template stages have. Read it through the resolvers.
+  description    String?      @db.VarChar(280)
   /// Entry gates (#1589, src/lib/stageGate.ts): what must hold before a
   /// relation moves FORWARD into this stage. All off by default, so a tenant
   /// that configures nothing behaves exactly as before. A backwards move or a

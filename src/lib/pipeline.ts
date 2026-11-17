@@ -244,6 +244,12 @@ export interface ResolvedStage {
   isOffPath: boolean;
   color: string | null;
   /**
+   * What the stage means (#3660), in the reader's language — the tenant's own
+   * text, or the curated description of a template stage. Absent or null:
+   * there is nothing to explain, and the board shows no info icon.
+   */
+  description?: string | null;
+  /**
    * The board phase the tenant filed this stage under (#1637), as stored — a
    * value outside PIPELINE_PHASES, null or absent means "derive it"; read it
    * only through `stageGroupKey()`.

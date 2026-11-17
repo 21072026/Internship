@@ -93,7 +93,11 @@ export type LocalizedLabel = Record<Locale, string>;
  * a field added to the resolved shape shows up here as a type error instead of
  * quietly shipping templates that cannot express it.
  */
-export type TemplateStage = Omit<ResolvedStage, 'label'> & { labels: LocalizedLabel };
+export type TemplateStage = Omit<ResolvedStage, 'label' | 'description'> & {
+  labels: LocalizedLabel;
+  /** What the stage means, per locale (#3660) — shown behind the board header's info icon. */
+  descriptions?: LocalizedLabel;
+};
 
 /** A service level, in calendar days (see the note on `StageSla`). */
 export interface TemplateSla {
@@ -129,6 +133,8 @@ const MAX_KEY_LENGTH = 60;
 // Labels are the realistic overrun: German is the longest of the three locales
 // and a compound stage name passes 120 characters easily.
 const MAX_LABEL_LENGTH = 120;
+// The `description` column (#3660) and the editor's bound on it.
+export const MAX_STAGE_DESCRIPTION_LENGTH = 280;
 const MAX_ORDER = 1000;
 const MAX_STAGES = 50;
 const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
@@ -550,22 +556,29 @@ const MARKETING_FUNNEL: ProgramTemplate = {
   reminderDays: 7,
   stages: [
     { key: 'LEAD_NEW', order: 0, isTerminal: false, isOffPath: false, color: '#2563eb',
-      labels: { en: 'New lead', tr: 'Yeni aday', de: 'Neuer Lead' } },
+      labels: { en: 'New lead', tr: 'Yeni aday', de: 'Neuer Lead' },
+      descriptions: { en: 'A new contact who has not been reached yet.', tr: 'Henüz ulaşılmamış yeni bir aday.', de: 'Ein neuer Kontakt, der noch nicht erreicht wurde.' } },
     { key: 'LEAD_CONTACTED', order: 1, isTerminal: false, isOffPath: false, color: '#0ea5e9',
-      labels: { en: 'Contacted', tr: 'İletişime geçildi', de: 'Kontaktiert' } },
+      labels: { en: 'Contacted', tr: 'İletişime geçildi', de: 'Kontaktiert' },
+      descriptions: { en: 'First contact is made; what they need is not clear yet.', tr: 'İlk temas kuruldu; ne istediği henüz belli değil.', de: 'Der erste Kontakt steht; der Bedarf ist noch offen.' } },
     { key: 'LEAD_QUALIFIED', order: 2, isTerminal: false, isOffPath: false, color: '#8b5cf6',
-      labels: { en: 'Qualified', tr: 'Nitelendirildi', de: 'Qualifiziert' } },
+      labels: { en: 'Qualified', tr: 'Nitelendirildi', de: 'Qualifiziert' },
+      descriptions: { en: 'What the customer wants is clear and their request is defined.', tr: 'Müşterinin ne istediği belli, talebi netleşti.', de: 'Klar, was der Kunde will; die Anfrage ist konkret.' } },
     { key: TRIAL_ACTIVE_STAGE_KEY, order: 3, isTerminal: false, isOffPath: false, color: '#06b6d4',
-      labels: { en: 'Trial running', tr: 'Deneme sürüyor', de: 'Testphase läuft' } },
+      labels: { en: 'Trial running', tr: 'Deneme sürüyor', de: 'Testphase läuft' },
+      descriptions: { en: 'The customer is using the product in a free trial.', tr: 'Müşteri ürünü ücretsiz denemede kullanıyor.', de: 'Der Kunde nutzt das Produkt in einer kostenlosen Testphase.' } },
     { key: TRIAL_EXPIRED_STAGE_KEY, order: 4, isTerminal: false, isOffPath: false, color: '#eab308',
-      labels: { en: 'Trial expired', tr: 'Deneme süresi doldu', de: 'Testphase abgelaufen' } },
+      labels: { en: 'Trial expired', tr: 'Deneme süresi doldu', de: 'Testphase abgelaufen' },
+      descriptions: { en: 'The trial has ended; the customer is deciding on a paid plan.', tr: 'Deneme süresi bitti; müşteri ücretli plan kararını veriyor.', de: 'Die Testphase ist vorbei; der Kunde entscheidet über einen bezahlten Tarif.' } },
     // No proposal/negotiation stages (#2840): a trial-led product has no
     // separate offer step — the win is the account choosing a paid plan,
     // straight out of the trial's decision window (TRIAL_EXPIRED).
     { key: 'DEAL_WON', order: 5, isTerminal: true, isOffPath: false, color: '#16a34a',
-      labels: { en: 'Won', tr: 'Kazanıldı', de: 'Gewonnen' } },
+      labels: { en: 'Won', tr: 'Kazanıldı', de: 'Gewonnen' },
+      descriptions: { en: 'The customer chose a paid plan.', tr: 'Müşteri ücretli bir plan seçti.', de: 'Der Kunde hat einen bezahlten Tarif gewählt.' } },
     { key: 'DEAL_LOST', order: 6, isTerminal: true, isOffPath: true, color: '#6b7280',
-      labels: { en: 'Lost', tr: 'Kaybedildi', de: 'Verloren' } },
+      labels: { en: 'Lost', tr: 'Kaybedildi', de: 'Verloren' },
+      descriptions: { en: 'The customer decided not to buy, or could not be reached.', tr: 'Müşteri satın almamaya karar verdi ya da ulaşılamadı.', de: 'Der Kunde hat sich gegen einen Kauf entschieden oder war nicht erreichbar.' } },
   ],
   // A marketing cadence in days: a fresh lead is contacted next-day, and a deal
   // does not sit in a stage for long before it needs a nudge.
@@ -660,8 +673,35 @@ export function localizeResolvedStageLabels(stages: ResolvedStage[], locale: Loc
   // raw key, which would no longer read as untouched.
   return localizeStageLabels(stages, locale).map((s, i) => {
     const label = curatedStageLabel(s.key, stages[i].label, locale);
-    return label === null ? s : { ...s, label };
+    const description = resolvedStageDescription(s.key, stages[i].description, locale);
+    return { ...s, label: label ?? s.label, description };
   });
+}
+
+// ── Stage descriptions (#3660) ───────────────────────────────────────────────
+// The same rule as the labels above: a stored description that is blank or a
+// copy of OUR curated one in any locale reads back in the viewer's language;
+// anything the tenant typed is shown verbatim.
+
+const CURATED_STAGE_DESCRIPTIONS: ReadonlyMap<string, LocalizedLabel> = new Map(
+  PROGRAM_TEMPLATES.flatMap((t) =>
+    t.stages.flatMap((s) => (s.descriptions ? [[s.key, s.descriptions] as const] : [])),
+  ),
+);
+
+/** True when `text` is blank or one of our curated descriptions of `key`, so it is stored as "use the curated one". */
+export function isCuratedStageDescription(key: string, text: string | null | undefined): boolean {
+  const trimmed = (text ?? '').trim();
+  if (!trimmed) return true;
+  const curated = CURATED_STAGE_DESCRIPTIONS.get(key);
+  return !!curated && TEMPLATE_LOCALES.some((l) => curated[l] === trimmed);
+}
+
+/** The description a reader sees: the tenant's text, else the curated one in `locale`, else null. */
+export function resolvedStageDescription(key: string, stored: string | null | undefined, locale: Locale): string | null {
+  if (!isCuratedStageDescription(key, stored)) return (stored ?? '').trim();
+  const curated = CURATED_STAGE_DESCRIPTIONS.get(key);
+  return curated ? curated[locale] ?? curated.en : null;
 }
 
 /**
@@ -881,6 +921,14 @@ export function validateProgramTemplate(template: ProgramTemplate): string[] {
         problems.push(at(`stage "${stage.key}" has no ${locale} label`));
       } else if (label.length > MAX_LABEL_LENGTH) {
         problems.push(at(`stage "${stage.key}" ${locale} label exceeds ${MAX_LABEL_LENGTH} chars`));
+      }
+      // Descriptions are optional, but all three locales or none.
+      if (stage.descriptions) {
+        const d = stage.descriptions[locale];
+        if (!d?.trim()) problems.push(at(`stage "${stage.key}" has no ${locale} description`));
+        else if (d.length > MAX_STAGE_DESCRIPTION_LENGTH) {
+          problems.push(at(`stage "${stage.key}" ${locale} description exceeds ${MAX_STAGE_DESCRIPTION_LENGTH} chars`));
+        }
       }
     }
   }

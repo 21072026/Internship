@@ -22,7 +22,7 @@ import {
 } from './pipeline';
 import type { Locale } from '@/i18n/config';
 import { orgWhere } from './tenantFilter';
-import { defaultTemplateForVertical, localizeResolvedStageLabels, templateStagePayload } from './programTemplates';
+import { defaultTemplateForVertical, isCuratedStageDescription, localizeResolvedStageLabels, templateStagePayload } from './programTemplates';
 
 export { CANONICAL_OUTCOME_KEYS, defaultPipelineStages, isDefaultLabel, onPathKeys, outcomeStageKeysFrom, stageLabel, startStageKey, type OutcomeStageKeys, type ResolvedStage };
 
@@ -48,6 +48,7 @@ export async function resolvePipelineStages(
           isTerminal: r.isTerminal,
           isOffPath: r.isOffPath,
           color: r.color,
+          description: r.description,
           phase: r.phase,
         })),
         locale,
@@ -75,6 +76,7 @@ export async function resolveCustomStages(
     isTerminal: r.isTerminal,
     isOffPath: r.isOffPath,
     color: r.color,
+    description: r.description,
     phase: r.phase,
   }));
 }
@@ -153,6 +155,12 @@ export interface StageWrite {
   isTerminal?: boolean;
   isOffPath?: boolean;
   color?: string | null;
+  /**
+   * What the stage means (#3660). Left out = keep what the stage with this key
+   * already has (a template apply never wipes it); blank or a copy of the
+   * curated description = "use the curated one", stored NULL.
+   */
+  description?: string | null;
   /** Board phase (#1637); anything outside PIPELINE_PHASES is stored as null ("derive it"). */
   phase?: string | null;
   /**
@@ -174,7 +182,7 @@ export async function replaceStages(orgId: string, stages: StageWrite[], client?
   const previous = new Map(
     (await (client ?? prisma).pipelineStage.findMany({
       where: { orgId },
-      select: { key: true, gateCapability: true, gateDocuments: true, gateEvaluation: true, gateOffer: true },
+      select: { key: true, description: true, gateCapability: true, gateDocuments: true, gateEvaluation: true, gateOffer: true },
     })).map((row) => [row.key, row]),
   );
   const data = stages.map((s) => ({
@@ -185,6 +193,10 @@ export async function replaceStages(orgId: string, stages: StageWrite[], client?
     isTerminal: s.isTerminal ?? false,
     isOffPath: s.isOffPath ?? false,
     color: s.color && s.color.trim() ? s.color.trim() : null,
+    description:
+      s.description !== undefined
+        ? (isCuratedStageDescription(s.key, s.description) ? null : (s.description ?? '').trim())
+        : (previous.get(s.key)?.description ?? null),
     phase: isPipelinePhase(s.phase) ? s.phase : null,
     gateCapability: s.gateCapability !== undefined ? (s.gateCapability?.trim() || null) : (previous.get(s.key)?.gateCapability ?? null),
     gateDocuments: s.gateDocuments ?? previous.get(s.key)?.gateDocuments ?? false,
