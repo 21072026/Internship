@@ -83,12 +83,15 @@ export default async function AffiliateCommissionsPage({ searchParams }: { searc
                     </td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">
                       {formatMinorAmount(r.paymentAmountMinor, r.currency, locale)}
-                      {r.paymentTransactionCount !== null && r.paymentUnitPriceMinor !== null && (
+                      {r.paymentTransactionCount !== null && (
                         <div className="text-xs text-gray-500" data-testid="affiliate-commission-breakdown">
-                          {interpolate(L.paymentBreakdown, {
-                            count: new Intl.NumberFormat(locale).format(r.paymentTransactionCount),
-                            price: formatMinorAmount(r.paymentUnitPriceMinor, r.currency, locale),
-                          })}
+                          {r.paymentUnitPriceMinor !== null
+                            ? interpolate(L.paymentBreakdown, {
+                                count: new Intl.NumberFormat(locale).format(r.paymentTransactionCount),
+                                price: formatMinorAmount(r.paymentUnitPriceMinor, r.currency, locale),
+                              })
+                            : // Priced by the programme's price list (#3844): the count alone.
+                              interpolate(L.paymentListPriced, { count: new Intl.NumberFormat(locale).format(r.paymentTransactionCount) })}
                         </div>
                       )}
                     </td>

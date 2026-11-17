@@ -19,13 +19,17 @@ import { interpolate } from '@/lib/notificationText';
 import { AffiliateTabs } from '../AffiliateTabs';
 import { AffiliateListToolbar, SortHeader, useAffiliateListQuery } from '@/components/affiliate/AffiliateListControls';
 import { PAYMENT_LIST, hasListFilter, listQueryParams } from '@/lib/affiliateListQueryRule';
+import { listPriceMinor, type PriceList } from '@/lib/affiliatePriceListRule';
+import { defaultPaymentRef } from '@/lib/affiliatePaymentBaseRule';
+import Link from 'next/link';
 
 // Customer payments (docs/affiliate-module.md, #3116): record one by hand, see
 // the commission the plan gave it. The writer decides everything; the amount is
 // typed the way a person writes it ("19,99") and sent as minor units.
-// The amount is the COMMISSION BASE (#3553): either transactions × the
-// undiscounted price per transaction, or the base amount itself — the writer's
-// resolvePaymentBase() decides; this screen only shows the product it will get.
+// The amount is the COMMISSION BASE (#3553): either the month's transaction
+// count, priced by the programme's price list (#3844), or the base amount
+// itself — the writer decides; this screen only shows what it will get. A
+// reference left empty becomes `<customer number>-YYYY-MM` (#3844).
 // A customer's partner-facing label (#3352) is edited from its row.
 // Partner, search and date filters and the column sort (#3539) live in the URL
 // and are applied on the server.
@@ -79,7 +83,7 @@ function AffiliatePayments() {
   const L = t.affiliatePayments;
   const locale = useLocale();
   const toast = useToast();
-  const [data, setData] = useState<{ rows: Row[]; total: number; page: number; perPage: number; canWrite: boolean } | null>(null);
+  const [data, setData] = useState<{ rows: Row[]; total: number; page: number; perPage: number; canWrite: boolean; priceList: PriceList | null } | null>(null);
   const [partners, setPartners] = useState<Partner[]>([]);
   const A = t.affiliateList;
   const { query, set } = useAffiliateListQuery(PAYMENT_LIST);
@@ -89,8 +93,10 @@ function AffiliatePayments() {
   const [forbidden, setForbidden] = useState(false);
   const [busy, setBusy] = useState(false);
   const [labelFor, setLabelFor] = useState<{ customerId: string; draft: string; reverseCharge: boolean } | null>(null);
-  const [form, setForm] = useState({ partnerId: '', customerExternalRef: '', amount: '', transactionCount: '', unitPrice: '', receivedOn: today(), externalPaymentRef: '' });
-  const [mode, setMode] = useState<'breakdown' | 'amount'>('breakdown');
+  const [form, setForm] = useState({ partnerId: '', customerExternalRef: '', amount: '', transactionCount: '', receivedOn: today(), externalPaymentRef: '' });
+  const [chosenMode, setMode] = useState<'count' | 'amount'>('count');
+  // Counting needs a price list; without one only the amount can be entered.
+  const mode = chosenMode === 'count' && data?.priceList ? 'count' : 'amount';
 
   const load = useCallback(async () => {
     const [p, q] = await Promise.all([fetch(`/api/admin/affiliate/payments?${qs}`), fetch('/api/admin/affiliate/partners')]);
@@ -134,7 +140,7 @@ function AffiliatePayments() {
   }
 
   async function save() {
-    let base: { amountMinor: number } | { transactionCount: number; unitPriceMinor: number };
+    let base: { amountMinor: number } | { transactionCount: number };
     if (mode === 'amount') {
       const amountMinor = parseMinorUnits(form.amount);
       if (amountMinor === null || Number.isNaN(amountMinor)) {
@@ -144,16 +150,11 @@ function AffiliatePayments() {
       base = { amountMinor };
     } else {
       const transactionCount = parseCount(form.transactionCount);
-      const unitPriceMinor = parseMinorUnits(form.unitPrice);
       if (transactionCount === null) {
         toast(L.baseErrors.transaction_count, 'error');
         return;
       }
-      if (unitPriceMinor === null || Number.isNaN(unitPriceMinor)) {
-        toast(L.baseErrors.unit_price, 'error');
-        return;
-      }
-      base = { transactionCount, unitPriceMinor };
+      base = { transactionCount };
     }
     setBusy(true);
     try {
@@ -172,8 +173,9 @@ function AffiliatePayments() {
       if (res.ok) {
         const moved = (body.created ?? 0) + (body.updated ?? 0);
         toast(moved > 0 ? interpolate(L.savedCommission, { n: String(moved) }) : L.saved);
+        if (!form.externalPaymentRef.trim() && body.externalPaymentRef) toast(interpolate(L.refAssigned, { ref: body.externalPaymentRef }));
         if (body.drift > 0) toast(interpolate(L.drift, { n: String(body.drift) }), 'error');
-        setForm({ ...form, customerExternalRef: '', amount: '', transactionCount: '', unitPrice: '', externalPaymentRef: '' });
+        setForm({ ...form, customerExternalRef: '', amount: '', transactionCount: '', externalPaymentRef: '' });
         // The new payment is the newest: back to the first page of the default order.
         // (A changed URL reloads by itself; an unchanged one is reloaded here.)
         if (page > 1 || query.sort !== PAYMENT_LIST.defaultSort || query.dir !== PAYMENT_LIST.defaultDir) set({ page: 1, sort: PAYMENT_LIST.defaultSort, dir: PAYMENT_LIST.defaultDir });
@@ -195,13 +197,19 @@ function AffiliatePayments() {
   // What the server will receive, before saving: "1.000" is a thousand euro.
   const parsedAmount = parseMinorUnits(form.amount);
   const amountPreview = parsedAmount === null || Number.isNaN(parsedAmount) ? undefined : interpolate(L.amountPreview, { amount: money(parsedAmount) });
-  // The product the writer will record, live: "340 × 0,15 € = 51,00 €".
+  // What the price list makes of the count, live (#3844). The reverse-charge price
+  // is shown beside it when it differs: the writer applies the customer's own flag.
   const parsedCount = parseCount(form.transactionCount);
-  const parsedPrice = parseMinorUnits(form.unitPrice);
-  const breakdownPreview =
-    parsedCount === null || parsedPrice === null || Number.isNaN(parsedPrice)
-      ? undefined
-      : interpolate(L.breakdownPreview, { count: new Intl.NumberFormat(locale).format(parsedCount), price: money(parsedPrice), amount: money(parsedCount * parsedPrice) });
+  const list = data?.priceList ?? null;
+  const priced = list && parsedCount !== null ? listPriceMinor(list, parsedCount) : null;
+  const pricedRc = list && parsedCount !== null ? listPriceMinor(list, parsedCount, { reverseCharge: true }) : null;
+  const countPreview = !priced || !priced.ok
+    ? undefined
+    : priced.amountMinor === 0
+      ? L.countFree
+      : interpolate(L.countPreview, { count: new Intl.NumberFormat(locale).format(parsedCount!), amount: money(priced.amountMinor) }) +
+        (pricedRc?.ok && pricedRc.amountMinor !== priced.amountMinor ? ' · ' + interpolate(L.countPreviewReverseCharge, { amount: money(pricedRc.amountMinor) }) : '');
+  const refPlaceholder = form.customerExternalRef.trim() && /^\d{4}-\d{2}/.test(form.receivedOn) ? defaultPaymentRef(form.customerExternalRef, form.receivedOn) : undefined;
 
   return (
     <div className="space-y-6">
@@ -230,27 +238,27 @@ function AffiliatePayments() {
             <div className="space-y-2 sm:col-span-2 lg:col-span-3">
               <div className="flex flex-wrap items-center gap-2" role="group" aria-label={L.baseMode}>
                 <span className="text-sm text-gray-600 dark:text-gray-400">{L.baseMode}</span>
-                {(['breakdown', 'amount'] as const).map((m) => (
+                {(['count', 'amount'] as const).map((m) => (
                   <Button
                     key={m}
                     type="button"
                     size="sm"
                     variant={mode === m ? 'primary' : 'secondary'}
                     aria-pressed={mode === m}
+                    disabled={m === 'count' && !data?.priceList}
                     onClick={() => setMode(m)}
                     data-testid={`affiliate-payment-mode-${m}`}
                   >
-                    {m === 'breakdown' ? L.modeBreakdown : L.modeAmount}
+                    {m === 'count' ? L.modeCount : L.modeAmount}
                   </Button>
                 ))}
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {mode === 'breakdown' ? (
+                {mode === 'count' ? (
                   <>
                     <Input label={L.transactionCount} inputMode="numeric" value={form.transactionCount} onChange={(e) => setForm({ ...form, transactionCount: e.target.value })} data-testid="affiliate-payment-count" />
-                    <Input label={L.unitPrice} inputMode="decimal" value={form.unitPrice} onChange={(e) => setForm({ ...form, unitPrice: e.target.value })} data-testid="affiliate-payment-unit-price" />
-                    <p className="self-end pb-2 text-sm font-medium text-gray-900 tabular-nums dark:text-gray-100" aria-live="polite" data-testid="affiliate-payment-breakdown-preview">
-                      {breakdownPreview}
+                    <p className="self-end pb-2 text-sm font-medium text-gray-900 tabular-nums sm:col-span-2 dark:text-gray-100" aria-live="polite" data-testid="affiliate-payment-count-preview">
+                      {countPreview}
                     </p>
                   </>
                 ) : (
@@ -258,9 +266,15 @@ function AffiliatePayments() {
                 )}
               </div>
               <p className="text-xs text-gray-500" data-testid="affiliate-payment-base-hint">{L.baseHint}</p>
+              {data && !data.priceList && (
+                <p className="text-xs text-amber-700 dark:text-amber-400" data-testid="affiliate-payment-no-price-list">
+                  {L.noPriceList}{' '}
+                  <Link href="/admin/affiliates/settings" className="underline">{L.noPriceListLink}</Link>
+                </p>
+              )}
             </div>
             <Input label={L.receivedOn} type="date" max={today()} value={form.receivedOn} onChange={(e) => setForm({ ...form, receivedOn: e.target.value })} data-testid="affiliate-payment-date" />
-            <Input label={L.paymentRef} hint={L.paymentRefHint} value={form.externalPaymentRef} onChange={(e) => setForm({ ...form, externalPaymentRef: e.target.value })} data-testid="affiliate-payment-ref" />
+            <Input label={L.paymentRef} hint={L.paymentRefHint} placeholder={refPlaceholder} value={form.externalPaymentRef} onChange={(e) => setForm({ ...form, externalPaymentRef: e.target.value })} data-testid="affiliate-payment-ref" />
           </div>
           <div className="mt-3">
             <Button type="button" disabled={busy} onClick={() => void save()} data-testid="affiliate-payment-save">
@@ -316,9 +330,11 @@ function AffiliatePayments() {
                     <td className="px-4 py-2">{r.partner.displayName}</td>
                     <td className="px-4 py-2 text-right whitespace-nowrap">
                       {money(r.amountMinor, r.currency)}
-                      {r.transactionCount !== null && r.unitPriceMinor !== null && (
+                      {r.transactionCount !== null && (
                         <div className="text-xs text-gray-500" data-testid="affiliate-payment-breakdown">
-                          {interpolate(L.breakdownLine, { count: new Intl.NumberFormat(locale).format(r.transactionCount), price: money(r.unitPriceMinor, r.currency) })}
+                          {r.unitPriceMinor !== null
+                            ? interpolate(L.breakdownLine, { count: new Intl.NumberFormat(locale).format(r.transactionCount), price: money(r.unitPriceMinor, r.currency) })
+                            : interpolate(L.listPricedLine, { count: new Intl.NumberFormat(locale).format(r.transactionCount) })}
                         </div>
                       )}
                     </td>

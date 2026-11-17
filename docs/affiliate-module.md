@@ -156,6 +156,27 @@ partner portal's commissions page (the partner's own customers only, through the
 existing scope; no personal data beyond the customer reference). A payment
 without one shows the amount alone.
 
+**(c) a count alone, priced by the price list** (#3843/#3844). The programme's
+transaction price list (`AffiliateProgramSettings.priceList`, set on the settings
+page; the rule is `src/lib/affiliatePriceListRule.ts`) turns a month's count into
+its gross list price: free up to a limit, a base fee covering the first
+transactions, per-transaction steps (fractions of a cent allowed), VAT on top —
+summed exactly and rounded to the cent once. A customer marked reverse charge
+(`AffiliateCustomer.reverseCharge`) gets VAT only when the list's
+`reverseChargeAddsVat` says so. A `transactionCount` with neither a unit price nor
+an amount takes this shape (`wantsListPrice()` / `priceByList()` in the base rule;
+the writer reads the list and the customer's flag). It is stored with the count
+and a null unit price — shown as `20 transactions · price list` — and refused as
+`no_price_list` without a list or `free_month` within the free limit. The price
+list prices an entry when it is made: changing it never reprices a stored payment.
+
+The **admin form** now offers "Number of transactions" (the default once a price
+list exists, with the list price shown live) or "Base amount"; without a price
+list only the amount can be entered. A **reference left empty** becomes
+`<customer number>-YYYY-MM` (`defaultPaymentRef()`), the month of the received
+day, so a second entry for the same customer and month is caught as a duplicate;
+the API answers with the reference it used.
+
 ### Re-evaluation after a plan change (#3170)
 
 A plan save returns as soon as the plan is committed, whatever the number of

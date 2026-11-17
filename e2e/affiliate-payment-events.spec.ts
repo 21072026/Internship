@@ -194,6 +194,6 @@ test('the commission base arrives as transactions × unit price, or is refused w
   const mismatch = await (await post(request, paymentEvent(ext, { id: `INV-${STAMP}-b3`, amount_minor: 4_000, transaction_count: 340, unit_price_minor: 15, currency: 'EUR' }))).json();
   expect(mismatch).toMatchObject({ outcome: 'conflict', detail: 'payment refused: invalid_input (amount_mismatch)' });
   const half = await (await post(request, paymentEvent(ext, { id: `INV-${STAMP}-b4`, transaction_count: 340, currency: 'EUR' }))).json();
-  expect(half).toMatchObject({ outcome: 'conflict', detail: 'payment refused: invalid_input (incomplete_breakdown)' });
+  expect(half).toMatchObject({ outcome: 'conflict', detail: 'payment refused: invalid_input (no_price_list)' });
   expect(await prisma.affiliatePayment.count({ where: { orgId: orgA } })).toBe(before);
 });

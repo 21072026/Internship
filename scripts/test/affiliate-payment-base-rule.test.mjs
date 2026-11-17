@@ -12,7 +12,7 @@ import { register } from 'node:module';
 // affiliatePaymentBaseRule.ts imports its sibling without an extension; see ts-extensionless-resolve.mjs.
 register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
 const { MAX_AMOUNT_MINOR } = await import('../../src/lib/affiliateCommissionRule.ts');
-const { resolvePaymentBase } = await import('../../src/lib/affiliatePaymentBaseRule.ts');
+const { resolvePaymentBase, priceByList, wantsListPrice, defaultPaymentRef } = await import('../../src/lib/affiliatePaymentBaseRule.ts');
 
 test('a bare amount is the base, with no breakdown', () => {
   assert.deepEqual(resolvePaymentBase({ amountMinor: 4_900 }), { ok: true, amountMinor: 4_900, transactionCount: null, unitPriceMinor: null });
@@ -59,4 +59,31 @@ test('the product must fit the column', () => {
   assert.equal(resolvePaymentBase({ transactionCount: 1, unitPriceMinor: MAX_AMOUNT_MINOR }).ok, true);
   assert.deepEqual(resolvePaymentBase({ transactionCount: 2, unitPriceMinor: MAX_AMOUNT_MINOR }), { ok: false, issue: 'amount_range' });
   assert.deepEqual(resolvePaymentBase({ transactionCount: 100_000, unitPriceMinor: 100_000 }), { ok: false, issue: 'amount_range' });
+});
+
+// #3844 — a count alone, priced by the price list. Synthetic list: 5 free, a 5.00
+// base fee for the first 6, then 0.10; 20 % VAT, none on reverse charge.
+const LIST = { freeUpTo: 5, baseCovers: 6, baseFeeMilli: 500_000, steps: [{ upTo: null, unitMilli: 10_000 }], vatBps: 2_000, reverseChargeAddsVat: false };
+
+test('only a count with neither a unit price nor an amount asks for the price list', () => {
+  assert.equal(wantsListPrice({ transactionCount: 20 }), true);
+  assert.equal(wantsListPrice({ transactionCount: 20, unitPriceMinor: null, amountMinor: undefined }), true);
+  assert.equal(wantsListPrice({ transactionCount: 20, unitPriceMinor: 5 }), false);
+  assert.equal(wantsListPrice({ transactionCount: 20, amountMinor: 500 }), false);
+  assert.equal(wantsListPrice({ amountMinor: 500 }), false);
+});
+
+test('the price list prices the count; the unit price stays empty', () => {
+  assert.deepEqual(priceByList(LIST, 20, false), { ok: true, amountMinor: 768, transactionCount: 20, unitPriceMinor: null });
+  assert.deepEqual(priceByList(LIST, 20, true), { ok: true, amountMinor: 640, transactionCount: 20, unitPriceMinor: null });
+});
+
+test('no price list, a free month and a bad count are refused', () => {
+  assert.deepEqual(priceByList(null, 20, false), { ok: false, issue: 'no_price_list' });
+  assert.deepEqual(priceByList(LIST, 5, false), { ok: false, issue: 'free_month' });
+  assert.deepEqual(priceByList(LIST, 0, false), { ok: false, issue: 'transaction_count' });
+});
+
+test('the default reference is the customer number and the month', () => {
+  assert.equal(defaultPaymentRef('  C-7 ', '2026-03-31'), 'C-7-2026-03');
 });
