@@ -42,7 +42,7 @@ export function ReEngageLeave({
         onClick={leave}
         disabled={state === 'busy'}
         data-testid="re-engage-leave"
-        className="mt-5 inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-40 dark:bg-gray-100 dark:text-gray-900"
+        className="mt-5 inline-flex items-center gap-2 rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-black disabled:opacity-40 dark:!bg-gray-100 dark:!text-gray-900"
       >
         {state === 'busy' && <Loader2 className="h-4 w-4 animate-spin" />}
         {labels.button}

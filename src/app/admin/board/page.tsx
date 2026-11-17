@@ -421,24 +421,10 @@ export default function AdminBoardPage() {
         </h1>
         <p className="text-gray-500 mt-1">{t.adminBoard.subtitle}</p>
       </div>
-      {leadHandoff.strip}
-
-      <div className="flex flex-wrap items-center gap-3 mb-4">
-        <input
-          type="search"
-          data-testid="board-search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t.adminBoard.searchPlaceholder}
-          className="flex-1 min-w-[180px] max-w-sm rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400"
-        />
-        <BoardOwnerFilter options={ownerOptions} selected={owners} onChange={setOwners} />
-        <label className="flex items-center gap-2 text-sm text-gray-600">
-          <input type="checkbox" checked={hideEmpty} onChange={(e) => setHideEmpty(e.target.checked)} />
-          {t.adminBoard.hideEmpty}
-        </label>
-      </div>
-      <div className="mb-4">
+      {/* One toolbar row above the colleague strip (#3838): saved views, the
+          owner filter and "hide empty stages", with the search at the far
+          right. Wraps on a narrow screen. */}
+      <div className="mb-4 flex flex-wrap items-center justify-end gap-3" data-testid="board-toolbar">
         <SavedViews
           storageKey="board-views"
           surface="board"
@@ -449,7 +435,22 @@ export default function AdminBoardPage() {
             setOwners((f.owners || '').split(',').filter(Boolean));
           }}
         />
+        <BoardOwnerFilter options={ownerOptions} selected={owners} onChange={setOwners} />
+        <label className="flex items-center gap-2 text-sm text-gray-600">
+          <input type="checkbox" data-testid="board-hide-empty" checked={hideEmpty} onChange={(e) => setHideEmpty(e.target.checked)} />
+          {t.adminBoard.hideEmpty}
+        </label>
+        <input
+          type="search"
+          data-testid="board-search"
+          aria-label={t.adminBoard.searchPlaceholder}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t.adminBoard.searchPlaceholder}
+          className="w-full rounded-lg border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 sm:w-80"
+        />
       </div>
+      {leadHandoff.strip}
 
       {totalCount === 0 && !serverSearch ? (
         /* Day one for a whole tenant: no mentorships at all, so no board. The
