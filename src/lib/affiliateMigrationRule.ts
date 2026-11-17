@@ -252,6 +252,10 @@ function readPaymentBase(get: (column: string) => string): PaymentBaseCells {
       return { ok: false, subject: 'unit_price', code: 'amount_range' };
     case 'amount_mismatch':
       return { ok: false, subject: 'payment_amount', code: 'amount_mismatch' };
+    // Only priceByList() answers these (#3844); the migration never prices by list.
+    case 'no_price_list':
+    case 'free_month':
+      return { ok: false, subject: 'unit_price', code: 'required' };
   }
 }
 

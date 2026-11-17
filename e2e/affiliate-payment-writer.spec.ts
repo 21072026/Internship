@@ -147,7 +147,9 @@ test('a breakdown is resolved to the base by the writer and stored beside it (#3
   const before = await prisma.affiliatePayment.count({ where: { orgId } });
   const pay = (fields: object, ref: string) => codeOf(recordAffiliatePayment({ ...base(), partnerId, customerExternalRef: 'c-b', receivedAt: at, externalPaymentRef: ref, ...fields }));
   expect(await pay({ amountMinor: 700, transactionCount: 20, unitPriceMinor: 40 }, 'inv-13')).toBe('invalid_input:amount_mismatch');
-  expect(await pay({ transactionCount: 20 }, 'inv-14')).toBe('invalid_input:incomplete_breakdown');
+  // A count alone is priced by the price list (#3844); this programme has none.
+  expect(await pay({ transactionCount: 20 }, 'inv-14')).toBe('invalid_input:no_price_list');
+  expect(await pay({ unitPriceMinor: 40 }, 'inv-16')).toBe('invalid_input:incomplete_breakdown');
   expect(await pay({}, 'inv-15')).toBe('invalid_input:amount_required');
   expect(await pay({ transactionCount: 3, unitPriceMinor: 0 }, 'inv-16')).toBe('invalid_input:amount_range');
   expect(await prisma.affiliatePayment.count({ where: { orgId } })).toBe(before);

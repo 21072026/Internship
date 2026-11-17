@@ -41,7 +41,8 @@ import {
   type PaymentInputIssue,
   type StoredCommission,
 } from '@/lib/affiliateCommissionSync';
-import { resolvePaymentBase, type PaymentBaseIssue } from '@/lib/affiliatePaymentBaseRule';
+import { priceByList, resolvePaymentBase, wantsListPrice, type PaymentBase, type PaymentBaseIssue } from '@/lib/affiliatePaymentBaseRule';
+import { readStoredPriceList } from '@/lib/affiliatePriceListRule';
 
 export type AffiliateWriteErrorCode =
   | 'invalid_input'
@@ -83,7 +84,10 @@ export interface RecordPaymentInput {
    * resolvePaymentBase() (src/lib/affiliatePaymentBaseRule.ts) decides (#3552).
    */
   amountMinor?: number | null;
-  /** Transactions in the period; with `unitPriceMinor`, the base is their product. */
+  /**
+   * Transactions in the period; with `unitPriceMinor`, the base is their product.
+   * Alone (no unit price, no amount), the programme's price list prices it (#3844).
+   */
   transactionCount?: number | null;
   /** Undiscounted gross price per transaction, minor units. */
   unitPriceMinor?: number | null;
@@ -226,6 +230,24 @@ function mapPrismaError(e: unknown): unknown {
 }
 
 /**
+ * Shape (c) of the base (#3844): the transaction count priced by the programme's
+ * price list, with the customer's reverse-charge flag (a new customer has none).
+ * Read before the partner lock: the price list prices an entry when it is made,
+ * and a stored payment is never repriced.
+ */
+async function listPricedBase(raw: RecordPaymentInput, tx?: Tx): Promise<PaymentBase> {
+  const db = tx ?? prisma;
+  const [settings, customer] = await Promise.all([
+    db.affiliateProgramSettings.findUnique({ where: { orgId: raw.orgId }, select: { priceList: true } }),
+    db.affiliateCustomer.findUnique({
+      where: { orgId_externalRef: { orgId: raw.orgId, externalRef: normalizeRef(raw.customerExternalRef) } },
+      select: { reverseCharge: true },
+    }),
+  ]);
+  return priceByList(readStoredPriceList(settings?.priceList), raw.transactionCount as number, customer?.reverseCharge ?? false);
+}
+
+/**
  * Records one customer payment and brings the partner's commissions in line.
  *
  * `tx` (#3355): a caller that already holds a transaction — the account-event
@@ -234,7 +256,7 @@ function mapPrismaError(e: unknown): unknown {
  */
 export async function recordAffiliatePayment(raw: RecordPaymentInput, tx?: Tx): Promise<RecordPaymentResult> {
   const now = raw.now ?? new Date();
-  const base = resolvePaymentBase(raw);
+  const base = wantsListPrice(raw) ? await listPricedBase(raw, tx) : resolvePaymentBase(raw);
   if (!base.ok) throw new AffiliateWriteError('invalid_input', [base.issue]);
   const issues = checkPaymentInput({ ...raw, amountMinor: base.amountMinor }, now);
   if (issues.length > 0) throw new AffiliateWriteError('invalid_input', issues);

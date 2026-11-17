@@ -8,6 +8,8 @@ import { PAYMENT_LIST, parseListQuery } from '@/lib/affiliateListQueryRule';
 import { listPayments } from '@/lib/affiliatePayments';
 import { parseCalendarDay } from '@/lib/calendarDay';
 import { AffiliateWriteError, recordAffiliatePayment, type AffiliateWriteErrorCode } from '@/lib/affiliatePaymentWriter';
+import { defaultPaymentRef } from '@/lib/affiliatePaymentBaseRule';
+import { priceListFor } from '@/lib/affiliateProgramSettings';
 
 // The programme's customer payments (docs/affiliate-module.md, #3116).
 // GET: `affiliate.read`, newest first, paged. POST: `affiliate.write` — a manual
@@ -15,7 +17,10 @@ import { AffiliateWriteError, recordAffiliatePayment, type AffiliateWriteErrorCo
 // also decides the commission. The currency is the plan's; the received date is
 // a calendar day (UTC midnight) and never in the future. The commission base
 // comes as `amountMinor`, as `transactionCount` × `unitPriceMinor`, or as both
-// when they agree — the writer's resolvePaymentBase() decides (#3552/#3553).
+// when they agree — the writer's resolvePaymentBase() decides (#3552/#3553) —
+// or as `transactionCount` alone, priced by the programme's price list (#3844).
+// A reference left empty becomes `<customer number>-YYYY-MM` (#3844); the
+// response names the one used.
 export async function GET(request: Request) {
   const auth = await requirePermission('affiliate.read', { request });
   if ('error' in auth) return auth.error;
@@ -29,7 +34,9 @@ export async function GET(request: Request) {
   const parsed = parseListQuery(PAYMENT_LIST, new URL(request.url).searchParams);
   if (!parsed.ok) return NextResponse.json({ code: 'invalid_query', field: parsed.field }, { status: 400 });
   const result = await listPayments(orgId, parsed.query);
-  return NextResponse.json({ ...result, canWrite: decide({ actor: auth.actor, permission: 'affiliate.write' }).allow });
+  // The price list, so the entry form can show what a count will be recorded as (#3844).
+  const priceList = await priceListFor(orgId);
+  return NextResponse.json({ ...result, priceList, canWrite: decide({ actor: auth.actor, permission: 'affiliate.write' }).allow });
 }
 
 const schema = z.object({
@@ -74,6 +81,7 @@ export async function POST(request: Request) {
   const settings = await prisma.affiliateProgramSettings.findUnique({ where: { orgId }, select: { plan: true } });
   const currency = (settings?.plan as { currency?: string } | null)?.currency;
   if (!currency) return NextResponse.json({ code: 'no_plan' }, { status: 409 });
+  const externalPaymentRef = parsed.data.externalPaymentRef.trim() || defaultPaymentRef(parsed.data.customerExternalRef, parsed.data.receivedOn);
 
   try {
     const result = await recordAffiliatePayment({
@@ -85,14 +93,14 @@ export async function POST(request: Request) {
       unitPriceMinor: parsed.data.unitPriceMinor,
       currency,
       receivedAt,
-      externalPaymentRef: parsed.data.externalPaymentRef,
+      externalPaymentRef,
       source: 'MANUAL',
       enteredById: auth.session.user.id,
       // A calendar day typed in the admin's own zone: "today" east of UTC is
       // already tomorrow's UTC midnight. Up to +14 h is not "the future".
       now: new Date(Date.now() + 14 * 60 * 60 * 1000),
     });
-    return NextResponse.json({ ...result, drift: result.drift.length }, { status: 201 });
+    return NextResponse.json({ ...result, externalPaymentRef, drift: result.drift.length }, { status: 201 });
   } catch (e) {
     if (e instanceof AffiliateWriteError) return NextResponse.json({ code: e.code, issues: e.issues }, { status: STATUS[e.code] });
     throw e;

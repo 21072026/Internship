@@ -88,7 +88,9 @@ test('the API takes the base as transactions × price, as an amount, or both whe
   const before = await prisma.affiliatePayment.count({ where: { orgId } });
   for (const [data, issue] of [
     [{ amountMinor: 5_000, transactionCount: 340, unitPriceMinor: 15 }, 'amount_mismatch'],
-    [{ transactionCount: 340 }, 'incomplete_breakdown'],
+    // A count alone is priced by the price list (#3844); none is set here.
+    [{ transactionCount: 340 }, 'no_price_list'],
+    [{ unitPriceMinor: 15 }, 'incomplete_breakdown'],
     [{}, 'amount_required'],
   ] as const) {
     const res = await pay({ ...data, externalPaymentRef: `BX-${issue}-${STAMP}` });
@@ -96,34 +98,6 @@ test('the API takes the base as transactions × price, as an amount, or both whe
     expect(await res.json()).toEqual({ code: 'invalid_input', issues: [issue] });
   }
   expect(await prisma.affiliatePayment.count({ where: { orgId } })).toBe(before);
-});
-
-test('the form records transactions × price with a live product, or the base amount', async ({ page }) => {
-  test.slow();
-  await page.context().setExtraHTTPHeaders(host);
-  await signInAndSettle(page, email, PW, '/admin');
-  await gotoSettled(page, '/admin/affiliates/payments');
-
-  // Transactions × price is the default; the product shows before saving.
-  await expect(page.getByTestId('affiliate-payment-mode-breakdown')).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByTestId('affiliate-payment-base-hint')).toContainText('Undiscounted, gross, VAT included');
-  await page.getByTestId('affiliate-payment-customer').fill('CUST-BASE');
-  await page.getByTestId('affiliate-payment-count').fill('340');
-  await page.getByTestId('affiliate-payment-unit-price').fill('0,15');
-  await expect(page.getByTestId('affiliate-payment-breakdown-preview')).toHaveText(/^340 × €0\.15 = €51\.00$/);
-  await page.getByTestId('affiliate-payment-ref').fill(`F1-${STAMP}`);
-  await page.getByTestId('affiliate-payment-save').click();
-  await expect.poll(() => prisma.affiliatePayment.count({ where: { orgId, externalPaymentRef: `F1-${STAMP}` } })).toBe(1);
-  expect(await stored(`F1-${STAMP}`)).toEqual({ amountMinor: 5_100, transactionCount: 340, unitPriceMinor: 15 });
-
-  // The base amount, as before.
-  await page.getByTestId('affiliate-payment-mode-amount').click();
-  await page.getByTestId('affiliate-payment-customer').fill('CUST-BASE');
-  await page.getByTestId('affiliate-payment-amount').fill('49,90');
-  await page.getByTestId('affiliate-payment-ref').fill(`F2-${STAMP}`);
-  await page.getByTestId('affiliate-payment-save').click();
-  await expect.poll(() => prisma.affiliatePayment.count({ where: { orgId, externalPaymentRef: `F2-${STAMP}` } })).toBe(1);
-  expect(await stored(`F2-${STAMP}`)).toEqual({ amountMinor: 4_990, transactionCount: null, unitPriceMinor: null });
 });
 
 test('the breakdown shows beside the base: in the admin list and on the partner’s commissions (#3554)', async ({ browser, baseURL }) => {
@@ -147,4 +121,83 @@ test('the breakdown shows beside the base: in the admin list and on the partner�
   await expect(partner.getByTestId('affiliate-commission-breakdown')).toHaveCount(1);
   await expect(partner.locator('tbody tr', { hasText: 'CUST-BASE' }).getByTestId('affiliate-commission-breakdown')).toHaveText('340 transactions × €0.15');
   await partner.close();
+});
+
+// Synthetic (#3844): 5 free, a 5.00 base fee for the first 6, then 0.10; 20 % VAT,
+// none on a reverse-charge customer.
+const PRICE_LIST = {
+  freeUpTo: 5,
+  baseCovers: 6,
+  baseFeeMilli: 500_000,
+  steps: [{ upTo: null, unitMilli: 10_000 }],
+  vatBps: 2_000,
+  reverseChargeAddsVat: false,
+};
+const setPriceList = (priceList: unknown) => api.put('/api/admin/affiliate/settings/price-list', { headers: host, data: { priceList } });
+
+test('a count alone is priced by the price list; without one, or within the free limit, it is refused (#3844)', async () => {
+  expect(await (await pay({ transactionCount: 20, externalPaymentRef: `L0-${STAMP}` })).json()).toEqual({ code: 'invalid_input', issues: ['no_price_list'] });
+  expect((await setPriceList(PRICE_LIST)).status()).toBe(200);
+  try {
+    expect(await (await pay({ transactionCount: 5, externalPaymentRef: `L1-${STAMP}` })).json()).toEqual({ code: 'invalid_input', issues: ['free_month'] });
+    // 20 transactions: 5.00 + 14 × 0.10 = 6.40 net, 7.68 gross.
+    expect((await pay({ transactionCount: 20, externalPaymentRef: `L2-${STAMP}` })).status()).toBe(201);
+    expect(await stored(`L2-${STAMP}`)).toEqual({ amountMinor: 768, transactionCount: 20, unitPriceMinor: null });
+
+    // A reverse-charge customer gets no VAT under this list.
+    await prisma.affiliateCustomer.create({ data: { orgId, partnerId, externalRef: `RC-${STAMP}`, reverseCharge: true } });
+    expect((await pay({ customerExternalRef: `RC-${STAMP}`, transactionCount: 20, externalPaymentRef: `L3-${STAMP}` })).status()).toBe(201);
+    expect(await stored(`L3-${STAMP}`)).toEqual({ amountMinor: 640, transactionCount: 20, unitPriceMinor: null });
+
+    // An empty reference becomes <customer number>-YYYY-MM; a second entry for the month is a duplicate.
+    const first = await pay({ customerExternalRef: `REF-${STAMP}`, transactionCount: 20, externalPaymentRef: '  ', receivedOn: '2026-02-14' });
+    expect(first.status()).toBe(201);
+    expect((await first.json()).externalPaymentRef).toBe(`REF-${STAMP}-2026-02`);
+    const again = await pay({ customerExternalRef: `REF-${STAMP}`, transactionCount: 30, externalPaymentRef: '', receivedOn: '2026-02-20' });
+    expect(await again.json()).toMatchObject({ code: 'duplicate_payment' });
+  } finally {
+    expect((await setPriceList(null)).status()).toBe(200);
+  }
+});
+
+test('the form: the amount only without a price list; with one, the count with a live price and a default reference', async ({ page }) => {
+  test.slow();
+  await page.context().setExtraHTTPHeaders(host);
+  await signInAndSettle(page, email, PW, '/admin');
+  await gotoSettled(page, '/admin/affiliates/payments');
+
+  // No price list: counting is off, the amount is the mode, and the screen says where to set one.
+  await expect(page.getByTestId('affiliate-payment-mode-count')).toBeDisabled();
+  await expect(page.getByTestId('affiliate-payment-mode-amount')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('affiliate-payment-no-price-list')).toBeVisible();
+  await page.getByTestId('affiliate-payment-customer').fill('CUST-BASE');
+  await page.getByTestId('affiliate-payment-amount').fill('49,90');
+  await page.getByTestId('affiliate-payment-ref').fill(`F2-${STAMP}`);
+  await page.getByTestId('affiliate-payment-save').click();
+  await expect.poll(() => prisma.affiliatePayment.count({ where: { orgId, externalPaymentRef: `F2-${STAMP}` } })).toBe(1);
+  expect(await stored(`F2-${STAMP}`)).toEqual({ amountMinor: 4_990, transactionCount: null, unitPriceMinor: null });
+
+  expect((await setPriceList(PRICE_LIST)).status()).toBe(200);
+  try {
+    await gotoSettled(page, '/admin/affiliates/payments');
+    await expect(page.getByTestId('affiliate-payment-mode-count')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('affiliate-payment-base-hint')).toContainText('Gross, VAT included');
+    // A new customer number needs its partner.
+    await page.getByTestId('affiliate-payment-partner').selectOption(partnerId);
+    await page.getByTestId('affiliate-payment-customer').fill(`FORM-${STAMP}`);
+    await page.getByTestId('affiliate-payment-count').fill('3');
+    await expect(page.getByTestId('affiliate-payment-count-preview')).toContainText('not a payment');
+    await page.getByTestId('affiliate-payment-count').fill('20');
+    // Gross, and the reverse-charge price beside it since this list adds no VAT there.
+    await expect(page.getByTestId('affiliate-payment-count-preview')).toHaveText('20 transactions → €7.68 by the price list · reverse-charge customer: €6.40');
+    await page.getByTestId('affiliate-payment-date').fill('2026-03-02');
+    await expect(page.getByTestId('affiliate-payment-ref')).toHaveAttribute('placeholder', `FORM-${STAMP}-2026-03`);
+    await page.getByTestId('affiliate-payment-save').click();
+    await expect.poll(() => prisma.affiliatePayment.count({ where: { orgId, externalPaymentRef: `FORM-${STAMP}-2026-03` } })).toBe(1);
+    expect(await stored(`FORM-${STAMP}-2026-03`)).toEqual({ amountMinor: 768, transactionCount: 20, unitPriceMinor: null });
+    // The list says where the amount came from.
+    await expect(page.getByTestId('affiliate-payment-breakdown').filter({ hasText: 'price list' }).first()).toHaveText('20 transactions · price list');
+  } finally {
+    expect((await setPriceList(null)).status()).toBe(200);
+  }
 });

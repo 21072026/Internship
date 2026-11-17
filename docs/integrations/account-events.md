@@ -60,7 +60,7 @@ Unknown keys are ignored, so a sender may add fields without breaking anything. 
 | `acquisition_source` | string \| null | no | The channel the person reported at sign-up: `search_engine`, `social_media`, `youtube`, `referral`, `advertisement` or `other` (the list in `src/lib/leadSourceName.ts`). |
 | `referral_code` | string \| null | no | An affiliate or referral code, at most 100 characters (the longest a partner code can be). |
 | `plan` | string \| null | no | The account's plan in the source product: 1–40 characters of `A–Z a–z 0–9 . _ -`, stored lower-cased on the account (`Company.productPlan`) on **any** event type, `plan_changed` included. The source owns the field, so it overwrites, but only forward in time: an event older than the one that wrote the stored plan leaves it alone. `free` means the free plan, and feeds the `free_quota_exceeded` upsell signal (an account on it past the org's monthly transaction quota, `freePlanTransactionQuota`, default 10, shows in its owner's attention queue; nothing is blocked or billed — #2846). Omitted or empty = no opinion. |
-| `payment` | object \| null | on `payment_received` | `id` (the billing side's payment reference, 1–120 characters, unique per organization), the commission base as `amount_minor` (a positive integer in minor units) **or** `transaction_count` (a positive integer) + `unit_price_minor` (a non-negative integer, the undiscounted gross price per transaction) — or all three when they agree — `currency` (ISO 4217, capitals) and an optional `received_at` (ISO 8601, defaults to `occurred_at`). Required on `payment_received`, ignored on every other type. See [Customer payments](#customer-payments-3355). |
+| `payment` | object \| null | on `payment_received` | `id` (the billing side's payment reference, 1–120 characters, unique per organization), the commission base as `amount_minor` (a positive integer in minor units) **or** `transaction_count` (a positive integer) + `unit_price_minor` (a non-negative integer, the undiscounted gross price per transaction) — or all three when they agree, or `transaction_count` alone, priced by the programme's price list (#3844) — `currency` (ISO 4217, capitals) and an optional `received_at` (ISO 8601, defaults to `occurred_at`). Required on `payment_received`, ignored on every other type. See [Customer payments](#customer-payments-3355). |
 | `contact` | object \| null | no | `first_name`, `last_name`, `company_name` (each at most 191 characters) and `email` (a valid address, at most 191). The account's contact name is `first_name` and `last_name` joined, cut to 191 characters. Without `email` a new account gets no funnel record (see [What an event does](#what-an-event-does)). |
 
 No field of the envelope is ever a marketing permission. A new account gets the machine `NONE` contact-permission row and nothing else ([contact-permission.md](../contact-permission.md)).
@@ -147,6 +147,9 @@ typed one would. It moves nothing on the funnel.
   added up. Send it as `amount_minor`, or as `transaction_count` ×
   `unit_price_minor` (the breakdown is then stored and shown to the partner), or
   both when they agree. A client that sends only `amount_minor` is unchanged.
+  A `transaction_count` **alone** (#3844) is priced by the programme's price list
+  (gross, the customer's reverse-charge flag applied); without a price list it is
+  refused as `no_price_list`, and a count within the free limit as `free_month`.
 - **The customer** is the event's `external_id`, the reference the referral
   link stored ([Affiliate attribution](#affiliate-attribution)). A
   `referral_code` on the same event links the customer first.
@@ -161,8 +164,9 @@ typed one would. It moves nothing on the funnel.
     terminated partner's new customer, no plan, or an invalid amount or date.
     A refused commission base names its issue:
     `payment refused: invalid_input (<issue>)` with `amount_required` (neither
-    shape), `incomplete_breakdown` (only one of `transaction_count` and
-    `unit_price_minor`), `amount_range` (a product of zero or too large) or
+    shape), `incomplete_breakdown` (a `unit_price_minor` without a
+    `transaction_count`), `no_price_list` / `free_month` (a count alone, see
+    above), `amount_range` (a product of zero or too large) or
     `amount_mismatch` (`amount_minor` differs from the product).
   - `conflict` with `detail: "busy: …"`: the writer was busy. The claim is
     released and the same `event_id` can be sent again.
