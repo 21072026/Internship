@@ -9508,6 +9508,12 @@ model AffiliateProgramSettings {
   // Days before a customer's commission window ends that its partner is told
   // (#3556, src/lib/affiliateWindowNoticeRule.ts). 0 = off; 0…180.
   windowNoticeDays Int          @default(30)
+  // The transaction price list (#3843, src/lib/affiliatePriceListRule.ts): turns a
+  // month's transaction count into its gross list price, the base of a first
+  // payment's one-off commission. Organisation data; null = none configured.
+  // Not part of the commission plan: it prices future entries and never
+  // re-evaluates a stored payment.
+  priceList        Json?
 }
 
 // A picture or video the public partner page's theme shows (#3535): the logo,
@@ -9592,6 +9598,10 @@ model AffiliateCustomer {
   // src/lib/affiliateWindowNoticeRule.ts). Claimed with a conditional update
   // BEFORE the mail leaves, so a re-run never sends twice. Null = not told.
   windowNoticeSentAt DateTime?
+
+  // Invoiced without VAT (reverse charge, #3843). Whether its list price still
+  // gets VAT added is the price list's `reverseChargeAddsVat`. Set by an admin.
+  reverseCharge Boolean @default(false)
 
   @@unique([orgId, externalRef])
   @@index([partnerId])

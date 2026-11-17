@@ -1062,8 +1062,9 @@ imports such a file elsewhere.
 `format: "affiliate-settings"`, `version: 1`, the export time, the app version,
 `sections` and `assets`. The sections are `landing` (page content and theme),
 `contract`, `customerStatus` (`freeMonths`, `passiveAfterDays`), `windowNotice`,
-`referralUrl` and `plan`. A section never set is left out (a contract with no
-text, no plan, a referral address never entered), and an import leaves that
+`referralUrl`, `priceList` (the transaction price list, #3843) and `plan`. A
+section never set is left out (a contract with no text, no plan, a referral
+address or a price list never entered), and an import leaves that
 section of the target alone — an empty address in the file would otherwise
 *clear* the target's and break every partner's link. The theme's media travel inside the file,
 base64, with their SHA-256: they are compressed already, so a zip would save

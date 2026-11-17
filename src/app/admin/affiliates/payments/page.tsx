@@ -41,6 +41,7 @@ interface Row {
   customerId: string;
   customerRef: string;
   customerLabel: string | null;
+  customerReverseCharge: boolean;
   partner: { id: string; code: string; displayName: string };
   commission: { kind: 'TIER' | 'PERCENT' | 'IMPORTED'; amountMinor: number; status: string } | null;
 }
@@ -87,7 +88,7 @@ function AffiliatePayments() {
   const [failed, setFailed] = useState(false);
   const [forbidden, setForbidden] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [labelFor, setLabelFor] = useState<{ customerId: string; draft: string } | null>(null);
+  const [labelFor, setLabelFor] = useState<{ customerId: string; draft: string; reverseCharge: boolean } | null>(null);
   const [form, setForm] = useState({ partnerId: '', customerExternalRef: '', amount: '', transactionCount: '', unitPrice: '', receivedOn: today(), externalPaymentRef: '' });
   const [mode, setMode] = useState<'breakdown' | 'amount'>('breakdown');
 
@@ -118,7 +119,7 @@ function AffiliatePayments() {
       const res = await fetch(`/api/admin/affiliate/customers/${encodeURIComponent(labelFor.customerId)}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ partnerLabel: labelFor.draft }),
+        body: JSON.stringify({ partnerLabel: labelFor.draft, reverseCharge: labelFor.reverseCharge }),
       });
       if (!res.ok) {
         toast(L.labelFailed, 'error');
@@ -296,12 +297,15 @@ function AffiliatePayments() {
                     <td className="px-4 py-2">
                       <div className="flex items-start gap-2">
                         <CustomerName label={r.customerLabel} reference={r.customerRef} />
+                        {r.customerReverseCharge && (
+                          <Badge data-testid="affiliate-customer-reverse-charge-badge">{L.reverseChargeBadge}</Badge>
+                        )}
                         {data.canWrite && (
                           <Button
                             type="button"
                             size="sm"
                             variant="ghost"
-                            onClick={() => setLabelFor({ customerId: r.customerId, draft: r.customerLabel ?? '' })}
+                            onClick={() => setLabelFor({ customerId: r.customerId, draft: r.customerLabel ?? '', reverseCharge: r.customerReverseCharge })}
                             data-testid="affiliate-customer-label-edit"
                           >
                             {L.labelEdit}
@@ -346,14 +350,29 @@ function AffiliatePayments() {
         open={labelFor !== null}
         title={L.labelTitle}
         message={
-          <Input
-            label={L.labelField}
-            hint={L.labelHint}
-            maxLength={CUSTOMER_LABEL_MAX}
-            value={labelFor?.draft ?? ''}
-            onChange={(e) => setLabelFor((cur) => (cur ? { ...cur, draft: e.target.value } : cur))}
-            data-testid="affiliate-customer-label-input"
-          />
+          <div className="space-y-3">
+            <Input
+              label={L.labelField}
+              hint={L.labelHint}
+              maxLength={CUSTOMER_LABEL_MAX}
+              value={labelFor?.draft ?? ''}
+              onChange={(e) => setLabelFor((cur) => (cur ? { ...cur, draft: e.target.value } : cur))}
+              data-testid="affiliate-customer-label-input"
+            />
+            <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={labelFor?.reverseCharge ?? false}
+                onChange={(e) => setLabelFor((cur) => (cur ? { ...cur, reverseCharge: e.target.checked } : cur))}
+                data-testid="affiliate-customer-reverse-charge"
+              />
+              <span>
+                {L.reverseChargeField}
+                <span className="block text-xs text-gray-500">{L.reverseChargeHint}</span>
+              </span>
+            </label>
+          </div>
         }
         confirmLabel={L.labelSave}
         cancelLabel={L.labelCancel}

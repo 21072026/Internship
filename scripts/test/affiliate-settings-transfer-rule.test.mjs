@@ -104,8 +104,8 @@ test('base64ByteLength reads the length without decoding', () => {
 });
 
 test('sections come back in apply order, the plan last', () => {
-  const r = parseTransferFile(file({ sections: { plan: {}, windowNotice: 3, landing: {}, contract: {}, referralUrl: null, customerStatus: {} } }));
-  assert.deepEqual(presentSections(r.file), ['landing', 'contract', 'customerStatus', 'windowNotice', 'referralUrl', 'plan']);
+  const r = parseTransferFile(file({ sections: { plan: {}, priceList: {}, windowNotice: 3, landing: {}, contract: {}, referralUrl: null, customerStatus: {} } }));
+  assert.deepEqual(presentSections(r.file), ['landing', 'contract', 'customerStatus', 'windowNotice', 'referralUrl', 'priceList', 'plan']);
   assert.equal(TRANSFER_SECTIONS.at(-1), 'plan');
 });
 

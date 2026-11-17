@@ -48,6 +48,7 @@ import {
 import { landingAssetRefusal, storeLandingAssetBytes } from '@/lib/affiliateLandingAssets';
 import { parseReferralUrl } from '@/lib/affiliateReferralRule';
 import { parseWindowNoticeDays, readWindowNoticeDays } from '@/lib/affiliateWindowNoticeRule';
+import { canonicalPriceList, parsePriceList, readStoredPriceList } from '@/lib/affiliatePriceListRule';
 import {
   AFFILIATE_CURRENCIES,
   AffiliateSettingsError,
@@ -55,6 +56,7 @@ import {
   saveCustomerStatusSettings,
   saveLanding,
   savePlan,
+  savePriceList,
   saveReferralUrl,
   saveWindowNoticeDays,
 } from '@/lib/affiliateProgramSettings';
@@ -84,7 +86,7 @@ const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest(
 export async function buildSettingsExport(orgId: string, now = new Date()): Promise<TransferFile> {
   const row = await prisma.affiliateProgramSettings.findUnique({
     where: { orgId },
-    select: { plan: true, referralUrl: true, landing: true, contract: true, freeMonths: true, passiveAfterDays: true, windowNoticeDays: true },
+    select: { plan: true, referralUrl: true, landing: true, contract: true, freeMonths: true, passiveAfterDays: true, windowNoticeDays: true, priceList: true },
   });
   const sections: TransferSections = {};
   const assets: TransferAsset[] = [];
@@ -100,6 +102,10 @@ export async function buildSettingsExport(orgId: string, now = new Date()): Prom
     if (row.referralUrl) sections.referralUrl = row.referralUrl;
     sections.customerStatus = storedCustomerStatusSettings(row);
     sections.windowNotice = readWindowNoticeDays(row.windowNoticeDays);
+    // Like the address: a price list never set is left out, so an import never
+    // removes the target's own (#3843).
+    const priceList = readStoredPriceList(row.priceList);
+    if (priceList) sections.priceList = priceList;
 
     const ids = [...new Set(themeMediaRefs(landing.theme).map((r) => r.id))];
     if (ids.length > 0) {
@@ -214,7 +220,7 @@ function landingByContent(landing: Landing, hashOf: (id: string) => string | und
 async function prepare(orgId: string, file: TransferFile): Promise<Prepared> {
   const row = await prisma.affiliateProgramSettings.findUnique({
     where: { orgId },
-    select: { plan: true, referralUrl: true, landing: true, contract: true, freeMonths: true, passiveAfterDays: true, windowNoticeDays: true },
+    select: { plan: true, referralUrl: true, landing: true, contract: true, freeMonths: true, passiveAfterDays: true, windowNoticeDays: true, priceList: true },
   });
   const previews: SectionPreview[] = [];
   const assets = new Map<string, PreparedAsset>();
@@ -328,6 +334,16 @@ async function prepare(orgId: string, file: TransferFile): Promise<Prepared> {
         push(section, same ? 'same' : 'changed', [], { from, to: parsed.settings });
         break;
       }
+      case 'priceList': {
+        const parsed = parsePriceList(raw);
+        if (!parsed.ok) {
+          push(section, 'invalid', parsed.issues.map((i) => `${i.field}:${i.code}`));
+          break;
+        }
+        const same = canonicalPriceList(readStoredPriceList(row?.priceList)) === canonicalPriceList(parsed.priceList);
+        push(section, same ? 'same' : 'changed');
+        break;
+      }
       case 'windowNotice': {
         const days = parseWindowNoticeDays(raw);
         if (days === null) push(section, 'invalid', ['windowNoticeDays:range']);
@@ -432,6 +448,12 @@ async function applyInOrder(
         }
         case 'windowNotice': {
           const result = await saveWindowNoticeDays(orgId, raw, actorId);
+          if (!result.ok) return stop('conflict', section);
+          applied.push({ section, changed: result.changed });
+          break;
+        }
+        case 'priceList': {
+          const result = await savePriceList(orgId, raw, actorId);
           if (!result.ok) return stop('conflict', section);
           applied.push({ section, changed: result.changed });
           break;
