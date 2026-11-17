@@ -1,0 +1,15 @@
+{
+  "bump": "minor",
+  "changelog": "Boards scroll sideways while a card is dragged near their left or right edge, so an off-screen stage can be reached in one drag (#3662). Rule in `src/lib/dragAutoScrollRule.ts`, applied by `HorizontalScrollArea`.",
+  "notes": {
+    "en": [
+      "Dragging a card to the edge of a board now scrolls the board, so you can drop it on a stage that was off-screen."
+    ],
+    "tr": [
+      "Bir kartı panonun kenarına sürüklediğinizde pano kendiliğinden kayıyor; ekranda görünmeyen aşamaya tek hamlede bırakabilirsiniz."
+    ],
+    "de": [
+      "Wenn Sie eine Karte an den Rand eines Boards ziehen, scrollt das Board mit – so erreichen Sie auch Phasen außerhalb des sichtbaren Bereichs."
+    ]
+  }
+}

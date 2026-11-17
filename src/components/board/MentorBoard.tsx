@@ -17,7 +17,7 @@ import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { BoardStageFilter } from '@/components/board/BoardStageFilter';
 import { BoardPhaseGroups } from '@/components/board/BoardPhaseGroups';
 import { BoardColumnHeader } from '@/components/board/BoardColumnHeader';
-import { boardColumnTone } from '@/lib/boardColumnTone';
+import { boardColumnPaint } from '@/lib/boardColumnTone';
 import { useBoardFilters } from '@/components/board/useBoardFilters';
 import { useBoardWipLimits } from '@/components/board/useBoardWipLimits';
 import { DropoffReasonDialog } from '@/components/DropoffReasonDialog';
@@ -131,6 +131,12 @@ export function MentorBoard({
     const byKey = new Map(stages.map((s) => [s.key, s.description ?? null]));
     return (key: string) => byKey.get(key) ?? null;
   }, [stages]);
+  // A column wears its stage's own color when it has one (#3661), else the
+  // positional tone — one rule, src/lib/boardColumnTone.ts.
+  const paintFor = useMemo(() => {
+    const colors = new Map(stages.map((s) => [s.key, s.color]));
+    return (key: string) => boardColumnPaint(key, stageKeys, colors.get(key));
+  }, [stages, stageKeys]);
   const router = useRouter();
   const toast = useToast();
   const narrow = useIsNarrow();
@@ -605,7 +611,8 @@ export function MentorBoard({
                       // The same stage tone as an open column (src/lib/boardColumnTone.ts,
                       // #3675), dashed to say "empty"; a drop target gains the
                       // accent ring, exactly like an open column.
-                      className={`h-28 overflow-hidden rounded-lg border border-dashed py-2 flex flex-col items-center gap-1 transition-colors ${boardColumnTone(status, stageKeys)}${
+                      style={paintFor(status).style}
+                      className={`h-28 overflow-hidden rounded-lg border border-dashed py-2 flex flex-col items-center gap-1 transition-colors ${paintFor(status).className}${
                         dragOver === status ? ' ring-2 ring-blue-500 ring-offset-1' : ''
                       }`}
                     >
@@ -634,9 +641,10 @@ export function MentorBoard({
                 // so mark the state for globals.css to outline instead (#2045).
                 data-drop-active={dragOver === status ? 'true' : undefined}
                 {...dropHandlersFor(status)}
-                // Each stage its own color (src/lib/boardColumnTone.ts); the drop
+                // Each stage its own color (src/lib/boardColumnTone.ts, #3661); the drop
                 // target keeps it and gains a ring instead of turning blue.
-                className={`flex-shrink-0 w-64 rounded-xl border p-3 transition-colors ${boardColumnTone(status, stageKeys)}${
+                style={paintFor(status).style}
+                className={`flex-shrink-0 w-64 rounded-xl border p-3 transition-colors ${paintFor(status).className}${
                   dragOver === status ? ' ring-2 ring-blue-500 ring-offset-1' : ''
                 }`}
               >

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Board columns wear their stage's own color — the one set in the pipeline editor or by the template, e.g. the sales funnel — as a light wash with a colored top stripe; a stage without a valid hex color keeps the positional tone (#3661). `boardColumnPaint()` in `src/lib/boardColumnTone.ts`.",
+  "notes": {
+    "en": ["Board columns now use each stage's own color, so stages are easier to tell apart at a glance."],
+    "tr": ["Pano sütunları artık her aşamanın kendi rengini kullanıyor; aşamalar bir bakışta ayırt ediliyor."],
+    "de": ["Die Spalten im Board tragen jetzt die Farbe ihrer Phase, so lassen sich Phasen auf einen Blick unterscheiden."]
+  }
+}

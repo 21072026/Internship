@@ -1,6 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { dragAutoScrollStep } from '@/lib/dragAutoScrollRule';
+
+// No dragover for this long = the drag left the scroller (or ended without a
+// drop reaching us). Browsers repeat dragover every ~50ms even while the
+// pointer stands still, so this never stops a drag that is still here.
+const DRAG_IDLE_MS = 150;
 
 export function HorizontalScrollArea({
   children,
@@ -29,6 +35,47 @@ export function HorizontalScrollArea({
   }, []);
 
   useLayoutEffect(update);
+
+  // Auto-scroll while a card is dragged near an edge (#3662): the browser's
+  // native drag-and-drop does not scroll an inner horizontal box, so a stage
+  // off-screen could not be reached. dragover only records the step; one
+  // animation-frame loop applies it, and stops once dragover stops arriving.
+  // Touch never starts an HTML5 drag, so phones are unaffected.
+  const dragStep = useRef(0);
+  const lastDragOver = useRef(0);
+  const frame = useRef<number | null>(null);
+  const stopDragScroll = useCallback(() => {
+    dragStep.current = 0;
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+    frame.current = null;
+  }, []);
+  const runDragScroll = useCallback(() => {
+    const element = scrollRef.current;
+    if (!element || dragStep.current === 0 || performance.now() - lastDragOver.current > DRAG_IDLE_MS) {
+      stopDragScroll();
+      return;
+    }
+    element.scrollLeft += dragStep.current;
+    frame.current = requestAnimationFrame(runDragScroll);
+  }, [stopDragScroll]);
+  // Capture phase: a column's own dragover handler must not be able to hide
+  // the pointer from us.
+  const onDragOverCapture = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      const element = scrollRef.current;
+      if (!element) return;
+      const box = element.getBoundingClientRect();
+      lastDragOver.current = performance.now();
+      dragStep.current = dragAutoScrollStep(
+        event.clientX,
+        Math.max(box.left, 0),
+        Math.min(box.right, window.innerWidth),
+      );
+      if (dragStep.current !== 0 && frame.current === null) frame.current = requestAnimationFrame(runDragScroll);
+    },
+    [runDragScroll],
+  );
+  useEffect(() => stopDragScroll, [stopDragScroll]);
   useEffect(() => {
     const element = scrollRef.current;
     if (!element) return;
@@ -58,6 +105,8 @@ export function HorizontalScrollArea({
         ref={scrollRef}
         data-testid={testId}
         onScroll={update}
+        onDragOverCapture={onDragOverCapture}
+        onDropCapture={stopDragScroll}
         {...(scrollable ? { tabIndex: 0 } : {})}
         {...(scrollable && label ? { role: 'region', 'aria-label': label } : {})}
         className={`overflow-x-auto ${className}`}
