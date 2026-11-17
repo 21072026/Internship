@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { boardColumnTone } from '../../src/lib/boardColumnTone.ts';
+import { boardColumnPaint, boardColumnTone, stageColorHex } from '../../src/lib/boardColumnTone.ts';
 
 const keys = (n) => Array.from({ length: n }, (_, i) => `S${i}`);
 
@@ -65,4 +65,29 @@ test('the drop-target ring follows the org accent', () => {
   const css = readFileSync(new URL('../../src/app/globals.css', import.meta.url), 'utf8');
   // The dark-mode guard (#3745) may sit between the utility and the brace.
   assert.match(css, /html\[data-accent\] \.ring-blue-500(?::not\(:where\(\.dark \[class\*="dark:ring-"\]\)\))? \{ --tw-ring-color: var\(--accent-500\); \}/);
+});
+
+// ── The stage's own color (#3661) ──────────────────────────────────────────
+
+test('a stored hex color is accepted, normalised to #rrggbb', () => {
+  assert.equal(stageColorHex('#16A34A'), '#16a34a');
+  assert.equal(stageColorHex(' #abc '), '#aabbcc');
+});
+
+test('anything that is not a plain hex never reaches a style', () => {
+  for (const bad of [null, undefined, '', 'red', '#12345', '#1234567', 'url(x)', '#fff;background:url(x)', 'rgb(0,0,0)']) {
+    assert.equal(stageColorHex(bad), null, String(bad));
+  }
+});
+
+test('a stage with its own color is painted with it, no tone class', () => {
+  const p = boardColumnPaint('S1', keys(3), '#8b5cf6');
+  assert.equal(p.className, '');
+  assert.deepEqual(p.style, { backgroundColor: '#8b5cf624', borderColor: '#8b5cf666', borderTopColor: '#8b5cf6', borderTopWidth: 4 });
+});
+
+test('no color, or a bad one, falls back to the positional tone', () => {
+  const k = keys(3);
+  assert.deepEqual(boardColumnPaint('S1', k, null), { className: boardColumnTone('S1', k) });
+  assert.deepEqual(boardColumnPaint('S1', k, 'not-a-color'), { className: boardColumnTone('S1', k) });
 });
