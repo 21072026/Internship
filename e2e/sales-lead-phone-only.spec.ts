@@ -131,7 +131,9 @@ test('the rep\'s form takes a phone without an address, and says whose a duplica
   // Nothing to reach them by: the form says so before posting.
   await dialog.locator('#new-lead-name').fill(`Acme Form Nothing ${STAMP}`);
   await dialog.getByTestId('new-lead-submit').click();
-  await expect(dialog.getByTestId('new-lead-error')).toHaveText('Enter an e-mail address or a phone number.');
+  // Under the field, not in the banner (#3821).
+  await expect(dialog.getByText('Enter an e-mail address or a phone number.')).toBeVisible();
+  await expect(dialog.getByTestId('new-lead-error')).toHaveCount(0);
 
   // A phone alone is enough.
   await dialog.locator('#new-lead-name').fill(`Acme Form Phone ${STAMP}`);

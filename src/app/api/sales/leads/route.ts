@@ -14,6 +14,7 @@ import { createMarketingAccount } from '@/lib/marketingImportStore';
 import { findLeadOwner } from '@/lib/leadOwner';
 import { leadContactKey, leadStandInEmail } from '@/lib/marketingImport';
 import { normalizePhoneKey } from '@/lib/duplicateDetection';
+import { resolveNewLeadNames } from '@/lib/newLeadNameRule';
 
 // A sales rep types in their OWN lead (#2958) — the call, the trade-fair
 // badge, the LinkedIn message — from the /sales surface.
@@ -53,6 +54,9 @@ import { normalizePhoneKey } from '@/lib/duplicateDetection';
 //     an address the lead person is keyed on the normalized phone
 //     (`leadContactKey`, the import's own key with its phone fallback on), so
 //     the same number typed twice meets the same dedupe as the same address.
+//   • COMPANY OR CONTACT (#3821). One of the two names is required; a contact
+//     alone names the account too, a company alone leaves the contact empty
+//     (`resolveNewLeadNames`, the dialog's own rule). 400 `name_required`.
 //   • WHOSE IT IS. A refusal that points at a colleague's account or record
 //     names its owner (`ownerName`) — never the record's id, never the lead's
 //     own contact details — so the rep knows whom to ask.
@@ -63,7 +67,8 @@ import { normalizePhoneKey } from '@/lib/duplicateDetection';
 
 const bodySchema = z
   .object({
-  name: z.string().trim().min(1).max(TEXT_LIMITS.companyName),
+  // Company OR contact name (#3821): checked below through `resolveNewLeadNames`.
+  name: z.string().trim().max(TEXT_LIMITS.companyName).optional(),
   country: z.string().trim().max(TEXT_LIMITS.companyCountry).optional(),
   vatId: z.string().trim().max(TEXT_LIMITS.companyVatId).optional(),
   contactName: z.string().trim().max(TEXT_LIMITS.companyContactName).optional(),
@@ -76,6 +81,9 @@ const bodySchema = z
   stage: z.string().trim().max(TEXT_LIMITS.profileShortText).optional(),
   })
   .superRefine((v, ctx) => {
+    if (!resolveNewLeadNames(v).ok) {
+      ctx.addIssue({ code: 'custom', path: ['name'], message: 'name_required' });
+    }
     if (v.contactEmail) return;
     if (!v.contactPhone) {
       ctx.addIssue({ code: 'custom', path: ['contactEmail'], message: 'contact_required' });
@@ -124,7 +132,10 @@ async function handlePost(request: Request) {
   }
   const parsed = bodySchema.safeParse(raw);
   if (!parsed.success) {
-    // The two contact rules get a code the form can word; anything else is "invalid".
+    // The name and contact rules get a code the form can word; anything else is "invalid".
+    if (parsed.error.issues.some((i) => i.message === 'name_required')) {
+      return NextResponse.json({ code: 'name_required', error: 'A company name or a contact name is required' }, { status: 400 });
+    }
     const contactIssue = parsed.error.issues.find((i) => i.message === 'contact_required' || i.message === 'phone_invalid');
     if (contactIssue) return NextResponse.json({ code: contactIssue.message, error: 'An e-mail address or a phone number is required' }, { status: 400 });
     return NextResponse.json(
@@ -132,7 +143,9 @@ async function handlePost(request: Request) {
       { status: 400 },
     );
   }
-  const fields = parsed.data;
+  const names = resolveNewLeadNames(parsed.data);
+  if (!names.ok) return NextResponse.json({ code: names.code }, { status: 400 });
+  const fields = { ...parsed.data, name: names.name, contactName: names.contactName };
 
   return withTenantScope(session, async () => {
     try {

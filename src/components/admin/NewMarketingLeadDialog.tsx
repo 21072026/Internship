@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/Input';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 import { useResolvedStages } from '@/lib/pipelineStagesClient';
 import { onPathKeys, startStageKey } from '@/lib/pipeline';
+import { resolveNewLeadNames } from '@/lib/newLeadNameRule';
 
 // "New lead / account" for a MARKETING org (#2562). The dialog only collects
 // the fields; everything that decides what they MEAN — the match key, the
@@ -74,19 +75,28 @@ export function NewMarketingLeadDialog({
   const [stage, setStage] = useState('');
   const [busy, setBusy] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
+  // The field rules (#3821) speak under their fields, not in the banner, from
+  // the first submit on — and they follow the typing, so a fixed field clears
+  // its own message.
+  const [attempted, setAttempted] = useState(false);
   const dialogRef = useModalFocus<HTMLDivElement>(true, onClose);
 
   const chosenStage = stage || startStageKey(stages);
   const set = (key: keyof typeof EMPTY) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setFields((f) => ({ ...f, [key]: e.target.value }));
 
+  // A company name OR a contact name (#3821) — the routes ask the same rule.
+  const nameMissing = !resolveNewLeadNames(fields).ok;
+  // The rep's door takes an e-mail OR a phone (#3647) — the server says the
+  // same; asking here saves a round trip. The admin form keeps its required
+  // address (its field is `required`).
+  const contactMissing = isSales && !fields.contactEmail.trim() && !fields.contactPhone.trim();
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    // The rep's door takes an e-mail OR a phone (#3647) — the server says the
-    // same; asking here saves a round trip. The admin form keeps its required
-    // address (its field is `required`).
-    if (isSales && !fields.contactEmail.trim() && !fields.contactPhone.trim()) {
-      setOutcome({ kind: 'message', text: sl.contactRequired });
+    setAttempted(true);
+    if (nameMissing || contactMissing) {
+      setOutcome(null);
       return;
     }
     setBusy(true);
@@ -107,6 +117,7 @@ export function NewMarketingLeadDialog({
       if (res.status === 201) {
         setOutcome({ kind: 'created', leadHref: isSales ? salesLeadHref(data.relationId) : adminLeadHref(data.leadId) });
         setFields(EMPTY);
+        setAttempted(false);
         await onCreated();
       } else if (data.code === 'account_exists') {
         setOutcome({
@@ -121,6 +132,8 @@ export function NewMarketingLeadDialog({
           leadHref: isSales ? salesLeadHref(data.relationId) : adminLeadHref(data.leadId),
           ownerName: typeof data.ownerName === 'string' ? data.ownerName : null,
         });
+      } else if (data.code === 'name_required') {
+        setOutcome({ kind: 'message', text: nl.nameRequired });
       } else if (data.code === 'contact_required') {
         setOutcome({ kind: 'message', text: sl.contactRequired });
       } else if (data.code === 'phone_invalid') {
@@ -242,7 +255,15 @@ export function NewMarketingLeadDialog({
         )}
 
         <form onSubmit={submit} className="space-y-4" data-testid="new-lead-form">
-          <Input id="new-lead-name" label={nl.name} required value={fields.name} onChange={set('name')} />
+          <Input
+            id="new-lead-name"
+            label={nl.name}
+            hint={nl.nameHint}
+            error={attempted && nameMissing ? nl.nameRequired : undefined}
+            aria-invalid={attempted && nameMissing ? true : undefined}
+            value={fields.name}
+            onChange={set('name')}
+          />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               id="new-lead-country"
@@ -252,12 +273,20 @@ export function NewMarketingLeadDialog({
               onChange={set('country')}
             />
             <Input id="new-lead-vat" label={nl.vatId} value={fields.vatId} onChange={set('vatId')} />
-            <Input id="new-lead-contact-name" label={nl.contactName} value={fields.contactName} onChange={set('contactName')} />
+            <Input
+              id="new-lead-contact-name"
+              label={nl.contactName}
+              aria-invalid={attempted && nameMissing ? true : undefined}
+              value={fields.contactName}
+              onChange={set('contactName')}
+            />
             <Input
               id="new-lead-contact-email"
               type="email"
               label={nl.contactEmail}
               hint={isSales ? sl.contactHint : nl.contactEmailHint}
+              error={attempted && contactMissing ? sl.contactRequired : undefined}
+              aria-invalid={attempted && contactMissing ? true : undefined}
               required={!isSales}
               value={fields.contactEmail}
               onChange={set('contactEmail')}
@@ -266,6 +295,7 @@ export function NewMarketingLeadDialog({
               id="new-lead-contact-phone"
               type="tel"
               label={nl.contactPhone}
+              aria-invalid={attempted && contactMissing ? true : undefined}
               value={fields.contactPhone}
               onChange={set('contactPhone')}
             />
