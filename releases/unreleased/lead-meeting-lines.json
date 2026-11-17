@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "The lead page's history shows planned meetings — \"Meeting scheduled for <when>\" in the viewer's time zone, and a second line when one is cancelled (#3837). Read from the existing `Meeting` rows; nothing is written to `InteractionLog`, since planning a meeting is not a contact (last-contact rule, counters, metering). The meeting title is shown only to viewers who may work the record.",
+  "notes": {
+    "en": ["A lead's history now shows when a meeting was scheduled or cancelled."],
+    "tr": ["Lead geçmişinde artık toplantının ne zaman planlandığı ya da iptal edildiği görünüyor."],
+    "de": ["Im Verlauf eines Leads steht jetzt, wann ein Termin vereinbart oder abgesagt wurde."]
+  }
+}
