@@ -26,6 +26,18 @@ import { SETTINGS_TRANSFER_MAX_BYTES } from '../src/lib/affiliateSettingsTransfe
 const PW = 'AffTransfer123!';
 const host = asHost(MARKETING_HOST);
 
+// Synthetic (#3843): 5 free, a 5.00 base fee for the first 6, 0.10 up to 50, then 0.025; 20 % VAT.
+const PRICE_LIST = {
+  freeUpTo: 5,
+  baseCovers: 6,
+  baseFeeMilli: 500_000,
+  steps: [
+    { upTo: 50, unitMilli: 10_000 },
+    { upTo: null, unitMilli: 2_500 },
+  ],
+  vatBps: 2_000,
+  reverseChargeAddsVat: true,
+};
 const PLAN = {
   currency: 'EUR',
   tiers: [{ upToMinor: 2_000, commissionMinor: 5_000 }],
@@ -100,6 +112,7 @@ test.beforeAll(async ({ playwright, baseURL }) => {
   expect((await adminA.put('/api/admin/affiliate/settings/referral-url', { headers: host, data: { referralUrl: 'https://shop.example/signup' } })).status()).toBe(200);
   expect((await adminA.put('/api/admin/affiliate/settings/customer-status', { headers: host, data: { freeMonths: 3, passiveAfterDays: 60 } })).status()).toBe(200);
   expect((await adminA.put('/api/admin/affiliate/settings/window-notice', { headers: host, data: { windowNoticeDays: 21 } })).status()).toBe(200);
+  expect((await adminA.put('/api/admin/affiliate/settings/price-list', { headers: host, data: { priceList: PRICE_LIST } })).status()).toBe(200);
 });
 
 test.afterAll(async () => {
@@ -127,8 +140,8 @@ test('the export is a download of the settings and the theme media — no partne
   expect(text).not.toContain(orgs.a);
   exported = JSON.parse(text);
   expect(exported).toMatchObject({ format: 'affiliate-settings', version: 1 });
-  expect(Object.keys(exported.sections).sort()).toEqual(['contract', 'customerStatus', 'landing', 'plan', 'referralUrl', 'windowNotice']);
-  expect(exported.sections).toMatchObject({ contract: CONTRACT, referralUrl: 'https://shop.example/signup', customerStatus: { freeMonths: 3, passiveAfterDays: 60 }, windowNotice: 21 });
+  expect(Object.keys(exported.sections).sort()).toEqual(['contract', 'customerStatus', 'landing', 'plan', 'priceList', 'referralUrl', 'windowNotice']);
+  expect(exported.sections).toMatchObject({ contract: CONTRACT, referralUrl: 'https://shop.example/signup', customerStatus: { freeMonths: 3, passiveAfterDays: 60 }, windowNotice: 21, priceList: PRICE_LIST });
   expect(exported.assets).toHaveLength(1);
   expect(exported.assets[0]).toMatchObject({ id: logoA, sha256: crypto.createHash('sha256').update(PNG).digest('hex'), data: PNG.toString('base64') });
   const audit = await prisma.auditLog.findFirst({ where: { orgId: orgs.a, action: 'affiliate.settings.export' } });
@@ -145,7 +158,7 @@ test('the preview writes nothing and never pre-selects the plan', async () => {
   expect(res.status()).toBe(200);
   const body = await res.json();
   // Neither the plan nor the contract (a new version re-locks every partner) is pre-selected.
-  expect(body.defaultSelection).toEqual(['landing', 'customerStatus', 'windowNotice', 'referralUrl']);
+  expect(body.defaultSelection).toEqual(['landing', 'customerStatus', 'windowNotice', 'referralUrl', 'priceList']);
   for (const p of body.preview) expect(p, p.section).toMatchObject({ status: 'changed', issues: [] });
   // The small settings say from what to what.
   expect(body.preview.find((p: { section: string }) => p.section === 'referralUrl')).toMatchObject({ from: null, to: 'https://shop.example/signup' });
@@ -169,18 +182,22 @@ test('a damaged or foreign file is refused before anything is written', async ()
   const applied = await importFile(adminB, 'sections=landing,contract', tampered);
   expect(applied.status()).toBe(400);
   expect(await applied.json()).toMatchObject({ code: 'invalid' });
+  // A price list is judged by its own writer's parser (#3843).
+  const badList = { ...exported, sections: { ...exported.sections, priceList: { ...PRICE_LIST, baseCovers: 5 } } };
+  const listPreview = await (await importFile(adminB, 'dryRun=1', badList)).json();
+  expect(listPreview.preview.find((p: { section: string }) => p.section === 'priceList')).toMatchObject({ status: 'invalid', issues: ['baseCovers:order'] });
   expect((await importFile(adminB, 'dryRun=1', { format: 'something-else' })).status()).toBe(400);
   expect(await (await importFile(adminB, 'dryRun=1', { ...exported, version: 99 })).json()).toEqual({ code: 'version' });
   expect(await settingsOf(orgs.b)).toBeNull();
 });
 
 test('applied, each section lands through its own writer; the media become B’s own upload', async () => {
-  const res = await importFile(adminB, 'sections=landing,contract,customerStatus,windowNotice,referralUrl', exported);
+  const res = await importFile(adminB, 'sections=landing,contract,customerStatus,windowNotice,referralUrl,priceList', exported);
   expect(res.status()).toBe(200);
   expect((await res.json()).applied.every((a: { changed: boolean }) => a.changed)).toBe(true);
 
   const b = await settingsOf(orgs.b);
-  expect(b).toMatchObject({ contractVersion: 1, planVersion: 0, plan: null, referralUrl: 'https://shop.example/signup', freeMonths: 3, passiveAfterDays: 60, windowNoticeDays: 21 });
+  expect(b).toMatchObject({ contractVersion: 1, planVersion: 0, plan: null, referralUrl: 'https://shop.example/signup', freeMonths: 3, passiveAfterDays: 60, windowNoticeDays: 21, priceList: PRICE_LIST });
   const media = (b?.landing as { theme: { media: { logo: string } } }).theme.media;
   expect(media.logo).not.toBe(logoA);
   const asset = await prisma.affiliateLandingAsset.findUnique({ where: { id: media.logo } });

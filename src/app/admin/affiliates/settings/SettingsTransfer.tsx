@@ -44,6 +44,7 @@ export function SettingsTransfer({ readOnly }: { readOnly: boolean }) {
     customerStatus: L.transferSectionCustomerStatus,
     windowNotice: L.transferSectionWindowNotice,
     referralUrl: L.transferSectionReferralUrl,
+    priceList: L.transferSectionPriceList,
     plan: L.transferSectionPlan,
   };
   // The small settings' values, so "will change" says from what to what.

@@ -2,7 +2,8 @@
 // the referral base URL (#3117), the public programme page's content (#3359) and
 // the customer-status thresholds (#3542).
 // The ONE writer of AffiliateProgramSettings.plan / planVersion / planEffectiveAt /
-// referralUrl / landing / freeMonths / passiveAfterDays / windowNoticeDays.
+// referralUrl / landing / freeMonths / passiveAfterDays / windowNoticeDays /
+// priceList (#3843).
 // The contract half has its own writer (src/lib/affiliateContract.ts).
 //
 // A plan change:
@@ -37,6 +38,7 @@ import {
   type SettingIssue,
 } from '@/lib/affiliateCustomerStatusRule';
 import { parseWindowNoticeDays, readWindowNoticeDays } from '@/lib/affiliateWindowNoticeRule';
+import { canonicalPriceList, parsePriceList, readStoredPriceList, type PriceList, type PriceListIssue } from '@/lib/affiliatePriceListRule';
 
 /**
  * The currencies a programme may run in. EUR only in the first release; every
@@ -301,11 +303,55 @@ export async function saveWindowNoticeDays(
   }
 }
 
+/**
+ * Sets the transaction price list (#3843, src/lib/affiliatePriceListRule.ts);
+ * null removes it. Not part of the plan: it prices payments entered from now on
+ * and never re-evaluates a stored one, so no plan version moves. An unchanged
+ * save writes nothing; a change is audited with the old and new list (prices of
+ * the organisation's own product, not a person's data).
+ */
+export async function savePriceList(
+  orgId: string,
+  raw: unknown,
+  actorId: string,
+): Promise<{ ok: true; priceList: PriceList | null; changed: boolean } | { ok: false; issues: PriceListIssue[] }> {
+  let next: PriceList | null = null;
+  if (raw !== null) {
+    const parsed = parsePriceList(raw);
+    if (!parsed.ok) return parsed;
+    next = parsed.priceList;
+  }
+  const value = next === null ? Prisma.DbNull : (next as unknown as Prisma.InputJsonValue);
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const current = await tx.affiliateProgramSettings.findUnique({ where: { orgId }, select: { priceList: true } });
+      const before = readStoredPriceList(current?.priceList);
+      if (canonicalPriceList(before) === canonicalPriceList(next)) return { ok: true as const, priceList: next, changed: false };
+      if (current) await tx.affiliateProgramSettings.update({ where: { orgId }, data: { priceList: value } });
+      else await tx.affiliateProgramSettings.create({ data: { orgId, priceList: value } });
+      await tx.auditLog.create({
+        data: { orgId, actorId, action: 'affiliate.price_list.update', detail: JSON.stringify({ from: before, to: next }) },
+      });
+      return { ok: true as const, priceList: next, changed: true };
+    });
+  } catch (e) {
+    // Two first saves of one organisation: the loser hits the unique orgId.
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') throw new AffiliateSettingsError('conflict');
+    throw e;
+  }
+}
+
+/** The organisation's price list, or null when none is configured. */
+export async function priceListFor(orgId: string): Promise<PriceList | null> {
+  const row = await prisma.affiliateProgramSettings.findUnique({ where: { orgId }, select: { priceList: true } });
+  return readStoredPriceList(row?.priceList);
+}
+
 export async function programSettings(orgId: string) {
   const [settings, payments] = await Promise.all([
     prisma.affiliateProgramSettings.findUnique({
       where: { orgId },
-      select: { plan: true, planVersion: true, planEffectiveAt: true, planResync: true, referralUrl: true, landing: true, contract: true, contractVersion: true, freeMonths: true, passiveAfterDays: true, windowNoticeDays: true, updatedAt: true },
+      select: { plan: true, planVersion: true, planEffectiveAt: true, planResync: true, referralUrl: true, landing: true, contract: true, contractVersion: true, freeMonths: true, passiveAfterDays: true, windowNoticeDays: true, priceList: true, updatedAt: true },
     }),
     prisma.affiliatePayment.count({ where: { orgId } }),
   ]);
@@ -321,6 +367,7 @@ export async function programSettings(orgId: string) {
     contractVersion: settings?.contractVersion ?? 0,
     customerStatus: storedCustomerStatusSettings(settings),
     windowNoticeDays: readWindowNoticeDays(settings?.windowNoticeDays),
+    priceList: readStoredPriceList(settings?.priceList),
     currencyLocked: payments > 0,
     currencies: AFFILIATE_CURRENCIES,
   };

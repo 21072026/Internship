@@ -25,7 +25,7 @@ export const SETTINGS_TRANSFER_FORMAT = 'affiliate-settings';
 export const SETTINGS_TRANSFER_VERSION = 1;
 
 /** The sections, in the order an import applies them; the plan last, so it lands only when the rest did. */
-export const TRANSFER_SECTIONS = ['landing', 'contract', 'customerStatus', 'windowNotice', 'referralUrl', 'plan'] as const;
+export const TRANSFER_SECTIONS = ['landing', 'contract', 'customerStatus', 'windowNotice', 'referralUrl', 'priceList', 'plan'] as const;
 export type TransferSection = (typeof TRANSFER_SECTIONS)[number];
 
 /**
@@ -58,6 +58,8 @@ export interface TransferSections {
   referralUrl?: unknown;
   customerStatus?: unknown;
   windowNotice?: unknown;
+  /** The transaction price list (#3843). */
+  priceList?: unknown;
 }
 
 export interface TransferFile {
