@@ -126,6 +126,11 @@ export function MentorBoard({
   const { show: showGate, dialog: gateDialog } = useStageGateDialog();
   const stages = useResolvedStages();
   const stageKeys = useMemo(() => [...stages].sort((a, b) => a.order - b.order).map((s) => s.key), [stages]);
+  // What each stage means (#3660), for the column header's info icon.
+  const descriptionOf = useMemo(() => {
+    const byKey = new Map(stages.map((s) => [s.key, s.description ?? null]));
+    return (key: string) => byKey.get(key) ?? null;
+  }, [stages]);
   const router = useRouter();
   const toast = useToast();
   const narrow = useIsNarrow();
@@ -637,7 +642,7 @@ export function MentorBoard({
               >
                 {/* Derived from the same filtered `items` the column renders,
                     so the badge never claims rows the search has hidden. */}
-                <BoardColumnHeader status={status} label={label(status)} count={items.length} limit={wipLimitFor(status)} muted />
+                <BoardColumnHeader status={status} label={label(status)} description={descriptionOf(status)} count={items.length} limit={wipLimitFor(status)} muted />
 
                 <div className="space-y-2 min-h-[40px]">
                   {items.map(renderCard)}

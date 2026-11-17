@@ -79,6 +79,8 @@ export interface EditableStage {
   isTerminal?: boolean;
   isOffPath?: boolean;
   color?: string | null;
+  /** What the stage means (#3660); left out = unchanged. */
+  description?: string | null;
   phase?: string | null;
 }
 
@@ -91,12 +93,16 @@ const norm = (v: string | null | undefined) => (v ?? '').trim().toLowerCase() ||
  * paywalled; only the stage set's look and shape is a paid customisation.
  * `isDefault(key, label)` says whether a label is just the built-in one in some
  * language, so a FREE editor that echoes the localized default still matches.
+ * `isDefaultDescription(key, text)` is the same test for the description
+ * (#3660): it is part of the stage set's look, so a FREE tenant keeps the
+ * curated one; a `next` stage that leaves it out changes nothing.
  */
 export function onlyGatesChanged(
   current: readonly EditableStage[],
   next: readonly EditableStage[],
   isDefault: (key: string, label: string) => boolean,
   isPhase: (value: unknown) => boolean,
+  isDefaultDescription: (key: string, text: string | null | undefined) => boolean = (_k, text) => !(text ?? '').trim(),
 ): boolean {
   if (current.length !== next.length) return false;
   const a = [...current].sort((x, y) => x.order - y.order);
@@ -106,7 +112,12 @@ export function onlyGatesChanged(
     if (c.key !== n.key) return false;
     const sameLabel = c.label.trim() === n.label.trim() || (isDefault(c.key, c.label) && isDefault(n.key, n.label));
     const phase = (p: string | null | undefined) => (isPhase(p) ? p : null);
+    const sameDescription =
+      n.description === undefined ||
+      (c.description ?? '').trim() === (n.description ?? '').trim() ||
+      (isDefaultDescription(c.key, c.description) && isDefaultDescription(n.key, n.description));
     return (
+      sameDescription &&
       sameLabel &&
       !!c.isTerminal === !!n.isTerminal &&
       !!c.isOffPath === !!n.isOffPath &&

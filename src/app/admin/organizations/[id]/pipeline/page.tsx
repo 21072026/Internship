@@ -21,6 +21,10 @@ interface Stage {
   isTerminal: boolean;
   isOffPath: boolean;
   color: string | null;
+  // What the stage means (#3660), shown behind the board header's info icon.
+  // Prefilled with the curated text in the admin's language; clearing it
+  // restores the curated one (if the stage has one).
+  description?: string | null;
   // Board phase (#1637): null = derive it (built-in phase for a canonical
   // key, the "custom" group for any other).
   phase?: string | null;
@@ -250,6 +254,16 @@ export default function PipelineStagesPage({ params }: { params: Promise<{ id: s
                     </button>
                   );
                 })()}
+                <input
+                  value={s.description ?? ''}
+                  onChange={(e) => update(i, { description: e.target.value })}
+                  disabled={locked}
+                  maxLength={280}
+                  placeholder={t.pipelineStages.descriptionPlaceholder}
+                  aria-label={t.pipelineStages.descriptionFor.replace('{key}', s.key)}
+                  data-testid={`stage-description-${s.key}`}
+                  className="basis-full rounded-lg border border-gray-300 px-3 py-1.5 text-xs"
+                />
                 {/* Entry gates (#1590): never on an off-path stage — a move
                     there is never gated, so a rule would be a promise the
                     server does not keep. */}

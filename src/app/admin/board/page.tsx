@@ -57,6 +57,11 @@ export default function AdminBoardPage() {
   const t = useT();
   const stages = useResolvedStages();
   const stageKeys = useMemo(() => [...stages].sort((a, b) => a.order - b.order).map((s) => s.key), [stages]);
+  // What each stage means (#3660), for the column header's info icon.
+  const descriptionOf = useMemo(() => {
+    const byKey = new Map(stages.map((s) => [s.key, s.description ?? null]));
+    return (key: string) => byKey.get(key) ?? null;
+  }, [stages]);
   const label = useStageLabel();
   const { show: showGate, dialog: gateDialog } = useStageGateDialog();
   const router = useRouter();
@@ -388,7 +393,7 @@ export default function AdminBoardPage() {
           dragOver === status ? ' ring-2 ring-blue-500 ring-offset-1' : ''
         }`}
       >
-        <BoardColumnHeader status={status} label={label(status)} count={countFor(status)} limit={wipLimitFor(status)} />
+        <BoardColumnHeader status={status} label={label(status)} description={descriptionOf(status)} count={countFor(status)} limit={wipLimitFor(status)} />
 
         <div className="space-y-2 min-h-[40px]">
           {items.map(renderCard)}

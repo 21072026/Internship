@@ -83,3 +83,14 @@ test('FREE: any change of the shape or look is refused', () => {
   ];
   for (const v of variants) assert.equal(onlyGatesChanged(set, v, isDefault, isPhase), false, JSON.stringify(v));
 });
+
+test('a FREE save that changes a stage description is not "only gates" (#3660)', () => {
+  const set = [{ key: 'A', label: 'A', order: 0, description: 'Curated A' }];
+  const curated = (key, text) => !(text ?? '').trim() || text === 'Curated A' || text === 'Kuratiert A';
+  // Echoing the curated text — in any language — or leaving it out is no change.
+  assert.equal(onlyGatesChanged(set, [{ key: 'A', label: 'A', order: 0, description: 'Curated A' }], isDefault, isPhase, curated), true);
+  assert.equal(onlyGatesChanged(set, [{ key: 'A', label: 'A', order: 0, description: 'Kuratiert A' }], isDefault, isPhase, curated), true);
+  assert.equal(onlyGatesChanged(set, [{ key: 'A', label: 'A', order: 0 }], isDefault, isPhase, curated), true);
+  // A typed description is a customisation.
+  assert.equal(onlyGatesChanged(set, [{ key: 'A', label: 'A', order: 0, description: 'Our own words' }], isDefault, isPhase, curated), false);
+});
