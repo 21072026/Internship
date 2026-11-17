@@ -24,7 +24,7 @@ import { Card, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { SalesRecordPanels } from '@/components/sales/SalesRecordPanels';
 import { PlanMeetingButton } from '@/app/sales/calendar/PlanMeetingDialog';
-import { SalesInteractionsCard } from '@/components/sales/SalesInteractionsCard';
+import { SalesInteractionsCard, type LeadSystemEvent } from '@/components/sales/SalesInteractionsCard';
 import { LeadContactEditor } from '@/components/sales/LeadContactEditor';
 import { shownEmail } from '@/lib/leadEmail';
 import { LeadPageHandoff } from '@/components/sales/LeadPageHandoff';
@@ -106,7 +106,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   const writable = await canWriteSalesRecord(session, relation);
   const ownersView = writable || canSeeNextAction({ id: session.user.id, role: session.user.role }, relation);
 
-  const [company, lastContact, interactions, earlier, successor, followUpEvents] = await Promise.all([
+  const [company, lastContact, interactions, earlier, successor, followUpEvents, stageMoves] = await Promise.all([
     relation.companyId
       ? prisma.company.findFirst({
           where: withinTenant({ id: relation.companyId }, tenant),
@@ -127,6 +127,15 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
     // The follow-up's history (#3819) carries the owner's notes: only for the
     // viewers who may read the follow-up itself.
     ownersView ? followUpEventsFor(relation.id) : [],
+    // The stage history (#3820), read from the audit rows every stage move
+    // already writes — no second record. Stages are on the page for every
+    // reader; the reason note is not shown here.
+    prisma.statusChange.findMany({
+      where: { relationId: relation.id },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: INTERACTION_LIMIT,
+      select: { id: true, fromStatus: true, toStatus: true, createdAt: true, changedBy: { select: { fullName: true } } },
+    }),
   ]);
   // The banner's link only when this viewer may open the current record (the same read as this page).
   const successorOpens =
@@ -141,7 +150,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   // One follow-up as a phrase: its day, its note, or both.
   const followUpText = (at: Date | null, note: string | null) =>
     [at ? date(at) : null, note].filter(Boolean).join(' — ') || s.followUpEvent.noDate;
-  const systemEvents = followUpEvents.map((e) => {
+  const systemEvents: LeadSystemEvent[] = followUpEvents.map((e) => {
     const someone = s.followUpEvent.someone;
     const fill = (tpl: string, from: string, to: string) => tpl.replace('{from}', () => from).replace('{to}', () => to);
     const headline =
@@ -162,8 +171,20 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
             ? followUpText(e.fromAt, e.fromNote)
             : null
           : null;
-    return { id: e.id, at: e.createdAt.toISOString(), headline, detail, by: e.actorName ?? someone };
+    return { id: e.id, source: 'followUp', at: e.createdAt.toISOString(), headline, detail, by: e.actorName ?? someone };
   });
+  for (const m of stageMoves) {
+    systemEvents.push({
+      id: m.id,
+      source: 'stage',
+      at: m.createdAt.toISOString(),
+      headline: s.followUpEvent.stageMoved
+        .replace('{from}', () => stageLabel(stages, m.fromStatus, locale))
+        .replace('{to}', () => stageLabel(stages, m.toStatus, locale)),
+      detail: null,
+      by: m.changedBy?.fullName ?? t.common.systemActor,
+    });
+  }
   // Never the `@import.local` stand-in: the account's address, else none.
   const leadEmail = shownEmail(relation.mentee.email, company?.contactEmail);
   // A colleague's record: the contact's name, never their e-mail or phone.
