@@ -3,7 +3,7 @@ import { runUnscoped } from '@/lib/tenantAmbient';
 import { findUserInWorld, worldOfOrg } from '@/lib/userWorld';
 import { sendEmail, appUrlFor, bulkListHeaders } from '@/services/emailService';
 import { subscriberToken } from '@/lib/subscriberTokens';
-import { getDictionary } from '@/i18n/dictionaries';
+import { emailDictionary } from '@/i18n/emailDictionary';
 import { isLocale, defaultLocale } from '@/i18n/config';
 
 const escape = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -13,7 +13,8 @@ export async function sendSubscriberMail(id: string, confirmation = false, updat
   const row = await runUnscoped(() => prisma.subscriber.findUnique({ where: { id } }));
   if (!row) return 'SKIPPED' as const;
   const user = await findUserInWorld(row.email, await worldOfOrg(row.orgId), { id: true });
-  const t = getDictionary(isLocale(row.locale) ? row.locale : defaultLocale).interest;
+  const locale = isLocale(row.locale) ? row.locale : defaultLocale;
+  const t = (await emailDictionary(locale, row.orgId)).interest;
   const origin = await appUrlFor(row.orgId);
   const unsubscribe = `${origin}/interest/unsubscribe?t=${encodeURIComponent(subscriberToken(id, 'unsubscribe'))}`;
   const oneClick = `${origin}/api/subscribe/unsubscribe?t=${encodeURIComponent(subscriberToken(id, 'unsubscribe'))}`;
@@ -25,7 +26,7 @@ export async function sendSubscriberMail(id: string, confirmation = false, updat
     to: row.email, orgId: row.orgId, subscriberId: id, userId: user?.id,
     subject: confirmation ? t.confirmSubject : update?.subject ?? t.title,
     html: `${html}<p><a href="${escape(unsubscribe)}">${escape(t.unsubscribe)}</a></p>`,
-    locale: row.locale,
+    locale,
     headers: { ...(confirmation ? {} : bulkListHeaders('announcements', origin)), 'List-Unsubscribe': `<${oneClick}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
   };
   if (confirmation) return sendEmail({ ...args, to: row.email, category: 'consent', notAfter: row.confirmationExpiresAt ?? undefined, dedupeKey: `subscriber-confirm:${id}` });

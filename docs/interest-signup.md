@@ -48,6 +48,7 @@ API both require server-side permission and organisation-admin tier; programme
 admins cannot read it. JSON/CSV resolve the session organisation and filter its required orgId explicitly. The latest 1,000
 rows show role, locale, confirmation/withdrawal state, source and campaign.
 CSV uses the existing formula-escaping cell encoder and includes no credentials.
+The tenant-offboarding export policy also omits both Subscriber credential hashes.
 
 ## Retention and erasure
 
