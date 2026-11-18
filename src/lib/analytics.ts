@@ -48,7 +48,15 @@ export interface AnalyticsProvider {
  * runtime, so its host is listed unconditionally. The difference is worth
  * knowing before someone "tidies" the two into one shape.)
  */
-export function configuredProviders(env: Record<string, string | undefined> = process.env): AnalyticsProvider[] {
+export function configuredProviders(env: Record<string, string | undefined> = {
+  // Next inlines direct NEXT_PUBLIC reads; an aliased process.env object does
+  // not expose these values in the browser bundle.
+  NEXT_PUBLIC_PLAUSIBLE_DOMAIN: process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN,
+  NEXT_PUBLIC_PLAUSIBLE_HOST: process.env.NEXT_PUBLIC_PLAUSIBLE_HOST,
+  NEXT_PUBLIC_GA4_MEASUREMENT_ID: process.env.NEXT_PUBLIC_GA4_MEASUREMENT_ID,
+  NEXT_PUBLIC_POSTHOG_KEY: process.env.NEXT_PUBLIC_POSTHOG_KEY,
+  NEXT_PUBLIC_POSTHOG_HOST: process.env.NEXT_PUBLIC_POSTHOG_HOST,
+}): AnalyticsProvider[] {
   const out: AnalyticsProvider[] = [];
 
   const plausibleDomain = env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN;

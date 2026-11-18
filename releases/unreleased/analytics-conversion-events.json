@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "- Add consent-aware public conversion events for signup, verification, mentor applications, company inquiries, demo and role links, features and pricing; restrict properties to finite non-identifying UI categories (#1388)."
+}

@@ -1,4 +1,5 @@
 'use client';
+import { track, ANALYTICS_EVENTS } from '@/lib/track';
 import { SocialSignInButtons } from '@/components/SocialSignInButtons';
 import { useT, useLocale } from "@/i18n/client";
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -145,6 +146,7 @@ function RegisterForm({ social }: { social: { id: string; label: string }[] }) {
         throw new Error(passwordRefusalText(body, pw.policy, t.passwordPolicy) ?? body.error ?? 'Registration failed');
       }
 
+      track(ANALYTICS_EVENTS.SIGNUP_COMPLETED);
       // Open sign-up: the account opens itself when the emailed link is
       // clicked ('verify'), unless the org runs manual approval ('pending').
       const next = body.pending ? 'pending' : body.selfRegistered ? 'verify' : 'registered';
