@@ -40,6 +40,7 @@ interface Row {
   amountMinor: number;
   transactionCount: number | null;
   unitPriceMinor: number | null;
+  listAmountMinor: number | null;
   currency: string;
   externalPaymentRef: string;
   customerId: string;
@@ -334,7 +335,10 @@ function AffiliatePayments() {
                         <div className="text-xs text-gray-500" data-testid="affiliate-payment-breakdown">
                           {r.unitPriceMinor !== null
                             ? interpolate(L.breakdownLine, { count: new Intl.NumberFormat(locale).format(r.transactionCount), price: money(r.unitPriceMinor, r.currency) })
-                            : interpolate(L.listPricedLine, { count: new Intl.NumberFormat(locale).format(r.transactionCount) })}
+                            : r.listAmountMinor !== null && r.listAmountMinor !== r.amountMinor
+                              ? // A paid invoice with the month's list price beside it (#3846).
+                                interpolate(L.listPriceLine, { count: new Intl.NumberFormat(locale).format(r.transactionCount), amount: money(r.listAmountMinor, r.currency) })
+                              : interpolate(L.listPricedLine, { count: new Intl.NumberFormat(locale).format(r.transactionCount) })}
                         </div>
                       )}
                     </td>

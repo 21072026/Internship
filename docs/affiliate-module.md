@@ -1003,6 +1003,43 @@ through `evaluatePartner()`). The board adds only admin-only pieces on top, in
   funnel and threshold queries, and for the window warning every customer's status
   (`partnerCustomerStatuses()`) and the first valid payment per customer.
 
+## Monthly invoice import (#3846)
+
+Once a month the admin imports last month's invoices as one CSV file at
+`/admin/affiliates/invoices` (`POST /api/admin/affiliate/invoices/import`,
+`affiliate.write`). The rule is pure in `src/lib/affiliateInvoiceImportRule.ts`, the
+run in `src/lib/affiliateInvoiceImport.ts` on the shared engine (`runImport`): the
+preview is the same run with a writer that does not write, and the import is
+offered only after a preview of exactly that file and those columns.
+
+- **Columns are the organisation's data.** The admin picks, from the file's own
+  header, which column holds the invoice number, the date that decides the month
+  (today the invoice date), the customer number, the PAID gross amount and —
+  optionally — the currency, a payment status with the value meaning "paid", and
+  the month's transaction count. No upstream column name is written in code. The
+  choice is saved on `AffiliateProgramSettings.invoiceColumns` by the first real
+  run and comes back next month.
+- **A row** is skipped when its status is not the "paid" value, when the paid
+  amount is zero, or when it is negative (a credit note — refunds wait for #3475);
+  it is an error when a mapped cell is missing or unreadable. Days read as
+  `DD.MM.YYYY` or `YYYY-MM-DD`; amounts in the migration's shapes (`45,22`,
+  `1.234,56`).
+- **The plan per row:** the invoice number already recorded → UNCHANGED (a
+  re-upload adds nothing); twice in the file → the second SKIP; a customer number
+  no partner brought → SKIP (the file names no partner); a month for which the
+  customer already has a payment **typed by hand** (e.g. the first month entered
+  by transaction count) → SKIP, so it is not counted twice. Several invoices of one
+  month from files are fine — each has its own number.
+- **The write** is `recordAffiliatePayment()` with source `INVOICE`, reference =
+  invoice number, `receivedAt` = the date, `amountMinor` = the paid amount. With a
+  transaction column and a price list, the month's list price is stored as
+  `listAmountMinor` (the count beside it): the one-off commission is chosen by
+  it, the percent earns on what was paid (#3845). One audit row per real run
+  (`affiliate.invoice_import`, counts only).
+- **Shown:** an invoice with a list price reads `250 transactions · list price
+  €24.40` under its amount, in the admin's payments and on the partner's
+  commissions.
+
 ## Payments from the source system (#3355)
 
 A customer's payment can arrive through the account-event feed as
