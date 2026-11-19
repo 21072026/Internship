@@ -1,9 +1,10 @@
 // The commission base of an affiliate payment (docs/affiliate-module.md
 // § Commission base, #3551/#3552).
 //
-// A payment's `amountMinor` is the COMMISSION BASE: the undiscounted, gross
-// (VAT included) amount for the month's transaction count — never what the
-// customer actually paid after a discount. It may arrive in two shapes:
+// A payment's `amountMinor` is the COMMISSION BASE, gross (VAT included). Since
+// the two-base rule (#3842/#3845) it is what the customer paid — the percent earns
+// on it — while a first payment's one-off commission is chosen by the month's list
+// price (`listAmountMinor`) when there is one. It may arrive in these shapes:
 //
 //   (a) a breakdown — `transactionCount` × `unitPriceMinor` (the undiscounted
 //       gross price per transaction); the base is the product, and the

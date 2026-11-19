@@ -140,11 +140,12 @@ the same checks, the same partner lock and the same commission reconciliation
 as an admin's manual entry, so an API payment earns exactly the commission a
 typed one would. It moves nothing on the funnel.
 
-- **The amount is the commission base** (#3553): the undiscounted, gross (VAT
-  included) amount for the period's transactions — not what the customer paid
-  after a discount, which never lowers the partner's commission. In a partial
-  month (a free period ending mid-month) the free and the paid transactions are
-  added up. Send it as `amount_minor`, or as `transaction_count` ×
+- **The amount is the commission base** (#3553, two bases since #3845): send
+  what the customer paid, gross (VAT included) — the percent earns on it. The
+  one-off commission of a first payment is chosen by the month's list price,
+  which the programme's price list computes from a `transaction_count` sent
+  alone. In a partial month (a free period ending mid-month) the free and the
+  paid transactions are added up. Send it as `amount_minor`, or as `transaction_count` ×
   `unit_price_minor` (the breakdown is then stored and shown to the partner), or
   both when they agree. A client that sends only `amount_minor` is unchanged.
   A `transaction_count` **alone** (#3844) is priced by the programme's price list
