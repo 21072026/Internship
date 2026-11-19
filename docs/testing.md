@@ -1077,3 +1077,81 @@ To run it locally, put the list in the environment and choose a mode:
 - **Dependency/SCA scanning** (`npm audit`, Dependabot) on a schedule.
 - ~~**Load-with-auth** scenarios~~ — built in #1612 against the demo environment: see
   [§ The demo-only scenarios](#the-demo-only-scenarios-authenticated-write-and-sse-load-1612).
+
+## AI prompt evals (#2036)
+
+The existing no-provider E2E denial tests stay in place. `ai-evals/<taskId>.json`
+adds a separate, synthetic-only contract and manual quality layer for **every
+current task in `src/lib/ai/tasks.ts`**, not just the original five prompts.
+There are three cases per task: English, Turkish and a German injection attempt;
+practice interviews cover both next-question and report prompts. Profile digests
+intentionally output English; translation and content drafting have per-locale
+outputs, as their current prompts require.
+
+Offline (default, no key or database needed):
+
+```sh
+env -u ANTHROPIC_API_KEY npm run check:ai-prompts
+```
+
+CI runs this beside i18n with `AI_EVAL_LIVE=0` and an empty provider key. It checks
+registry/golden coverage in both directions, the current prompt expressions and
+declared JSON schemas, the golden examples' shapes and assertions, pinned
+no-invention/grounding clauses, and the effective anti-injection/PII rule appended
+by `preparePrompt`. The TypeScript AST reader evaluates only referenced contract
+expressions, not feature modules or their database imports. Removing a rule even
+if its words remain in a comment fails. New/unsupported schema or assertion
+keywords fail instead of being silently ignored. **Offline success is not a
+claim that a provider produced good answers.** Offline uses `callModel`’s existing injected request-capture transport solely to
+inspect the actual assembled request; it returns no generated answer and never
+invokes the SDK. The live path supplies no injected transport.
+
+To add a case (3–5 per task):
+
+1. Read [DATA_ACCESS_POLICY.md](DATA_ACCESS_POLICY.md). Invent the input from
+   scratch: no production/preview rows, pasted CVs, copied conversations, provider
+   keys or real contact details. Use anonymous labels or clearly fictional
+   entities; any email uses `@demo.example.com`.
+2. Add a unique case id and fixed input in that task's JSON. `bindings` supplies
+   JSON values for current prompt-local parameters (locale, purpose, etc.), not
+   replacement source constants. `call` indexes that module's actual `callModel`
+   sites in source order; cover distinct variants such as interview reports.
+3. Pin `providerSchema` to whether the current call declares a JSON schema,
+   so removal of structured output cannot silently pass. Copy that `jsonSchema`
+   into `outputSchema`; prose-only tasks declare
+   an eval string schema, and JSON-without-provider-schema tasks declare their
+   explicit JSON contract. Set `format` to `json` or `text`. `expected` is an
+   example used to test the contract, **not exact prose to compare live replies**.
+4. Choose substantive assertions: required/non-empty strings, array sizes,
+   distinct/offered labels, verbatim extracted facts/quotes, scores in bounds,
+   numbers present in the input, forbidden injected entities, output language,
+   and a character/word budget. Character caps allow the current token budgets
+   but catch runaway output; prompt-specific counts follow the current prompt.
+   Explain changed thresholds in the review. Keep pinned `groundingClauses`:
+   never update a golden merely to accept a removed security instruction.
+5. Run the offline command and `node --test scripts/test/check-ai-prompts.test.mjs`.
+
+Language assertions use stopword evidence (at least two expected-language words,
+more than either other supported language); uncertain prose fails. These are
+heuristics, not semantic proof. Grounding checks cover offered labels, literal
+extractions/quotes, numeric facts and planted injection facts, not every possible
+hallucination. Review live outputs manually too, without committing provider
+output. Empty allowed fields (e.g. absent CV phone) are intentional.
+
+Live, **manual only**, with an operator-supplied real key in the process environment:
+
+```sh
+# Set ANTHROPIC_API_KEY securely in the shell; do not put it in a fixture or commit.
+AI_EVAL_LIVE=1 npm run check:ai-prompts
+```
+
+Live evals **never run in CI and consume provider credit** (currently 66 sequential
+calls). The script refuses live mode in CI or with an absent/malformed key. It
+never loads `.env`. It genuinely invokes the existing `callModel` default SDK path,
+with current model routing, token/input limits, fencing and PII safeguards, then
+applies the same shape/behaviour assertions and prints a per-task pass/fail table.
+No canned reply or mock provider is used by live mode. Failures exit non-zero;
+provider bodies, inputs, keys and generated answers are not logged. Set the
+existing `AI_MODEL_<TASK_ID>` / tier variables explicitly to evaluate a model
+upgrade. Never claim live success from offline or structural tests; when no key
+is available report: **live provider execution not run: no key available**.
