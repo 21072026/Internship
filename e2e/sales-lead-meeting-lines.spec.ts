@@ -77,3 +77,22 @@ test('a planned and a cancelled meeting each leave a history line, and no intera
   await page.getByTestId('sales-lead-interaction-filter-interactions').click();
   await expect(lines).toHaveCount(0);
 });
+
+test('meetings planned from the lead page show up one after another, without a reload (#3853)', async ({ page }) => {
+  test.slow();
+  await page.context().setExtraHTTPHeaders(H);
+  await signInAndSettle(page, emails[0], PW, '/sales');
+  await gotoSettled(page, `/sales/leads/${ids.rel}`);
+  // The newest line sits on top; the card shows the first few rows, so each new
+  // meeting is checked as the top line rather than by a count.
+  const lines = page.locator('[data-testid="sales-lead-system-row"][data-source="meeting"]');
+  for (let i = 1; i <= 3; i++) {
+    await page.getByTestId('sales-lead-plan-meeting').click();
+    const dialog = page.getByTestId('plan-meeting-dialog');
+    await dialog.getByTestId('plan-meeting-date').fill(`2027-02-0${i}`);
+    await dialog.getByTestId('plan-meeting-title-input').fill(`Follow-up ${i} ${STAMP}`);
+    await dialog.getByRole('button', { name: /plan|schedule|create|save/i }).last().click();
+    await expect(dialog).toHaveCount(0);
+    await expect(lines.first()).toContainText(`Follow-up ${i} ${STAMP}`);
+  }
+});

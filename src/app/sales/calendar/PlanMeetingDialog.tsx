@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { CalendarPlus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -49,6 +50,7 @@ export function PlanMeetingButton({
   variant?: 'primary' | 'outline';
 }) {
   const t = useT();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -69,7 +71,10 @@ export function PlanMeetingButton({
           onClose={() => setOpen(false)}
           onCreated={() => {
             setOpen(false);
-            onCreated?.();
+            // A caller that keeps its own list reloads it; a server-rendered page
+            // (the lead page, #3853) is re-rendered so the new meeting shows up.
+            if (onCreated) onCreated();
+            else router.refresh();
           }}
         />
       )}

@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "Sales lead page (#3853): a meeting planned with \"Plan meeting\" now re-renders the page (`router.refresh()` in `PlanMeetingButton` when no `onCreated` is given), so its history line shows at once — before, the page kept its old render and the history seemed one meeting behind until a reload.",
+  "notes": {
+    "en": ["Leads: a meeting planned from the lead page shows up in the history right away."],
+    "tr": ["Lead'ler: lead sayfasından planlanan toplantı, geçmişte hemen görünüyor."],
+    "de": ["Leads: Ein auf der Lead-Seite geplantes Meeting erscheint sofort im Verlauf."]
+  }
+}
