@@ -50,6 +50,8 @@ partner on the queue (see "Re-evaluation after a plan change"); an unchanged sav
 | `windowMonths` | A customer's payments earn percent commission for this many months from that customer's first payment. Null = no limit. |
 | `payoutDays` | Days after a payment by which its commission is due (shown to the admin, not enforced). |
 | `afterNotice` | `STOP_ALL` (nothing accrues once a termination takes effect) or `RUN_OUT` (customers referred before it keep earning inside their window; nothing for customers referred after). |
+| `monthAligned` | (#3845) `true`: the percent phase starts at the **beginning of the calendar month** in which the switch customer first paid, and a customer's window runs `windowMonths` calendar months from the beginning of its first paying month. `false` (and every plan stored before #3845, which has no such key): both start at the payment itself. A new plan in the form starts as `true`. |
+| `timeZone` | (#3845) IANA zone whose calendar months `monthAligned` counts in; default `Europe/Berlin`. Refused if the runtime does not know it. |
 
 **Engine semantics** (fixed, documented here, not configurable):
 
@@ -59,6 +61,16 @@ partner on the queue (see "Re-evaluation after a plan change"); an unchanged sav
   paying customer. From then on, every payment received **at or after** that
   instant earns `percentBps` — for all of the partner's customers, the earlier ones
   included — inside each customer's window. Nothing is recomputed retroactively.
+- **Month-aligned plans** (#3845): the switch instant is moved back to the
+  beginning of that payment's month (`monthStartInZone()`, Intl only, DST-safe),
+  so the month's earlier payments of earlier customers earn the percent too. A
+  first payment of a customer **before** the Nth still earns only its tier, even
+  inside that month. The window end is `customerWindowEndsAt()` — month-aligned,
+  the 1st of the month `windowMonths` after the first paying month.
+- **Which amount** (#3845): a first payment's tier band is picked by the payment's
+  `listAmountMinor` (the price list's price for the month's transactions) when it
+  has one, else by `amountMinor`; the percent phase always earns on `amountMinor`
+  (what was paid). A count priced by the list (#3844) stores the same value in both.
 - A customer's ordinal is decided by **first-payment date**, not by entry order.
   The engine therefore judges a partner's **whole** history in one pass, and a
   back-dated entry is answered by running it again.

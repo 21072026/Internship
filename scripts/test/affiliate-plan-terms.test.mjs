@@ -29,7 +29,8 @@ test('the bands, the amount above the last band and the percent phase are carrie
     { upToMinor: 3_000, commissionMinor: 700 },
   ]);
   assert.deepEqual(v.top, { aboveMinor: 3_000, commissionMinor: 1_100 });
-  assert.deepEqual(v.percent, { bps: 850, startsAtCustomer: 7, boundaryCustomer: 'PERCENT', windowMonths: 12 });
+  assert.deepEqual(v.percent, { bps: 850, startsAtCustomer: 7, boundaryCustomer: 'PERCENT', windowMonths: 12, monthAligned: false });
+  assert.equal(planTermsView({ ...PLAN, monthAligned: true }).percent.monthAligned, true);
   assert.equal(v.payoutDays, 30);
   assert.equal(v.afterNotice, 'RUN_OUT_WINDOW');
   assert.equal(v.currency, 'XTS');

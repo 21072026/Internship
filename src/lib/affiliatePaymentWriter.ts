@@ -89,6 +89,12 @@ export interface RecordPaymentInput {
    * Alone (no unit price, no amount), the programme's price list prices it (#3844).
    */
   transactionCount?: number | null;
+  /**
+   * The list price of the month's transactions, when the sender knows it apart
+   * from what was paid (an invoice import, #3846). Set by the writer itself when
+   * it prices a count by the list. The one-off commission is chosen by it (#3845).
+   */
+  listAmountMinor?: number | null;
   /** Undiscounted gross price per transaction, minor units. */
   unitPriceMinor?: number | null;
   currency: string;
@@ -155,7 +161,7 @@ async function syncLocked(tx: Tx, orgId: string, partner: LockedPartner, loaded:
   const { plan, planVersion, planEffectiveAt } = loaded;
   const paymentRows = await tx.affiliatePayment.findMany({
     where: { orgId, customer: { partnerId: partner.id } },
-    select: { id: true, customerId: true, amountMinor: true, currency: true, receivedAt: true, createdAt: true, source: true },
+    select: { id: true, customerId: true, amountMinor: true, listAmountMinor: true, currency: true, receivedAt: true, createdAt: true, source: true },
   });
   const payments: PaymentFact[] = paymentRows;
   const recordedBeforePlan = new Set(
@@ -256,8 +262,14 @@ async function listPricedBase(raw: RecordPaymentInput, tx?: Tx): Promise<Payment
  */
 export async function recordAffiliatePayment(raw: RecordPaymentInput, tx?: Tx): Promise<RecordPaymentResult> {
   const now = raw.now ?? new Date();
-  const base = wantsListPrice(raw) ? await listPricedBase(raw, tx) : resolvePaymentBase(raw);
+  const listPriced = wantsListPrice(raw);
+  const base = listPriced ? await listPricedBase(raw, tx) : resolvePaymentBase(raw);
   if (!base.ok) throw new AffiliateWriteError('invalid_input', [base.issue]);
+  // A list-priced count IS the list price; a list amount given beside a paid one must be a payment-sized integer.
+  const listAmountMinor = listPriced ? base.amountMinor : (raw.listAmountMinor ?? null);
+  if (listAmountMinor !== null && (!Number.isSafeInteger(listAmountMinor) || listAmountMinor < 1 || listAmountMinor > MAX_AMOUNT_MINOR)) {
+    throw new AffiliateWriteError('invalid_input', ['amount_range']);
+  }
   const issues = checkPaymentInput({ ...raw, amountMinor: base.amountMinor }, now);
   if (issues.length > 0) throw new AffiliateWriteError('invalid_input', issues);
   const input: ResolvedPaymentInput = {
@@ -265,6 +277,7 @@ export async function recordAffiliatePayment(raw: RecordPaymentInput, tx?: Tx): 
     amountMinor: base.amountMinor,
     transactionCount: base.transactionCount,
     unitPriceMinor: base.unitPriceMinor,
+    listAmountMinor,
     customerExternalRef: normalizeRef(raw.customerExternalRef),
     externalPaymentRef: normalizeRef(raw.externalPaymentRef),
   };
@@ -287,7 +300,7 @@ export async function recordAffiliatePayment(raw: RecordPaymentInput, tx?: Tx): 
 }
 
 /** The input once the base is resolved: `amountMinor` is always the base. */
-type ResolvedPaymentInput = RecordPaymentInput & { amountMinor: number; transactionCount: number | null; unitPriceMinor: number | null };
+type ResolvedPaymentInput = RecordPaymentInput & { amountMinor: number; transactionCount: number | null; unitPriceMinor: number | null; listAmountMinor: number | null };
 
 /** The payment write itself, under the partner lock, inside `tx`. */
 async function writePayment(tx: Tx, input: ResolvedPaymentInput, partnerId: string): Promise<RecordPaymentResult> {
@@ -343,6 +356,7 @@ async function writePayment(tx: Tx, input: ResolvedPaymentInput, partnerId: stri
       amountMinor: input.amountMinor,
       transactionCount: input.transactionCount,
       unitPriceMinor: input.unitPriceMinor,
+      listAmountMinor: input.listAmountMinor,
       currency: input.currency,
       receivedAt: input.receivedAt,
       source: input.source,
@@ -536,7 +550,7 @@ export async function driftReport(orgId: string): Promise<(CommissionDrift & { p
     prisma.affiliatePartner.findMany({ where: { orgId }, select: { id: true, noticeEffectiveAt: true } }),
     prisma.affiliatePayment.findMany({
       where: { orgId },
-      select: { id: true, customerId: true, amountMinor: true, currency: true, receivedAt: true, createdAt: true, source: true, customer: { select: { partnerId: true } } },
+      select: { id: true, customerId: true, amountMinor: true, listAmountMinor: true, currency: true, receivedAt: true, createdAt: true, source: true, customer: { select: { partnerId: true } } },
     }),
     prisma.affiliateCommission.findMany({
       where: { orgId },
