@@ -9417,6 +9417,9 @@ enum AffiliatePaymentSource {
   // commission is frozen as imported: the writer never creates, changes or
   // reports drift for it.
   IMPORT
+  // A paid invoice from the monthly invoice CSV (#3846): the amount is what the
+  // customer paid; the commission is computed like any other payment.
+  INVOICE
 }
 
 enum AffiliatePayoutMethod {
@@ -9514,6 +9517,10 @@ model AffiliateProgramSettings {
   // Not part of the commission plan: it prices future entries and never
   // re-evaluates a stored payment.
   priceList        Json?
+  // Which column of the monthly invoice CSV holds what (#3846,
+  // src/lib/affiliateInvoiceImportRule.ts): header names as the file spells
+  // them, saved by the last import. Organisation data; null = never imported.
+  invoiceColumns   Json?
 }
 
 // A picture or video the public partner page's theme shows (#3535): the logo,

@@ -243,6 +243,8 @@ export async function partnerCommissions(partner: GatedPartner, opts: { status?:
       // The breakdown of the commission base when it was entered as one (#3554); both or neither.
       paymentTransactionCount: r.payment.transactionCount,
       paymentUnitPriceMinor: r.payment.unitPriceMinor,
+      // The month's list price (#3845): equal to the amount when the count was priced by the list.
+      paymentListAmountMinor: r.payment.listAmountMinor,
     })),
   };
 }

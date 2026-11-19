@@ -100,7 +100,8 @@ export interface RecordPaymentInput {
   currency: string;
   receivedAt: Date;
   externalPaymentRef: string;
-  source: 'MANUAL' | 'API';
+  /** INVOICE: a paid invoice from the monthly CSV (#3846). */
+  source: 'MANUAL' | 'API' | 'INVOICE';
   enteredById?: string | null;
   /** Injected for tests; defaults to the wall clock. */
   now?: Date;
@@ -263,7 +264,14 @@ async function listPricedBase(raw: RecordPaymentInput, tx?: Tx): Promise<Payment
 export async function recordAffiliatePayment(raw: RecordPaymentInput, tx?: Tx): Promise<RecordPaymentResult> {
   const now = raw.now ?? new Date();
   const listPriced = wantsListPrice(raw);
-  const base = listPriced ? await listPricedBase(raw, tx) : resolvePaymentBase(raw);
+  // A paid amount with its list price beside it (an invoice, #3846) may carry the
+  // month's count as a note: the base is the paid amount, never count × price.
+  const paidWithList = !listPriced && raw.listAmountMinor != null;
+  const base = listPriced
+    ? await listPricedBase(raw, tx)
+    : paidWithList
+      ? resolvePaymentBase({ amountMinor: raw.amountMinor })
+      : resolvePaymentBase(raw);
   if (!base.ok) throw new AffiliateWriteError('invalid_input', [base.issue]);
   // A list-priced count IS the list price; a list amount given beside a paid one must be a payment-sized integer.
   const listAmountMinor = listPriced ? base.amountMinor : (raw.listAmountMinor ?? null);
@@ -275,7 +283,7 @@ export async function recordAffiliatePayment(raw: RecordPaymentInput, tx?: Tx): 
   const input: ResolvedPaymentInput = {
     ...raw,
     amountMinor: base.amountMinor,
-    transactionCount: base.transactionCount,
+    transactionCount: paidWithList ? (raw.transactionCount ?? null) : base.transactionCount,
     unitPriceMinor: base.unitPriceMinor,
     listAmountMinor,
     customerExternalRef: normalizeRef(raw.customerExternalRef),

@@ -43,6 +43,7 @@ export function AffiliateTabs() {
       tabs: [
         { href: '/admin/affiliates/customers', label: t.affiliateCustomers.tab },
         { href: '/admin/affiliates/payments', label: t.affiliatePayments.tab },
+        { href: '/admin/affiliates/invoices', label: t.affiliateInvoices.tab },
       ],
     },
     {

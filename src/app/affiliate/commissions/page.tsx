@@ -90,8 +90,14 @@ export default async function AffiliateCommissionsPage({ searchParams }: { searc
                                 count: new Intl.NumberFormat(locale).format(r.paymentTransactionCount),
                                 price: formatMinorAmount(r.paymentUnitPriceMinor, r.currency, locale),
                               })
-                            : // Priced by the programme's price list (#3844): the count alone.
-                              interpolate(L.paymentListPriced, { count: new Intl.NumberFormat(locale).format(r.paymentTransactionCount) })}
+                            : r.paymentListAmountMinor !== null && r.paymentListAmountMinor !== r.paymentAmountMinor
+                              ? // A paid invoice with the month's list price beside it (#3846).
+                                interpolate(L.paymentListPrice, {
+                                  count: new Intl.NumberFormat(locale).format(r.paymentTransactionCount),
+                                  amount: formatMinorAmount(r.paymentListAmountMinor, r.currency, locale),
+                                })
+                              : // Priced by the programme's price list (#3844): the count alone.
+                                interpolate(L.paymentListPriced, { count: new Intl.NumberFormat(locale).format(r.paymentTransactionCount) })}
                         </div>
                       )}
                     </td>

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Affiliate monthly invoice import (#3846): `/admin/affiliates/invoices` and `POST /api/admin/affiliate/invoices/import` read last month's invoice CSV on the shared `runImport` engine — the admin maps the columns from the file's header (saved on `AffiliateProgramSettings.invoiceColumns`), previews, then imports. Paid rows become payments through `recordAffiliatePayment()` with the new source `INVOICE` (paid gross amount; with a transaction column, the price list's `listAmountMinor` beside it); already-recorded invoice numbers, unknown customers, unpaid, zero and negative rows, and months already typed by hand are skipped. Pure rule in `src/lib/affiliateInvoiceImportRule.ts`.",
+  "notes": {
+    "en": ["Affiliate: import last month's invoices from a CSV file. Choose which column holds what once, check the preview, then import; every paid invoice earns its commission."],
+    "tr": ["Affiliate: geçen ayın faturalarını CSV dosyasından içe aktarın. Hangi sütunda ne olduğunu bir kez seçin, önizlemeyi kontrol edin, sonra içe aktarın; ödenmiş her fatura komisyonunu kazandırır."],
+    "de": ["Affiliate: Die Rechnungen des Vormonats aus einer CSV-Datei importieren. Einmal festlegen, welche Spalte was enthält, die Vorschau prüfen, dann importieren; jede bezahlte Rechnung bringt ihre Provision."]
+  }
+}
