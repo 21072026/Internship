@@ -79,7 +79,7 @@ export interface RecordPaymentInput {
   partnerId?: string | null;
   customerExternalRef: string;
   /**
-   * The commission base (undiscounted, gross, VAT included), or leave it out and
+   * The commission base (gross, VAT included; what was paid — #3845), or leave it out and
    * give the breakdown below; both may come together only when they agree.
    * resolvePaymentBase() (src/lib/affiliatePaymentBaseRule.ts) decides (#3552).
    */
