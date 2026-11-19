@@ -1,3 +1,4 @@
+import { orgMailWriteFields, mailIdentityDomainError } from '@/lib/orgMailIdentityRule';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
@@ -225,6 +226,9 @@ export async function GET(request: Request) {
 // door. The server applies it — the client never posts stages or a pre-built
 // configuration, only choices.
 const createSchema = z.object({
+  // A new org has no verified domain; configure identity after ownership proof.
+  mailFromAddress: z.never().optional(), mailFromName: z.never().optional(),
+  mailReplyTo: z.never().optional(), mailDomainVerifiedAt: z.never().optional(),
   name: z.string().trim().min(1).max(120),
   slug: z.string().max(60).optional(),
   plan: z.enum(['FREE', 'PRO', 'ENTERPRISE']).optional(),
@@ -315,6 +319,7 @@ const PROVISION_ERRORS: Record<Exclude<ProvisionRefusal['code'], 'feature_locked
 // Empty string clears an optional branding field (stored as null).
 const optionalText = z.string().max(TEXT_LIMITS.orgBrandName).optional();
 const patchSchema = z.object({
+  ...orgMailWriteFields,
   id: z.string().min(1),
   plan: z.string().refine(isOrgPlan, 'Invalid plan').optional(),
   vertical: z.string().refine(isVerticalKey, 'Unknown vertical').optional(),
@@ -433,6 +438,9 @@ export async function PATCH(request: Request) {
   // depends on whether the payload happened to be well-formed.
   const existing = await prisma.organization.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: 'Organization not found' }, { status: 404 });
+  if (mailIdentityDomainError(parsed.data, existing)) {
+    return NextResponse.json({ error: 'Mail addresses must match the verified organization domain' }, { status: 400 });
+  }
 
   // The plan is what the premium gate below reads, so who may WRITE it decides
   // whether that gate means anything (#1742). A tenant ADMIN owns their org and
@@ -635,6 +643,10 @@ export async function PATCH(request: Request) {
   const data: Record<string, unknown> = {};
   if (plan !== undefined) data.plan = plan;
   if (vertical !== undefined) data.vertical = vertical;
+  for (const field of ['mailFromAddress', 'mailFromName', 'mailReplyTo'] as const) {
+    const value = parsed.data[field];
+    if (value !== undefined) data[field] = value?.trim() || null;
+  }
   const bn = orNull(brandName); if (bn !== undefined) data.brandName = bn;
   const bl = orNull(brandLogoUrl); if (bl !== undefined) data.brandLogoUrl = bl;
   const bc = orNull(brandColor); if (bc !== undefined) data.brandColor = bc;

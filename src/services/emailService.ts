@@ -1,3 +1,5 @@
+import { resolveMailIdentity } from '@/lib/orgMailIdentity';
+import { platformFromIdentity, type MailIdentityContext } from '@/lib/orgMailIdentityRule';
 import nodemailer from 'nodemailer';
 import type { PrerenderedEmail } from '@/lib/notifications/adapters/types';
 import type { Transporter } from 'nodemailer';
@@ -466,21 +468,7 @@ function htmlToText(html: string): string {
 // returned verbatim, which silently dropped every tenant's brand name — so on
 // such a deployment a marketing recipient got the internship name on every mail.
 function fromIdentity(brandName?: string | null, transport: MailTransport = 'primary'): { name: string; address: string } {
-  // Bulk mail may carry its own sender identity (e.g. noreply@ersah.in) so that
-  // digest complaints never touch the domain the password-reset mail is signed
-  // with. Falls back to the primary address when unset, which keeps a
-  // single-identity setup working unchanged.
-  const configured =
-    (transport === 'bulk' ? process.env.SMTP_BULK_FROM : undefined) ||
-    process.env.SMTP_FROM ||
-    (transport === 'bulk' ? process.env.SMTP_BULK_USER : undefined) ||
-    process.env.SMTP_USER ||
-    '';
-  const angled = configured.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
-  const address = (angled ? angled[2] : configured).trim();
-  const configuredName = angled?.[1].trim() || null;
-  const name = brandName || configuredName || process.env.MAIL_FROM_NAME || 'Internship CRM';
-  return { name, address };
+  return platformFromIdentity(brandName, transport);
 }
 
 function fromHeader(brandName?: string | null, transport: MailTransport = 'primary'): string {
@@ -1011,10 +999,11 @@ export interface SendEmailArgs {
 /**
  * One mail, fully built and ready for the wire (#2941): everything
  * `prepareEmail()` decided (consent, footer, headers, sender, channel, lane)
- * and nothing that still needs the database. The outbox (a later PR) seals it
+ * plus revocable tenant identity context checked again at transmission. The outbox seals it
  * into a queued row and hands it back to `deliverPrepared()`.
  */
 export interface PreparedEmail {
+  mailIdentity?: MailIdentityContext;
   to: string;
   subject: string;
   category?: string;
@@ -1248,11 +1237,15 @@ export async function prepareEmail({
   // After the SMTP short-circuits on purpose: a mail that is not going out
   // costs no brand lookup.
   const senderName = fromName || (await recipientSenderName(orgId, userId, storedOrg));
-  const sender = fromIdentity(senderName || null, transport);
+  const effectiveOrgId = orgId !== undefined ? orgId : tenantOrgId;
+  const platform = fromIdentity(senderName || null, transport);
+  const identity = await resolveMailIdentity(effectiveOrgId, transport, senderName || null, platform);
+  const sender = identity.from;
 
   return {
     status: 'READY',
     prepared: {
+      ...(effectiveOrgId ? { mailIdentity: { platform, transport, barePlatform: senderName === false, explicitReplyTo: !!replyTo } } : {}),
       to,
       subject,
       category,
@@ -1260,19 +1253,19 @@ export async function prepareEmail({
       lane: effectiveLane(category, lane),
       group: groupId ?? null,
       userId: userId ?? null,
-      orgId: orgId !== undefined ? orgId : (storedOrg?.orgId ?? null),
+      orgId: effectiveOrgId,
       world: storedWorld ?? null,
       message: {
         // `false`: the recipient's world could not be read — a bare address names
         // no product, where the default name might name the wrong one. An object,
         // not a formatted string, so a tenant brand with a comma or a quote in it
         // is encoded by nodemailer instead of splitting the header.
-        from: !sender.address ? '' : senderName === false ? sender.address : { name: sender.name, address: sender.address },
+        from: !sender.address ? '' : senderName === false && identity.source === 'platform' ? sender.address : { name: sender.name, address: sender.address },
         to,
         subject,
         html: body,
         text: htmlToText(body),
-        ...(replyTo ? { replyTo } : {}),
+        ...((replyTo || identity.replyTo) ? { replyTo: replyTo || identity.replyTo } : {}),
         ...(attachments?.length ? { attachments } : {}),
         ...(mergedHeaders && Object.keys(mergedHeaders).length ? { headers: mergedHeaders } : {}),
       },
@@ -1302,7 +1295,7 @@ export async function deliverPrepared(
   const { to, subject, category, transport } = prepared;
   const transporterFor = via ?? transportForMail(prepared, mode);
   try {
-    await transporterFor.sendMail(prepared.message);
+    await transporterFor.sendMail(await currentMailIdentity(prepared));
   } catch (e) {
     // Record, then rethrow unchanged: callers that already catch (and the ones
     // that deliberately don't) keep behaving exactly as before.
@@ -1683,11 +1676,26 @@ async function sendCriticalCapped(
  * inline paths above decide what to record (#2944). `mode` picks the transport
  * (see `DeliveryMode`).
  */
+// Approval/queue envelopes can outlive proof. Re-resolve immediately before
+// transmission, also after a primary→bulk failover. Channel selection is untouched.
+async function currentMailIdentity(prepared: PreparedEmail): Promise<PreparedEmail['message']> {
+  if (!prepared.orgId || !prepared.mailIdentity) return prepared.message;
+  const meta = prepared.mailIdentity;
+  const platform = meta.transport === prepared.transport ? meta.platform
+    : platformFromIdentity(meta.platform.name, prepared.transport);
+  const identity = await resolveMailIdentity(prepared.orgId, prepared.transport, platform.name, platform, true);
+  const from = !identity.from.address ? '' : meta.barePlatform && identity.source === 'platform'
+    ? identity.from.address : identity.from;
+  const { replyTo, ...message } = prepared.message;
+  const resolvedReply = meta.explicitReplyTo ? replyTo : identity.replyTo;
+  return { ...message, from, ...(resolvedReply ? { replyTo: resolvedReply } : {}) };
+}
+
 export async function transmit(
   prepared: PreparedEmail,
   { mode = 'request', via }: { mode?: DeliveryMode; via?: Pick<Transporter, 'sendMail'> } = {},
 ): Promise<void> {
-  await (via ?? transportForMail(prepared, mode)).sendMail(prepared.message);
+  await (via ?? transportForMail(prepared, mode)).sendMail(await currentMailIdentity(prepared));
 }
 
 /** The drain's ledger row for a queued mail (#2944): the same EmailLog row an

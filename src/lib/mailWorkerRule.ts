@@ -1,3 +1,4 @@
+import type { MailIdentityContext } from '@/lib/orgMailIdentityRule';
 // Mail outbox rules: when a mail goes to the queue, how a queued mail is
 // settled, and how its envelope is written and read back.
 //
@@ -318,6 +319,7 @@ export interface EnvelopeMessage {
 }
 
 export interface Envelope {
+  mailIdentity?: MailIdentityContext;
   to: string;
   subject: string;
   category?: string;
