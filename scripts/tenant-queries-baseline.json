@@ -712,6 +712,14 @@
     "src/app/weekly-reports/booklet/[relationId]/page.tsx": {
       "count": 1,
       "reason": "WeeklyReport.findMany filters by relationId only after the relation was loaded and checked with inCallerTenant(relation.orgId, session.user.orgId) plus canReadWeeklyReports (admin-only page)."
+    },
+    "src/app/api/subscribe/confirm/route.ts": {
+      "count": 1,
+      "reason": "Public confirm credential authorizes exactly its Subscriber UUID: HMAC purpose validated before query and stored SHA-256 hash matched in the same write. No caller-selected tenant/address and no returned row (#1406)."
+    },
+    "src/app/api/subscribe/unsubscribe/route.ts": {
+      "count": 1,
+      "reason": "Public unsubscribe credential authorizes exactly its Subscriber UUID: HMAC purpose validated before query and stored SHA-256 hash matched in the same write. No caller-selected tenant/address and no returned row (#1406)."
     }
   }
 }

@@ -131,6 +131,7 @@ export default function CompanyInquiriesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">{a.title}</h1>
+        <Link href="/admin/subscribers" className="text-sm text-blue-600 underline">{t.interest.adminTitle}</Link>
         <p className="text-gray-500 mt-1">{a.subtitle}</p>
       </div>
 

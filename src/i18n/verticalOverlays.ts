@@ -59,6 +59,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      interest: { roles: { MENTOR: 'Advisor' } },
       // The executive dashboard (#3706): the third score counts records that first
       // reached the tenant's own finished stage — a won deal here, not a placement.
       executive: {
@@ -1248,6 +1249,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      interest: { roles: { MENTOR: 'Danışman' } },
       executive: {
         subtitle: '0–100 arası üç skor; her biri kendi kayıtlarınız üzerinde basit bir hesap.',
         scores: { placement: { name: 'Kazanılan anlaşmalar' } },
@@ -2287,6 +2289,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      interest: { roles: { MENTOR: 'Ansprechperson' } },
       executive: {
         subtitle: 'Drei Scores von 0 bis 100, jeder eine einfache Rechnung über Ihre eigenen Daten.',
         scores: { placement: { name: 'Gewonnene Deals' } },

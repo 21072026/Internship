@@ -303,6 +303,7 @@ model Organization {
   unmappedSkillTerms      UnmappedSkillTerm[]
   mentorApplications      MentorApplication[]
   mentorOffers            MentorOffer[]
+  subscribers             Subscriber[]
   companyInquiries        CompanyInquiry[]
   documentRequirements    DocumentRequirement[]
   documentReviews         DocumentReview[]
@@ -9940,4 +9941,33 @@ model CompanyMembership {
   @@unique([companyId, userId])
   @@index([orgId, companyId])
   @@index([userId])
+}
+
+// Public interest list (#1406), separate from User/newsletter preferences.
+// A request is never marketing permission until the address owner confirms it.
+model Subscriber {
+  id                    String       @id
+  orgId                 String
+  org                   Organization @relation(fields: [orgId], references: [id])
+  email                 String       @db.VarChar(191)
+  role                  String       @db.VarChar(10)
+  locale                String       @db.VarChar(5)
+  consent               Boolean
+  consentAt             DateTime
+  consentTextVersion    String
+  createdAt             DateTime     @default(now())
+  confirmedAt           DateTime?
+  unsubscribedAt        DateTime?
+  confirmationTokenHash String?      @db.VarChar(64)
+  confirmationExpiresAt DateTime?
+  unsubscribeTokenHash  String       @db.VarChar(64)
+  utmSource             String?
+  utmMedium             String?
+  utmCampaign           String?
+  utmTerm               String?
+  utmContent            String?
+  referrer              String?      @db.Text
+
+  @@unique([orgId, email])
+  @@index([createdAt])
 }

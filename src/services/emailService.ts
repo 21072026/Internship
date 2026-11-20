@@ -1,3 +1,4 @@
+import { subscriberDeliveryAllowed } from '@/lib/subscriberDelivery';
 import nodemailer from 'nodemailer';
 import type { PrerenderedEmail } from '@/lib/notifications/adapters/types';
 import type { Transporter } from 'nodemailer';
@@ -756,6 +757,12 @@ function unsubscribeHeaders(userId: string, group: EmailGroupId, origin?: string
     'List-Unsubscribe': mailto ? `<${one}>, <mailto:${mailto}?subject=unsubscribe>` : `<${one}>`,
     'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
   };
+  return { ...h, ...bulkListHeaders(group, origin) };
+}
+
+// Shared list markers for both account-backed and public interest recipients.
+export function bulkListHeaders(group: EmailGroupId, origin?: string): Record<string, string> {
+  const h: Record<string, string> = {};
   // Only automated volume gets the list markers. A 1:1 notification is not a
   // list, and `Precedence: bulk` on the primary channel is a negative signal on
   // exactly the reputation the two-transport split exists to protect — plus
@@ -899,6 +906,7 @@ async function recipientSenderName(
 }
 
 export interface SendEmailArgs {
+  subscriberId?: string; // Public interest recipient, not a User (#1406).
   to: string;
   subject: string;
   html: string;
@@ -1015,6 +1023,7 @@ export interface SendEmailArgs {
  * into a queued row and hands it back to `deliverPrepared()`.
  */
 export interface PreparedEmail {
+  subscriberId?: string;
   to: string;
   subject: string;
   category?: string;
@@ -1040,6 +1049,7 @@ export type PrepareResult = { status: 'SKIPPED' } | { status: 'READY'; prepared:
  * FAILED `EmailLog` rows it always did and throws where it always threw.
  */
 export async function prepareEmail({
+  subscriberId,
   to,
   subject,
   html,
@@ -1055,6 +1065,10 @@ export async function prepareEmail({
   orgId,
   lane,
 }: SendEmailArgs): Promise<PrepareResult> {
+  if (subscriberId && !(await subscriberDeliveryAllowed(subscriberId, to, orgId, category))) {
+    await recordEmail(to, subject, category, 'SKIPPED', transportFor(category), 'Interest consent unavailable', { orgId });
+    return { status: 'SKIPPED' };
+  }
   // ── A GENERATED ADDRESS IS NOBODY (#2970) ─────────────────────────────────
   // Before anything else — the opt-out read, demo mode, the approval hold, the
   // queue: a stand-in lead address (`import.local`) or an erased account's
@@ -1161,7 +1175,7 @@ export async function prepareEmail({
     // Fail OPEN on a missing row or a DB error, exactly like notifyIfAllowed: a
     // preference lookup that breaks must not silently swallow the mail.
     if (u && !emailGroupAllowed(u, groupId!)) {
-      logger.info('Email not sent: unsubscribed', { to, category, group: groupId });
+      logger.info('Email not sent: unsubscribed', { ...(subscriberId ? {} : { to }), category, group: groupId });
       await recordEmail(to, subject, category, 'SKIPPED', transport, `Unsubscribed: ${groupId}`, { orgId: orgId ?? storedOrg?.orgId, userId });
       // 'SKIPPED', never a bare return: #1431 made this function report what
       // actually happened, because four routes had been reading "did not throw"
@@ -1179,13 +1193,13 @@ export async function prepareEmail({
   // keeps every flow clickable, and the SKIPPED row means the admin email view
   // still shows what would have gone out — which is the part worth demoing.
   if (IS_DEMO_MODE) {
-    logger.info('Email not sent: demo mode', { to, subject, category });
+    logger.info('Email not sent: demo mode', { ...(subscriberId ? {} : { to, subject }), category });
     await recordEmail(to, subject, category, 'SKIPPED', transport, 'Demo mode — delivery disabled', { orgId: orgId ?? storedOrg?.orgId, userId });
     return { status: 'SKIPPED' };
   }
 
   if (!process.env.SMTP_USER) {
-    logger.error('Email not sent: SMTP is not configured', { to, subject, category });
+    logger.error('Email not sent: SMTP is not configured', { ...(subscriberId ? {} : { to, subject }), category });
     await recordEmail(to, subject, category, 'SKIPPED', transport, 'SMTP not configured (SMTP_USER unset)', { orgId: orgId ?? storedOrg?.orgId, userId });
     return { status: 'SKIPPED' };
   }
@@ -1235,7 +1249,7 @@ export async function prepareEmail({
       ({ body, headers: computed } = await optOutParts(html, userId!, groupId!, locale, origin));
     } catch (e) {
       const message = `Recipient origin unresolved: ${e instanceof Error ? e.message : String(e)}`;
-      logger.error('Email not sent: recipient origin unresolved', { to, category, error: message });
+      logger.error('Email not sent: recipient origin unresolved', { ...(subscriberId ? {} : { to }), category, error: message });
       await recordEmail(to, subject, category, 'FAILED', transport, message, { orgId: orgId ?? storedOrg?.orgId, userId });
       throw e;
     }
@@ -1253,6 +1267,7 @@ export async function prepareEmail({
   return {
     status: 'READY',
     prepared: {
+      ...(subscriberId ? { subscriberId } : {}),
       to,
       subject,
       category,
@@ -1299,6 +1314,7 @@ export async function deliverPrepared(
     observer = meterObserver,
   }: { mode?: DeliveryMode; via?: Pick<Transporter, 'sendMail'>; observer?: MeterObserver } = {},
 ): Promise<'SENT'> {
+  await assertSubscriberDelivery(prepared);
   const { to, subject, category, transport } = prepared;
   const transporterFor = via ?? transportForMail(prepared, mode);
   try {
@@ -1343,6 +1359,7 @@ export async function sendPrepared(
   prepared: PreparedEmail,
   opts: { via?: Pick<Transporter, 'sendMail'>; observer?: MeterObserver } = {},
 ): Promise<'SENT' | 'QUEUED'> {
+  await assertSubscriberDelivery(prepared);
   // The customer-mail lock (see sendEmail()): an approved draft to a marketing
   // org's lead is refused too — it throws, so the draft is not marked sent.
   if (await customerMailLocked(prepared)) {
@@ -1683,10 +1700,20 @@ async function sendCriticalCapped(
  * inline paths above decide what to record (#2944). `mode` picks the transport
  * (see `DeliveryMode`).
  */
+// A held draft or paced inline mail may outlive its consent. Fail closed at
+// the transport boundary too; the queue also cancels it before consuming SMTP.
+async function assertSubscriberDelivery(prepared: PreparedEmail): Promise<void> {
+  if (prepared.subscriberId && !(await subscriberDeliveryAllowed(prepared.subscriberId, prepared.to, prepared.orgId, prepared.category))) {
+    await recordEmailOutcome(prepared, 'SKIPPED', 'Interest consent unavailable');
+    throw new Error('subscriber_consent_unavailable');
+  }
+}
+
 export async function transmit(
   prepared: PreparedEmail,
   { mode = 'request', via }: { mode?: DeliveryMode; via?: Pick<Transporter, 'sendMail'> } = {},
 ): Promise<void> {
+  await assertSubscriberDelivery(prepared);
   await (via ?? transportForMail(prepared, mode)).sendMail(prepared.message);
 }
 

@@ -1,3 +1,4 @@
+import { subscriberDeliveryAllowed } from '@/lib/subscriberDelivery';
 import type { JobStatus, Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -699,7 +700,7 @@ async function drainRow(row: JobRecord, ctx: RowContext): Promise<Stop> {
   }
 
   // ── The preference gate, again ────────────────────────────────────────────
-  if (!(await stillWanted(payload.group, payload.userId))) {
+  if ((envelope.subscriberId && !(await subscriberDeliveryAllowed(envelope.subscriberId, envelope.to, envelope.orgId, envelope.category))) || !(await stillWanted(payload.group, payload.userId))) {
     await settle(row, workerId, { status: 'CANCELLED', lastError: 'unsubscribed', payload: clearedPayload(payload) });
     await deps.record(envelope, 'SKIPPED', `Unsubscribed: ${payload.group}`);
     await settleMailRef(payload.ref, 'SKIPPED', 'unsubscribed');

@@ -1,3 +1,4 @@
+import { InterestSignup } from '@/components/InterestSignup';
 import Link from 'next/link';
 import {
   GraduationCap, ArrowRight, ArrowDown, CheckCircle, Users, Building2, Briefcase,
@@ -463,6 +464,8 @@ async function HomePage() {
           </div>
         </div>
       </section>
+
+      <InterestSignup />
 
       {/* Live chat for visitors who would rather ask than read (#1174). Landing
           page only, and only once marketing cookies are accepted. */}
