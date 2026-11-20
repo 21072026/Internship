@@ -247,16 +247,18 @@ const SCREENS = {
 
 const CONSENT = JSON.stringify({ version: 3, necessary: true, analytics: false, marketing: false, ts: '2026-01-01T00:00:00.000Z' });
 
-async function signedInPage(browser, screen, device, theme) {
-  const { out, ...contextOptions } = VIEWPORTS[device];
-  const context = await browser.newContext({ ...contextOptions, locale: { en: 'en-US', tr: 'tr-TR', de: 'de-DE' }[LOCALE], colorScheme: theme, reducedMotion: 'reduce' });
+async function signedInPage(browser, screen, device, theme, locale = LOCALE) {
+  const { out, ...contextOptions } = device === 'channel'
+    ? { viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 2, timezoneId: 'Europe/Berlin', out: { width: 2880, height: 2000 } }
+    : VIEWPORTS[device];
+  const context = await browser.newContext({ ...contextOptions, locale: { en: 'en-US', tr: 'tr-TR', de: 'de-DE' }[locale], colorScheme: theme, reducedMotion: 'reduce' });
   // A returning visitor: no consent banner over the screen. The theme cookie is
   // what the no-flash script in src/app/layout.tsx reads first.
   await context.addInitScript((consent) => localStorage.setItem('cookie_consent', consent), CONSENT);
   const base = screen.base ?? BASE_URL;
   await context.addCookies([
     { name: 'theme', value: theme, url: base },
-    { name: 'locale', value: LOCALE, url: base },
+    { name: 'locale', value: locale, url: base },
   ]);
   const page = await context.newPage();
   await page.goto(`${base}/auth/signin`);
@@ -273,6 +275,13 @@ async function signedInPage(browser, screen, device, theme) {
   // Fonts and the post-mount fetches (badges, counts) settle.
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(1500);
+  // A newly seeded account may show its first-run tour. Dismiss via the real
+  // UI, rather than painting over an overlay in the resulting image.
+  const tourSkip = page.getByTestId('tour-skip');
+  if (await tourSkip.isVisible()) {
+    await tourSkip.click();
+    await tourSkip.waitFor({ state: 'hidden' });
+  }
   return { context, page, out };
 }
 
@@ -379,6 +388,77 @@ async function clip(browser, name, theme) {
   }
 }
 
+// Channel stills (#2225) use the same sign-in, theme and consent path as the
+// landing producer. Six surfaces, two languages and two themes across the set;
+// no clips or pipeline/shortlist changes. The explicit matrix avoids 24 near-duplicates.
+async function openDemoRelation(page, base, reports = false) {
+  const response = await page.request.get(`${base}/api/mentorship`);
+  if (!response.ok()) throw new Error('Cannot read synthetic mentor relations');
+  const { relations } = await response.json();
+  const relation = relations.find((r) => r.mentee.email === 'mentee.gizem@demo.example.com');
+  if (!relation) throw new Error('Canonical Gizem demo relation missing; run seed:demo');
+  await page.goto(`${base}/mentor/mentees/${relation.id}`);
+  await page.getByRole('tab').first().waitFor();
+  if (reports) await page.getByRole('tab').nth(1).click();
+}
+
+const CHANNEL_SCREENS = [
+  { name: 'pipeline', locale: 'de', theme: 'light', ...SCREENS.mentor },
+  { name: 'mentee-profile', locale: 'en', theme: 'light', email: SCREENS.mentor.email, landing: '/mentor',
+    open: (page, base) => openDemoRelation(page, base), ready: (page) => page.getByTestId('mentee-detail-main') },
+  { name: 'interaction-log', locale: 'en', theme: 'dark', email: SCREENS.mentor.email, landing: '/mentor',
+    open: (page, base) => page.goto(`${base}/mentor/interactions`), ready: (page) => page.getByTestId('interactions-search') },
+  { name: 'weekly-report', locale: 'de', theme: 'light', email: SCREENS.mentor.email, landing: '/mentor',
+    open: (page, base) => openDemoRelation(page, base, true), ready: (page) => page.getByTestId('weekly-report-row').first() },
+  { name: 'talent-pool', locale: 'de', theme: 'dark', email: SCREENS.company.email, landing: '/company',
+    open: (page, base) => page.goto(`${base}/company`), ready: (page) => page.getByText('Hakan Demo', { exact: true }) },
+  { name: 'admin-analytics', locale: 'en', theme: 'dark', email: 'admin.demo@demo.example.com', landing: '/admin',
+    open: (page, base) => page.goto(`${base}/admin/analytics`), ready: (page) => page.getByTestId('outcomes-link') },
+];
+
+async function channelStills(browser) {
+  // A localhost browser URL alone cannot prove that its server uses a local DB.
+  // Require the operator to name that DB, then check its complete account set.
+  // Keep the server and producer on this same DATABASE_URL (see README).
+  const url = new URL(process.env.DATABASE_URL || 'invalid:');
+  if (!['localhost', '127.0.0.1'].includes(url.hostname) || !url.pathname.endsWith('_demo')) {
+    throw new Error('--channels requires an explicitly named local *_demo DATABASE_URL');
+  }
+  const { PrismaClient } = await import('@prisma/client');
+  const db = new PrismaClient();
+  try {
+    const users = await db.user.findMany({ select: { email: true, phone: true, cvUrl: true, avatarUrl: true } });
+    if (!users.length || users.some((u) => !u.email.endsWith('@demo.example.com') || u.phone || u.cvUrl || u.avatarUrl)) {
+      throw new Error('Channel capture requires only demo accounts, with no phones or uploaded profiles');
+    }
+    console.log(`Synthetic preflight: ${users.length} demo accounts; no phones/CVs/avatars`);
+  } finally { await db.$disconnect(); }
+  for (const screen of CHANNEL_SCREENS) {
+    const { page, context, out } = await signedInPage(browser, screen, 'channel', screen.theme, screen.locale);
+    try {
+      if (screen.name === 'mentee-profile') {
+        await page.getByTestId('mentee-detail-sidebar').evaluate((el) => {
+          window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 24, behavior: 'instant' });
+        });
+      }
+      await page.getByTestId('page-loading').waitFor({ state: 'hidden' });
+      const dark = await page.locator('html').evaluate((el) => el.classList.contains('dark'));
+      if (dark !== (screen.theme === 'dark')) throw new Error('Requested theme did not render');
+      if (await page.locator('[data-testid$="-load-error"]:visible').count()) throw new Error('A product panel failed to load');
+      const text = await page.locator('body').innerText();
+      const emails = text.match(/[\w.+-]+@[\w.-]+\.[a-z]{2,}/gi) || [];
+      if (emails.some((email) => !email.endsWith('@demo.example.com'))) throw new Error('Non-demo address visible');
+      const png = await page.screenshot({ animations: 'disabled' });
+      const file = path.join(OUT_DIR, `${screen.name}-${screen.locale}-${screen.theme}.png`);
+      await sharp(png).png({ compressionLevel: 9 }).toFile(file);
+      const meta = await sharp(file).metadata();
+      if (meta.width !== out.width || meta.height !== out.height) throw new Error('Unexpected retina dimensions');
+      await sharp(file).raw().toBuffer(); // decode the full file, not only its header
+      console.log(`channel ${path.basename(file)} ${out.width}×${out.height} ${checkSize(file, 1200).toFixed(0)} KB`);
+    } finally { await context.close(); }
+  }
+}
+
 const args = process.argv.slice(2);
 const themeArg = args.find((a) => a.startsWith('--theme='))?.split('=')[1];
 const themes = themeArg ? [themeArg] : ['light', 'dark'];
@@ -386,7 +466,7 @@ const withVideo = !args.includes('--no-video');
 const only = args.filter((a) => !a.startsWith('--'));
 const names = only.length ? only : Object.keys(SCREENS);
 for (const n of names) if (!SCREENS[n]) { console.error(`unknown screen "${n}" — one of ${Object.keys(SCREENS).join(', ')}`); process.exit(1); }
-if (withVideo && themes.length > 1) {
+if (!args.includes('--channels') && withVideo && themes.length > 1) {
   console.error('the clips change demo data (a card moves, a candidate is shortlisted): capture one --theme at a time and re-seed in between, or pass --no-video.');
   process.exit(1);
 }
@@ -394,7 +474,9 @@ if (withVideo && themes.length > 1) {
 mkdirSync(OUT_DIR, { recursive: true });
 const browser = await chromium.launch();
 try {
-  for (const name of names) {
+  if (args.includes('--channels')) {
+    await channelStills(browser);
+  } else for (const name of names) {
     for (const theme of themes) {
       // Stills first: they show each screen before its clip changes the data.
       for (const device of Object.keys(VIEWPORTS)) await still(browser, name, device, theme);
