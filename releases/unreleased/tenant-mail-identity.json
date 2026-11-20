@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "Tenant mail identity (#1670): additive Organization sender/reply-to fields, exact verified-domain validation, fail-closed identity resolution at preparation and final transport, and scoped admin email-health identity state. Platform From fallback, explicit Reply-To and primary/bulk selection are preserved. Mail verification remains server-owned; the DNS wizard belongs to #1672."
+}

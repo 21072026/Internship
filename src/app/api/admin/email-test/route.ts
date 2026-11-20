@@ -1,3 +1,4 @@
+import { tenantMailIdentityHealth } from '@/lib/orgMailIdentity';
 import { NextResponse } from 'next/server';
 import { requirePermission } from '@/lib/authz';
 import { z } from 'zod';
@@ -32,6 +33,7 @@ export async function GET(request: Request) {
     // category rides the primary transport — a valid setup, not a fault.
     bulkSmtp,
     channels: mailChannelInfo(),
+    tenantIdentity: await tenantMailIdentityHealth(resolveOrgId(gate.session)),
     from: process.env.SMTP_FROM || process.env.SMTP_USER || null,
     host: process.env.SMTP_HOST || null,
     // null = reply-by-email is off (#2217); never a guessed default.

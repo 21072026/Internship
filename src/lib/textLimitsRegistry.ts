@@ -322,6 +322,9 @@ export const COLUMN_GUARDS: Record<string, Record<string, Guard>> = {
     lastError: { exempt: '@db.Text, written by the drain job through sanitizeError, never from a request' },
   },
   Organization: {
+    mailFromAddress: { limit: 'orgMailAddress', files: ['src/lib/orgMailIdentityRule.ts'] },
+    mailReplyTo: { limit: 'orgMailAddress', files: ['src/lib/orgMailIdentityRule.ts'] },
+    mailFromName: { limit: 'orgMailFromName', files: ['src/lib/orgMailIdentityRule.ts'] },
     // OPEN | RULES, checked by isEligibilityMode() before any write (#1945).
     eligibilityMode: ENUMERATED,
     // full | read_only | off, checked by isImpersonationPolicy() before any write (#1586).

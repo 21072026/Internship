@@ -689,3 +689,43 @@ handled and suppress the reminders permanently.
 | `INBOUND_IMAP_ENABLED` | Set to `0` to stop the bridge while keeping the credentials |
 | `CRON_SECRET` | Registers the scheduled jobs at boot (production only) |
 | `CRON_ENABLED` | Set to `0` to stop the schedules while keeping the secret |
+
+## Tenant mail identity (#1670)
+
+`Organization.mailFromAddress`, `mailFromName`, `mailReplyTo` and
+`mailDomainVerifiedAt` are nullable. `src/lib/orgMailIdentityRule.ts` resolves
+identity independently of channel selection. A tenant From is enabled only when:
+
+- the separate, server-owned `mailDomainVerifiedAt` proof exists;
+- the current domain-ownership source (`publicHost` + `publicHostVerifiedAt`)
+  is verified, and mail proof does not predate that ownership proof;
+- the bare From address is valid and its domain matches that host exactly.
+
+Web-host ownership alone is **not mail verification**. There is no inferred parent
+or subdomain match. Invalid stored Reply-To or display-name control characters
+also fail closed. Missing proof, lookup failure or invalid fields use the exact
+existing platform SMTP identity fallback. A verified sender uses `mailFromName`,
+then `brandName`, then the platform name. The future DNS verification workflow
+(#1672) must establish mail proof; this change does not query DNS or provide a
+verification wizard or a route that can stamp proof.
+
+The existing organization settings PATCH validates bare RFC-shaped addresses and
+requires From/Reply-To domains to match the verified ownership source. Empty or
+null fields clear settings. Clients cannot set `mailDomainVerifiedAt`; creation
+cannot supply these settings before ownership exists. Changing/clearing a host
+through `prisma/set-public-host.mjs` invalidates mail proof too.
+
+Caller-supplied explicit Reply-To always wins. Otherwise an active tenant's
+`mailReplyTo` is used; absent tenant Reply-To preserves the platform behavior
+(no extra Reply-To header). Primary/bulk routing and SMTP configuration are
+unchanged. Queue/approval envelopes carry identity context, and verification is
+read again immediately before transmission, including after transport failover,
+so revoked proof cannot authorize an already-prepared tenant sender. The saved
+platform fallback preserves the original platform display name and address for
+that channel. Existing envelopes without identity context retain their existing
+platform headers.
+
+Both admin email-health GET payloads expose the session organization's resolved
+identity, verification timestamp/domain and active/fallback state, under the
+existing server-side `mail.read` authorization. They expose no SMTP credentials
+or proof token. Identity tests inject a recording transport; they send no SMTP.

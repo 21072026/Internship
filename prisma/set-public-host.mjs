@@ -105,7 +105,7 @@ async function main() {
     if (!org) throw new Error(`No organization with id or slug "${orgRef}"`);
 
     if (process.argv.includes('--clear')) {
-      await prisma.organization.update({ where: { id: org.id }, data: { publicHost: null, publicHostToken: null, publicHostVerifiedAt: null } });
+      await prisma.organization.update({ where: { id: org.id }, data: { publicHost: null, publicHostToken: null, publicHostVerifiedAt: null, mailDomainVerifiedAt: null } });
       console.log(`Cleared the public host of ${org.slug} (was ${org.publicHost ?? 'none'}).`);
       return;
     }
@@ -121,7 +121,7 @@ async function main() {
     const moved = org.publicHost !== host;
     await prisma.organization.update({
       where: { id: org.id },
-      data: { publicHost: host, ...(moved ? { publicHostToken: null, publicHostVerifiedAt: null } : {}) },
+      data: { publicHost: host, ...(moved ? { publicHostToken: null, publicHostVerifiedAt: null, mailDomainVerifiedAt: null } : {}) },
     });
     console.log(`${host} → ${org.slug} (${org.id}, ${org.vertical}).`);
   } finally {
