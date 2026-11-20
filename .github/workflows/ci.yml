@@ -46,6 +46,11 @@ jobs:
       - run: npx prisma validate
       - run: npm run lint
       - run: npx tsc --noEmit
+      - name: AI prompt contracts (offline, synthetic only)
+        env:
+          AI_EVAL_LIVE: '0'
+          ANTHROPIC_API_KEY: ''
+        run: npm run check:ai-prompts
       - name: i18n parity (EN/TR/DE)
         run: npm run check:i18n
       # The browser gets the dictionary per top-level segment (#2987): every
