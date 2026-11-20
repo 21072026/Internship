@@ -1,3 +1,5 @@
+import { AnalyticsPageView } from '@/components/AnalyticsPageView';
+import { ANALYTICS_EVENTS } from '@/lib/analyticsEvents';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import {
@@ -138,6 +140,7 @@ export default async function PricingPage() {
 
   return (
     <PublicShell breadcrumb={{ name: t.pricing.metaTitle, path: '/pricing' }}>
+      <AnalyticsPageView event={ANALYTICS_EVENTS.PRICING_VIEWED} />
       <div className="max-w-6xl mx-auto px-4 py-12 sm:py-16">
         {/* Hero */}
         <div className="text-center max-w-3xl mx-auto">

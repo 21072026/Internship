@@ -1,4 +1,5 @@
 'use client';
+import { track, ANALYTICS_EVENTS } from '@/lib/track';
 
 import { useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -96,6 +97,7 @@ export function ApplyMentorForm() {
       }
       if (!res.ok) throw new Error('Failed');
 
+      track(ANALYTICS_EVENTS.MENTOR_APPLICATION_SUBMITTED);
       setDone(true);
     } catch {
       setError(t.applyMentor.genericError);
