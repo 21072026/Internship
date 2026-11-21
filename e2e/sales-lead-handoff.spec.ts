@@ -435,3 +435,52 @@ test('a lead with history keeps its previous follow-up in the hand-off line, and
   await expect(earlier).toContainText(`Intro call ${STAMP}`);
   await expect(earlier.getByTestId('sales-lead-system-row')).toContainText(`Send the offer ${STAMP}`);
 });
+
+test('the dialog shows who has the lead and its follow-up, and can hand it on with that follow-up kept (#3873)', async ({ playwright, baseURL, page }) => {
+  test.slow();
+  const relId = await lead('keep', ids.rep1, ids.orgA);
+  const due = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
+  due.setUTCHours(0, 0, 0, 0);
+  await prisma.mentorshipRelation.update({ where: { id: relId }, data: { nextActionAt: due, nextActionNote: `Send the contract ${STAMP}` } });
+
+  // The read answers like the write: the owner reads it, a colleague gets 404.
+  const rep1 = await jar(playwright, baseURL, 'rep1', true);
+  const read = await rep1.get(handoffPath(relId));
+  expect(read.status()).toBe(200);
+  expect(await read.json()).toMatchObject({ ownerId: ids.rep1, ownerName: `Handoff rep1 ${STAMP}`, nextActionNote: `Send the contract ${STAMP}` });
+  const rep2 = await jar(playwright, baseURL, 'rep2', true);
+  expect((await rep2.get(handoffPath(relId))).status()).toBe(404);
+  // Nothing to keep is refused before anything moves.
+  const bare = await lead('keepBare', ids.rep1, ids.orgA);
+  const refused = await rep1.post(handoffPath(bare), { data: { toUserId: ids.rep2, action: 'call', keepFollowUp: true } });
+  expect(refused.status()).toBe(400);
+  expect((await refused.json()).code).toBe('no_follow_up');
+  expect(await owner(bare)).toBe(ids.rep1);
+  await rep1.dispose();
+  await rep2.dispose();
+
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mail.rep1, PW, '/sales');
+  await gotoSettled(page, `/sales/leads/${relId}`);
+  await page.getByTestId('sales-lead-handoff').click();
+  const dialog = page.getByTestId('lead-handoff-dialog');
+  const current = dialog.getByTestId('lead-handoff-current');
+  await expect(current).toContainText(`Currently with Handoff rep1 ${STAMP}`);
+  await expect(current).toContainText(`Send the contract ${STAMP}`);
+
+  await dialog.getByTestId('lead-handoff-recipient').selectOption(ids.rep2);
+  await dialog.getByTestId('lead-handoff-follow-up-keep').check();
+  await expect(dialog.getByTestId('lead-handoff-note')).toHaveCount(0);
+  await dialog.getByTestId('lead-handoff-confirm').click();
+  await page.waitForURL((u) => u.pathname === '/sales', { timeout: 20_000 });
+
+  const moved = await prisma.mentorshipRelation.findFirst({
+    where: { menteeId: ids['lead-keep'], status: 'ACTIVE' },
+    select: { id: true, mentorId: true, nextActionAt: true, nextActionNote: true },
+  });
+  expect(moved?.mentorId).toBe(ids.rep2);
+  expect(moved?.nextActionNote).toBe(`Send the contract ${STAMP}`);
+  expect(moved?.nextActionAt?.toISOString()).toBe(due.toISOString());
+  const line = await prisma.followUpEvent.findFirst({ where: { relationId: moved!.id, kind: 'HANDED_OFF' } });
+  expect(line).toMatchObject({ fromNote: `Send the contract ${STAMP}`, toNote: `Send the contract ${STAMP}` });
+});

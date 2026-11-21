@@ -4601,7 +4601,13 @@ const en = {
       too_long: 'The note is too long.',
       already_mentored: 'This lead already has another active owner.',
       inactive_relation: 'This record is closed.',
+      no_follow_up: 'This lead has no follow-up to keep.',
     },
+    currentLine: 'Currently with {name} · follow-up: {followUp}',
+    currentNoFollowUp: 'Currently with {name} · no follow-up',
+    followUpChoice: 'Follow-up',
+    followUpNew: 'Write a new follow-up',
+    followUpKeep: 'Keep the current follow-up',
     actions: {
       call: 'Call',
       email: 'Send an e-mail',
@@ -17368,7 +17374,14 @@ const tr: Dict = {
       too_long: 'Not çok uzun.',
       already_mentored: 'Bu müşteri adayının başka bir aktif sahibi var.',
       inactive_relation: 'Bu kayıt kapalı.',
+      no_follow_up: 'Bu müşteri adayının korunacak bir takibi yok.',
     },
+    currentLine: 'Şu an: {name} · takip: {followUp}',
+    currentNoFollowUp: 'Şu an: {name} · takip yok',
+    followUpChoice: 'Takip',
+    followUpNew: 'Yeni takip yaz',
+    followUpKeep: 'Mevcut takip kalsın',
+
     actions: {
       call: 'Telefonla aranacak',
       email: 'E-posta atılacak',
@@ -29983,7 +29996,14 @@ const de: Dict = {
       too_long: 'Die Notiz ist zu lang.',
       already_mentored: 'Dieser Lead hat bereits einen anderen aktiven Owner.',
       inactive_relation: 'Dieser Datensatz ist geschlossen.',
+      no_follow_up: 'Dieser Lead hat keine Wiedervorlage zum Behalten.',
     },
+    currentLine: 'Aktuell bei {name} · Wiedervorlage: {followUp}',
+    currentNoFollowUp: 'Aktuell bei {name} · keine Wiedervorlage',
+    followUpChoice: 'Wiedervorlage',
+    followUpNew: 'Neue Wiedervorlage schreiben',
+    followUpKeep: 'Aktuelle Wiedervorlage behalten',
+
     actions: {
       call: 'Anrufen',
       email: 'E-Mail senden',

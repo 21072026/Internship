@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "The lead hand-off dialog now says who has the lead and its current follow-up (`GET /api/sales/leads/[id]/handoff`, same gate as the write — 404 for whoever may not hand it off), and offers \"Keep the current follow-up\": `keepFollowUp: true` hands the record over with its follow-up day and note unchanged, written to the `HANDED_OFF` history line; refused as `400 no_follow_up` when there is none. The current owner cannot be picked as the recipient (#3873).",
+  "notes": {
+    "en": ["Lead hand-off: the dialog shows who has the lead now and its follow-up, and you can hand it over with that follow-up kept."],
+    "tr": ["Lead devri: pencere lead'in şu an kimde olduğunu ve takibini gösteriyor; mevcut takibi koruyarak devredebiliyorsun."],
+    "de": ["Lead-Übergabe: Der Dialog zeigt, bei wem der Lead gerade liegt und seine Wiedervorlage, und du kannst ihn mit dieser Wiedervorlage übergeben."]
+  }
+}
