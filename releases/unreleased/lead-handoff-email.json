@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "A lead handed off from the board or the lead page now also mails the new owner (`sendLeadHandedOffEmail`, event `lead.handedOff` on the e-mail channel through `notifyEvent`, category `mentee-assigned`): who handed it over, the next step and its day, and a link to `/sales/leads/<id>`. The admin's direct assignment already mailed; the hand-off told the recipient in-app only. A retried click mails once (dedupe on the record's state before the write) (#3871).",
+  "notes": {
+    "en": ["Lead hand-off: the new owner now also gets an e-mail with the next step and a link to the lead."],
+    "tr": ["Lead devri: yeni sahip artık sıradaki adımı ve lead bağlantısını içeren bir e-posta da alıyor."],
+    "de": ["Lead-Übergabe: Der neue Besitzer bekommt jetzt auch eine E-Mail mit dem nächsten Schritt und einem Link zum Lead."]
+  }
+}

@@ -5640,6 +5640,15 @@ const en = {
       body: '{mentee} has been assigned to you as a mentee. Reach out to them to get the mentorship started, and log your first interaction when you do.',
       cta: 'Open your dashboard',
     },
+    leadHandedOffEmail: {
+      subject: '{from} handed you a lead: {lead}',
+      heading: 'A lead was handed to you',
+      greeting: 'Hi {name},',
+      body: '{from} handed {lead} over to you.',
+      next: 'Next step: {action}',
+      due: 'Due: {date}',
+      cta: 'Open the lead',
+    },
     mentorAssignedEmail: {
       subject: 'You have a mentor: {mentor}',
       heading: 'You have been assigned a mentor',
@@ -18363,6 +18372,15 @@ const tr: Dict = {
       body: '{mentee} sana mentee olarak atandı. Mentorluğu başlatmak için onunla iletişime geç ve ilk etkileşimini kaydetmeyi unutma.',
       cta: 'Panonu aç',
     },
+    leadHandedOffEmail: {
+      subject: '{from} sana bir lead devretti: {lead}',
+      heading: 'Sana bir lead devredildi',
+      greeting: 'Merhaba {name},',
+      body: '{from}, {lead} kaydını sana devretti.',
+      next: 'Sıradaki adım: {action}',
+      due: 'Tarih: {date}',
+      cta: "Lead'i aç",
+    },
     mentorAssignedEmail: {
       subject: 'Bir mentorun var: {mentor}',
       heading: 'Sana bir mentor atandı',
@@ -30967,6 +30985,15 @@ const de: Dict = {
       greeting: 'Hallo {mentor},',
       body: '{mentee} wurde dir als Mentee zugewiesen. Melde dich bei der Person, um das Mentoring zu starten, und erfasse dabei deine erste Interaktion.',
       cta: 'Dashboard öffnen',
+    },
+    leadHandedOffEmail: {
+      subject: '{from} hat dir einen Lead übergeben: {lead}',
+      heading: 'Dir wurde ein Lead übergeben',
+      greeting: 'Hallo {name},',
+      body: '{from} hat dir {lead} übergeben.',
+      next: 'Nächster Schritt: {action}',
+      due: 'Fällig: {date}',
+      cta: 'Lead öffnen',
     },
     mentorAssignedEmail: {
       subject: 'Du hast einen Mentor: {mentor}',

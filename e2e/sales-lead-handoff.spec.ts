@@ -141,6 +141,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   const userIds = Object.entries(ids).filter(([k]) => !k.startsWith('rel-') && k !== 'orgA').map(([, v]) => v);
   await prisma.notification.deleteMany({ where: { userId: { in: userIds } } }).catch(() => {});
+  await prisma.notificationDelivery.deleteMany({ where: { userId: { in: userIds } } }).catch(() => {});
   await prisma.impersonationGrant.deleteMany({ where: { targetId: { in: userIds } } }).catch(() => {});
   await prisma.auditLog.deleteMany({ where: { targetId: { in: userIds } } }).catch(() => {});
   await prisma.activityLog.deleteMany({ where: { orgId: { in: orgIds } } }).catch(() => {});
@@ -260,6 +261,13 @@ test('the owner hands their lead on: owner and next step move, the recipient is 
   const bell = await prisma.notification.findFirst({ where: { userId: ids.rep2, type: 'lead.handedOff' } });
   expect(bell?.link).toBe(`/sales/leads/${out.relationId}`);
   expect(bell?.link?.startsWith('/mentor')).toBe(false);
+  // …and a mail (#3871), through the router: one e-mail delivery for the recipient.
+  const mailed = await prisma.notificationDelivery.findMany({
+    where: { userId: ids.rep2, eventKey: 'lead.handedOff', channel: 'email' },
+    select: { status: true },
+  });
+  expect(mailed).toHaveLength(1);
+  expect(mailed[0].status).not.toBe('SKIPPED');
   // The lead hears nothing about who works it.
   expect(await prisma.notification.count({ where: { userId: ids['lead-happy'] } })).toBe(0);
 
