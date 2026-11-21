@@ -49,6 +49,14 @@ test.beforeAll(async () => {
     data: { orgId, mentorId: ids.rep, menteeId: ids.lead, pipelineStatus: 'LEAD_QUALIFIED' },
   });
   ids.rel = rel.id;
+  // A second lead with an interaction and no system line: no filter control (#3879).
+  await person('bareLead', 'MENTEE');
+  ids.bare = (
+    await prisma.mentorshipRelation.create({ data: { orgId, mentorId: ids.rep, menteeId: ids.bareLead, pipelineStatus: 'LEAD_QUALIFIED' } })
+  ).id;
+  await prisma.interactionLog.create({
+    data: { relationId: ids.bare, date: new Date(Date.now() - HOUR), type: 'Email', subject: `Bare email ${STAMP}`, notes: 'Sent.' },
+  });
   await prisma.interactionLog.create({
     data: { relationId: rel.id, date: new Date(Date.now() - 2 * HOUR), type: 'Call', subject: `Intro call ${STAMP}`, notes: 'Reached them.' },
   });
@@ -99,4 +107,20 @@ test('the filter narrows one list of interactions, follow-up lines and stage mov
   await expect(page.getByTestId('sales-lead-interaction-filter-system')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId('sales-lead-system-row')).toHaveCount(2);
   await expect(page.getByTestId('sales-lead-interaction-row')).toHaveCount(0);
+});
+
+test('a remembered "System" does not hide the interactions of a lead with no system line (#3879)', async ({ page }) => {
+  test.slow();
+  await page.context().setExtraHTTPHeaders(H);
+  await signInAndSettle(page, emails[0], PW, '/sales');
+  await page.evaluate(() => window.localStorage.setItem('sales.lead.interactionFilter', 'system'));
+
+  await gotoSettled(page, `/sales/leads/${ids.bare}`);
+  await expect(page.getByTestId('sales-lead-interaction-row')).toContainText(`Bare email ${STAMP}`);
+  await expect(page.getByTestId('sales-lead-interaction-filter')).toHaveCount(0);
+  await expect(page.getByTestId('sales-lead-interactions-empty')).toHaveCount(0);
+
+  // The choice itself is kept: the lead that has the control still opens on System.
+  await gotoSettled(page, `/sales/leads/${ids.rel}`);
+  await expect(page.getByTestId('sales-lead-interaction-filter-system')).toHaveAttribute('aria-pressed', 'true');
 });

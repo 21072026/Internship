@@ -44,7 +44,10 @@ import { INTERACTION_DRAFT_EVENT, isTypingTarget, type InteractionDraftRequest }
 // "All · Interactions · System" control above the list narrows it without
 // splitting the chronology into tabs. All is the default; the choice is
 // remembered in this browser (a convenience, never relied on). The control
-// appears only once there is a system line to filter.
+// appears only once there is a system line to filter — and without it the
+// remembered choice does not apply: a lead with no system line always reads
+// All, or a "System" picked on another lead hid every interaction here with
+// no control in sight to undo it (#3879).
 
 export interface LeadInteraction {
   id: string;
@@ -195,8 +198,9 @@ export function SalesInteractionsCard({
     });
   const [draft, setDraft] = useState<InteractionFormDraft | null>(null);
   // All on the server and on first paint; the remembered choice applies after hydration.
-  const [filter, setFilter] = useState<Filter>('all');
+  const [remembered, setFilter] = useState<Filter>('all');
   useEffect(() => setFilter(readFilter()), []);
+  const filter: Filter = systemEvents.length > 0 ? remembered : 'all';
   const pick = (f: Filter) => {
     setFilter(f);
     writeFilter(f);
