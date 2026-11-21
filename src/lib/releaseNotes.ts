@@ -65,6 +65,837 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.692.0-beta',
+    date: '2026-11-19',
+    time: '13:28',
+    commit: '16844b5',
+    highlights: {
+      en: [
+        "Affiliate: import last month's invoices from a CSV file. Choose which column holds what once, check the preview, then import; every paid invoice earns its commission.",
+      ],
+      tr: [
+        "Affiliate: geçen ayın faturalarını CSV dosyasından içe aktarın. Hangi sütunda ne olduğunu bir kez seçin, önizlemeyi kontrol edin, sonra içe aktarın; ödenmiş her fatura komisyonunu kazandırır.",
+      ],
+      de: [
+        "Affiliate: Die Rechnungen des Vormonats aus einer CSV-Datei importieren. Einmal festlegen, welche Spalte was enthält, die Vorschau prüfen, dann importieren; jede bezahlte Rechnung bringt ihre Provision.",
+      ],
+    },
+  },
+  {
+    version: '0.691.1-beta',
+    date: '2026-11-19',
+    time: '11:53',
+    commit: '6de4635',
+    highlights: {
+      en: [
+        "Leads: a meeting planned from the lead page shows up in the history right away.",
+      ],
+      tr: [
+        "Lead'ler: lead sayfasından planlanan toplantı, geçmişte hemen görünüyor.",
+      ],
+      de: [
+        "Leads: Ein auf der Lead-Seite geplantes Meeting erscheint sofort im Verlauf.",
+      ],
+    },
+  },
+  {
+    version: '0.691.0-beta',
+    date: '2026-11-19',
+    time: '11:53',
+    commit: 'b4816b2',
+    highlights: {
+      en: [
+        "Affiliate plan: commissions can be counted in calendar months — the percentage starts at the beginning of the month the switch customer arrives in, and each customer's period runs from the beginning of its first paying month. The one-off commission follows the price-list price.",
+      ],
+      tr: [
+        "Affiliate planı: komisyon takvim ayına göre sayılabilir — yüzde, geçiş müşterisinin geldiği ayın başından başlar ve her müşterinin süresi ilk ödeme ayının başından sayılır. Tek seferlik komisyon fiyat listesi fiyatına göre belirlenir.",
+      ],
+      de: [
+        "Affiliate-Plan: Provisionen können in Kalendermonaten gezählt werden — der Prozentsatz beginnt am Anfang des Monats, in dem der Wechselkunde hinzukommt, und die Laufzeit jedes Kunden zählt ab Beginn seines ersten Zahlungsmonats. Die Einmalprovision richtet sich nach dem Preislistenpreis.",
+      ],
+    },
+  },
+  {
+    version: '0.690.0-beta',
+    date: '2026-11-17',
+    time: '22:57',
+    commit: 'c4a45e1',
+    highlights: {
+      en: [
+        "Affiliate payments: enter the month's number of transactions and the amount comes from the price list, shown before saving. Without a reference, the customer number and month are used.",
+      ],
+      tr: [
+        "Affiliate ödemeleri: ayın işlem sayısını girin, tutar fiyat listesinden hesaplanıp kaydetmeden önce gösterilir. Referans boş bırakılırsa müşteri numarası ve ay kullanılır.",
+      ],
+      de: [
+        "Affiliate-Zahlungen: Die Anzahl der Transaktionen des Monats eingeben, der Betrag kommt aus der Preisliste und wird vor dem Speichern angezeigt. Ohne Referenz werden Kundennummer und Monat verwendet.",
+      ],
+    },
+  },
+  {
+    version: '0.689.0-beta',
+    date: '2026-11-17',
+    time: '22:15',
+    commit: 'a45b728',
+    highlights: {
+      en: [
+        "Affiliate settings: a transaction price list with free limit, base fee, steps and VAT, with a live example of what a month costs. Customers can be marked as reverse charge. The price list is part of the settings export and import.",
+      ],
+      tr: [
+        "Affiliate ayarları: ücretsiz sınır, temel ücret, kademeler ve KDV içeren işlem fiyat listesi; bir ayın ne tuttuğu canlı örnekle görünür. Müşteriler ters vergi olarak işaretlenebilir. Fiyat listesi ayarların dışa ve içe aktarımına dahil.",
+      ],
+      de: [
+        "Affiliate-Einstellungen: eine Transaktions-Preisliste mit Freigrenze, Grundgebühr, Stufen und MwSt., mit Live-Beispiel, was ein Monat kostet. Kunden lassen sich als Reverse Charge markieren. Die Preisliste ist Teil von Export und Import der Einstellungen.",
+      ],
+    },
+  },
+  {
+    version: '0.688.0-beta',
+    date: '2026-11-17',
+    time: '13:11',
+    commit: '8cd8107',
+    highlights: {
+      en: [
+        "A lead's history now shows when a meeting was scheduled or cancelled.",
+      ],
+      tr: [
+        "Lead geçmişinde artık toplantının ne zaman planlandığı ya da iptal edildiği görünüyor.",
+      ],
+      de: [
+        "Im Verlauf eines Leads steht jetzt, wann ein Termin vereinbart oder abgesagt wurde.",
+      ],
+    },
+  },
+  {
+    version: '0.687.1-beta',
+    date: '2026-11-17',
+    time: '13:10',
+    commit: '2631ac9',
+    highlights: {
+      en: [
+        "Boards: the Mine/Team switch is readable in dark mode, filters and the search share one row above the colleague strip, and empty stage strips look tidier.",
+      ],
+      tr: [
+        "Panolar: Benim/Ekip seçimi koyu temada okunuyor, filtreler ve arama ekip arkadaşları şeridinin üstünde tek satırda, boş aşama şeritleri daha düzgün görünüyor.",
+      ],
+      de: [
+        "Boards: Der Schalter Meine/Team ist im dunklen Modus lesbar, Filter und Suche stehen in einer Zeile über der Kollegenleiste, leere Phasen-Streifen wirken aufgeräumter.",
+      ],
+    },
+  },
+  {
+    version: '0.687.0-beta',
+    date: '2026-11-17',
+    time: '10:22',
+    commit: 'e88e7c4',
+    highlights: {
+      en: [
+        "Each board column now has an info icon that explains what the stage means; admins can write their own text in the stage editor.",
+      ],
+      tr: [
+        "Pano sütunlarında artık aşamanın ne anlama geldiğini açıklayan bir bilgi ikonu var; yöneticiler kendi açıklamalarını aşama düzenleyicisinden yazabiliyor.",
+      ],
+      de: [
+        "Jede Board-Spalte hat jetzt ein Info-Symbol, das erklärt, was die Phase bedeutet; Admins können im Phasen-Editor eigene Texte hinterlegen.",
+      ],
+    },
+  },
+  {
+    version: '0.686.0-beta',
+    date: '2026-11-17',
+    time: '10:07',
+    commit: 'e8b0f36',
+    highlights: {
+      en: [
+        "Board columns now use each stage's own color, so stages are easier to tell apart at a glance.",
+      ],
+      tr: [
+        "Pano sütunları artık her aşamanın kendi rengini kullanıyor; aşamalar bir bakışta ayırt ediliyor.",
+      ],
+      de: [
+        "Die Spalten im Board tragen jetzt die Farbe ihrer Phase, so lassen sich Phasen auf einen Blick unterscheiden.",
+      ],
+    },
+  },
+  {
+    version: '0.685.0-beta',
+    date: '2026-11-17',
+    time: '10:07',
+    commit: '682b42d',
+    highlights: {
+      en: [
+        "Dragging a card to the edge of a board now scrolls the board, so you can drop it on a stage that was off-screen.",
+      ],
+      tr: [
+        "Bir kartı panonun kenarına sürüklediğinizde pano kendiliğinden kayıyor; ekranda görünmeyen aşamaya tek hamlede bırakabilirsiniz.",
+      ],
+      de: [
+        "Wenn Sie eine Karte an den Rand eines Boards ziehen, scrollt das Board mit – so erreichen Sie auch Phasen außerhalb des sichtbaren Bereichs.",
+      ],
+    },
+  },
+  {
+    version: '0.684.0-beta',
+    date: '2026-11-17',
+    time: '08:44',
+    commit: '70e85e3',
+    highlights: {
+      en: [
+        "The lead page shows stage changes in the interaction list, and a filter switches between all entries, interactions only and system lines.",
+      ],
+      tr: [
+        "Lead sayfası aşama değişikliklerini etkileşim listesinde gösteriyor; bir filtreyle tüm kayıtlar, yalnızca görüşmeler ve sistem satırları arasında geçilebiliyor.",
+      ],
+      de: [
+        "Die Lead-Seite zeigt Phasenwechsel in der Interaktionsliste, und ein Filter wechselt zwischen allen Einträgen, nur Interaktionen und Systemzeilen.",
+      ],
+    },
+  },
+  {
+    version: '0.683.1-beta',
+    date: '2026-11-17',
+    time: '00:03',
+    commit: 'd2dc2dd',
+    highlights: {
+      en: [
+        "New lead: a company name or a contact name is enough — with only a contact, the account gets that name.",
+        "New lead: missing details are shown right under the field.",
+        "A lead entered with only a phone number no longer shows the number as its name.",
+        "Completing a handed-off follow-up preselects the right interaction type (call, e-mail or meeting).",
+      ],
+      tr: [
+        "Yeni lead: firma adı ya da muhatap adı yeterli — yalnızca muhatap girilirse hesap onun adıyla açılır.",
+        "Yeni lead: eksik bilgiler artık ilgili alanın hemen altında gösteriliyor.",
+        "Yalnızca telefon numarasıyla girilen bir lead'in adı artık numara olarak görünmüyor.",
+        "Devredilen bir takip tamamlanırken etkileşim türü (arama, e-posta ya da toplantı) önceden seçili geliyor.",
+      ],
+      de: [
+        "Neuer Lead: Ein Firmenname oder ein Ansprechpartner reicht — mit nur einem Ansprechpartner bekommt der Account dessen Namen.",
+        "Neuer Lead: Fehlende Angaben stehen jetzt direkt unter dem Feld.",
+        "Ein Lead, der nur mit einer Telefonnummer angelegt wurde, zeigt die Nummer nicht mehr als Namen.",
+        "Beim Abschließen einer übergebenen Wiedervorlage ist die richtige Art der Interaktion (Anruf, E-Mail oder Termin) vorausgewählt.",
+      ],
+    },
+  },
+  {
+    version: '0.683.0-beta',
+    date: '2026-11-17',
+    time: '00:02',
+    commit: '0fc001c',
+    highlights: {
+      en: [
+        "The lead page now shows what happened to the follow-up — set, moved, completed, removed or handed over — as system lines in the interaction list.",
+      ],
+      tr: [
+        "Lead sayfası artık takibin ne olduğunu — atandı, değişti, tamamlandı, silindi ya da devredildi — etkileşim listesinde sistem satırı olarak gösteriyor.",
+      ],
+      de: [
+        "Die Lead-Seite zeigt jetzt in der Interaktionsliste als Systemzeilen, was mit der Wiedervorlage passiert ist — gesetzt, verschoben, erledigt, entfernt oder übergeben.",
+      ],
+    },
+  },
+  {
+    version: '0.682.0-beta',
+    date: '2026-11-16',
+    time: '20:37',
+    commit: '3a41b34',
+    highlights: {
+      en: [
+        "After a hand-off, the lead page shows the earlier owner's interactions in a collapsible section, and the old record points to the current owner.",
+      ],
+      tr: [
+        "Devirden sonra lead sayfası önceki sorumlunun etkileşimlerini katlanır bir bölümde gösteriyor; eski kayıt da güncel sorumluyu gösteriyor.",
+      ],
+      de: [
+        "Nach einer Übergabe zeigt die Lead-Seite die Interaktionen des früheren Zuständigen in einem aufklappbaren Bereich, und der alte Datensatz verweist auf den aktuellen Zuständigen.",
+      ],
+    },
+  },
+  {
+    version: '0.681.0-beta',
+    date: '2026-11-16',
+    time: '20:36',
+    commit: 'c0ea5cc',
+    highlights: {
+      en: [
+        "A lead marked lost while its trial is still running is now pointed out: a \"Still in trial\" chip on the board and a notice on the lead page, with \"Back to trial\" one click away.",
+      ],
+      tr: [
+        "Kaybedildi işaretlendiği hâlde deneme süresi devam eden lead'ler artık görünüyor: panoda \"Deneme sürüyor\" rozeti, lead sayfasında bir uyarı ve tek tıkla \"Denemeye geri al\".",
+      ],
+      de: [
+        "Ein als verloren markierter Lead, dessen Testphase noch läuft, wird jetzt angezeigt: ein Hinweis „Testphase läuft noch“ auf dem Board und auf der Lead-Seite, mit „Zurück in die Testphase“ per Klick.",
+      ],
+    },
+  },
+  {
+    version: '0.680.0-beta',
+    date: '2026-11-16',
+    time: '05:07',
+    commit: '9dbbe7c',
+    highlights: {
+      en: [
+        "The estimated monthly value now shows as plain text once set, with Edit and Remove next to it.",
+        "Fixed: cancelling the form after \"Complete follow-up\" no longer deletes the follow-up — it is closed only when you save the interaction.",
+      ],
+      tr: [
+        "Tahmini aylık değer girildikten sonra düz metin olarak görünüyor; yanında Düzenle ve Tahmini kaldır var.",
+        "Düzeltildi: \"Takibi tamamla\"dan sonra formdan vazgeçince takip artık silinmiyor; yalnızca etkileşimi kaydettiğinde kapanıyor.",
+      ],
+      de: [
+        "Der geschätzte Monatswert wird nach der Eingabe als Text angezeigt, mit Bearbeiten und Entfernen daneben.",
+        "Behoben: Wer nach „Wiedervorlage erledigen“ das Formular abbricht, verliert die Wiedervorlage nicht mehr — sie wird erst beim Speichern der Interaktion geschlossen.",
+      ],
+    },
+  },
+  {
+    version: '0.679.0-beta',
+    date: '2026-11-16',
+    time: '02:43',
+    commit: 'f663ecd',
+    highlights: {
+      en: [
+        "The lead page now has two columns: what to do next and what happened on the left, the trial, the estimated value and the contact on the right. The contact card is more compact, with \"Edit contact\" next to its heading.",
+        "Recent interactions are easier to scan: each one takes two lines, separated by a line, with \"today\", \"yesterday\" or \"3 days ago\" on the right. Click a note to read all of it.",
+      ],
+      tr: [
+        "Lead sayfası artık iki sütunlu: solda sıradaki adım ve yapılan etkileşimler, sağda deneme süresi, tahmini değer ve iletişim. İletişim kartı daha derli toplu; \"İletişimi düzenle\" başlığın yanında.",
+        "Son etkileşimler daha kolay okunuyor: her biri ince bir çizgiyle ayrılmış iki satır, sağda \"bugün\", \"dün\" ya da \"3 gün önce\". Notun tamamını görmek için üstüne tıkla.",
+      ],
+      de: [
+        "Die Lead-Seite hat jetzt zwei Spalten: links der nächste Schritt und die bisherigen Kontakte, rechts Testphase, geschätzter Wert und Kontakt. Die Kontaktkarte ist kompakter, „Kontakt bearbeiten“ steht neben der Überschrift.",
+        "Die letzten Kontakte sind übersichtlicher: jeder Eintrag zwei Zeilen, durch eine Linie getrennt, rechts „heute“, „gestern“ oder „vor 3 Tagen“. Ein Klick auf die Notiz zeigt sie vollständig.",
+      ],
+    },
+  },
+  {
+    version: '0.678.0-beta',
+    date: '2026-11-16',
+    time: '00:04',
+    commit: '932aa64',
+    highlights: {
+      en: [
+        "Leads that came in through an affiliate link now show which partner brought them, and partners see in their portal how many leads they brought and at which stage.",
+      ],
+      tr: [
+        "Affiliate bağlantısıyla gelen lead'lerde artık hangi partnerin getirdiği görünüyor; partnerler de portallarında kaç lead getirdiklerini ve bu lead'lerin hangi aşamada olduğunu görüyor.",
+      ],
+      de: [
+        "Leads, die über einen Affiliate-Link kamen, zeigen jetzt, welcher Partner sie gebracht hat, und Partner sehen in ihrem Portal, wie viele Leads sie gebracht haben und in welcher Phase diese sind.",
+      ],
+    },
+  },
+  {
+    version: '0.677.0-beta',
+    date: '2026-11-15',
+    time: '23:30',
+    commit: 'ff3d749',
+    highlights: {
+      en: [
+        "New Team page in sales: how many records the whole team follows, where they stand, what came in, was won and was lost this week and this month — and a leaderboard by deals won.",
+      ],
+      tr: [
+        "Satışta yeni Ekip sayfası: tüm ekibin kaç kaydı takip ettiği, bu kayıtların nerede durduğu, bu hafta ve bu ay ne geldiği, ne kazanıldığı ve ne kaybedildiği — ve kazanılan anlaşmalara göre bir liderlik tablosu.",
+      ],
+      de: [
+        "Neue Team-Seite im Vertrieb: wie viele Datensätze das ganze Team betreut, wo sie stehen, was diese Woche und diesen Monat hinzukam, gewonnen und verloren wurde — und eine Rangliste nach gewonnenen Deals.",
+      ],
+    },
+  },
+  {
+    version: '0.676.3-beta',
+    date: '2026-11-15',
+    time: '23:12',
+    commit: '23b8a4b',
+    highlights: {
+      en: [
+        "In the calendar's Team view you now also see on which day your colleagues' follow-ups are due — never their notes.",
+      ],
+      tr: [
+        "Takvimin Ekip görünümünde artık ekip arkadaşlarının takiplerinin hangi gün olduğu da görünüyor — notları asla.",
+      ],
+      de: [
+        "In der Team-Ansicht des Kalenders siehst du jetzt auch, an welchem Tag die Wiedervorlagen deiner Kolleg:innen fällig sind – nie ihre Notizen.",
+      ],
+    },
+  },
+  {
+    version: '0.676.2-beta',
+    date: '2026-11-15',
+    time: '23:00',
+    commit: '6bb6699',
+    highlights: {
+      en: [
+        "Security: administrators can now only start chats with people in their own organisation.",
+      ],
+      tr: [
+        "Güvenlik: yöneticiler artık yalnızca kendi organizasyonlarındaki kişilerle sohbet başlatabiliyor.",
+      ],
+      de: [
+        "Sicherheit: Administratoren können Chats jetzt nur noch mit Personen ihrer eigenen Organisation beginnen.",
+      ],
+    },
+  },
+  {
+    version: '0.676.1-beta',
+    date: '2026-11-15',
+    time: '22:59',
+    commit: '3c642da',
+    highlights: {
+      en: [
+        "The sales calendar has a Team view: your colleagues' meetings appear read-only, with their initials.",
+      ],
+      tr: [
+        "Satış takviminde artık Ekip görünümü var: ekip arkadaşlarının toplantıları baş harfleriyle, salt okunur görünüyor.",
+      ],
+      de: [
+        "Der Vertriebskalender hat eine Team-Ansicht: Die Termine deiner Kolleg:innen erscheinen schreibgeschützt mit ihren Initialen.",
+      ],
+    },
+  },
+  {
+    version: '0.676.0-beta',
+    date: '2026-11-15',
+    time: '22:54',
+    commit: '088423b',
+    highlights: {
+      en: [
+        "Sales reps can now enter a lead with only a phone number. If the lead is already a colleague's, the message says whose.",
+      ],
+      tr: [
+        "Satış temsilcileri artık yalnızca telefon numarasıyla lead girebiliyor. Lead zaten bir meslektaşındaysa mesaj kimde olduğunu söylüyor.",
+      ],
+      de: [
+        "Vertriebsmitarbeiter können jetzt einen Lead nur mit Telefonnummer anlegen. Gehört der Lead schon einem Kollegen, nennt die Meldung, wem.",
+      ],
+    },
+  },
+  {
+    version: '0.675.0-beta',
+    date: '2026-11-15',
+    time: '22:42',
+    commit: 'e7e1725',
+    highlights: {
+      en: [
+        "Team view: see the whole team’s records read-only — switch between Mine and Team on the board, open a colleague’s lead and message its owner.",
+      ],
+      tr: [
+        "Ekip görünümü: tüm ekip kayıtları salt-okunur görülebilir — panoda Benim / Ekip arasında geçin, bir meslektaşın lead’ini açın ve sahibine yazın.",
+      ],
+      de: [
+        "Teamansicht: alle Datensätze des Teams schreibgeschützt einsehen — auf dem Board zwischen Meine und Team wechseln, den Lead einer Kollegin oder eines Kollegen öffnen und der zuständigen Person schreiben.",
+      ],
+    },
+  },
+  {
+    version: '0.674.1-beta',
+    date: '2026-11-15',
+    time: '22:14',
+    commit: 'ab7b54b',
+    highlights: {
+      en: [
+        "The sales dashboard starts with \"Today\": follow-ups due and overdue, today's meetings and your open to-dos, each one click away.",
+      ],
+      tr: [
+        "Satış panosu artık \"Bugün\" kartıyla açılıyor: bugünkü ve gecikmiş takipler, bugünün toplantıları ve açık yapılacakların — her biri tek tıkla.",
+      ],
+      de: [
+        "Das Vertriebs-Dashboard beginnt mit „Heute“: fällige und überfällige Wiedervorlagen, die heutigen Termine und deine offenen Aufgaben – jeweils einen Klick entfernt.",
+      ],
+    },
+  },
+  {
+    version: '0.674.0-beta',
+    date: '2026-11-15',
+    time: '22:05',
+    commit: 'a8a4891',
+    highlights: {
+      en: [
+        "Team view groundwork: reps can read the whole team’s sales book, and the leaderboard is on by default. Admins can switch either off in the settings.",
+      ],
+      tr: [
+        "Ekip görünümü altyapısı: temsilciler tüm ekibin satış kayıtlarını okuyabilir, ekip sıralaması varsayılan olarak açık. Yöneticiler ikisini de ayarlardan kapatabilir.",
+      ],
+      de: [
+        "Grundlage der Teamansicht: Vertriebspersonen können alle Vertriebsdatensätze des Teams lesen, die Rangliste ist standardmäßig an. Admins können beides in den Einstellungen ausschalten.",
+      ],
+    },
+  },
+  {
+    version: '0.673.0-beta',
+    date: '2026-11-15',
+    time: '21:56',
+    commit: '8214d33',
+    highlights: {
+      en: [
+        "Sales reps can now message each other, and every team has a shared Team room. Messages, To-dos and Notifications are in the sales menu.",
+      ],
+      tr: [
+        "Satış temsilcileri artık birbirine mesaj atabiliyor ve her ekibin ortak bir Ekip odası var. Mesajlar, Yapılacaklar ve Bildirimler satış menüsünde.",
+      ],
+      de: [
+        "Vertriebsmitarbeiter können sich jetzt gegenseitig Nachrichten schreiben, und jedes Team hat einen gemeinsamen Team-Raum. Nachrichten, Aufgaben und Benachrichtigungen stehen im Vertriebsmenü.",
+      ],
+    },
+  },
+  {
+    version: '0.672.2-beta',
+    date: '2026-11-15',
+    time: '21:41',
+    commit: 'ae688eb',
+    highlights: {
+      en: [
+        "Newly invited sales reps now land on their sales dashboard on their first sign-in instead of an error page.",
+      ],
+      tr: [
+        "Yeni davet edilen satış temsilcileri ilk girişte artık hata sayfası yerine kendi satış panolarına iniyor.",
+      ],
+      de: [
+        "Neu eingeladene Vertriebsmitarbeiter landen bei der ersten Anmeldung jetzt auf ihrem Vertriebs-Dashboard statt auf einer Fehlerseite.",
+      ],
+    },
+  },
+  {
+    version: '0.672.0-beta',
+    date: '2026-11-15',
+    time: '21:41',
+    commit: 'd89071a',
+    highlights: {
+      en: [
+        "Partner portal: changing your bank details now asks you to confirm it is you, with your password or your authenticator code.",
+      ],
+      tr: [
+        "Partner portalı: banka bilgilerini değiştirirken artık parolanla veya doğrulayıcı kodunla sen olduğunu doğruluyorsun.",
+      ],
+      de: [
+        "Partnerportal: Wenn Sie Ihre Bankverbindung ändern, bestätigen Sie jetzt mit Ihrem Passwort oder Ihrem Authenticator-Code, dass Sie es sind.",
+      ],
+    },
+  },
+  {
+    version: '0.671.5-beta',
+    date: '2026-11-15',
+    time: '21:41',
+    commit: 'e81d209',
+    highlights: {
+      en: [
+        "Partner application page: with a custom theme, the footer links are now readable on the theme's background.",
+      ],
+      tr: [
+        "Partner başvuru sayfası: özel temada alt bilgi bağlantıları artık temanın arka planında okunaklı.",
+      ],
+      de: [
+        "Partnerbewerbung: Mit eigenem Design sind die Links in der Fußzeile auf dem Hintergrund des Designs jetzt gut lesbar.",
+      ],
+    },
+  },
+  {
+    version: '0.671.4-beta',
+    date: '2026-11-15',
+    time: '21:41',
+    commit: '9d9e8f7',
+    highlights: {
+      en: [
+        "Affiliate settings: larger settings files (up to 32 MB) can be imported, and a busy import says so clearly.",
+      ],
+      tr: [
+        "Affiliate ayarları: daha büyük ayar dosyaları (32 MB'a kadar) içe aktarılabiliyor; devam eden bir yükleme varsa bu açıkça söyleniyor.",
+      ],
+      de: [
+        "Affiliate-Einstellungen: Größere Einstellungsdateien (bis 32 MB) lassen sich einspielen, und ein laufender Import wird klar gemeldet.",
+      ],
+    },
+  },
+  {
+    version: '0.671.3-beta',
+    date: '2026-11-15',
+    time: '21:41',
+    commit: 'f86c67d',
+    highlights: {
+      en: [
+        "Partner application: after sending, “Send another application” opens an empty form again.",
+      ],
+      tr: [
+        "Partner başvurusu: gönderdikten sonra “Başka bir başvuru gönder” ile boş form yeniden açılıyor.",
+      ],
+      de: [
+        "Partnerbewerbung: Nach dem Senden öffnet „Weitere Bewerbung senden“ wieder ein leeres Formular.",
+      ],
+    },
+  },
+  {
+    version: '0.671.1-beta',
+    date: '2026-11-15',
+    time: '21:40',
+    commit: 'd34e2a7',
+    highlights: {
+      en: [
+        "Partner portal: a customer's commission end date is shown correctly even when an invalid payment was recorded first.",
+      ],
+      tr: [
+        "Partner portalı: önce geçersiz bir ödeme kaydedilmiş olsa da müşterinin komisyon bitiş tarihi doğru gösteriliyor.",
+      ],
+      de: [
+        "Partnerportal: Das Provisionsende eines Kunden wird richtig angezeigt, auch wenn zuerst eine ungültige Zahlung erfasst wurde.",
+      ],
+    },
+  },
+  {
+    version: '0.671.0-beta',
+    date: '2026-11-15',
+    time: '21:36',
+    commit: 'f3bd6c9',
+    highlights: {
+      en: [
+        "Sales reps have a calendar: meetings, follow-ups and trial ends in one place, with \"New meeting\" to schedule a meeting with a lead.",
+      ],
+      tr: [
+        "Satış temsilcilerinin artık bir takvimi var: toplantılar, takipler ve deneme bitişleri tek yerde; \"Yeni toplantı\" ile bir lead'le toplantı planlanabiliyor.",
+      ],
+      de: [
+        "Vertriebler haben einen Kalender: Termine, Wiedervorlagen und Testenden an einem Ort, mit „Neuer Termin“ für einen Termin mit einem Lead.",
+      ],
+    },
+  },
+  {
+    version: '0.670.1-beta',
+    date: '2026-11-15',
+    time: '21:25',
+    commit: '60752f8',
+    highlights: {
+      en: [
+        "Board cards no longer carry a stage picker. Drag a card to change its stage, or open it and change the stage there — on a phone, that is the way.",
+      ],
+      tr: [
+        "Pano kartlarında artık aşama seçici yok. Aşamayı kartı sürükleyerek ya da kartı açıp oradan değiştirebilirsin — telefonda yol bu.",
+      ],
+      de: [
+        "Board-Karten haben keine Phasenauswahl mehr. Zieh eine Karte, um die Phase zu ändern, oder öffne sie und ändere die Phase dort — auf dem Handy ist das der Weg.",
+      ],
+    },
+  },
+  {
+    version: '0.670.0-beta',
+    date: '2026-11-15',
+    time: '21:22',
+    commit: '758ab71',
+    highlights: {
+      en: [
+        "Marketing CRM: you can now switch off e-mail to leads entirely — nothing reaches leads, customers or contacts and no drafts pile up in the outbox, while your reps and admins keep getting their mail.",
+      ],
+      tr: [
+        "Pazarlama CRM'i: lead'lere giden e-postaları artık tamamen kapatabilirsiniz. Lead'lere, müşterilere ve kişilere hiçbir e-posta gitmez, giden kutusunda taslak da birikmez; temsilci ve adminlere giden e-postalar gitmeye devam eder.",
+      ],
+      de: [
+        "Marketing-CRM: E-Mails an Leads lassen sich jetzt ganz abschalten — nichts erreicht Leads, Kunden oder Kontakte und im Postausgang sammeln sich keine Entwürfe, während Vertrieb und Admins ihre E-Mails weiter bekommen.",
+      ],
+    },
+  },
+  {
+    version: '0.669.4-beta',
+    date: '2026-11-15',
+    time: '21:12',
+    commit: 'db358b6',
+    highlights: {
+      en: [
+        "Admin menu pages: on a phone, the feedback button no longer covers the last entry.",
+      ],
+      tr: [
+        "Admin menü sayfaları: telefonda geri bildirim düğmesi artık son satırın üstünü kapatmıyor.",
+      ],
+      de: [
+        "Admin-Menüseiten: Auf dem Handy verdeckt die Feedback-Schaltfläche den letzten Eintrag nicht mehr.",
+      ],
+    },
+  },
+  {
+    version: '0.669.3-beta',
+    date: '2026-11-15',
+    time: '14:54',
+    commit: 'bb4793d',
+    highlights: {
+      en: [
+        "When a lead's trial end can't be changed, the page now says why — closed record, or not in a trial stage (with the current stage) — instead of just hiding the Edit button.",
+      ],
+      tr: [
+        "Lead'in deneme bitişi değiştirilemediğinde sayfa artık nedenini söylüyor: kayıt kapalı ya da kayıt deneme aşamasında değil (şu anki aşamasıyla birlikte). Düzenle butonu artık sessizce kaybolmuyor.",
+      ],
+      de: [
+        "Lässt sich das Testende eines Leads nicht ändern, sagt die Seite jetzt warum – Datensatz geschlossen oder nicht in einer Testphase (mit der aktuellen Phase) – statt die Schaltfläche „Bearbeiten“ nur auszublenden.",
+      ],
+    },
+  },
+  {
+    version: '0.669.2-beta',
+    date: '2026-11-15',
+    time: '14:22',
+    commit: 'c99fef2',
+    highlights: {
+      en: [
+        "On a lead's page the trial end now reads as a date with an Edit button; editing opens only when you press it, and the remaining-days badge updates as soon as you save.",
+      ],
+      tr: [
+        "Lead sayfasında deneme bitişi artık bir tarih ve Düzenle butonu olarak görünüyor; düzenleme alanı yalnızca butona basınca açılıyor, kalan gün rozeti kaydeder kaydetmez güncelleniyor.",
+      ],
+      de: [
+        "Auf der Lead-Seite erscheint das Testende jetzt als Datum mit einer Schaltfläche „Bearbeiten“; das Feld öffnet sich erst auf Klick, und die Anzeige der verbleibenden Tage aktualisiert sich sofort nach dem Speichern.",
+      ],
+    },
+  },
+  {
+    version: '0.669.1-beta',
+    date: '2026-11-15',
+    time: '14:04',
+    commit: '33ec967',
+    highlights: {
+      en: [
+        "When a call from a lead's page moves the lead to the next stage, you now see it and can undo it.",
+      ],
+      tr: [
+        "Lead sayfasından yapılan bir arama lead'i bir sonraki aşamaya taşıdığında artık bunu görüyor ve geri alabiliyorsunuz.",
+      ],
+      de: [
+        "Wenn ein Anruf von der Lead-Seite den Lead in die nächste Phase verschiebt, sehen Sie das jetzt und können es rückgängig machen.",
+      ],
+    },
+  },
+  {
+    version: '0.669.0-beta',
+    date: '2026-11-15',
+    time: '13:56',
+    commit: '08a1798',
+    highlights: {
+      en: [
+        "The admin menu is now grouped like your phone's settings: daily pages on top, everything else in sections you can fold away, and rarely used pages one tap away under \"More\".",
+      ],
+      tr: [
+        "Admin menüsü artık telefonunun ayarları gibi gruplu: günlük sayfalar en üstte, gerisi katlanabilen bölümlerde, seyrek kullanılan sayfalar \"Daha fazla\" altında tek dokunuş uzakta.",
+      ],
+      de: [
+        "Das Admin-Menü ist jetzt gruppiert wie die Einstellungen deines Telefons: tägliche Seiten oben, alles andere in einklappbaren Bereichen und selten genutzte Seiten einen Tipp entfernt unter „Mehr“.",
+      ],
+    },
+  },
+  {
+    version: '0.668.2-beta',
+    date: '2026-11-15',
+    time: '13:36',
+    commit: 'd4bd394',
+    highlights: {
+      en: [
+        "The sales board now shows only your own leads (a dispatcher still sees the whole team's), so every card you see opens. Admins see everyone's leads on the admin board.",
+      ],
+      tr: [
+        "Satış panosu artık yalnızca sizin müşteri adaylarınızı gösteriyor (dağıtıcı hâlâ tüm ekibinkini görür); gördüğünüz her kart açılıyor. Yöneticiler herkesin adaylarını yönetici panosunda görür.",
+      ],
+      de: [
+        "Das Vertriebsboard zeigt jetzt nur noch Ihre eigenen Leads (die Dispositionsrolle sieht weiterhin die des ganzen Teams), sodass sich jede Karte öffnen lässt. Admins sehen alle Leads auf dem Admin-Board.",
+      ],
+    },
+  },
+  {
+    version: '0.668.1-beta',
+    date: '2026-11-15',
+    time: '13:19',
+    commit: '13fdeb8',
+    highlights: {
+      en: [
+        "A saved follow-up now reads as a note — the day (with its weekday) and the next step — and opens for editing only when you press Edit.",
+      ],
+      tr: [
+        "Kayıtlı bir takip artık bir not gibi okunuyor: gün (haftanın günüyle) ve sonraki adım. Düzenleme formu yalnızca Düzenle'ye basınca açılıyor.",
+      ],
+      de: [
+        "Eine gespeicherte Wiedervorlage liest sich jetzt wie eine Notiz – der Tag (mit Wochentag) und der nächste Schritt – und öffnet sich erst mit „Bearbeiten“ zum Ändern.",
+      ],
+    },
+  },
+  {
+    version: '0.668.0-beta',
+    date: '2026-11-15',
+    time: '13:10',
+    commit: '3eca3a1',
+    highlights: {
+      en: [
+        "Marketing CRM: when you log a call, meeting, e-mail or WhatsApp message on a new lead, it can now move to “Contacted” on its own — switch it on in the settings, and undo it from the notice if it was too early.",
+      ],
+      tr: [
+        "Pazarlama CRM'i: yeni bir lead'e telefon, toplantı, e-posta ya da WhatsApp kaydı girdiğinizde lead artık kendiliğinden “İletişime geçildi” aşamasına geçebiliyor. Ayarlardan açın; erken olduysa bildirimdeki “Geri al” ile geri alın.",
+      ],
+      de: [
+        "Marketing-CRM: Erfassen Sie bei einem neuen Lead einen Anruf, Termin, eine E-Mail oder eine WhatsApp-Nachricht, kann er jetzt von selbst nach „Kontaktiert“ wechseln — in den Einstellungen einschalten und, falls zu früh, über die Meldung rückgängig machen.",
+      ],
+    },
+  },
+  {
+    version: '0.667.0-beta',
+    date: '2026-11-15',
+    time: '12:53',
+    commit: '08e9cd5',
+    highlights: {
+      en: [
+        "Call a lead from its page and say whether you reached them: the call is logged for you, or add a note instead.",
+      ],
+      tr: [
+        "Lead'i sayfasından arayın ve ulaşıp ulaşmadığınızı seçin: görüşme sizin için kaydedilir, isterseniz not ekleyerek kaydedin.",
+      ],
+      de: [
+        "Rufen Sie einen Lead direkt von seiner Seite an und geben Sie an, ob Sie ihn erreicht haben: Der Anruf wird für Sie protokolliert, oder Sie fügen eine Notiz hinzu.",
+      ],
+    },
+  },
+  {
+    version: '0.666.5-beta',
+    date: '2026-11-15',
+    time: '12:44',
+    commit: '6cf3bf2',
+    highlights: {
+      en: [
+        "Board cards are more compact: the stage picker is now a small icon on the card instead of a full-width field.",
+      ],
+      tr: [
+        "Pano kartları daha derli toplu: aşama seçici artık kartın altındaki geniş alan yerine kart üzerinde küçük bir ikon.",
+      ],
+      de: [
+        "Board-Karten sind kompakter: Die Phasenauswahl ist jetzt ein kleines Symbol auf der Karte statt eines Feldes über die volle Breite.",
+      ],
+    },
+  },
+  {
+    version: '0.666.4-beta',
+    date: '2026-11-15',
+    time: '12:41',
+    commit: '1f2ab1a',
+    highlights: {
+      en: [
+        "The lead page shows \"Hand over\" only to people who are allowed to hand the lead over.",
+      ],
+      tr: [
+        "Müşteri adayı sayfasındaki \"Devret\" düğmesi artık yalnızca adayı devretmeye yetkisi olanlara görünüyor.",
+      ],
+      de: [
+        "Die Lead-Seite zeigt „Übergeben“ nur noch denen, die den Lead auch übergeben dürfen.",
+      ],
+    },
+  },
+  {
+    version: '0.666.2-beta',
+    date: '2026-11-15',
+    time: '12:32',
+    commit: '7371104',
+    highlights: {
+      en: [
+        "In dark mode, active filter buttons and blue links are readable again: their text no longer disappears into a light background.",
+      ],
+      tr: [
+        "Dark mode'da aktif filtre butonları ve mavi bağlantılar yeniden okunuyor: yazıları artık açık renkli zeminde kaybolmuyor.",
+      ],
+      de: [
+        "Im dunklen Modus sind aktive Filterschaltflächen und blaue Links wieder lesbar: ihr Text verschwindet nicht mehr auf hellem Hintergrund.",
+      ],
+    },
+  },
+  {
     version: '0.666.1-beta',
     date: '2026-11-15',
     time: '12:16',

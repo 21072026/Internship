@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Sales board shows only the viewer's own book (#3755):** `/sales/board` listed what `GET /api/mentorship` lets the role read (the whole tenant for an ORG_ADMIN/OBSERVER) while `/sales/leads/[id]` opened only `mentorId = self`, so a colleague's card was listed and its click was a 404. One rule now, `salesBookWhere()` / `salesBookScope()` (`src/lib/salesBookRule.ts`, `src/lib/salesBook.ts`): own records for everybody, an ADMIN included; the whole tenant only for the sales dispatcher. The lead page and `GET /api/mentorship?surface=sales` (narrow-only; without it the admin surfaces keep their scope) read it, and the sales board asks with it. The admin board still opens the admin detail.",
-  "notes": {
-    "en": ["The sales board now shows only your own leads (a dispatcher still sees the whole team's), so every card you see opens. Admins see everyone's leads on the admin board."],
-    "tr": ["Satış panosu artık yalnızca sizin müşteri adaylarınızı gösteriyor (dağıtıcı hâlâ tüm ekibinkini görür); gördüğünüz her kart açılıyor. Yöneticiler herkesin adaylarını yönetici panosunda görür."],
-    "de": ["Das Vertriebsboard zeigt jetzt nur noch Ihre eigenen Leads (die Dispositionsrolle sieht weiterhin die des ganzen Teams), sodass sich jede Karte öffnen lässt. Admins sehen alle Leads auf dem Admin-Board."]
-  }
-}

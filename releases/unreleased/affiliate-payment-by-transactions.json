@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "Affiliate payments by transaction count (#3844): a `transactionCount` alone is priced by the programme's price list (`priceByList()` in `src/lib/affiliatePaymentBaseRule.ts`, the customer's reverse-charge flag applied) and stored with the count and no unit price; refused as `no_price_list` / `free_month`. The admin form's default mode is the count with the list price shown live (the old count × unit price fields are gone from the form; the API and the account event still accept them), and an empty reference becomes `<customer number>-YYYY-MM`.",
-  "notes": {
-    "en": ["Affiliate payments: enter the month's number of transactions and the amount comes from the price list, shown before saving. Without a reference, the customer number and month are used."],
-    "tr": ["Affiliate ödemeleri: ayın işlem sayısını girin, tutar fiyat listesinden hesaplanıp kaydetmeden önce gösterilir. Referans boş bırakılırsa müşteri numarası ve ay kullanılır."],
-    "de": ["Affiliate-Zahlungen: Die Anzahl der Transaktionen des Monats eingeben, der Betrag kommt aus der Preisliste und wird vor dem Speichern angezeigt. Ohne Referenz werden Kundennummer und Monat verwendet."]
-  }
-}
