@@ -862,6 +862,9 @@ export const authOptions: NextAuthOptions = {
         token.impersonationReadOnly = !!u.impersonatorId && u.impersonationReadOnly === true;
         // Cap impersonation sessions; after this they auto-revert to the admin.
         token.impersonationExpiresAt = u.impersonatorId ? Date.now() + IMPERSONATION_SESSION_MAX_MS : null;
+        // Any sign-in (a start, a stop, a fresh login) ends the notice of an
+        // earlier expiry (#3876).
+        token.impersonationEndedAt = null;
         // Millisecond mint time for "sign out of all devices" — finer than the
         // second-granular JWT `iat`, so a fresh login is never mistaken for a
         // pre-revocation token even within the same second.
@@ -896,6 +899,9 @@ export const authOptions: NextAuthOptions = {
         token.impersonatorName = null;
         token.impersonationExpiresAt = null;
         token.impersonationReadOnly = false;
+        // The banner says so (#3876): without it the strip simply vanished
+        // mid-session and the admin was suddenly themselves, with no reason given.
+        token.impersonationEndedAt = Date.now();
       }
       // On a client-side session update() (e.g. after changing email/profile),
       // re-read the user so the token — and thus the UI that reads the session,
@@ -972,6 +978,10 @@ export const authOptions: NextAuthOptions = {
         session.user.impersonatorId = (token.impersonatorId as string) ?? null;
         session.user.impersonationReadOnly = token.impersonationReadOnly === true;
         session.user.impersonatorName = (token.impersonatorName as string) ?? null;
+        // The cap's deadline and an auto-revert's moment (#3876): the banner
+        // switches back on time and says why, instead of vanishing.
+        session.user.impersonationExpiresAt = typeof token.impersonationExpiresAt === 'number' ? token.impersonationExpiresAt : null;
+        session.user.impersonationEndedAt = typeof token.impersonationEndedAt === 'number' ? token.impersonationEndedAt : null;
         session.user.companyId = (token.companyId as string) ?? null;
         session.user.orgId = (token.orgId as string) ?? null;
         session.user.adminLevel = (token.adminLevel as string) ?? null;
@@ -1036,6 +1046,10 @@ declare module 'next-auth' {
       impersonatorName?: string | null;
       /** A read-only impersonation (#1586): the banner says so, middleware refuses writes. */
       impersonationReadOnly?: boolean;
+      /** Epoch ms when the impersonation cap reverts this session (#3876). */
+      impersonationExpiresAt?: number | null;
+      /** Epoch ms when the cap reverted this session to the admin (#3876). */
+      impersonationEndedAt?: number | null;
       companyId?: string | null;
       orgId?: string | null;
       // User.adminLevel (#1567) for the UI; authorization reads it live.
