@@ -60,6 +60,41 @@ export async function actorMayHandOff(
 }
 
 
+export interface HandoffCurrent {
+  ownerId: string;
+  ownerName: string;
+  nextActionAt: string | null;
+  nextActionNote: string | null;
+}
+
+/**
+ * What the hand-off dialog shows before anything moves (#3873): who has the
+ * record now and the follow-up it carries, so a lead already with someone is
+ * not handed on blind, and "keep the current follow-up" knows what it keeps.
+ * The same gate as the write — whoever may not hand it off reads a 404.
+ */
+export async function handoffCurrent(session: Session, orgId: string, relationId: string): Promise<HandoffCurrent | null> {
+  const relation = await prisma.mentorshipRelation.findFirst({
+    where: { id: relationId, orgId },
+    select: {
+      orgId: true,
+      mentorId: true,
+      cohortId: true,
+      companyId: true,
+      nextActionAt: true,
+      nextActionNote: true,
+      mentor: { select: { fullName: true } },
+    },
+  });
+  if (!relation || !(await actorMayHandOff(session, relation))) return null;
+  return {
+    ownerId: relation.mentorId,
+    ownerName: relation.mentor.fullName,
+    nextActionAt: relation.nextActionAt ? relation.nextActionAt.toISOString() : null,
+    nextActionNote: relation.nextActionNote,
+  };
+}
+
 export async function handOffLead(opts: {
   session: Session;
   orgId: string;
@@ -68,6 +103,12 @@ export async function handOffLead(opts: {
   action: HandoffAction;
   note?: string | null;
   dueOn?: string | null;
+  /**
+   * Hand the record over with the follow-up it already has (#3873) instead of
+   * a new step: the day and the note travel to the new owner unchanged, and
+   * `action`/`note`/`dueOn` are ignored. Refused when there is none to keep.
+   */
+  keepFollowUp?: boolean;
   request?: Request;
 }): Promise<HandoffOutcome> {
   const { session, orgId, relationId, toUserId, action, request } = opts;
@@ -100,13 +141,23 @@ export async function handOffLead(opts: {
   });
   // The note is written in the language of the person who will read it.
   const locale = isLocale(recipientRow?.preferredLanguage) ? recipientRow!.preferredLanguage : defaultLocale;
-  const labels = getDictionary(locale as Parameters<typeof getDictionary>[0]).leadHandoff.actions;
-  const composed = composeHandoffNote(action, labels[action], opts.note);
-  if (!composed.ok) return { ok: false, status: 400, code: composed.error };
-
-  // No day picked means today: a hand-off is work to do now, not someday.
-  const due = parseNextActionDate(opts.dueOn || todayIso());
-  if (!due.ok || !due.value) return { ok: false, status: 400, code: 'invalid_date' };
+  // The follow-up the recipient gets: the one the record has (kept), or the
+  // step written in this dialog.
+  let next: { at: Date | null; note: string | null };
+  if (opts.keepFollowUp === true) {
+    if (!relation.nextActionAt && !relation.nextActionNote) return { ok: false, status: 400, code: 'no_follow_up' };
+    next = { at: relation.nextActionAt, note: relation.nextActionNote };
+  } else {
+    const labels = getDictionary(locale as Parameters<typeof getDictionary>[0]).leadHandoff.actions;
+    const composed = composeHandoffNote(action, labels[action], opts.note);
+    if (!composed.ok) return { ok: false, status: 400, code: composed.error };
+    // No day picked means today: a hand-off is work to do now, not someday.
+    const due = parseNextActionDate(opts.dueOn || todayIso());
+    if (!due.ok || !due.value) return { ok: false, status: 400, code: 'invalid_date' };
+    next = { at: due.value, note: composed.value };
+  }
+  // What the notices call the next step: the note, else the day.
+  const stepText = next.note ?? (next.at ? next.at.toISOString().slice(0, 10) : '');
 
   const result = await transferMentorship({
     relationId: relation.id,
@@ -114,7 +165,7 @@ export async function handOffLead(opts: {
     reasonCode: SALES_HANDOFF_REASON,
     // The instruction rides into the transfer's audit row (ActivityLog), which
     // is the record of who handed what to whom.
-    reasonNote: composed.value,
+    reasonNote: stepText,
     actorId,
     actorEmail: session.user.email ?? null,
     callerOrgId: orgId,
@@ -148,8 +199,8 @@ export async function handOffLead(opts: {
     prisma.mentorshipRelation.update({
       where: { id: newId },
       data: nextActionPatch(current ?? { nextActionAt: null }, {
-        nextActionAt: due.value,
-        nextActionNote: composed.value,
+        nextActionAt: next.at,
+        nextActionNote: next.note,
       }),
     }),
     followUpEventWrite({
@@ -157,9 +208,9 @@ export async function handOffLead(opts: {
       facts: {
         kind: 'HANDED_OFF',
         fromAt: before.at,
-        toAt: due.value,
+        toAt: next.at,
         fromNote: before.note,
-        toNote: composed.value,
+        toNote: next.note,
       },
       recordUpdatedAt: current?.updatedAt ?? new Date(0),
       actorId,
@@ -173,7 +224,7 @@ export async function handOffLead(opts: {
       recipient.id,
       'mentorship',
       'lead.handedOff',
-      { menteeName, from: session.user.name ?? '', action: composed.value },
+      { menteeName, from: session.user.name ?? '', action: stepText },
       `/sales/leads/${newId}`,
     );
     // …and by mail (#3871), as the admin's direct assignment already is. Keyed on
@@ -182,8 +233,8 @@ export async function handOffLead(opts: {
       relationId: newId,
       leadName: menteeName,
       fromName: session.user.name ?? '',
-      action: composed.value,
-      dueOn: due.value,
+      action: stepText,
+      dueOn: next.at,
       recipientName: recipientRow?.fullName ?? '',
       orgId,
       userId: recipient.id,

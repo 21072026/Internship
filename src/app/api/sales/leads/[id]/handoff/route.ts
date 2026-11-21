@@ -5,7 +5,7 @@ import { authOptions } from '@/lib/auth';
 import { withRequestScope } from '@/lib/requestContext';
 import { withTenantScope } from '@/lib/orgContext';
 import { salesPoolGate } from '@/lib/salesPoolGate';
-import { handOffLead } from '@/lib/leadHandoff';
+import { handOffLead, handoffCurrent } from '@/lib/leadHandoff';
 import { HANDOFF_ACTIONS, HANDOFF_NOTE_MAX } from '@/lib/leadHandoffRule';
 
 // Hand a lead to a colleague with its next step (the board's rep strip). The
@@ -17,7 +17,26 @@ const schema = z.object({
   action: z.enum(HANDOFF_ACTIONS),
   note: z.string().max(HANDOFF_NOTE_MAX).nullable().optional(),
   dueOn: z.string().max(10).nullable().optional(),
+  // Keep the record's follow-up as it is (#3873); the step fields are then ignored.
+  keepFollowUp: z.boolean().optional(),
 });
+
+// The dialog's "currently with … · follow-up …" line (#3873). Same gate as the
+// write: not yours to hand off = 404.
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  return withRequestScope(request, async () => {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const g = await salesPoolGate(session);
+    if (!g.ok) return g.response;
+    const { id } = await params;
+    return withTenantScope(session, async () => {
+      const current = await handoffCurrent(session, g.orgId, id);
+      if (!current) return NextResponse.json({ error: 'Not found', code: 'missing' }, { status: 404 });
+      return NextResponse.json(current);
+    });
+  });
+}
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   return withRequestScope(request, async () => {
