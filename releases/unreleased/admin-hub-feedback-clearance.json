@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "Admin group hub pages (`/admin/hub/<group>`, #3757) leave room below the last row for the floating feedback button, which covered the settings hub's last row on a phone; the seven hub pages are now in the mobile layout audit's coverage gate, whose absence had turned the scheduled full suite red (#3752).",
-  "notes": {
-    "en": ["Admin menu pages: on a phone, the feedback button no longer covers the last entry."],
-    "tr": ["Admin menü sayfaları: telefonda geri bildirim düğmesi artık son satırın üstünü kapatmıyor."],
-    "de": ["Admin-Menüseiten: Auf dem Handy verdeckt die Feedback-Schaltfläche den letzten Eintrag nicht mehr."]
-  }
-}

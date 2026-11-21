@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Sales:** a rep's new lead (`POST /api/sales/leads` and the form on `/sales`) takes an e-mail OR a phone — a trade-fair or cold-call lead with only a number can be entered. Without an address the lead person is keyed on the normalized phone (`leadContactKey()` in `src/lib/marketingImport.ts`, the import's own key with an opt-in phone fallback; the file import keeps its \"no address, no funnel record\" contract), so the same number in any formatting meets the same dedupe. A refusal that points at a colleague's account or record now names the owner (`ownerName`) — never the record id or the lead's own contact details. Codes `contact_required` / `phone_invalid` (400). No schema change (#3647).",
-  "notes": {
-    "en": ["Sales reps can now enter a lead with only a phone number. If the lead is already a colleague's, the message says whose."],
-    "tr": ["Satış temsilcileri artık yalnızca telefon numarasıyla lead girebiliyor. Lead zaten bir meslektaşındaysa mesaj kimde olduğunu söylüyor."],
-    "de": ["Vertriebsmitarbeiter können jetzt einen Lead nur mit Telefonnummer anlegen. Gehört der Lead schon einem Kollegen, nennt die Meldung, wem."]
-  }
-}

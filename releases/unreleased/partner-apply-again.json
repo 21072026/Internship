@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "Partner application page: the confirmation box after a send offers **Send another application**, which clears the tab's \"sent\" flag (#3534) and opens an empty form — a second application (another address, a colleague) no longer needs a new tab. The anti-spam fill time restarts with the empty form (#3731).",
-  "notes": {
-    "en": ["Partner application: after sending, “Send another application” opens an empty form again."],
-    "tr": ["Partner başvurusu: gönderdikten sonra “Başka bir başvuru gönder” ile boş form yeniden açılıyor."],
-    "de": ["Partnerbewerbung: Nach dem Senden öffnet „Weitere Bewerbung senden“ wieder ein leeres Formular."]
-  }
-}

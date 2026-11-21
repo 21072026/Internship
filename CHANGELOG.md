@@ -24,6 +24,339 @@ each fragment — so only the *recording* was late, not the numbering. The app
 had been serving these versions correctly all along, deriving them from
 base+fragments at build time.
 
+## [0.692.0-beta] - 2026-11-19
+
+_Shipped 2026-11-19 13:28 UTC · commit [16844b5](https://github.com/21072026/Internship/commit/16844b52fa7d8d835c9004bec834a4e5e9bdbe3c)_
+
+Affiliate monthly invoice import (#3846): `/admin/affiliates/invoices` and `POST /api/admin/affiliate/invoices/import` read last month's invoice CSV on the shared `runImport` engine — the admin maps the columns from the file's header (saved on `AffiliateProgramSettings.invoiceColumns`), previews, then imports. Paid rows become payments through `recordAffiliatePayment()` with the new source `INVOICE` (paid gross amount; with a transaction column, the price list's `listAmountMinor` beside it); already-recorded invoice numbers, unknown customers, unpaid, zero and negative rows, and months already typed by hand are skipped. Pure rule in `src/lib/affiliateInvoiceImportRule.ts`.
+
+## [0.691.1-beta] - 2026-11-19
+
+_Shipped 2026-11-19 11:53 UTC · commit [6de4635](https://github.com/21072026/Internship/commit/6de4635c57ee85c0f2b495b63dca96c847a1553e)_
+
+Sales lead page (#3853): a meeting planned with "Plan meeting" now re-renders the page (`router.refresh()` in `PlanMeetingButton` when no `onCreated` is given), so its history line shows at once — before, the page kept its old render and the history seemed one meeting behind until a reload.
+
+## [0.691.0-beta] - 2026-11-19
+
+_Shipped 2026-11-19 11:53 UTC · commit [b4816b2](https://github.com/21072026/Internship/commit/b4816b2771fb775d8843d4245e072747c630739d)_
+
+Affiliate commission engine (#3845): a plan can be month-aligned (`monthAligned`, `timeZone`, default Europe/Berlin) — the percent phase then starts at the beginning of the month the switch customer first paid in, and a customer's window runs whole calendar months from its first paying month (`monthStartInZone()`, `customerWindowEndsAt()`). A first payment's tier is chosen by the new `AffiliatePayment.listAmountMinor` (the price list's price, set for list-priced counts) when present; the percent earns on the paid `amountMinor`. Stored plans read as not month-aligned until saved; the plan form, the partner's terms box and the settings transfer carry the new fields.
+
+## [0.690.0-beta] - 2026-11-17
+
+_Shipped 2026-11-17 22:57 UTC · commit [c4a45e1](https://github.com/21072026/Internship/commit/c4a45e1975aaa04bfb4f0be245b3018672f459e6)_
+
+Affiliate payments by transaction count (#3844): a `transactionCount` alone is priced by the programme's price list (`priceByList()` in `src/lib/affiliatePaymentBaseRule.ts`, the customer's reverse-charge flag applied) and stored with the count and no unit price; refused as `no_price_list` / `free_month`. The admin form's default mode is the count with the list price shown live (the old count × unit price fields are gone from the form; the API and the account event still accept them), and an empty reference becomes `<customer number>-YYYY-MM`.
+
+## [0.689.0-beta] - 2026-11-17
+
+_Shipped 2026-11-17 22:15 UTC · commit [a45b728](https://github.com/21072026/Internship/commit/a45b7286c3f360228a934f0c107f45c583e6c4e1)_
+
+Affiliate transaction price list (#3843): `AffiliateProgramSettings.priceList` (free limit, base fee, per-transaction steps with sub-cent prices, VAT) priced by the pure `src/lib/affiliatePriceListRule.ts` — the month is summed exactly and rounded to the cent once; set on the settings page with a live example table (`PUT /api/admin/affiliate/settings/price-list`). Customers can be marked reverse charge (`AffiliateCustomer.reverseCharge`, `PATCH /api/admin/affiliate/customers/[id]`), and the price list says whether their list price still gets VAT. The price list travels in the settings export/import as its own `priceList` section, judged by its own parser and written through `savePriceList()`; a list never set is left out of the file.
+
+## [0.688.0-beta] - 2026-11-17
+
+_Shipped 2026-11-17 13:11 UTC · commit [8cd8107](https://github.com/21072026/Internship/commit/8cd81070585f674e6ae5685ab9fb60363befd7a6)_
+
+The lead page's history shows planned meetings — "Meeting scheduled for <when>" in the viewer's time zone, and a second line when one is cancelled (#3837). Read from the existing `Meeting` rows; nothing is written to `InteractionLog`, since planning a meeting is not a contact (last-contact rule, counters, metering). The meeting title is shown only to viewers who may work the record.
+
+## [0.687.1-beta] - 2026-11-17
+
+_Shipped 2026-11-17 13:10 UTC · commit [2631ac9](https://github.com/21072026/Internship/commit/2631ac9a0daffc61ee70738c33b713b3057257f9)_
+
+Board toolbars (#3838): the selected Mine/Team button (and four other dark buttons) pin their dark-mode colours, since `html.dark .bg-gray-900` beat `dark:bg-gray-100`. Sales board: Mine/Team on the left, "show empty stages" and the search right-aligned in the same row. Admin board: saved views, owner filter, "hide empty stages" and the search in one right-aligned row above the colleague strip. A collapsed empty-stage strip keeps its stage colour without the 4px top stripe.
+
+## [0.687.0-beta] - 2026-11-17
+
+_Shipped 2026-11-17 10:22 UTC · commit [e88e7c4](https://github.com/21072026/Internship/commit/e88e7c42fe250453cee9ded639517b3e022e393a)_
+
+Board column headers explain their stage behind an info icon (hover and keyboard focus) (#3660). New optional `PipelineStage.description` (VarChar 280): curated, localized descriptions for the sales funnel template, or the admin's own text from the stage editor shown verbatim — the label rule of #2268. On the FREE plan it is part of the locked look (`onlyGatesChanged`).
+
+## [0.686.0-beta] - 2026-11-17
+
+_Shipped 2026-11-17 10:07 UTC · commit [e8b0f36](https://github.com/21072026/Internship/commit/e8b0f36fd79f93bc7d5e81ab814508a7a2c9dcd6)_
+
+Board columns wear their stage's own color — the one set in the pipeline editor or by the template, e.g. the sales funnel — as a light wash with a colored top stripe; a stage without a valid hex color keeps the positional tone (#3661). `boardColumnPaint()` in `src/lib/boardColumnTone.ts`.
+
+## [0.685.0-beta] - 2026-11-17
+
+_Shipped 2026-11-17 10:07 UTC · commit [682b42d](https://github.com/21072026/Internship/commit/682b42da21fc49de3f9eecc80003df14eaa64072)_
+
+Boards scroll sideways while a card is dragged near their left or right edge, so an off-screen stage can be reached in one drag (#3662). Rule in `src/lib/dragAutoScrollRule.ts`, applied by `HorizontalScrollArea`.
+
+## [0.684.0-beta] - 2026-11-17
+
+_Shipped 2026-11-17 08:44 UTC · commit [70e85e3](https://github.com/21072026/Internship/commit/70e85e3ef72352192564b5ecd316a89f026bf0dd)_
+
+Lead page interaction filter and stage history (#3820): the sales lead page's interaction list gains an "All · Interactions · System" segmented filter (default All, remembered per browser) and shows the record's stage moves, read from the existing `StatusChange` rows, as one-line system entries next to the follow-up history (#3819).
+
+## [0.683.1-beta] - 2026-11-17
+
+_Shipped 2026-11-17 00:03 UTC · commit [d2dc2dd](https://github.com/21072026/Internship/commit/d2dc2ddddf6e7a7f146a59b22fa3c390e8318798)_
+
+New lead form (#3821): a company name OR a contact name is required (`resolveNewLeadNames()` in `src/lib/newLeadNameRule.ts`, shared by the dialog, `POST /api/sales/leads` and `POST /api/admin/marketing-accounts`; 400 `name_required`); a contact alone names the account, a company alone leaves the contact empty. The name and e-mail/phone rules show inline under their fields instead of in the banner. A nameless phone-only lead is named after its account instead of its `tel.<digits>` key (`leadFallbackName()`), and backfill `0038-lead-phone-names` renames the existing ones. "Complete follow-up" opens the interaction form on the board hand-off's pick (`followUpInteractionType()` in `src/lib/leadHandoffRule.ts`), else a call.
+
+## [0.683.0-beta] - 2026-11-17
+
+_Shipped 2026-11-17 00:02 UTC · commit [0fc001c](https://github.com/21072026/Internship/commit/0fc001c543eb72f6214bf66d1d93d85091cb83db)_
+
+Follow-up history (#3819): every change to a record's follow-up — set, moved, completed, removed, handed over — writes one `FollowUpEvent` row (new model, `src/lib/followUpEvents.ts`, rule in `src/lib/followUpEventRule.ts`) in the same transaction as the follow-up columns, idempotent on `(relationId, dedupeKey)`. The sales lead page shows them as muted system lines among the interactions. Deliberately not `InteractionLog` rows: a follow-up is not a contact (last-contact rule, counters, billing meter) and its note stays hidden from the mentee.
+
+## [0.682.1-beta] - 2026-11-16
+
+_Shipped 2026-11-16 20:37 UTC · commit [a00f6c2](https://github.com/21072026/Internship/commit/a00f6c278b5da11e2d1aaaf3481be202e74dd663)_
+
+`InteractionLog.authorId` (nullable, `onDelete: SetNull`, never backfilled): the log form, POST /api/interactions, the mentor's direct e-mail and a mail copied to the CRM address record who logged the row; API-key, meeting-sweep and migration rows stay NULL. Groundwork for system rows on follow-up events (#3818).
+
+## [0.682.0-beta] - 2026-11-16
+
+_Shipped 2026-11-16 20:37 UTC · commit [3a41b34](https://github.com/21072026/Internship/commit/3a41b34c237097d55cd895372d6afd9c00af77df)_
+
+Sales lead page reads the hand-off chain (`previousRelationId`, `src/lib/leadJourney.ts`): the earlier owners' interactions appear in a collapsed per-period section, the header says who the lead was taken over from, and a handed-on record shows a banner naming the current owner with a link when the viewer may open it (#3817).
+
+## [0.681.0-beta] - 2026-11-16
+
+_Shipped 2026-11-16 20:36 UTC · commit [c0ea5cc](https://github.com/21072026/Internship/commit/c0ea5ccf97aac50b22f567397445fcf195bfd694)_
+
+Sales: a lead marked lost while its trial still runs is pointed out — a "Still in trial · N days left" chip on its board card (the team view's cards too; `GET /api/sales/team-book` rows now carry `trialEndsAt`) and a notice at the top of the lead page with "Back to trial", an ordinary stage move through `PUT /api/mentorship/[id]` that keeps the trial window. One predicate, `lostWhileTrialOpen()` in `src/lib/trialReminderRule.ts` (unit-tested); nothing moves on its own, and a colleague's read-only view gets the notice without the button (#3813).
+
+## [0.680.0-beta] - 2026-11-16
+
+_Shipped 2026-11-16 05:07 UTC · commit [9dbbe7c](https://github.com/21072026/Internship/commit/9dbbe7c874701ec0122f9d087d5e45b3b4cba6fc)_
+
+Sales lead page: the estimated monthly value reads first like the trial end — once set it shows as text with Edit (pencil) and Remove side by side, and the form opens on Edit with Save/Cancel (`DealValuePanel`). Fixed: "Complete follow-up" cleared the follow-up on the click, so cancelling the interaction form lost it; the follow-up is now cleared only after the interaction is saved (`InteractionDraftRequest.onLogged`) (#3803).
+
+## [0.679.0-beta] - 2026-11-16
+
+_Shipped 2026-11-16 02:43 UTC · commit [f663ecd](https://github.com/21072026/Internship/commit/f663ecd68ddd6204f70d29a3a856a261a6f3b3ab)_
+
+Sales lead page (`/sales/leads/[id]`): two independent columns on wide screens — follow-up and recent interactions on the left, trial end, estimated value and the contact card stacked on the right (`SalesRecordPanels`). The contact card is compact: "Edit contact" sits on the heading line at the right, name/position/phone share two columns and the e-mail gets its own line The interactions card lists each entry in two lines with a hairline between entries — type, headline and a calendar-day distance (`relativeDay()`, `<RelativeTime granularity="day">`: today / yesterday / 3 days ago, the date on hover) on the first, the note clipped to one line and opened by a click on the second (#3803).
+
+## [0.678.2-beta] - 2026-11-16
+
+_Shipped 2026-11-16 01:14 UTC · commit [36a9472](https://github.com/21072026/Internship/commit/36a9472909119a9dc3e26de91617417c63265983)_
+
+Security: the durable sign-in lockout (`recordFailedAttempt()`) counts with conditional `updateMany` steps and a duplicate-skipping insert instead of read-then-upsert, so concurrent failed attempts against one address are all counted and the first ones no longer fail on the unique key (#3799). Pinned by `e2e/lockout-counter-race.unit.spec.ts` (@smoke).
+
+## [0.678.1-beta] - 2026-11-16
+
+_Shipped 2026-11-16 01:14 UTC · commit [851f39f](https://github.com/21072026/Internship/commit/851f39f9180b0b66bc4a35b3e2ddd192f0ca191d)_
+
+Security: a TOTP code is now spent by one conditional `updateMany` on `lastTotpStep` inside `requireSecondFactor()`, so concurrent requests carrying the same code can no longer all pass the replay floor (#3770). Pinned by `e2e/totp-replay-race.unit.spec.ts` (@smoke).
+
+## [0.678.0-beta] - 2026-11-16
+
+_Shipped 2026-11-16 00:04 UTC · commit [932aa64](https://github.com/21072026/Internship/commit/932aa6467f4bf7c30bcc4a247015c4b9ab7ebd56)_
+
+**Affiliate:** a lead that came in through a partner's link (Source `affiliate:<code>`) shows an "Affiliate: <partner>" badge on the sales lead page and on the board card (`AffiliateSourceBadge`); the partner is resolved by (org, code) from the org's own `AffiliatePartner` (`src/lib/affiliateLeadSource.ts`, the code rule pure in `affiliateSourceRule.ts`), so a code never names another org's partner. `GET /api/mentorship` adds `affiliatePartner` for staff readers only and strips the lead's source. The partner portal (`/affiliate`) gets a "Leads you brought" card: the count and the stage distribution — counts only, no lead name, contact or account, never another partner's or another org's leads (#3647).
+
+## [0.677.0-beta] - 2026-11-15
+
+_Shipped 2026-11-15 23:30 UTC · commit [ff3d749](https://github.com/21072026/Internship/commit/ff3d7493e059a5ad10ef60f3e7739fa29e0c8297)_
+
+**Sales team page `/sales/team` (#3779, MARKETING).** Every rep of the tenant can open it from the sales menu (`Team`). It shows: the team's active records and how many sit in each stage (the tenant's own labels and order); new leads, wins and losses this week and this month; the open pipeline's estimated value per currency (minor units, never converted); and one row per seller (open records, stage split, wins this week and this month); overdue follow-ups as a team total for everyone and per person only for admins and the dispatcher (`canSeeRepOverdue`). The ranked leaderboard reuses `salesTargetRule` (`wonCountsByOwner` / `rankLeaderboard`) and gains a week window (`weekRange()`: UTC, Monday-start, half-open like `periodRange()`); `/sales`'s leaderboard card gets a *This week* column, and the dashboard one *Team totals* card linking to the page. Ranking is by wins only — no points, streaks or activity counts. `lostCountsByOwner()` reads a loss as the first move into an off-path stage. Names and counts only, tenant-scoped by hand, `count`/`groupBy` on the request path.
+
+## [0.676.3-beta] - 2026-11-15
+
+_Shipped 2026-11-15 23:12 UTC · commit [23b8a4b](https://github.com/21072026/Internship/commit/23b8a4b73de23e1b440d25d1a5a1467ec1e34129)_
+
+The sales calendar's Team view shows colleagues' follow-up DAYS to a rep too (#3778, the user's decision of 2026-11-15: the team sees each other's work) — the day, the lead's name and the owner's initials, never the note. A new narrow, pure rule `canSeeTeamFollowUpDate()` (`src/lib/teamFollowUpDateRule.ts`, unit-tested) allows the date on that one screen only; `canSeeNextAction` is unchanged and still gates the note and every other reader, and the team book's fields do not change. With `salesTeamBookForReps` off the Team API stays a 404.
+
+## [0.676.2-beta] - 2026-11-15
+
+_Shipped 2026-11-15 23:00 UTC · commit [6bb6699](https://github.com/21072026/Internship/commit/6bb66992f7e4a8f0c776156685179f957464935e)_
+
+**Security — an admin's chat stays inside its own organisation (#3792):** the ADMIN branch of `canMessage()` let an admin open a 1:1 chat with any user, any organisation's included, because the user lookup is not tenant-scoped while `MT_ENFORCE_ISOLATION` is off. Org A's admin could open a chat with org B's user, write into it and be read, and B's user could do the same towards A's admin. The door now opens only inside the admin's own tenant (`src/lib/messageAdminRule.ts`, pure and unit-tested, using `sameTenant()`), for a super admin too. `POST /api/conversations` answers **404** for another tenant's user, the same as an id that does not exist, and `/messages?to=` refuses the same way. A chat that already crossed orgs takes no new message; its history stays readable to its participants. No data is changed. Pinned by `e2e/tenant-isolation.spec.ts` (@smoke) and the authz matrix's `CROSS_TENANT_WRITES`.
+
+## [0.676.1-beta] - 2026-11-15
+
+_Shipped 2026-11-15 22:59 UTC · commit [3c642da](https://github.com/21072026/Internship/commit/3c642da550c8c87e539ed4b7c82ffd0eff0323b5)_
+
+The sales calendar gets a "Me / Team" toggle (#3778): the Team view (`GET /api/sales/calendar/team`) adds colleagues' meetings — with the owner's initials and the lead's name, opening the colleague's lead page read-only, never the meeting title or a follow-up note — offered only when the shared team-read rule (`salesTeamReadAllowed`) lets the viewer read the org's book. A colleague's follow-up day is listed only for a viewer `canSeeNextAction` allows (an admin), never its note.
+
+## [0.676.0-beta] - 2026-11-15
+
+_Shipped 2026-11-15 22:54 UTC · commit [088423b](https://github.com/21072026/Internship/commit/088423b311fdd73dab31aaeac93d3727a590a6c6)_
+
+**Sales:** a rep's new lead (`POST /api/sales/leads` and the form on `/sales`) takes an e-mail OR a phone — a trade-fair or cold-call lead with only a number can be entered. Without an address the lead person is keyed on the normalized phone (`leadContactKey()` in `src/lib/marketingImport.ts`, the import's own key with an opt-in phone fallback; the file import keeps its "no address, no funnel record" contract), so the same number in any formatting meets the same dedupe. A refusal that points at a colleague's account or record now names the owner (`ownerName`) — never the record id or the lead's own contact details. Codes `contact_required` / `phone_invalid` (400). No schema change (#3647).
+
+## [0.675.0-beta] - 2026-11-15
+
+_Shipped 2026-11-15 22:42 UTC · commit [e7e1725](https://github.com/21072026/Internship/commit/e7e17250ae0f67ac325cc2dfc13337b69bc4b16b)_
+
+Sales team view (read-only): `/sales/board` gets a "Mine / Team" toggle (`?view=team`, read from `GET /api/sales/team-book`; `?owners=` filters it) with owner initials on every card — only your own card moves (drag, hand-off) unless you are the dispatcher or an admin with `relation.write`. `/sales/leads/[id]` and `/sales/accounts/[id]` open a colleague's record/account read-only while the team read is on (`salesTeamReadAllowed`): owner banner with "Message the owner" (`/messages?to=`), no editor, and no contact e-mail/phone, follow-up, notice period or deal value. Write rule `salesBookWriteAllowed` / `canWriteSalesRecord`; the hand-off uses it too. Off, a colleague's record is a 404 as before.
+
+## [0.674.1-beta] - 2026-11-15
+
+_Shipped 2026-11-15 22:14 UTC · commit [ab7b54b](https://github.com/21072026/Internship/commit/ab7b54b120d08c8ec4e9b898b1933e46713dc37d)_
+
+The sales dashboard (`/sales`) opens with a "Today" card (#3778): follow-ups due today and overdue ones (red), today's meetings at their time on the rep's own clock, and the rep's open to-dos — each line a link to the lead page or `/todos`. Follow-ups and meetings come from the sales calendar's loader (`src/lib/salesCalendar.ts`, now shared with `GET /api/sales/calendar`), so the card and the calendar never disagree. The role × endpoint matrix pins `POST /api/meetings` on a colleague's or another org's lead as a 404.
+
+## [0.674.0-beta] - 2026-11-15
+
+_Shipped 2026-11-15 22:05 UTC · commit [a8a4891](https://github.com/21072026/Internship/commit/a8a4891cb0485aeea23144c1b9a98a375277dcda)_
+
+Sales team book (read-only): `GET /api/sales/team-book` (`src/lib/salesTeamBook.ts`) lists every record of the org — lead, account, owner, stage, days in stage, last contact; never e-mail, phone, value or follow-up — with counts per stage and owner. Gate `salesTeamReadAllowed()` / pure `canReadSalesTeamBook()` + `salesTeamReadWhere()` (`src/lib/salesBookRule.ts`): admins and the dispatcher always, reps while the new org setting `salesTeamBookForReps` (default on, MARKETING) is on; otherwise 404. The write scope `salesBookWhere` is unchanged. `salesLeaderboardForReps` now defaults to on.
+
+## [0.673.0-beta] - 2026-11-15
+
+_Shipped 2026-11-15 21:56 UTC · commit [8214d33](https://github.com/21072026/Internship/commit/8214d33ffd4f91a40945d2f21df90f39c316e303)_
+
+**Sales team messaging (#3783):** on the sales surface, colleagues can now message each other, and each org has one team room. `canMessage()` gains one rule (`src/lib/salesTeamMessagingRule.ts`, pure and unit-tested): two **active** sales staff of the **same org** (MENTOR/ADMIN, `hasSalesSurface`) may message each other. It never applies to a lead, a customer login or another org, and never in INTERNSHIP. The team room is a project-less GROUP conversation keyed by the new nullable unique `Conversation.teamKey` (`sales-team:<orgId>`). It is created on first visit, and the unique key means two first visits at once still make one room. Who may read and post is the live rule on every request, so a new rep sees it at once and a deactivated rep is refused and dropped from the roster. Room messages go out by bell and push only, with no e-mail mirror. The sales menu gains Messages (with an unread badge), To-dos and Notifications. On the shared pages (`/messages`, `/todos`) RoleShell gives a rep the sales menu, with no command palette and no global search; the back links on `/messages` and `/notifications` go to `/sales`. The inbox's new-chat picker lists the sales team, and `/messages?to=<userId>` opens the 1:1 chat with that person, or creates it on first use, under the same rule. A refusal leaves the caller on the inbox with a notice.
+
+## [0.672.2-beta] - 2026-11-15
+
+_Shipped 2026-11-15 21:41 UTC · commit [ae688eb](https://github.com/21072026/Internship/commit/ae688ebd6e67d823f6995c51f469c95f8aa9f0e8)_
+
+**Fix (go-live):** a freshly invited MARKETING sales rep's first sign-in ended on a 404. The mentor dashboard stamped `mentorOnboardingSeenAt` and redirected to `/onboarding`, which a vertical without `mentorship` does not have; the page's redirect could beat the layout's own `/sales` redirect. The mentor page now sends a mentorship-less vertical on itself (`mentorlessShellTarget`) before the wizard check, and the sign-in form lands a sales rep straight on `/sales` (`postSignInHome()` in `src/lib/salesSurface.ts`; every other role and vertical keeps `roleHome()`). `e2e/marketing-rep-first-login.spec.ts` (@smoke) signs in a rep with the stamp unset, as an invitation leaves it (#3647).
+
+## [0.672.1-beta] - 2026-11-15
+
+_Shipped 2026-11-15 21:41 UTC · commit [16bf640](https://github.com/21072026/Internship/commit/16bf6402c30cbecae9d4e7ffaade05f91d20252c)_
+
+Partner page media (`/api/public/partner-media/[id]`) is now served with its own `default-src 'none'; sandbox` Content-Security-Policy; the route set it, but the site-wide policy from `next.config.js` shadowed it (#3732). The dead `Content-Length` lines are gone — Next's App Router drops that header, and WebKit plays the ranged video from `Content-Range` alone.
+
+## [0.672.0-beta] - 2026-11-15
+
+_Shipped 2026-11-15 21:41 UTC · commit [d89071a](https://github.com/21072026/Internship/commit/d89071a27c89ac8f412b1c416bed88f53995a126)_
+
+Affiliate portal: changing the payout IBAN now needs a step-up — the authenticator or recovery code when the partner has 2FA, else the current password (`src/lib/stepUp.ts`). The code goes through the sign-in doors' own `requireSecondFactor()` (now exported from `src/lib/auth.ts`), and a wrong password is charged to the sign-in password counters, so the step-up cannot be used to guess around the sign-in limit. `PUT /api/affiliate/me/payout-details` answers 403 `step_up_required` (with `method`), 403 `step_up_invalid`, 429 `step_up_locked` or 403 `step_up_unavailable` (SSO-only account without 2FA); the change is still audited and announced (#3734).
+
+## [0.671.5-beta] - 2026-11-15
+
+_Shipped 2026-11-15 21:41 UTC · commit [e81d209](https://github.com/21072026/Internship/commit/e81d209838894ab5846c8671d5fa4e7c3a639002)_
+
+Themed partner application page: the legal footer uses the theme's own text colour (whose contrast on the page background is checked when the theme is saved) instead of a fixed grey nobody checked against it. Tests: the `stats`-only audit detail (`changedLandingFields`) and the themed footer's legal/contract links on `/partner` and `/partner/apply` (#3730).
+
+## [0.671.4-beta] - 2026-11-15
+
+_Shipped 2026-11-15 21:41 UTC · commit [9d9e8f7](https://github.com/21072026/Internship/commit/9d9e8f7e14db51eab5419ce40d771a88a2b2ecd1)_
+
+Affiliate settings import: files over 10 MB no longer fail as "not a settings file". Next silently truncated every request body past `experimental.middlewareClientMaxBodySize` (default 10 MB); it is now 40 MB, the reverse proxy's cap, which also unblocks the 32 MiB admin JSON importers and 15 MB theme videos. `SETTINGS_TRANSFER_MAX_BYTES` is now the admin JSON ceiling (32 MiB) instead of an unreachable 50 MB, and a `409 busy` import is shown with its own message (EN/TR/DE) (#3728).
+
+## [0.671.3-beta] - 2026-11-15
+
+_Shipped 2026-11-15 21:41 UTC · commit [f86c67d](https://github.com/21072026/Internship/commit/f86c67db4521d5b9c9f9c91c7b509d507cd0ac1f)_
+
+Partner application page: the confirmation box after a send offers **Send another application**, which clears the tab's "sent" flag (#3534) and opens an empty form — a second application (another address, a colleague) no longer needs a new tab. The anti-spam fill time restarts with the empty form (#3731).
+
+## [0.671.2-beta] - 2026-11-15
+
+_Shipped 2026-11-15 21:41 UTC · commit [54234e9](https://github.com/21072026/Internship/commit/54234e91d573fe8bd11f66ec0e7e25449b3f70f1)_
+
+Sales lead page: the TR/DE strings added in #3663 ("assigned to you on", its hint, two contact-editor messages) now use the informal form of address the rest of the `sales` namespace uses (TR "sen", DE "du") (#3733).
+
+## [0.671.1-beta] - 2026-11-15
+
+_Shipped 2026-11-15 21:40 UTC · commit [d34e2a7](https://github.com/21072026/Internship/commit/d34e2a700d1b6574ef4eb9fea80114cf39d28aaf)_
+
+Affiliate portal: a customer whose first recorded payment was invalid (zero amount or another currency) no longer shows an "unlimited" commission window — `customerWindows()` now reads the window from the first valid payment, as the engine does (#3729).
+
+## [0.671.0-beta] - 2026-11-15
+
+_Shipped 2026-11-15 21:36 UTC · commit [f3bd6c9](https://github.com/21072026/Internship/commit/f3bd6c9a974310605b6edd4ff5e66a3dbf92cab9)_
+
+Sales reps get a calendar at `/sales/calendar` (#3778): their meetings, their records' follow-up days (red when overdue) and trial ends, week view by default with day, month and a phone agenda, colour-coded with a legend, each item opening the lead. "New meeting" (and "Plan meeting" on the lead page) schedules with one of the rep's own leads through the existing `POST /api/meetings`; that route now lets a sales dispatcher schedule on records `relation.write` allows, and answers `404 relation_not_found` when none of the requested relations is within reach (it used to answer `200 { created: 0 }`). The calendar subscription feed carries a sales rep's follow-up days. New `GET /api/sales/calendar`, gated like the lead pool.
+
+## [0.670.1-beta] - 2026-11-15
+
+_Shipped 2026-11-15 21:25 UTC · commit [60752f8](https://github.com/21072026/Internship/commit/60752f8f0710032ab594ae0780d41dad9f721988)_
+
+**Board:** the per-card stage picker is gone from both boards (maintainer's decision: it crowded the card). A stage is changed by dragging the card, or — on a phone, by keyboard, or with a single pointer — on the record the card opens (`stage-select` on `/admin/candidates/[id]` and `/mentor/mentees/[id]`). `CardStageSelect` and `board.moveTo` are deleted; the board copy, the accessibility statement and the VPAT rows for 2.1.1 / 2.5.1 / 2.5.7 / 4.1.2 now describe that path, and the board specs move a card by drag or through the record.
+
+## [0.670.0-beta] - 2026-11-15
+
+_Shipped 2026-11-15 21:22 UTC · commit [758ab71](https://github.com/21072026/Internship/commit/758ab7112895fa6160554e5e2de578bbbd0a5c78)_
+
+**Lead mail switched off entirely (#3771, MARKETING):** `outboundApproval` gets a third value, `lead_mail_blocked`. In this mode no mail reaches a non-staff recipient of the org: leads, customer logins (COMPANY) and contacts without an account. No category is exempt, including `account_security` (password reset, sign-in link, invitation) and the DOI `consent` mail, because a marketing lead never signs in. Only the org's ADMIN/MENTOR staff still receive mail. A blocked mail is not drafted, queued or sent; it is recorded `SKIPPED` with `Blocked: outbound_blocked (<code>)`. The decision stays in `outboundDecision()` (new `block` flag and `blocked_*` codes), and the single hook stays in `sendEmail()`, which returns the new `'BLOCKED'`. That value reads as handled to `!== 'SKIPPED'` callers, so cron claims still stamp. Callers that report what reached a person count it as skipped: the notification ledger, newsletter send rows, report subscriptions, nudges, announcement tallies and the bug-report notified flag. The demo form's DOI treats it like `SKIPPED`: the slot is given back, the evidence is not stamped and the permission stays NONE. A draft held earlier cannot be sent or scheduled in this mode (`409 outbound_blocked`). Settings offers the third option, and `/admin/outbox` shows a banner (`GET /api/admin/outbox` returns `mode`). See docs/outbound-approval.md.
+
+## [0.669.4-beta] - 2026-11-15
+
+_Shipped 2026-11-15 21:12 UTC · commit [db358b6](https://github.com/21072026/Internship/commit/db358b6eaa219e29507f463d38d032fef74573ab)_
+
+Admin group hub pages (`/admin/hub/<group>`, #3757) leave room below the last row for the floating feedback button, which covered the settings hub's last row on a phone; the seven hub pages are now in the mobile layout audit's coverage gate, whose absence had turned the scheduled full suite red (#3752).
+
+## [0.669.3-beta] - 2026-11-15
+
+_Shipped 2026-11-15 14:54 UTC · commit [bb4793d](https://github.com/21072026/Internship/commit/bb4793d65554c39ef6f8ff1f5f3f200f14847562)_
+
+When the trial end on the sales lead page cannot be changed, the panel says why instead of just omitting Edit: a short line in the Edit button's place ("Can be changed in a trial stage only" / "The record is closed") and an info button that opens the full reason, naming the record's current stage by the tenant's own label. The reason has one source, `trialEndLockReason()` in `src/lib/trialReminderRule.ts` (`'closed' | 'not_in_trial' | null`, the trial route's own refusals in its order), unit-tested. It is shown only to those who may edit the trial end (owner, sales dispatcher, admin). The rule itself is unchanged (#3647).
+
+## [0.669.2-beta] - 2026-11-15
+
+_Shipped 2026-11-15 14:22 UTC · commit [c99fef2](https://github.com/21072026/Internship/commit/c99fef26770db9f40d4ccdd12946271c1e4df47d)_
+
+The trial end on the sales lead page (`/sales/leads/[id]`) reads as text with an Edit button (pencil) — the follow-up panel's read-mode pattern (#3747) — and the date field opens on Edit with Save and Cancel; a save moves the badge ("Ended" / days left) at once. `TrialEndPanel` takes an opt-in `readFirst` prop, so the admin candidate page keeps its always-open field. Who sees Edit is computed on the server with the trial route's own rule (`canEditTrial`: owner, the tenant's sales dispatcher, an admin with `relation.write`; open records only). Same `PATCH /api/mentorship/[id]/trial`, same rules (#3647).
+
+## [0.669.1-beta] - 2026-11-15
+
+_Shipped 2026-11-15 14:04 UTC · commit [33ec967](https://github.com/21072026/Internship/commit/33ec9671fb5a3d04a56b6d2405d6c05794d356f2)_
+
+**The click-to-call "Yes" says when it moved the lead (#3748 × #3746):** a "Did you reach them? Yes" on a first-stage lead goes through `POST /api/interactions`, so the first-contact rule could move it, but nothing on the page said so. `ContactActions` now reads the same `stageAdvance` answer the interaction form reads. It shows the same "moved to <stage>" toast with Undo, and the page (stage badge, interactions card) re-reads itself. The toast and Undo are one hook, `useStageAdvanceToast()`, shared by the form and the question; Undo moves the record back through `PUT /api/mentorship/[id]`, the board's stage write. With the setting off, the toast still says only that the contact was logged.
+
+## [0.669.0-beta] - 2026-11-15
+
+_Shipped 2026-11-15 13:56 UTC · commit [08a1798](https://github.com/21072026/Internship/commit/08a1798b315974070ca3bf8990be0b0c4fa3e24b)_
+
+**Grouped admin sidebar (#3752, iOS-Settings style):** the ~80 flat admin links are now eight daily items followed by collapsible groups — Sales & pipeline, Mentoring, Communication, Reports, Team & access, Integrations & API, Settings & compliance, Operations. A group header is a `button` with `aria-expanded`; a closed group is remembered in `localStorage` and the current page's group is always open. Rarely used, settings-like pages (`hub: true`) leave the sidebar for their group's hub page `/admin/hub/<group>` (icon, title, description, chevron), reached through one "More" row. `NavLink` gains `group` and `hub`, `groupNavLinks()` shapes the sidebar, and the hub page renders from the same list through the same filters, so the palette, the native app menu (now with a `group` field) and the sidebar search still reach every page — `scripts/test/nav-groups.test.mjs` pins that for every vertical and admin tier. The admin sidebar also lists Messages.
+
+## [0.668.2-beta] - 2026-11-15
+
+_Shipped 2026-11-15 13:36 UTC · commit [d4bd394](https://github.com/21072026/Internship/commit/d4bd394b22bf2c9dcd7d8504bf8739b8f54879b7)_
+
+**Sales board shows only the viewer's own book (#3755):** `/sales/board` listed what `GET /api/mentorship` lets the role read (the whole tenant for an ORG_ADMIN/OBSERVER) while `/sales/leads/[id]` opened only `mentorId = self`, so a colleague's card was listed and its click was a 404. One rule now, `salesBookWhere()` / `salesBookScope()` (`src/lib/salesBookRule.ts`, `src/lib/salesBook.ts`): own records for everybody, an ADMIN included; the whole tenant only for the sales dispatcher. The lead page and `GET /api/mentorship?surface=sales` (narrow-only; without it the admin surfaces keep their scope) read it, and the sales board asks with it. The admin board still opens the admin detail.
+
+## [0.668.1-beta] - 2026-11-15
+
+_Shipped 2026-11-15 13:19 UTC · commit [13fdeb8](https://github.com/21072026/Internship/commit/13fdeb8db39777513dbd9bf9352cce91b69c6dd9)_
+
+The follow-up panel on a record (sales lead page, mentor mentee page, admin candidate page) shows a saved follow-up as a read-only note — the day with its weekday, red when overdue and amber on the day, and the next step as text — with an Edit button that opens the form (Save, Cancel, Clear). With nothing saved it offers "Add follow-up". Presentation only; the API and rules are unchanged (#3647).
+
+## [0.668.0-beta] - 2026-11-15
+
+_Shipped 2026-11-15 13:10 UTC · commit [3eca3a1](https://github.com/21072026/Internship/commit/3eca3a110acaf0c422d0f1b9ac9adffb7437c913)_
+
+**First contact moves a lead on (#3746, MARKETING):** with the new org setting `firstContactAutoAdvance = on`, logging a Call, Meeting, Email or WhatsApp on an ACTIVE lead still on the pipeline's first stage moves it forward to `firstContactTargetStage` (blank = the marketing preset's `LEAD_CONTACTED`; no such stage → the rule never runs). A fixed rule outside the automation engine, which still has no stage-move action (docs/automation-rules.md): the decision is pure in `src/lib/firstContactAdvanceRule.ts`, the one writer `src/lib/firstContactAdvance.ts` is called by every interaction-creating path (createInteraction for UI/v1/chat, the mentor e-mail composer, the CRM BCC bridge, the meeting auto-log, outcome mail) and moves through `stageMoveData()` + a guarded `updateMany` + `recordStageMove()` (actor null, the triggering interaction named in the activity). The settings API refuses the keys outside MARKETING and checks the target against the tenant's stages; the settings page has a switch and a target picker, the automation page a status line, and the interaction form a toast with an Undo through `PUT /api/mentorship/[id]`.
+
+## [0.667.0-beta] - 2026-11-15
+
+_Shipped 2026-11-15 12:53 UTC · commit [08e9cd5](https://github.com/21072026/Internship/commit/08e9cd56e9073674d0b17cb904051308978cdfcf)_
+
+**Click-to-call with a "Did you reach them?" auto-log on a MARKETING lead (#3748):** the internship mentor page's flow, reused on the lead page at the maintainer's request.
+- **The lead page.** The contact card's `tel:` link (#3741) stays the one way in for the number. After the device dials, `ContactActions` asks "Did you reach them?":
+  - Yes logs a Call through `POST /api/interactions`, so its owner check, the first-contact rule and the meter all apply, and refreshes the interactions card.
+  - "Add a note" opens #3741's call draft and logs nothing, so there are never two rows.
+  - No logs nothing.
+  - The e-mail link still opens its draft.
+- **`ContactActions` gains two optional props:** `trigger` (the page's own link replaces the buttons) and `onAddNote`. The only write stays its POST.
+- **The admin's lead view** `/admin/candidates/[id]` gets the Call and WhatsApp buttons in a MARKETING org.
+- **Who sees it.** The question and the buttons appear only for someone that route accepts: the record's owner, the org's sales dispatcher, or an admin holding `relation.write`. The lead page computes this on the server; `GET /api/users/[id]` carries `canLogInteraction`, so an OBSERVER admin gets none.
+- The "yes" link keeps a readable colour in dark mode.
+
+## [0.666.5-beta] - 2026-11-15
+
+_Shipped 2026-11-15 12:44 UTC · commit [6cf3bf2](https://github.com/21072026/Internship/commit/6cf3bf261a59dcd0bf8d11278d49884296c3d8c6)_
+
+**Board:** the per-card stage picker is an icon in the card's meta row instead of a full-width field under every card — it cost a 44px row per card and repeated the name of the column the card already sits in. The native `<select>` is still there (transparent, over the icon), so the touch and keyboard alternative to drag-and-drop and its accessible name are unchanged (`CardStageSelect`, both boards).
+
+## [0.666.4-beta] - 2026-11-15
+
+_Shipped 2026-11-15 12:41 UTC · commit [1f2ab1a](https://github.com/21072026/Internship/commit/1f2ab1a7fb6722bc94c61cb8f222ef589078f515)_
+
+**Sales lead page hand-off (#3657 follow-up):** the "Hand over" button is offered only to whom `POST /api/sales/leads/[id]/handoff` lets through — the owner, the org's sales dispatcher or an admin with `relation.write` — decided on the server by `canHandOffLead()` / `actorMayHandOff()` (`src/lib/leadHandoff.ts`), the same check the hand-off itself now calls. A dispatcher under impersonation (who may read but not write) no longer sees a button the route would refuse.
+
+## [0.666.3-beta] - 2026-11-15
+
+_Shipped 2026-11-15 12:35 UTC · commit [3b72d15](https://github.com/21072026/Internship/commit/3b72d15e5b100a6a2b07fa8ece89733011e6fd74)_
+
+**Fixed:** a person's hover card offers no profile link where that profile page does not exist in the viewer's vertical. In MARKETING a rep (MENTOR) has no admin page — `/admin/mentors/<id>` is closed and there is no `/admin/users/<id>` — so the card used to link to a 404. `personHref()` stays pure and takes the vertical's `{ mentorship }` from the caller, which reads it through `useCapabilities()` (#2348).
+
+## [0.666.2-beta] - 2026-11-15
+
+_Shipped 2026-11-15 12:32 UTC · commit [7371104](https://github.com/21072026/Internship/commit/737110452469fb914ff9bc8db4ace9064e59776c)_
+
+**Dark mode:** the accent layer (`html[data-accent] .bg|text|border|ring-blue-*`, always on) no longer overrides an element's own `dark:` colour. The remap outranked Tailwind's `dark:` variant (0,2,1 vs 0,2,0), so the active "My records" toggle on the lead list kept its light fill under light text (1.16:1), and `text-blue-700 dark:text-blue-300` links stayed dark blue on dark pages. Each remap now carries a zero-specificity `:not(:where(.dark [class*="dark:<prop>-"]))` guard, and `check:dark-mode` fails on a remap without it (#3745).
+
 ## [0.666.1-beta] - 2026-11-15
 
 _Shipped 2026-11-15 12:16 UTC · commit [1b59e97](https://github.com/21072026/Internship/commit/1b59e979aaac10342688970c8f65e28a59224bd9)_
