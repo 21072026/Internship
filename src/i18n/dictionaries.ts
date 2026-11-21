@@ -4551,6 +4551,8 @@ const en = {
     viewingAs: 'You are viewing the app as {name}.',
     return: 'Return to your account',
     stopFailed: 'Could not return to your account. Please try again.',
+    expired: 'Viewing the app as another user ended after 30 minutes. You are back in your own account.',
+    dismiss: 'Close',
   },
   modeSwitch: {
     label: 'View as',
@@ -17309,6 +17311,8 @@ const tr: Dict = {
     viewingAs: 'Uygulamayı {name} olarak görüntülüyorsun.',
     return: 'Kendi hesabına dön',
     stopFailed: 'Kendi hesabına dönülemedi. Lütfen tekrar deneyin.',
+    expired: 'Başka bir kullanıcı olarak görüntüleme 30 dakika sonra sona erdi. Artık kendi hesabındasın.',
+    dismiss: 'Kapat',
   },
   modeSwitch: {
     label: 'Görünüm',
@@ -29913,6 +29917,8 @@ const de: Dict = {
     viewingAs: 'Du siehst die App als {name}.',
     return: 'Zu deinem Konto zurückkehren',
     stopFailed: 'Rückkehr zu deinem Konto fehlgeschlagen. Bitte versuche es erneut.',
+    expired: 'Die Ansicht als anderer Nutzer endete nach 30 Minuten. Du bist wieder in deinem eigenen Konto.',
+    dismiss: 'Schließen',
   },
   modeSwitch: {
     label: 'Ansicht',
