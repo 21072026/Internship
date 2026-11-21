@@ -223,3 +223,21 @@ test('without a name the token is left as written (the 3-argument form)', () => 
   const merged = applyVerticalOverlay(dictionaries.en, 'en', 'MARKETING');
   expect((merged.publicProfile as { poweredBy: string }).poweredBy).toBe('{product}');
 });
+
+// #3872: a MARKETING rep whose lead an admin (or the dispatcher) moved hears only
+// that it was taken — never "assigned to you by mistake" (it rarely was), and
+// never who has it now. Both modes of the transfer read the same sentence.
+test('MARKETING: the previous owner is told the record was taken, naming no one', () => {
+  const expected = {
+    en: 'An admin took the {menteeName} record from you.',
+    tr: 'Yönetici {menteeName} kaydını senden aldı.',
+    de: 'Ein Admin hat dir den Datensatz {menteeName} abgenommen.',
+  } as const;
+  for (const locale of ['en', 'tr', 'de'] as const) {
+    const flat = flatten(applyVerticalOverlay(dictionaries[locale], locale, 'MARKETING') as Record<string, unknown>);
+    for (const key of ['mentorship.assignmentCorrected', 'mentorship.reassignedAway']) {
+      const hit = Object.entries(flat).find(([k]) => k.endsWith(`events.${key}`));
+      expect(hit?.[1], `${locale} ${key}`).toBe(expected[locale]);
+    }
+  }
+});
