@@ -192,7 +192,8 @@ export async function handOffLead(opts: {
     }).catch(() => {});
   }
   // An admin moved somebody else's record: its previous owner hears it left
-  // their book (the MARKETING overlay words it as a hand-over to another rep).
+  // their book. The MARKETING overlay says only that an admin took it (#3872):
+  // never "by mistake", never who has it now.
   if (relation.mentorId !== actorId) {
     await notify(
       relation.mentorId,
