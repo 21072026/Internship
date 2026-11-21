@@ -32,6 +32,7 @@ import { shownEmail } from '@/lib/leadEmail';
 import { LeadPageHandoff } from '@/components/sales/LeadPageHandoff';
 import { earlierPeriods, currentSuccessor } from '@/lib/leadJourney';
 import { followUpEventsFor, type FollowUpEventView } from '@/lib/followUpEvents';
+import { markAssignmentSeen } from '@/lib/assignedToYou';
 
 // One of the rep's own records (#2580): who the lead is, the account behind it,
 // its stage, the follow-up, trial-end and estimated-value (#2422) editors, what happened last and a
@@ -103,6 +104,9 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
     },
   });
   if (!relation) notFound();
+  // The owner opened it: it leaves their "Assigned to you" card (#3874). Not
+  // under impersonation — an admin looking over the rep's shoulder has not seen it for them.
+  if (relation.mentorId === session.user.id && !session.user.impersonatorId) await markAssignmentSeen(relation.id, session.user.id);
   // Who may WORK this record — every editor below, the hand-off (#3657), the
   // contact log (#3748), the trial end: the rule the write routes apply.
   const writable = await canWriteSalesRecord(session, relation);

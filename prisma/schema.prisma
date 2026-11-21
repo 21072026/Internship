@@ -4575,6 +4575,16 @@ model MentorshipRelation {
   // because re-pointing `relationId` would re-attribute the outgoing mentor's
   // work to the incoming one — InteractionLog has no author column of its own.
   previousRelationId         String?
+  // "Assigned to you" (#3874, src/lib/assignedToYou.ts): when the record last
+  // came to its owner from someone else (an admin's assignment or transfer, a
+  // colleague's hand-off), by whom, and when the owner first opened it since.
+  // The sales home lists own active records with assignedAt set, assignedById
+  // not the owner and assignmentSeenAt null. Plain id, no foreign key — an
+  // erased account simply reads as "someone". All nullable: older rows were
+  // never "new" and read as seen.
+  assignedAt                 DateTime?
+  assignedById               String?
+  assignmentSeenAt           DateTime?
   // What the pair agreed to (#1784, story #1782). `expectedEndDate` is when
   // the pairing is MEANT to finish; `completedAt` is when it actually ended —
   // deliberately two columns. Not `stageDeadline` either: that is the pipeline

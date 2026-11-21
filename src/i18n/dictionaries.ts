@@ -8006,6 +8006,16 @@ const en = {
   // The link button on a chat card (#1942).
   chatCard: { join: 'Join the meeting', accept: 'Accept', decline: 'Decline', book: 'Book a session', rsvpYes: 'Yes, I’ll be there', rsvpNo: 'I can’t make it', approve: 'Approve', answerSurvey: 'Answer now', addNotes: 'Add notes' },
   // "Today" on the sales dashboard (#3778).
+  // "Assigned to you" (#3874): records that came to the rep from someone else, until opened.
+  assignedToYou: {
+    title: 'Assigned to you',
+    hint: 'New on your list — they leave this card once you open them.',
+    from: 'from {name}',
+    fromSomeone: 'from someone',
+    noStep: 'No next step written',
+    more: '{n} more',
+    strip: '{n} new on your list:',
+  },
   salesToday: {
     title: 'Today',
     followUps: 'Follow-ups',
@@ -20707,6 +20717,16 @@ const tr: Dict = {
     requestHandled: 'Bu istek zaten yanıtlandı.',
   },
   chatCard: { join: 'Toplantıya katıl', accept: 'Kabul et', decline: 'Reddet', book: 'Randevu al', rsvpYes: 'Evet, katılacağım', rsvpNo: 'Katılamıyorum', approve: 'Onayla', answerSurvey: 'Şimdi yanıtla', addNotes: 'Not ekle' },
+  // "Sana atananlar" (#3874).
+  assignedToYou: {
+    title: 'Sana atananlar',
+    hint: 'Listene yeni gelenler — açtığında bu karttan düşer.',
+    from: '{name} tarafından',
+    fromSomeone: 'biri tarafından',
+    noStep: 'Sıradaki adım yazılmamış',
+    more: '{n} tane daha',
+    strip: 'Listende {n} yeni kayıt:',
+  },
   salesToday: {
     title: 'Bugün',
     followUps: 'Takipler',
@@ -33323,6 +33343,16 @@ const de: Dict = {
     requestHandled: 'Diese Anfrage wurde bereits beantwortet.',
   },
   chatCard: { join: 'Am Meeting teilnehmen', accept: 'Annehmen', decline: 'Ablehnen', book: 'Termin buchen', rsvpYes: 'Ja, ich bin dabei', rsvpNo: 'Ich kann nicht', approve: 'Freigeben', answerSurvey: 'Jetzt antworten', addNotes: 'Notizen hinzufügen' },
+  // „Dir zugewiesen" (#3874).
+  assignedToYou: {
+    title: 'Dir zugewiesen',
+    hint: 'Neu auf deiner Liste — sie verschwinden hier, sobald du sie öffnest.',
+    from: 'von {name}',
+    fromSomeone: 'von jemandem',
+    noStep: 'Kein nächster Schritt eingetragen',
+    more: '{n} weitere',
+    strip: '{n} neu auf deiner Liste:',
+  },
   salesToday: {
     title: 'Heute',
     followUps: 'Wiedervorlagen',

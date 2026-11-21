@@ -283,7 +283,8 @@ export async function transferMentorship(opts: {
         // the whole thing back, rather than quietly reviving a closed pairing.
         await tx.mentorshipRelation.update({
           where: { id: relation.id, status: 'ACTIVE' },
-          data: { mentorId: toMentorId },
+          // "Assigned to you" (#3874): the record came to its owner from someone.
+          data: { mentorId: toMentorId, assignedAt: new Date(), assignedById: actorId, assignmentSeenAt: null },
         });
         return null;
       }
@@ -311,6 +312,9 @@ export async function transferMentorship(opts: {
           // successor is not handed a fresh 30 days.
           ...carriedOverFields(relation),
           previousRelationId: relation.id,
+          // "Assigned to you" (#3874).
+          assignedAt: new Date(),
+          assignedById: actorId,
         },
         select: { id: true },
       });
