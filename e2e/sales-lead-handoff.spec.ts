@@ -389,3 +389,41 @@ test('the dispatcher gets the button; the same dispatcher under impersonation, w
   expect(await owner(ids['rel-colleague'])).toBe(ids.rep2);
 });
 
+
+test('a lead with history keeps its previous follow-up in the hand-off line, and the earlier period shows its follow-up history (#3870)', async ({ playwright, baseURL, page }) => {
+  test.slow();
+  // History (an interaction) makes the hand-off a transfer: a new record, which
+  // carries no follow-up of its own — the line must still name the old one.
+  const relId = await lead('history', ids.rep1, ids.orgA);
+  const oldDue = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+  await prisma.mentorshipRelation.update({ where: { id: relId }, data: { nextActionAt: oldDue, nextActionNote: `Send the offer ${STAMP}` } });
+  await prisma.interactionLog.create({ data: { relationId: relId, date: new Date(), type: 'Meeting', subject: `Intro call ${STAMP}`, notes: 'Interested.' } });
+  await prisma.followUpEvent.create({
+    data: { relationId: relId, kind: 'ASSIGNED', toAt: oldDue, toNote: `Send the offer ${STAMP}`, actorId: ids.rep1, dedupeKey: `e2e-${STAMP}` },
+  });
+
+  const rep1 = await jar(playwright, baseURL, 'rep1', true);
+  const res = await rep1.post(handoffPath(relId), { data: { toUserId: ids.rep2, action: 'call', note: 'confirm the date' } });
+  expect(res.status()).toBe(200);
+  const out = await res.json();
+  expect(out.mode).toBe('transferred');
+  await rep1.dispose();
+
+  const line = await prisma.followUpEvent.findFirst({ where: { relationId: out.relationId, kind: 'HANDED_OFF' } });
+  expect(line?.fromNote).toBe(`Send the offer ${STAMP}`);
+  expect(line?.fromAt?.toISOString()).toBe(oldDue.toISOString());
+  expect(line?.toNote).toBe('Call: confirm the date');
+
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mail.rep2, PW, '/sales');
+  await gotoSettled(page, `/sales/leads/${out.relationId}`);
+  const handed = page.getByTestId('sales-lead-interactions').getByTestId('sales-lead-system-headline').filter({ hasText: 'Handed over' });
+  await expect(handed).toContainText(`Send the offer ${STAMP} → `);
+  await expect(handed).toContainText('Call: confirm the date');
+
+  const toggle = page.getByTestId('sales-lead-earlier-toggle');
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  const earlier = page.getByTestId('sales-lead-earlier-interactions');
+  await expect(earlier).toContainText(`Intro call ${STAMP}`);
+  await expect(earlier.getByTestId('sales-lead-system-row')).toContainText(`Send the offer ${STAMP}`);
+});
