@@ -3087,6 +3087,74 @@ export async function sendMenteeAssignedEmail({
   });
 }
 
+// A lead handed to this rep by a colleague or an admin (#3871,
+// src/lib/leadHandoff.ts). The admin's direct assignment already mails the new
+// owner (sendMenteeAssignedEmail); the board's hand-off told them only in-app,
+// so a rep away from the app missed the lead until its follow-up came due.
+// Through the router, e-mail channel only: the bell is the hand-off's own
+// notify() with its exact link. The recipient is staff (a MENTOR/ADMIN of the
+// org), so outbound approval never holds it.
+export async function sendLeadHandedOffEmail({
+  relationId,
+  leadName,
+  fromName,
+  action,
+  dueOn,
+  recipientName,
+  orgId,
+  userId,
+  locale,
+  dedupeKey,
+}: {
+  relationId: string;
+  leadName: string;
+  fromName: string;
+  action: string;
+  dueOn: Date | null;
+  recipientName: string;
+  orgId: string;
+  userId: string;
+  locale?: string | null;
+  dedupeKey: string;
+}) {
+  const brand = await emailBrand(orgId);
+  // WORLDS (#2590): the CTA opens the product the RECIPIENT'S account lives in.
+  const base = await appUrlForRecipient(orgId, userId);
+  const lang = await assignedEmailLocale(locale, userId);
+  const M = (await emailDictionary(lang, orgId)).notifications.leadHandedOffEmail;
+  // Replacer functions: names and the note are typed text, and a `$&` in them
+  // must not be read as a replacement pattern.
+  const fill = (t: string) =>
+    t
+      .replace('{from}', () => fromName)
+      .replace('{lead}', () => leadName)
+      .replace('{name}', () => recipientName)
+      .replace('{action}', () => action);
+  // A follow-up day is a calendar day stored at UTC midnight.
+  const day = dueOn ? new Intl.DateTimeFormat(intlLocaleFor(lang), { dateStyle: 'long', timeZone: 'UTC' }).format(dueOn) : null;
+  await notifyEvent(userId, 'lead.handedOff', { menteeName: leadName, from: fromName, action, relationId }, {
+    channels: ['email'],
+    orgId,
+    dedupeKey,
+    email: {
+      category: 'mentee-assigned',
+      locale: lang,
+      fromName: brand.name,
+      subject: fill(M.subject),
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, esc(M.heading))}
+          <p>${esc(fill(M.greeting))}</p>
+          <p>${esc(fill(M.body))}</p>
+          <p><strong>${esc(fill(M.next))}</strong></p>
+          ${day ? `<p>${esc(M.due.replace('{date}', () => day))}</p>` : ''}
+          ${ctaBlock(brand, `${base}/sales/leads/${encodeURIComponent(relationId)}`, esc(M.cta))}
+        </div>
+      `,
+    },
+  });
+}
+
 // Mentor Offers (#1809): a mentor offered to mentor this mentee, or the one
 // reminder before the offer expires. Sent only to a mentee who opted in
 // (User.openToOffers) — the caller checks that and the opt-out chain; the

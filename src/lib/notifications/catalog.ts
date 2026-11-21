@@ -404,8 +404,9 @@ export const NOTIFICATION_EVENTS = [
   { key: 'mentorship_request.rematchMentorNotice', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
   { key: 'mentorship.mentorChanged', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['mentorName'] },
   // A sales rep (or an admin) handed a lead to a colleague from the board's rep
-  // strip (src/lib/leadHandoff.ts). In-app only: the instruction also lands on
-  // the record's follow-up, whose due-day reminder is the mail.
+  // strip (src/lib/leadHandoff.ts). The bell is the send site's notify() (its
+  // exact /sales/leads link); the mail (#3871) is this event with channels
+  // ['email'] and the mail the site rendered, so the default stays in-app.
   { key: 'lead.handedOff', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['menteeName', 'from', 'action'] },
   { key: 'mentorship.reassignedAway', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
   // A pairing paused, resumed, ended or reopened through the lifecycle endpoint

@@ -10,6 +10,7 @@ import { transferMentorship } from '@/lib/mentorTransfer';
 import { nextActionPatch, parseNextActionDate } from '@/lib/nextActionRule';
 import { followUpEventWrite } from '@/lib/followUpEvents';
 import { notify, notifyIfAllowed } from '@/lib/notify';
+import { sendLeadHandedOffEmail } from '@/services/emailService';
 import { getDictionary } from '@/i18n/dictionaries';
 import { defaultLocale, isLocale } from '@/i18n/config';
 import { composeHandoffNote, SALES_HANDOFF_REASON, todayIso, type HandoffAction } from '@/lib/leadHandoffRule';
@@ -175,6 +176,20 @@ export async function handOffLead(opts: {
       { menteeName, from: session.user.name ?? '', action: composed.value },
       `/sales/leads/${newId}`,
     );
+    // …and by mail (#3871), as the admin's direct assignment already is. Keyed on
+    // the record's state before this write, so a retried click mails once.
+    await sendLeadHandedOffEmail({
+      relationId: newId,
+      leadName: menteeName,
+      fromName: session.user.name ?? '',
+      action: composed.value,
+      dueOn: due.value,
+      recipientName: recipientRow?.fullName ?? '',
+      orgId,
+      userId: recipient.id,
+      locale,
+      dedupeKey: `lead-handoff:${newId}:${recipient.id}:${(current?.updatedAt ?? new Date(0)).getTime()}`,
+    }).catch(() => {});
   }
   // An admin moved somebody else's record: its previous owner hears it left
   // their book (the MARKETING overlay words it as a hand-over to another rep).
