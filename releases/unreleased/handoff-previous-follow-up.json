@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "Handing off a lead that already has history (a transfer to a new record) now records the lead's previous follow-up in the `HANDED_OFF` history line; it was read from the new record, which carries none, so every such hand-off showed no previous follow-up. The lead page also lists the earlier owners' follow-up history inside their collapsed periods, under the same gate as the record's own (#3870).",
+  "notes": {
+    "en": ["Lead hand-off: the history now shows the follow-up the lead had before it was handed over, and earlier owners' follow-ups appear in their periods."],
+    "tr": ["Lead devri: geçmişte artık devirden önceki takip de görünüyor; önceki sahiplerin takipleri kendi dönemlerinde listeleniyor."],
+    "de": ["Lead-Übergabe: Der Verlauf zeigt jetzt auch die Wiedervorlage vor der Übergabe, und frühere Wiedervorlagen erscheinen im Zeitraum ihres Besitzers."]
+  }
+}

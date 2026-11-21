@@ -74,7 +74,17 @@ export async function handOffLead(opts: {
 
   const relation = await prisma.mentorshipRelation.findFirst({
     where: { id: relationId, orgId },
-    select: { id: true, orgId: true, mentorId: true, menteeId: true, companyId: true, status: true, mentee: { select: { fullName: true } } },
+    select: {
+      id: true,
+      orgId: true,
+      mentorId: true,
+      menteeId: true,
+      companyId: true,
+      status: true,
+      nextActionAt: true,
+      nextActionNote: true,
+      mentee: { select: { fullName: true } },
+    },
   });
   if (!relation) return { ok: false, status: 404, code: 'missing' };
   // Not yours = 404, never a 403 that confirms the id.
@@ -125,7 +135,11 @@ export async function handOffLead(opts: {
     where: { id: newId },
     select: { nextActionAt: true, nextActionNote: true, updatedAt: true },
   });
-  const before = { at: current?.nextActionAt ?? null, note: current?.nextActionNote ?? null };
+  // The follow-up the lead had BEFORE the hand-off is the handed-off record's,
+  // read above: a lead with history gets a new record (transferred), which
+  // carries no follow-up (relationHistory.ts CARRIED_OVER_FIELDS), so reading it
+  // from `current` showed every such hand-off as "no previous follow-up" (#3870).
+  const before = { at: relation.nextActionAt, note: relation.nextActionNote };
   // ONE history line for the hand-off (#3819), carrying the follow-up it set —
   // not a "handed off" plus an "assigned" for the same click. In the same
   // transaction as the columns it describes.

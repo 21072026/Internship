@@ -76,6 +76,8 @@ export interface EarlierPeriodView {
   from: string;
   to: string | null;
   interactions: LeadInteraction[];
+  /** That period's follow-up history lines (#3870), when the viewer may read the follow-up. */
+  events?: LeadSystemEvent[];
 }
 
 const FIRST_ROWS = 3;
@@ -329,13 +331,22 @@ export function SalesInteractionsCard({
             </span>
           </button>
           {earlierOpen &&
-            (period.interactions.length === 0 ? (
+            (period.interactions.length + (period.events?.length ?? 0) === 0 ? (
               <p className="mt-2 text-sm text-gray-500" data-testid="sales-lead-earlier-empty">{s.earlierPeriodEmpty}</p>
             ) : (
               <ul className="mt-2 divide-y divide-gray-100 opacity-90 dark:divide-gray-800" data-testid="sales-lead-earlier-interactions">
-                {period.interactions.map((i) => (
-                  <InteractionRow key={i.id} row={i} open={opened.has(i.id)} onToggle={() => toggle(i.id)} />
-                ))}
+                {[
+                  ...period.interactions.map((row): Entry => ({ kind: 'interaction', at: Date.parse(row.date), row })),
+                  ...(period.events ?? []).map((row): Entry => ({ kind: 'system', at: Date.parse(row.at), row })),
+                ]
+                  .sort((a, b) => b.at - a.at)
+                  .map((e) =>
+                    e.kind === 'system' ? (
+                      <SystemRow key={`s-${e.row.id}`} row={e.row} badge={s.followUpEvent.badge} />
+                    ) : (
+                      <InteractionRow key={e.row.id} row={e.row} open={opened.has(e.row.id)} onToggle={() => toggle(e.row.id)} />
+                    ),
+                  )}
               </ul>
             ))}
         </section>
