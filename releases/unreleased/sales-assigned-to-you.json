@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Sales: an \"Assigned to you\" card on top of `/sales` and a strip above the columns on `/sales/board` list the records that came to the rep from someone else (an admin's assignment or transfer, a colleague's hand-off) until the rep opens them. New nullable columns `MentorshipRelation.assignedAt` / `assignedById` / `assignmentSeenAt`, written by `transferMentorship()` and `POST /api/mentorship`, read only through `src/lib/assignedToYou.ts`, cleared when the owner opens the lead page (not under impersonation). Older rows read as seen (#3874).",
+  "notes": {
+    "en": ["Sales: leads assigned or handed over to you now appear in an \"Assigned to you\" card at the top of your dashboard and above the board, until you open them."],
+    "tr": ["Satış: sana atanan ya da devredilen lead'ler, sen açana kadar panelin en üstündeki \"Sana atananlar\" kartında ve panonun üstünde görünüyor."],
+    "de": ["Vertrieb: Leads, die dir zugewiesen oder übergeben wurden, erscheinen jetzt oben im Dashboard in der Karte „Dir zugewiesen“ und über dem Board, bis du sie öffnest."]
+  }
+}
