@@ -4579,6 +4579,8 @@ const en = {
   leadHandoff: {
     stripLabel: 'Hand over to a colleague',
     stripHint: 'Drag a card onto a person',
+    loadOpen: '{n} open',
+    loadOverdue: '{n} overdue follow-ups',
     you: 'you',
     dialogTitle: 'Hand {lead} over to {name}',
     dialogTitleNoRecipient: 'Hand {lead} over',
@@ -17362,6 +17364,8 @@ const tr: Dict = {
   leadHandoff: {
     stripLabel: 'Bir ekip arkadaşına devret',
     stripHint: 'Kartı bir kişinin üzerine sürükleyin',
+    loadOpen: '{n} açık',
+    loadOverdue: '{n} gecikmiş takip',
     you: 'siz',
     dialogTitle: '{lead} → {name}',
     dialogTitleNoRecipient: '{lead} devret',
@@ -29994,6 +29998,8 @@ const de: Dict = {
   leadHandoff: {
     stripLabel: 'An Kolleg:in übergeben',
     stripHint: 'Karte auf eine Person ziehen',
+    loadOpen: '{n} offen',
+    loadOverdue: '{n} überfällige Wiedervorlagen',
     you: 'du',
     dialogTitle: '{lead} an {name} übergeben',
     dialogTitleNoRecipient: '{lead} übergeben',

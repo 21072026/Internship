@@ -20,13 +20,34 @@ export interface SalesTeamMember {
   fullName: string;
   avatarUrl: string | null;
   self: boolean;
+  /** Their ACTIVE records — the team page's "open" (#3875). */
+  open: number;
+  /**
+   * Their overdue follow-ups (a due day before today, UTC), or null when the
+   * viewer may not see per-person overdue counts — the team page's rule,
+   * `canSeeRepOverdue` (admins and the dispatcher only).
+   */
+  overdue: number | null;
 }
 
 /** Bounded: the strip is a row of faces, not a directory. */
 export const SALES_TEAM_LIMIT = 50;
 
-/** Every active ADMIN/MENTOR of the org — exactly who `findLeadOwner` accepts as an owner. */
-export async function listSalesTeam(orgId: string, selfId: string): Promise<SalesTeamMember[]> {
+/** Midnight UTC of `now`'s day — a follow-up due before it is overdue (isNextActionOverdue). */
+function startOfUtcDay(now: Date): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+/**
+ * Every active ADMIN/MENTOR of the org — exactly who `findLeadOwner` accepts as
+ * an owner — with the load line under their name (#3875): the same counts the
+ * team page shows, as COUNTs only, nothing about a record.
+ */
+export async function listSalesTeam(
+  orgId: string,
+  selfId: string,
+  opts: { withOverdue: boolean; now?: Date } = { withOverdue: false },
+): Promise<SalesTeamMember[]> {
   const rows = await runUnscoped(() =>
     prisma.user.findMany({
       where: { orgId, isActive: true, role: { in: [...LEAD_OWNER_ROLES] } },
@@ -35,7 +56,27 @@ export async function listSalesTeam(orgId: string, selfId: string): Promise<Sale
       select: { id: true, fullName: true, avatarUrl: true },
     }),
   );
-  return rows.map((r) => ({ ...r, self: r.id === selfId }));
+  const ids = rows.map((r) => r.id);
+  const [open, overdue] = await Promise.all([
+    ids.length
+      ? prisma.mentorshipRelation.groupBy({ by: ['mentorId'], where: { orgId, status: 'ACTIVE', mentorId: { in: ids } }, _count: { _all: true } })
+      : Promise.resolve([]),
+    opts.withOverdue && ids.length
+      ? prisma.mentorshipRelation.groupBy({
+          by: ['mentorId'],
+          where: { orgId, status: 'ACTIVE', mentorId: { in: ids }, nextActionAt: { lt: startOfUtcDay(opts.now ?? new Date()) } },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
+  ]);
+  const openBy = new Map(open.map((g) => [g.mentorId, g._count._all]));
+  const overdueBy = new Map(overdue.map((g) => [g.mentorId, g._count._all]));
+  return rows.map((r) => ({
+    ...r,
+    self: r.id === selfId,
+    open: openBy.get(r.id) ?? 0,
+    overdue: opts.withOverdue ? (overdueBy.get(r.id) ?? 0) : null,
+  }));
 }
 
 export type HandoffOutcome =
