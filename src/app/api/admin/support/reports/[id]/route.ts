@@ -62,6 +62,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         if (!report?.contactAllowed) {
           return NextResponse.json({ error: 'The reporter did not allow contact', code: 'contact_not_allowed' }, { status: 409 });
         }
+        // The note is the reporter's answer: kept for their own list (#3877),
+        // whatever becomes of the mail. Without a note the earlier one stays.
+        if (parsed.data.note) {
+          await prisma.supportReport.updateMany({
+            where: { id, orgId: admin.orgId },
+            data: { reporterNote: parsed.data.note, reporterNoteAt: new Date() },
+          });
+        }
         if (report.user.isActive) {
           try {
             const sent = await sendSupportReportUpdateEmail({
