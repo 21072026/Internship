@@ -108,6 +108,7 @@ Three rules are load-bearing:
 | `/requisitions` | `hiring:read` | `Requisition.orgId` | `status`, `companyId` |
 | `/offers` | `hiring:read` | the relationship's org (`Offer.orgId` is nullable) | `relationId`, `companyId` |
 | `/interview-requests` | `hiring:read` | `InterviewRequest.orgId` | `requisitionId`, `companyId` |
+| `/support/reports` | `support:read` (+ `support:read_screenshots` for `/{id}/screenshot`) | `SupportReport.orgId` | `status`, `type`; `since` = `updatedSince` |
 
 Every list has a `/{id}` twin returning the same object (`src/lib/api/v1Resources.ts`
 holds the one `select` + serializer per resource); another org's id is a `404
@@ -126,6 +127,22 @@ existing rows start at the deploy instant. It is stamped by Prisma; a raw SQL
 `UPDATE` does not move it.
 
 The async bulk export is #3002.
+
+### Support reports (read only, `src/lib/api/v1Support.ts`)
+
+`GET /api/v1/support/reports[/{id}]` returns the org's in-app bug reports and feedback
+(`SupportReport`, #3130) to a key holding `support:read` — never a default, never in the
+sandbox, granted by an admin to the one key that triages. A page holds at most **50** (a
+larger `limit` is clamped). What leaves: id, type, status, rating, the reporter's **name and
+role** (no e-mail, no user agent), the page, the build, the description, the request ids and the
+console / failed-request context — every free-text and URL field re-masked on the way out by the
+**one** masking path, `src/lib/feedbackContext.ts` (no second masking code). The screenshot is
+`GET …/{id}/screenshot` and needs **both** `support:read` and `support:read_screenshots`; the
+replay and attachments are not exposed. Every read writes one `AuditLog` row
+(`API_SUPPORT_REPORT_LIST` / `_READ` / `_SCREENSHOT`, actor `api_key:<id>`, detail = key + report
+**ids only** — never the text). There is no write: status changes and replies are a later
+`support:write`. Support tickets (`SupportTicket`, a conversation without an `orgId` of its own)
+are a separate follow-up.
 ## Writes (#1994, `src/lib/api/v1Write.ts`)
 
 A write route is `withApiKey(request, '<resource>:write', (key) => apiWrite(request, key, schema, handler))`.
@@ -327,7 +344,8 @@ A full snapshot of one resource without walking the cursor:
 `POST /api/developers/sandbox-key` (no session — the `/developers` button) mints a key **only on
 the public demo**: `DEMO_MODE=true` **and** a database whose name ends in `_demo` (the guard
 `prisma/reset-demo.mjs` uses). Everywhere else it answers 404, so it cannot mint against a real
-organisation even with the flag set by mistake. The key holds every `*:read` scope and nothing
+organisation even with the flag set by mistake. The key holds every `*:read` scope except
+`support:read` (the demo's feedback button is used by real visitors) and nothing
 that writes (`interactions:read_notes` is not a `:read` scope), is bound to the deployment's
 default org (the synthetic seed), expires after 24 h and carries a daily allowance of 1000; minting
 is limited to 3 an hour per address and 200 live keys. The demo seed grants the default org

@@ -550,3 +550,29 @@ export const SALES_LEAD_CREATE: Array<{ caller: SalesLeadCaller; expect: 201 | 4
   { caller: 'internshipAdmin', expect: 403, code: 'vertical_unavailable', why: 'INTERNSHIP has its own intake paths' },
   { caller: 'anonymous', expect: 401, why: 'no session' },
 ];
+
+/**
+ * The /api/v1 support reads (src/lib/api/v1Support.ts) — scope × endpoint for
+ * an API key of the reports' own org, consumed by e2e/v1-support-reports.spec.ts
+ * and mirrored in docs/role-access-matrix.md § API keys. `:own` / `:ownShot`
+ * are a report of the key's org (with a screenshot); `:foreign` one of another
+ * org. Read only: there is no write route to probe.
+ */
+export interface SupportApiProbe {
+  scopes: string;
+  path: string;
+  expect: 200 | 401 | 403 | 404;
+  why: string;
+}
+export const V1_SUPPORT_PROBES: SupportApiProbe[] = [
+  { scopes: '', path: '/api/v1/support/reports', expect: 401, why: 'no key' },
+  { scopes: 'candidates:read', path: '/api/v1/support/reports', expect: 403, why: 'a key without support:read' },
+  { scopes: 'candidates:read', path: '/api/v1/support/reports/:own', expect: 403, why: 'a key without support:read' },
+  { scopes: 'support:read', path: '/api/v1/support/reports', expect: 200, why: 'the list' },
+  { scopes: 'support:read', path: '/api/v1/support/reports/:own', expect: 200, why: 'one report of the key’s org' },
+  { scopes: 'support:read', path: '/api/v1/support/reports/:foreign', expect: 404, why: 'another org’s report' },
+  { scopes: 'support:read', path: '/api/v1/support/reports/:ownShot/screenshot', expect: 403, why: 'the screenshot needs its own scope' },
+  { scopes: 'support:read_screenshots', path: '/api/v1/support/reports/:ownShot/screenshot', expect: 403, why: 'the screenshot scope alone reads nothing' },
+  { scopes: 'support:read,support:read_screenshots', path: '/api/v1/support/reports/:ownShot/screenshot', expect: 200, why: 'both scopes' },
+  { scopes: 'support:read,support:read_screenshots', path: '/api/v1/support/reports/:foreign/screenshot', expect: 404, why: 'another org’s screenshot' },
+];
