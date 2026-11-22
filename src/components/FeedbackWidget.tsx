@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useSession } from 'next-auth/react';
 import { MessageSquareWarning, Star, X, Camera, Paperclip, Square } from 'lucide-react';
 import { useT } from '@/i18n/client';
@@ -302,7 +303,11 @@ export function FeedbackWidget({ replay }: { replay?: ReplayConfig }) {
                 <X className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
-            <p className="mb-4 text-sm text-gray-600 dark:text-gray-300">{f.intro}</p>
+            <p className="mb-1 text-sm text-gray-600 dark:text-gray-300">{f.intro}</p>
+            {/* What became of earlier reports (#3877). */}
+            <Link href="/account/feedback" onClick={close} className="mb-4 inline-block text-sm text-blue-600 hover:underline dark:text-blue-400" data-testid="feedback-my-reports">
+              {t.myFeedback.link}
+            </Link>
 
             <form onSubmit={submit} className="space-y-4" noValidate>
               <fieldset>

@@ -2570,6 +2570,11 @@ model SupportReport {
   contactAllowed Boolean
   status         SupportReportStatus @default(NEW)
   githubIssueUrl String?             @db.VarChar(512)
+  // What the admin last told the reporter with a status change (#3877): the
+  // note of the "tell the reporter" mail, kept so the reporter's own list
+  // (/account/feedback) can show it. Written only when that mail was asked for.
+  reporterNote   String?             @db.VarChar(1000)
+  reporterNoteAt DateTime?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 

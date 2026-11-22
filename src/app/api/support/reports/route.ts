@@ -7,6 +7,7 @@ import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { resolveOrgId } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
+import { listMyFeedbackReports } from '@/lib/myFeedbackReports';
 import { enforceRateLimit } from '@/lib/rateLimit';
 import { withRequestScope } from '@/lib/requestContext';
 import { APP_VERSION, GIT_SHA } from '@/lib/version';
@@ -47,6 +48,16 @@ const schema = z.object({
   viewport: z.string().regex(/^(\d{1,5}x\d{1,5})?$/).optional().default(''),
   context: z.string().max(FEEDBACK_CONTEXT_MAX_BYTES).optional().default('{}'),
 });
+
+// The caller's own reports (#3877): what they sent and what became of it —
+// never the files, the context or another person's report.
+export async function GET(request: Request) {
+  return withRequestScope(request, async () => {
+    const session = await getServerSession(authOptions);
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return withTenantScope(session, async () => NextResponse.json({ reports: await listMyFeedbackReports(session) }));
+  });
+}
 
 export async function POST(request: Request) {
   return withRequestScope(request, async () => {

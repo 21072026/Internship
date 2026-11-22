@@ -8024,6 +8024,18 @@ const en = {
     more: '{n} more',
     strip: '{n} new on your list:',
   },
+  // "My feedback" (#3877): the reports a person sent with the feedback button, at /account/feedback.
+  myFeedback: {
+    title: 'My feedback',
+    intro: 'What you sent with the feedback button, and where it stands.',
+    empty: 'You have not sent any feedback yet.',
+    link: 'My feedback',
+    sentFrom: 'Sent from {path}',
+    reply: 'Reply from the team',
+    failed: 'The list could not be loaded.',
+    type: { BUG: 'Bug', FEEDBACK: 'Feedback' },
+    status: { NEW: 'Received', TRIAGED: 'Looked at', IN_PROGRESS: 'Being worked on', RESOLVED: 'Resolved', WONT_FIX: 'Will not be changed' },
+  },
   salesToday: {
     title: 'Today',
     followUps: 'Follow-ups',
@@ -20744,6 +20756,18 @@ const tr: Dict = {
     more: '{n} tane daha',
     strip: 'Listende {n} yeni kayıt:',
   },
+  // "Gönderdiğim geri bildirimler" (#3877).
+  myFeedback: {
+    title: 'Gönderdiğim geri bildirimler',
+    intro: 'Geri bildirim düğmesiyle gönderdiklerin ve durumları.',
+    empty: 'Henüz bir geri bildirim göndermedin.',
+    link: 'Gönderdiğim geri bildirimler',
+    sentFrom: '{path} sayfasından',
+    reply: 'Ekibin yanıtı',
+    failed: 'Liste yüklenemedi.',
+    type: { BUG: 'Hata', FEEDBACK: 'Geri bildirim' },
+    status: { NEW: 'Alındı', TRIAGED: 'İncelendi', IN_PROGRESS: 'Üzerinde çalışılıyor', RESOLVED: 'Çözüldü', WONT_FIX: 'Değiştirilmeyecek' },
+  },
   salesToday: {
     title: 'Bugün',
     followUps: 'Takipler',
@@ -33378,6 +33402,18 @@ const de: Dict = {
     noStep: 'Kein nächster Schritt eingetragen',
     more: '{n} weitere',
     strip: '{n} neu auf deiner Liste:',
+  },
+  // „Meine Rückmeldungen" (#3877).
+  myFeedback: {
+    title: 'Meine Rückmeldungen',
+    intro: 'Was du über die Feedback-Schaltfläche gesendet hast, und wie der Stand ist.',
+    empty: 'Du hast noch keine Rückmeldung gesendet.',
+    link: 'Meine Rückmeldungen',
+    sentFrom: 'Gesendet von {path}',
+    reply: 'Antwort des Teams',
+    failed: 'Die Liste konnte nicht geladen werden.',
+    type: { BUG: 'Fehler', FEEDBACK: 'Feedback' },
+    status: { NEW: 'Eingegangen', TRIAGED: 'Gesichtet', IN_PROGRESS: 'In Arbeit', RESOLVED: 'Erledigt', WONT_FIX: 'Wird nicht geändert' },
   },
   salesToday: {
     title: 'Heute',
