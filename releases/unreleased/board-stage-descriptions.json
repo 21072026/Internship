@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "Board column headers explain their stage behind an info icon (hover and keyboard focus) (#3660). New optional `PipelineStage.description` (VarChar 280): curated, localized descriptions for the sales funnel template, or the admin's own text from the stage editor shown verbatim — the label rule of #2268. On the FREE plan it is part of the locked look (`onlyGatesChanged`).",
-  "notes": {
-    "en": ["Each board column now has an info icon that explains what the stage means; admins can write their own text in the stage editor."],
-    "tr": ["Pano sütunlarında artık aşamanın ne anlama geldiğini açıklayan bir bilgi ikonu var; yöneticiler kendi açıklamalarını aşama düzenleyicisinden yazabiliyor."],
-    "de": ["Jede Board-Spalte hat jetzt ein Info-Symbol, das erklärt, was die Phase bedeutet; Admins können im Phasen-Editor eigene Texte hinterlegen."]
-  }
-}

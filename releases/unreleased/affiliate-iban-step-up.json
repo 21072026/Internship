@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "Affiliate portal: changing the payout IBAN now needs a step-up — the authenticator or recovery code when the partner has 2FA, else the current password (`src/lib/stepUp.ts`). The code goes through the sign-in doors' own `requireSecondFactor()` (now exported from `src/lib/auth.ts`), and a wrong password is charged to the sign-in password counters, so the step-up cannot be used to guess around the sign-in limit. `PUT /api/affiliate/me/payout-details` answers 403 `step_up_required` (with `method`), 403 `step_up_invalid`, 429 `step_up_locked` or 403 `step_up_unavailable` (SSO-only account without 2FA); the change is still audited and announced (#3734).",
-  "notes": {
-    "en": ["Partner portal: changing your bank details now asks you to confirm it is you, with your password or your authenticator code."],
-    "tr": ["Partner portalı: banka bilgilerini değiştirirken artık parolanla veya doğrulayıcı kodunla sen olduğunu doğruluyorsun."],
-    "de": ["Partnerportal: Wenn Sie Ihre Bankverbindung ändern, bestätigen Sie jetzt mit Ihrem Passwort oder Ihrem Authenticator-Code, dass Sie es sind."]
-  }
-}

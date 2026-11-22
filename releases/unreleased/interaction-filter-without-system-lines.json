@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "The lead page's interaction filter no longer applies a remembered choice on a lead with no system line, where its control is not shown: a \"System\" picked on another lead hid every interaction there with nothing on screen to undo it. The remembered choice is kept for leads that show the control (#3879).",
-  "notes": {
-    "en": ["Lead page: interactions no longer disappear behind a filter chosen on another lead."],
-    "tr": ["Lead sayfası: etkileşimler artık başka bir lead'de seçilen filtrenin arkasında kaybolmuyor."],
-    "de": ["Lead-Seite: Interaktionen verschwinden nicht mehr hinter einem Filter, der bei einem anderen Lead gewählt wurde."]
-  }
-}

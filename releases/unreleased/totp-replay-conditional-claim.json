@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "Security: a TOTP code is now spent by one conditional `updateMany` on `lastTotpStep` inside `requireSecondFactor()`, so concurrent requests carrying the same code can no longer all pass the replay floor (#3770). Pinned by `e2e/totp-replay-race.unit.spec.ts` (@smoke)."
-}

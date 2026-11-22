@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Sales team page `/sales/team` (#3779, MARKETING).** Every rep of the tenant can open it from the sales menu (`Team`). It shows: the team's active records and how many sit in each stage (the tenant's own labels and order); new leads, wins and losses this week and this month; the open pipeline's estimated value per currency (minor units, never converted); and one row per seller (open records, stage split, wins this week and this month); overdue follow-ups as a team total for everyone and per person only for admins and the dispatcher (`canSeeRepOverdue`). The ranked leaderboard reuses `salesTargetRule` (`wonCountsByOwner` / `rankLeaderboard`) and gains a week window (`weekRange()`: UTC, Monday-start, half-open like `periodRange()`); `/sales`'s leaderboard card gets a *This week* column, and the dashboard one *Team totals* card linking to the page. Ranking is by wins only — no points, streaks or activity counts. `lostCountsByOwner()` reads a loss as the first move into an off-path stage. Names and counts only, tenant-scoped by hand, `count`/`groupBy` on the request path.",
-  "notes": {
-    "en": ["New Team page in sales: how many records the whole team follows, where they stand, what came in, was won and was lost this week and this month — and a leaderboard by deals won."],
-    "tr": ["Satışta yeni Ekip sayfası: tüm ekibin kaç kaydı takip ettiği, bu kayıtların nerede durduğu, bu hafta ve bu ay ne geldiği, ne kazanıldığı ve ne kaybedildiği — ve kazanılan anlaşmalara göre bir liderlik tablosu."],
-    "de": ["Neue Team-Seite im Vertrieb: wie viele Datensätze das ganze Team betreut, wo sie stehen, was diese Woche und diesen Monat hinzukam, gewonnen und verloren wurde — und eine Rangliste nach gewonnenen Deals."]
-  }
-}

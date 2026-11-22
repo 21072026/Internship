@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "Themed partner application page: the legal footer uses the theme's own text colour (whose contrast on the page background is checked when the theme is saved) instead of a fixed grey nobody checked against it. Tests: the `stats`-only audit detail (`changedLandingFields`) and the themed footer's legal/contract links on `/partner` and `/partner/apply` (#3730).",
-  "notes": {
-    "en": ["Partner application page: with a custom theme, the footer links are now readable on the theme's background."],
-    "tr": ["Partner başvuru sayfası: özel temada alt bilgi bağlantıları artık temanın arka planında okunaklı."],
-    "de": ["Partnerbewerbung: Mit eigenem Design sind die Links in der Fußzeile auf dem Hintergrund des Designs jetzt gut lesbar."]
-  }
-}

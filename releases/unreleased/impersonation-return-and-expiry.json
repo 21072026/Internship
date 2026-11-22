@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "Impersonation banner (#3876): the return button works on a second impersonation in the same tab — the app-wide banner kept its `busy` state across sessions, so the button stayed disabled. When the 30-minute cap reverts the session, the banner now switches at the deadline (a session `update()` at `impersonationExpiresAt`) and says the view ended, instead of vanishing without a word; the session exposes `impersonationExpiresAt` / `impersonationEndedAt` for it.",
-  "notes": {
-    "en": ["Viewing as another user: \"Return to your account\" works every time, and when the 30-minute limit ends the view, a notice says so."],
-    "tr": ["Başka kullanıcı olarak görüntüleme: \"Kendi hesabına dön\" her seferinde çalışıyor; 30 dakikalık süre dolunca bir uyarı bunu bildiriyor."],
-    "de": ["Ansicht als anderer Nutzer: „Zu deinem Konto zurückkehren“ funktioniert jedes Mal, und nach Ablauf der 30 Minuten weist ein Hinweis darauf hin."]
-  }
-}

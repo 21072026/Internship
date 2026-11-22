@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "When the trial end on the sales lead page cannot be changed, the panel says why instead of just omitting Edit: a short line in the Edit button's place (\"Can be changed in a trial stage only\" / \"The record is closed\") and an info button that opens the full reason, naming the record's current stage by the tenant's own label. The reason has one source, `trialEndLockReason()` in `src/lib/trialReminderRule.ts` (`'closed' | 'not_in_trial' | null`, the trial route's own refusals in its order), unit-tested. It is shown only to those who may edit the trial end (owner, sales dispatcher, admin). The rule itself is unchanged (#3647).",
-  "notes": {
-    "en": ["When a lead's trial end can't be changed, the page now says why — closed record, or not in a trial stage (with the current stage) — instead of just hiding the Edit button."],
-    "tr": ["Lead'in deneme bitişi değiştirilemediğinde sayfa artık nedenini söylüyor: kayıt kapalı ya da kayıt deneme aşamasında değil (şu anki aşamasıyla birlikte). Düzenle butonu artık sessizce kaybolmuyor."],
-    "de": ["Lässt sich das Testende eines Leads nicht ändern, sagt die Seite jetzt warum – Datensatz geschlossen oder nicht in einer Testphase (mit der aktuellen Phase) – statt die Schaltfläche „Bearbeiten“ nur auszublenden."]
-  }
-}

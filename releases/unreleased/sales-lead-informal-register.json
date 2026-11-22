@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "Sales lead page: the TR/DE strings added in #3663 (\"assigned to you on\", its hint, two contact-editor messages) now use the informal form of address the rest of the `sales` namespace uses (TR \"sen\", DE \"du\") (#3733)."
-}
