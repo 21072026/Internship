@@ -730,3 +730,15 @@ Yeni bir rol veya yeni bir kapsanan kaynak eklerken:
 2. Bu dokümandaki tabloyu güncelleyin.
 3. [`e2e/fixtures/authz-matrix.ts`](../e2e/fixtures/authz-matrix.ts) tablosuna rolü/ucu ekleyin — `own` hücresi
    için `ownership` yüklemini de yazın.
+
+## API keys — support reports (`/api/v1/support/*`)
+
+A key works for its own org only. These rows live in `e2e/fixtures/authz-matrix.ts` (`V1_SUPPORT_PROBES`) and `e2e/v1-support-reports.spec.ts` checks them. Everything is read-only; no write route exists.
+
+| Endpoint | No key | Key without `support:read` | `support:read` | + `support:read_screenshots` | Another org's report |
+|---|---|---|---|---|---|
+| `GET /api/v1/support/reports` | 401 | 403 `insufficient_scope` | 200 (masked, ≤ 50) | 200 | not listed |
+| `GET /api/v1/support/reports/{id}` | 401 | 403 | 200 | 200 | 404 |
+| `GET /api/v1/support/reports/{id}/screenshot` | 401 | 403 | 403 (scope `support:read_screenshots`) | 200 image | 404 |
+
+Every 200 writes one `AuditLog` row containing the actor `api_key:<id>` and the report ids. The sandbox key never holds `support:*`.

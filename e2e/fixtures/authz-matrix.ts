@@ -554,7 +554,7 @@ export const SALES_LEAD_CREATE: Array<{ caller: SalesLeadCaller; expect: 201 | 4
 /**
  * The /api/v1 support reads (src/lib/api/v1Support.ts) — scope × endpoint for
  * an API key of the reports' own org, consumed by e2e/v1-support-reports.spec.ts
- * and mirrored in docs/role-access-matrix.md § API keys. `:own` / `:ownShot`
+ * and mirrored in docs/role-access-matrix.md § API keys — support reports. `:own` / `:ownShot`
  * are a report of the key's org (with a screenshot); `:foreign` one of another
  * org. Read only: there is no write route to probe.
  */
