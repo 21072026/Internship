@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "Security: the durable sign-in lockout (`recordFailedAttempt()`) counts with conditional `updateMany` steps and a duplicate-skipping insert instead of read-then-upsert, so concurrent failed attempts against one address are all counted and the first ones no longer fail on the unique key (#3799). Pinned by `e2e/lockout-counter-race.unit.spec.ts` (@smoke)."
-}

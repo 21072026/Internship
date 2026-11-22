@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "MARKETING: when an admin or the dispatcher moves a rep's lead (hand-off or admin transfer), the previous owner's notice now reads \"An admin took the {lead} record from you.\" in both transfer modes. It used to say the lead had been \"assigned to you by mistake\" whenever the record had no history, which was rarely true, and named no reason either way; the new owner is still not named (#3872).",
-  "notes": {
-    "en": ["Sales: when an admin takes a lead from you, the notice now says just that, instead of claiming it was assigned to you by mistake."],
-    "tr": ["Satış: yönetici bir lead'i senden aldığında bildirim artık bunu söylüyor; \"yanlışlıkla sana atanmıştı\" demiyor."],
-    "de": ["Vertrieb: Nimmt dir ein Admin einen Lead ab, sagt die Benachrichtigung genau das, statt zu behaupten, er sei dir versehentlich zugewiesen worden."]
-  }
-}

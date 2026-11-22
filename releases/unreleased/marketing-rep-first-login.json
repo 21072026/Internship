@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "**Fix (go-live):** a freshly invited MARKETING sales rep's first sign-in ended on a 404. The mentor dashboard stamped `mentorOnboardingSeenAt` and redirected to `/onboarding`, which a vertical without `mentorship` does not have; the page's redirect could beat the layout's own `/sales` redirect. The mentor page now sends a mentorship-less vertical on itself (`mentorlessShellTarget`) before the wizard check, and the sign-in form lands a sales rep straight on `/sales` (`postSignInHome()` in `src/lib/salesSurface.ts`; every other role and vertical keeps `roleHome()`). `e2e/marketing-rep-first-login.spec.ts` (@smoke) signs in a rep with the stamp unset, as an invitation leaves it (#3647).",
-  "notes": {
-    "en": ["Newly invited sales reps now land on their sales dashboard on their first sign-in instead of an error page."],
-    "tr": ["Yeni davet edilen satış temsilcileri ilk girişte artık hata sayfası yerine kendi satış panolarına iniyor."],
-    "de": ["Neu eingeladene Vertriebsmitarbeiter landen bei der ersten Anmeldung jetzt auf ihrem Vertriebs-Dashboard statt auf einer Fehlerseite."]
-  }
-}

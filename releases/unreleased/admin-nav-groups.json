@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "**Grouped admin sidebar (#3752, iOS-Settings style):** the ~80 flat admin links are now eight daily items followed by collapsible groups — Sales & pipeline, Mentoring, Communication, Reports, Team & access, Integrations & API, Settings & compliance, Operations. A group header is a `button` with `aria-expanded`; a closed group is remembered in `localStorage` and the current page's group is always open. Rarely used, settings-like pages (`hub: true`) leave the sidebar for their group's hub page `/admin/hub/<group>` (icon, title, description, chevron), reached through one \"More\" row. `NavLink` gains `group` and `hub`, `groupNavLinks()` shapes the sidebar, and the hub page renders from the same list through the same filters, so the palette, the native app menu (now with a `group` field) and the sidebar search still reach every page — `scripts/test/nav-groups.test.mjs` pins that for every vertical and admin tier. The admin sidebar also lists Messages.",
-  "notes": {
-    "en": ["The admin menu is now grouped like your phone's settings: daily pages on top, everything else in sections you can fold away, and rarely used pages one tap away under \"More\"."],
-    "tr": ["Admin menüsü artık telefonunun ayarları gibi gruplu: günlük sayfalar en üstte, gerisi katlanabilen bölümlerde, seyrek kullanılan sayfalar \"Daha fazla\" altında tek dokunuş uzakta."],
-    "de": ["Das Admin-Menü ist jetzt gruppiert wie die Einstellungen deines Telefons: tägliche Seiten oben, alles andere in einklappbaren Bereichen und selten genutzte Seiten einen Tipp entfernt unter „Mehr“."]
-  }
-}
