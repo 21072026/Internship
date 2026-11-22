@@ -25,6 +25,9 @@ export interface TeamMember {
   fullName: string;
   avatarUrl: string | null;
   self: boolean;
+  /** Load line (#3875): their open records, and overdue follow-ups when the viewer may see them (else null). */
+  open?: number;
+  overdue?: number | null;
 }
 
 interface Pending {
@@ -150,9 +153,22 @@ function LeadHandoffStrip({ members, onDrop }: { members: TeamMember[]; onDrop: 
                 {initials(m.fullName)}
               </span>
             )}
-            <span className="whitespace-nowrap">
-              {m.fullName}
-              {m.self && <span className="ml-1 text-xs text-gray-400">({h.you})</span>}
+            <span className="flex flex-col leading-tight">
+              <span className="whitespace-nowrap">
+                {m.fullName}
+                {m.self && <span className="ml-1 text-xs text-gray-400">({h.you})</span>}
+              </span>
+              {typeof m.open === 'number' && (
+                <span className="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400" data-testid={`handoff-target-load-${m.id}`}>
+                  {h.loadOpen.replace('{n}', String(m.open))}
+                  {typeof m.overdue === 'number' && (
+                    <span className={m.overdue > 0 ? 'text-red-600 dark:text-red-400' : undefined}>
+                      {' · '}
+                      {h.loadOverdue.replace('{n}', String(m.overdue))}
+                    </span>
+                  )}
+                </span>
+              )}
             </span>
           </li>
         ))}

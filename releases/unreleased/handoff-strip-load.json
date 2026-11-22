@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "The hand-off strip above the sales and admin boards shows each person's load under their name: \"{n} open\" for everyone and \"· {m} overdue follow-ups\" for admins and the dispatcher only (`GET /api/sales/team` now returns `open` and `overdue`, the latter null unless `canSeeRepOverdue`) — the same counts and the same visibility rule as the team page (#3875).",
+  "notes": {
+    "en": ["Board: the colleagues strip now shows how many open leads each person has; admins also see their overdue follow-ups."],
+    "tr": ["Pano: ekip arkadaşları şeridi artık her kişinin kaç açık lead'i olduğunu gösteriyor; yöneticiler gecikmiş takipleri de görüyor."],
+    "de": ["Board: Die Kollegenleiste zeigt jetzt, wie viele offene Leads jede Person hat; Admins sehen auch überfällige Wiedervorlagen."]
+  }
+}

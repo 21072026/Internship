@@ -215,8 +215,8 @@ test('the team is the active ADMINs and MENTORs of the caller’s org, the calle
   for (const label of ['rep3', 'mentee', 'company', 'foreignRep', 'intMentor']) expect(byId.has(ids[label]), label).toBe(false);
   expect(byId.get(ids.rep1)?.self).toBe(true);
   expect(byId.get(ids.rep2)?.self).toBe(false);
-  // Names and avatars, nothing else.
-  expect(Object.keys(members[0]).sort()).toEqual(['avatarUrl', 'fullName', 'id', 'self']);
+  // Names, avatars and the load counts (#3875), nothing else.
+  expect(Object.keys(members[0]).sort()).toEqual(['avatarUrl', 'fullName', 'id', 'open', 'overdue', 'self']);
   await rep1.dispose();
 });
 
@@ -483,4 +483,37 @@ test('the dialog shows who has the lead and its follow-up, and can hand it on wi
   expect(moved?.nextActionAt?.toISOString()).toBe(due.toISOString());
   const line = await prisma.followUpEvent.findFirst({ where: { relationId: moved!.id, kind: 'HANDED_OFF' } });
   expect(line).toMatchObject({ fromNote: `Send the contract ${STAMP}`, toNote: `Send the contract ${STAMP}` });
+});
+
+test('the strip shows each person\'s load: open records for everyone, overdue follow-ups only to the admin (#3875)', async ({ playwright, baseURL, page }) => {
+  test.slow();
+  // One overdue follow-up on rep2's book.
+  const late = await lead('late', ids.rep2, ids.orgA);
+  await prisma.mentorshipRelation.update({ where: { id: late }, data: { nextActionAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) } });
+  const startOfToday = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
+  const openOf = (id: string) => prisma.mentorshipRelation.count({ where: { orgId: ids.orgA, mentorId: id, status: 'ACTIVE' } });
+  const overdueOf = (id: string) =>
+    prisma.mentorshipRelation.count({ where: { orgId: ids.orgA, mentorId: id, status: 'ACTIVE', nextActionAt: { lt: startOfToday } } });
+
+  type Member = { id: string; open: number; overdue: number | null };
+  const rep1 = await jar(playwright, baseURL, 'rep1', true);
+  const asRep = ((await (await rep1.get('/api/sales/team')).json()).members as Member[]).find((m) => m.id === ids.rep2)!;
+  expect(asRep.open).toBe(await openOf(ids.rep2));
+  // A rep sees the open count only — the team page's rule.
+  expect(asRep.overdue).toBeNull();
+  await rep1.dispose();
+
+  const admin = await jar(playwright, baseURL, 'admin', true);
+  const asAdmin = ((await (await admin.get('/api/sales/team')).json()).members as Member[]).find((m) => m.id === ids.rep2)!;
+  expect(asAdmin.open).toBe(await openOf(ids.rep2));
+  expect(asAdmin.overdue).toBe(await overdueOf(ids.rep2));
+  expect(asAdmin.overdue).toBeGreaterThanOrEqual(1);
+  await admin.dispose();
+
+  // On the board: the line under the name.
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mail.rep1, PW, '/sales');
+  await gotoSettled(page, '/sales/board');
+  const line = page.getByTestId(`handoff-target-load-${ids.rep2}`);
+  await expect(line).toHaveText(`${await openOf(ids.rep2)} open`);
 });
