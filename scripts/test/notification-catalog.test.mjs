@@ -50,7 +50,7 @@ const EMAIL_GROUPS = new Set([
   'meeting_invites', 'meeting_reminders', 'task_reminders', 'digests', 'reports_analytics',
   'opportunities', 'inbound_requests', 'newsletter', 'surveys', 'announcements',
 ]);
-const LINK_KINDS = new Set(['relation', 'thread', 'mentee', 'support', 'project', 'dashboard', 'requisition']);
+const LINK_KINDS = new Set(['relation', 'thread', 'mentee', 'support', 'project', 'dashboard', 'requisition', 'feedbackReport']);
 
 const placeholders = (template) =>
   [...new Set([...template.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))].sort();

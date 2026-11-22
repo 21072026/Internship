@@ -67,6 +67,8 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
+  await prisma.notification.deleteMany({ where: { userId: { in: [ids.me, ids.colleague, ids.admin, ids.foreign].filter(Boolean) } } }).catch(() => {});
+  await prisma.notificationDelivery.deleteMany({ where: { userId: { in: [ids.me, ids.colleague, ids.admin, ids.foreign].filter(Boolean) } } }).catch(() => {});
   await prisma.supportReport.deleteMany({ where: { orgId: { in: [orgId, otherOrgId] } } }).catch(() => {});
   for (const e of emails) await cleanupByEmail(e);
   await prisma.organization.deleteMany({ where: { id: { in: [orgId, otherOrgId] } } }).catch(() => {});
@@ -119,4 +121,27 @@ test('the team\'s note reaches the reporter\'s list, and the page shows it with 
   await expect(card.getByTestId('my-feedback-status')).toHaveText('Resolved');
   await expect(card.getByTestId('my-feedback-reply')).toContainText(`Fixed in the next release ${STAMP}`);
   await expect(page.getByTestId(`my-feedback-${ids.theirs}`)).toHaveCount(0);
+});
+
+test('a status change rings the reporter\'s bell in the app, linked to the report; no change, no bell (#3878)', async ({ playwright, baseURL, page }) => {
+  test.slow();
+  const bells = () => prisma.notification.findMany({ where: { userId: ids.me, type: 'support_report.updated' }, select: { link: true } });
+  const before = (await bells()).length;
+  const admin = await jar(playwright, baseURL, 'admin');
+  // A change of status without the mail (and with contact not even asked for).
+  expect((await admin.patch(`/api/admin/support/reports/${ids.mine}`, { data: { status: 'IN_PROGRESS' } })).status()).toBe(200);
+  await expect.poll(async () => (await bells()).length).toBe(before + 1);
+  expect((await bells()).every((b) => b.link === `/account/feedback#report-${ids.mine}`)).toBe(true);
+  // The same status again, no note: nothing new happened, so no bell.
+  expect((await admin.patch(`/api/admin/support/reports/${ids.mine}`, { data: { status: 'IN_PROGRESS' } })).status()).toBe(200);
+  await page.waitForTimeout(500);
+  expect((await bells()).length).toBe(before + 1);
+  await admin.dispose();
+  // Only the reporter hears it.
+  expect(await prisma.notification.count({ where: { userId: ids.colleague, type: 'support_report.updated' } })).toBe(0);
+
+  // The bell's link lands on the report in the list.
+  await signInAndSettle(page, mail.me, PW, '/portal');
+  await gotoSettled(page, `/account/feedback#report-${ids.mine}`);
+  await expect(page.getByTestId(`my-feedback-${ids.mine}`).getByTestId('my-feedback-status')).toHaveText('Being worked on');
 });

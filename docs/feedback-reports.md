@@ -232,3 +232,11 @@ The team's note is `SupportReport.reporterNote` / `reporterNoteAt`, written by
 the admin's status `PATCH` when "tell the reporter" is ticked with a note — the
 same text the update mail carries. A status change without a note leaves the
 earlier note in place.
+
+The reporter also hears it in the app (#3878): when an admin changes a report's
+status, or sends a note with it, the reporter gets the in-app notification
+`support_report.updated` ("There is an update on the feedback you sent"),
+linked to `/account/feedback#report-<id>` (link kind `feedbackReport`). It is
+in-app only, so it needs no consent to contact — the mail stays the admin's
+explicit, consent-gated choice. The same status again without a note sends
+nothing, and an admin acting on their own report is not told.

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "When an admin changes the status of a feedback report, or sends the reporter a note, the reporter gets an in-app notification (`support_report.updated`, in-app only, so no consent to contact is needed) that opens their own list at that report — new link kind `feedbackReport` → `/account/feedback#report-<id>`. Re-saving the same status without a note sends nothing (#3878).",
+  "notes": {
+    "en": ["Feedback: when the team updates something you reported, you now get a notification in the app."],
+    "tr": ["Geri bildirim: ekip bildirdiğin bir şeyde değişiklik yaptığında artık uygulama içinde bildirim alıyorsun."],
+    "de": ["Feedback: Wenn das Team etwas aktualisiert, das du gemeldet hast, bekommst du jetzt eine Benachrichtigung in der App."]
+  }
+}

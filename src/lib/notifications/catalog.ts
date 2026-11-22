@@ -78,9 +78,11 @@ export interface NotificationLinkIds {
   conversationId: string;
   /** A `requisition` link: the role's applicant board for the company, its record for an admin (#1944). */
   requisitionId: string;
+  /** A `feedbackReport` link: the reporter's own list at that report (#3878). */
+  reportId: string;
 }
 
-export const LINK_ID_KEYS = ['relationId', 'menteeId', 'projectId', 'conversationId', 'requisitionId'] as const;
+export const LINK_ID_KEYS = ['relationId', 'menteeId', 'projectId', 'conversationId', 'requisitionId', 'reportId'] as const;
 
 export interface NotificationEventDef {
   /** Matches a key of `notifications.events` in src/i18n/dictionaries.ts. */
@@ -221,6 +223,12 @@ export const NOTIFICATION_EVENTS = [
   { key: 'question.asked', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'thread', params: ['from'] },
   { key: 'question.askedGeneric', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'thread', params: [] },
   { key: 'question.answered', category: 'messages', emailGroup: 'direct_messages', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'thread', params: [] },
+  // An admin changed the status of a report the person sent with the feedback
+  // button, or wrote them a note (#3878). In-app only: the update mail is the
+  // admin's explicit choice and needs the reporter's consent to contact; the
+  // bell tells them in the app either way, and opens their own list
+  // (/account/feedback), where the status and the note are.
+  { key: 'support_report.updated', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp'], delivery: 'immediate', link: 'feedbackReport', params: [] },
   { key: 'support.new', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'support', params: ['from'] },
   { key: 'support.newGeneric', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'support', params: [] },
   { key: 'support.newMessage', category: 'messages', emailGroup: 'inbound_requests', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'support', params: ['from'] },
