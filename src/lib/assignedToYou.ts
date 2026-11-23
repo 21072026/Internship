@@ -88,11 +88,14 @@ export async function assignedToYou(
 /**
  * The owner opened the record: it is no longer new. Only the owner's own view
  * counts — an admin or a colleague reading it does not clear the owner's card.
- * One conditional write, a no-op once seen.
+ * One conditional write, a no-op once seen. Answers whether this call is the
+ * one that marked it, so the page can drop the browser's cached copies of the
+ * card (#3894).
  */
-export async function markAssignmentSeen(relationId: string, viewerId: string): Promise<void> {
-  await prisma.mentorshipRelation.updateMany({
+export async function markAssignmentSeen(relationId: string, viewerId: string): Promise<boolean> {
+  const { count } = await prisma.mentorshipRelation.updateMany({
     where: { id: relationId, mentorId: viewerId, assignedAt: { not: null }, assignmentSeenAt: null },
     data: { assignmentSeenAt: new Date() },
   });
+  return count > 0;
 }

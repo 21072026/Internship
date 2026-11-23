@@ -1,0 +1,15 @@
+{
+  "bump": "patch",
+  "changelog": "\"Assigned to you\": opening a record now clears the card even when you come back with the browser's Back button (the lead page drops the client router cache once it marks the record seen), and an admin viewing as a rep is told that only the rep's own visit clears it (#3894).",
+  "notes": {
+    "en": [
+      "\"Assigned to you\" now updates when you go back from a record, and explains why it stays while an admin views as the rep."
+    ],
+    "tr": [
+      "\"Sana atananlar\" kartı bir kayıttan geri dönünce güncelleniyor; yönetici temsilci gibi bakarken neden düşmediğini de söylüyor."
+    ],
+    "de": [
+      "„Dir zugewiesen“ aktualisiert sich jetzt, wenn du von einem Datensatz zurückgehst, und erklärt, warum es in der Vertretungsansicht bleibt."
+    ]
+  }
+}

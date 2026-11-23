@@ -92,7 +92,7 @@ export default async function SalesDashboard() {
       </div>
 
       {/* What came to the rep from someone else, until opened (#3874): first, above everything. */}
-      <AssignedToYouCard viewerId={session.user.id} tenant={tenant} />
+      <AssignedToYouCard viewerId={session.user.id} tenant={tenant} impersonating={!!session.user.impersonatorId} />
 
       {/* What is due today, each line a link (#3778). */}
       <SalesTodayCard userId={session.user.id} orgId={session.user.orgId} />

@@ -27,7 +27,7 @@ export default async function SalesBoardPage() {
   return (
     <>
       {/* New on the rep's list (#3874): one line above the columns, each name a link. */}
-      <AssignedToYouCard viewerId={session.user.id} tenant={tenant} variant="strip" />
+      <AssignedToYouCard viewerId={session.user.id} tenant={tenant} impersonating={!!session.user.impersonatorId} variant="strip" />
       <MentorBoard
         detailBase="/sales/leads"
         handoff
