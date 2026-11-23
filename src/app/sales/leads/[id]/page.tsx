@@ -33,6 +33,7 @@ import { LeadPageHandoff } from '@/components/sales/LeadPageHandoff';
 import { earlierPeriods, currentSuccessor } from '@/lib/leadJourney';
 import { followUpEventsFor, type FollowUpEventView } from '@/lib/followUpEvents';
 import { markAssignmentSeen } from '@/lib/assignedToYou';
+import { RefreshRouterCache } from '@/components/RefreshRouterCache';
 
 // One of the rep's own records (#2580): who the lead is, the account behind it,
 // its stage, the follow-up, trial-end and estimated-value (#2422) editors, what happened last and a
@@ -106,7 +107,13 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   if (!relation) notFound();
   // The owner opened it: it leaves their "Assigned to you" card (#3874). Not
   // under impersonation — an admin looking over the rep's shoulder has not seen it for them.
-  if (relation.mentorId === session.user.id && !session.user.impersonatorId) await markAssignmentSeen(relation.id, session.user.id);
+  // When this visit is the one that marked it, the client router cache still
+  // holds /sales and /sales/board with the card on them — a Back press would
+  // show that copy (#3894) — so the page drops the cache once.
+  const justSeen =
+    relation.mentorId === session.user.id && !session.user.impersonatorId
+      ? await markAssignmentSeen(relation.id, session.user.id)
+      : false;
   // Who may WORK this record — every editor below, the hand-off (#3657), the
   // contact log (#3748), the trial end: the rule the write routes apply.
   const writable = await canWriteSalesRecord(session, relation);
@@ -267,6 +274,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
 
   return (
     <div data-testid="sales-lead">
+      {justSeen && <RefreshRouterCache />}
       <Link href="/sales" className="mb-4 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800">
         <ArrowLeft className="h-4 w-4" />
         {s.back}

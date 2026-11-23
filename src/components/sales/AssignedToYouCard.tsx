@@ -16,10 +16,13 @@ export async function AssignedToYouCard({
   viewerId,
   tenant,
   variant = 'card',
+  impersonating = false,
 }: {
   viewerId: string;
   tenant: TenantWhere;
   variant?: 'card' | 'strip';
+  /** An admin viewing as the rep: opening a record does not clear it for the rep (#3894). */
+  impersonating?: boolean;
 }) {
   const { items, total } = await assignedToYou(viewerId, tenant);
   if (items.length === 0) return null;
@@ -44,6 +47,11 @@ export async function AssignedToYouCard({
           </span>
         ))}
         {total > items.length && <span>· {a.more.replace('{n}', String(total - items.length))}</span>}
+        {impersonating && (
+          <span className="basis-full text-xs opacity-80" data-testid="assigned-to-you-impersonating">
+            {a.hintImpersonating}
+          </span>
+        )}
       </div>
     );
   }
@@ -54,7 +62,9 @@ export async function AssignedToYouCard({
     <Card className="mb-8" data-testid="assigned-to-you">
       <CardHeader>
         <CardTitle>{a.title}</CardTitle>
-        <p className="text-sm text-gray-500 dark:text-gray-400">{a.hint}</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400" data-testid={impersonating ? 'assigned-to-you-impersonating' : undefined}>
+          {impersonating ? a.hintImpersonating : a.hint}
+        </p>
       </CardHeader>
       <ul className="divide-y divide-gray-100 dark:divide-gray-800">
         {items.map((i) => {

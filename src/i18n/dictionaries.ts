@@ -8019,6 +8019,7 @@ const en = {
   assignedToYou: {
     title: 'Assigned to you',
     hint: 'New on your list — they leave this card once you open them.',
+    hintImpersonating: 'They leave this card when the rep opens them — not when you look at them while viewing as the rep.',
     from: 'from {name}',
     fromSomeone: 'from someone',
     noStep: 'No next step written',
@@ -20752,6 +20753,7 @@ const tr: Dict = {
   assignedToYou: {
     title: 'Sana atananlar',
     hint: 'Listene yeni gelenler — açtığında bu karttan düşer.',
+    hintImpersonating: 'Temsilci kendisi açınca bu karttan düşer; onun yerine bakarken sen açınca düşmez.',
     from: '{name} tarafından',
     fromSomeone: 'biri tarafından',
     noStep: 'Sıradaki adım yazılmamış',
@@ -33400,6 +33402,7 @@ const de: Dict = {
   assignedToYou: {
     title: 'Dir zugewiesen',
     hint: 'Neu auf deiner Liste — sie verschwinden hier, sobald du sie öffnest.',
+    hintImpersonating: 'Sie verschwinden hier, wenn die vertretene Person sie öffnet — nicht, wenn du sie in deren Ansicht öffnest.',
     from: 'von {name}',
     fromSomeone: 'von jemandem',
     noStep: 'Kein nächster Schritt eingetragen',

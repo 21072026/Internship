@@ -76,6 +76,7 @@ test.afterAll(async () => {
   const userIds = Object.entries(ids).filter(([k]) => !k.startsWith('rel-') && k !== 'handedNow').map(([, v]) => v);
   await prisma.notification.deleteMany({ where: { userId: { in: userIds } } }).catch(() => {});
   await prisma.notificationDelivery.deleteMany({ where: { userId: { in: userIds } } }).catch(() => {});
+  await prisma.impersonationGrant.deleteMany({ where: { targetId: { in: userIds } } }).catch(() => {});
   await prisma.activityLog.deleteMany({ where: { orgId } }).catch(() => {});
   await prisma.mentorshipRelation.updateMany({ where: { orgId }, data: { previousRelationId: null } }).catch(() => {});
   await prisma.mentorshipRelation.deleteMany({ where: { orgId } }).catch(() => {});
@@ -127,11 +128,59 @@ test('the rep sees it first on /sales and on the board; opening it clears both',
   await expect(page.getByTestId('assigned-to-you-strip')).toHaveCount(0);
 });
 
+test('an admin viewing as the rep is told the card is the rep\'s to clear, and opening a record does not clear it (#3894)', async ({ page }) => {
+  test.slow();
+  const relId = await lead('imp', ids.rep1);
+  await prisma.mentorshipRelation.update({ where: { id: relId }, data: { assignedAt: new Date(), assignedById: ids.admin } });
+  await page.context().setExtraHTTPHeaders(H);
+  await signInAndSettle(page, mail.admin, PW, '/admin');
+  const start = await page.request.post('/api/admin/impersonate', { data: { targetUserId: ids.rep1, reason: 'support' } });
+  expect(start.ok(), await start.text()).toBe(true);
+  const { grant } = await start.json();
+  const csrf = await (await page.request.get('/api/auth/csrf')).json();
+  await page.request.post('/api/auth/callback/impersonate', { form: { csrfToken: csrf.csrfToken, grant, json: 'true' }, maxRedirects: 0 });
+  const session = await (await page.request.get('/api/auth/session')).json();
+  expect(session?.user?.id).toBe(ids.rep1);
+  expect(session?.user?.impersonatorId).toBeTruthy();
+
+  await gotoSettled(page, '/sales');
+  const card = page.getByTestId('assigned-to-you');
+  await expect(card.getByTestId('assigned-to-you-impersonating')).toContainText('not when you look at them while viewing as the rep');
+  await card.getByTestId(`assigned-to-you-${relId}`).click();
+  await page.waitForURL((u) => u.pathname === `/sales/leads/${relId}`);
+  await expect(page.getByTestId('sales-lead')).toBeVisible();
+  await gotoSettled(page, '/sales');
+  await expect(page.getByTestId(`assigned-to-you-${relId}`)).toBeVisible();
+  const row = await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: relId }, select: { assignmentSeenAt: true } });
+  expect(row.assignmentSeenAt).toBeNull();
+  await gotoSettled(page, '/sales/board');
+  await expect(page.getByTestId('assigned-to-you-strip').getByTestId('assigned-to-you-impersonating')).toBeVisible();
+});
+
+test('back from the lead page with the browser\'s Back button: the card is gone, not a cached copy (#3894)', async ({ page }) => {
+  test.slow();
+  const relId = await lead('back', ids.rep1);
+  await prisma.mentorshipRelation.update({ where: { id: relId }, data: { assignedAt: new Date(), assignedById: ids.admin } });
+  await page.context().setExtraHTTPHeaders(H);
+  await signInAndSettle(page, mail.rep1, PW, '/sales');
+  await gotoSettled(page, '/sales');
+  await page.getByTestId(`assigned-to-you-${relId}`).click();
+  await page.waitForURL((u) => u.pathname === `/sales/leads/${relId}`);
+  await expect.poll(async () => (await prisma.mentorshipRelation.findUnique({ where: { id: relId }, select: { assignmentSeenAt: true } }))?.assignmentSeenAt).not.toBeNull();
+  await page.waitForTimeout(1000);
+  await page.goBack();
+  await page.waitForURL((u) => u.pathname === '/sales');
+  await expect(page.getByTestId('sales-dashboard')).toBeVisible();
+  // The record the admin opened while viewing as the rep (above) is still new; this one is not.
+  await expect(page.getByTestId(`assigned-to-you-${ids['rel-imp']}`)).toBeVisible();
+  await expect(page.getByTestId(`assigned-to-you-${relId}`)).toHaveCount(0);
+});
+
 test('nobody else sees the card: the previous owner has none', async ({ page }) => {
   test.slow();
   await page.context().setExtraHTTPHeaders(H);
   await signInAndSettle(page, mail.rep1, PW, '/sales');
   await gotoSettled(page, '/sales');
   await expect(page.getByTestId('sales-dashboard')).toBeVisible();
-  await expect(page.getByTestId('assigned-to-you')).toHaveCount(0);
+  await expect(page.getByTestId(`assigned-to-you-${ids.handedNow}`)).toHaveCount(0);
 });
