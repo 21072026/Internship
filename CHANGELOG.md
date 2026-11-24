@@ -24,6 +24,36 @@ each fragment — so only the *recording* was late, not the numbering. The app
 had been serving these versions correctly all along, deriving them from
 base+fragments at build time.
 
+## [0.699.1-beta] - 2026-11-23
+
+_Shipped 2026-11-23 10:57 UTC · commit [426aff4](https://github.com/21072026/Internship/commit/426aff4d11825a2413024c5ea24005c7d0ce8192)_
+
+"Assigned to you": opening a record now clears the card even when you come back with the browser's Back button (the lead page drops the client router cache once it marks the record seen), and an admin viewing as a rep is told that only the rep's own visit clears it (#3894).
+
+## [0.699.0-beta] - 2026-11-22
+
+_Shipped 2026-11-22 22:13 UTC · commit [f67d41c](https://github.com/21072026/Internship/commit/f67d41caed680429185acf2eda3a3684e5e4f1c5)_
+
+When an admin changes the status of a feedback report, or sends the reporter a note, the reporter gets an in-app notification (`support_report.updated`, in-app only, so no consent to contact is needed) that opens their own list at that report — new link kind `feedbackReport` → `/account/feedback#report-<id>`. Re-saving the same status without a note sends nothing (#3878).
+
+## [0.698.0-beta] - 2026-11-22
+
+_Shipped 2026-11-22 21:56 UTC · commit [1a89d61](https://github.com/21072026/Internship/commit/1a89d6142f462d4178dd69030a3ca3cd25435bb4)_
+
+"My feedback" (`/account/feedback`, linked from the feedback panel and `/account`): a person reads back the reports they sent — type, their description, the page path, the status and the team's note — through `GET /api/support/reports` and `GET /api/support/reports/[id]` (own reports only; another person's or org's id is 404; never files, context or GitHub links). The admin's status note to the reporter is now kept on the report (`SupportReport.reporterNote` / `reporterNoteAt`, new nullable columns) so it can be shown there (#3877).
+
+## [0.697.0-beta] - 2026-11-22
+
+_Shipped 2026-11-22 19:33 UTC · commit [f1b3316](https://github.com/21072026/Internship/commit/f1b33166a41ed9ee3861cba48951d4289ffd57dd)_
+
+Public API: read-only `GET /api/v1/support/reports` and `/{id}` (scope `support:read`, ≤ 50 per page, `status`/`type`/`since` filters) and `/{id}/screenshot` (also needs `support:read_screenshots`) — the org's in-app bug reports and feedback, re-masked through `src/lib/feedbackContext.ts`, reporter name and role only, every read audited (key + report ids). Not in the sandbox key. `src/lib/api/v1Support.ts`, `docs/public-api.md`.
+
+## [0.696.0-beta] - 2026-11-22
+
+_Shipped 2026-11-22 19:30 UTC · commit [f5a5206](https://github.com/21072026/Internship/commit/f5a5206ad706011c8259ff200592feb009a0515e)_
+
+The hand-off strip above the sales and admin boards shows each person's load under their name: "{n} open" for everyone and "· {m} overdue follow-ups" for admins and the dispatcher only (`GET /api/sales/team` now returns `open` and `overdue`, the latter null unless `canSeeRepOverdue`) — the same counts and the same visibility rule as the team page (#3875).
+
 ## [0.695.0-beta] - 2026-11-21
 
 _Shipped 2026-11-21 21:34 UTC · commit [194bfc1](https://github.com/21072026/Internship/commit/194bfc1b48141fc8fbc0b03577f763f95c95cbd2)_
