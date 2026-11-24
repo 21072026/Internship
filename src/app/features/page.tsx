@@ -1,3 +1,5 @@
+import { AnalyticsPageView } from '@/components/AnalyticsPageView';
+import { ANALYTICS_EVENTS } from '@/lib/analyticsEvents';
 import type { Metadata } from 'next';
 import { pageMetadata } from '@/lib/pageMetadata';
 import Link from 'next/link';
@@ -44,6 +46,7 @@ export default async function FeaturesPage() {
 
   return (
     <PublicShell breadcrumb={{ name: F.title, path: '/features' }}>
+      <AnalyticsPageView event={ANALYTICS_EVENTS.FEATURES_VIEWED} />
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-12">
         <Link href="/" className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline mb-6">
           <ArrowLeft className="h-4 w-4" /> {F.backHome}

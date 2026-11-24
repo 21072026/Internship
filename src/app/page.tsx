@@ -16,6 +16,7 @@ import { verticalCapabilities } from '@/lib/verticals';
 import { JsonLd } from '@/components/JsonLd';
 import { PublicShell } from '@/components/landing/PublicShell';
 import { DemoLink } from '@/components/landing/DemoLink';
+import { RoleCardLink } from '@/components/landing/RoleCardLink';
 import { ProductTour } from '@/components/landing/ProductTour';
 import { FOUNDER_NAME, FOUNDER_URL, GITHUB_URL } from '@/components/landing/links';
 import { TawkChat } from '@/components/TawkChat';
@@ -102,9 +103,9 @@ async function HomePage() {
   // chip stays light in dark mode while globals.css lightens `text-*-600`, so a
   // `-600` icon there would go light-on-light.
   const pick = [
-    { t: L.pickMenteeT, d: L.pickMenteeD, cta: L.ctaMentee, href: '/auth/register', icon: GraduationCap, badge: 'bg-green-100 text-green-700', testId: undefined },
-    { t: L.pickMentorT, d: L.pickMentorD, cta: L.ctaMentor, href: mentorHref, icon: Users, badge: 'bg-blue-100 text-blue-700', testId: 'become-mentor-link' },
-    { t: L.pickCompanyT, d: L.pickCompanyD, cta: L.ctaCompany, href: companyHref, icon: Building2, badge: 'bg-indigo-100 text-indigo-700', testId: undefined },
+    { role: 'mentee' as const, t: L.pickMenteeT, d: L.pickMenteeD, cta: L.ctaMentee, href: '/auth/register', icon: GraduationCap, badge: 'bg-green-100 text-green-700', testId: undefined },
+    { role: 'mentor' as const, t: L.pickMentorT, d: L.pickMentorD, cta: L.ctaMentor, href: mentorHref, icon: Users, badge: 'bg-blue-100 text-blue-700', testId: 'become-mentor-link' },
+    { role: 'company' as const, t: L.pickCompanyT, d: L.pickCompanyD, cta: L.ctaCompany, href: companyHref, icon: Building2, badge: 'bg-indigo-100 text-indigo-700', testId: undefined },
   ];
 
   // Only claims a stranger can check without an account. The version count is
@@ -182,9 +183,9 @@ async function HomePage() {
           )}
           {isMarketing && demoFormOpen && (
             <div className="mt-10">
-              <a href="#demo" data-testid="hero-demo-request" className={primaryButton}>
+              <DemoLink placement="hero" href="#demo" testId="hero-demo-request" className={primaryButton}>
                 <Briefcase className="h-5 w-5" /> {L.demoFormCta}
-              </a>
+              </DemoLink>
             </div>
           )}
         </div>
@@ -210,13 +211,13 @@ async function HomePage() {
                 </div>
                 <h3 className="font-semibold text-gray-900">{p.t}</h3>
                 <p className="mt-2 text-sm text-gray-600 leading-relaxed">{p.d}</p>
-                <Link
+                <RoleCardLink role={p.role}
                   href={p.href}
                   data-testid={p.testId}
                   className="mt-auto pt-4 inline-flex items-center gap-1.5 min-h-[44px] font-medium text-blue-600 hover:underline"
                 >
                   {p.cta} <ArrowRight className="h-4 w-4 flex-shrink-0" />
-                </Link>
+                </RoleCardLink>
               </div>
             ))}
           </div>
@@ -409,13 +410,13 @@ async function HomePage() {
               {L.ctaMentee} <ArrowRight className="h-5 w-5" />
             </Link>
             {isMarketing && demoFormOpen && (
-              <a
+              <DemoLink placement="cta"
                 href="#demo"
-                data-testid="cta-demo-request"
+                testId="cta-demo-request"
                 className="inline-flex items-center justify-center gap-2 border-2 border-white/60 text-white px-7 py-3.5 rounded-xl font-semibold hover:bg-white/10 transition-colors"
               >
                 <Briefcase className="h-5 w-5" /> {L.demoFormCta}
-              </a>
+              </DemoLink>
             )}
           </div>
           {/* The band's question speaks to all three sides, but its one button

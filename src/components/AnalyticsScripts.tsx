@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { configuredProviders, type AnalyticsWindow } from '@/lib/analytics';
+import { ANALYTICS_READY_EVENT } from '@/lib/analyticsEvents';
 import { COOKIE_CONSENT_EVENT, hasConsent } from '@/lib/cookieConsent';
 
 /**
@@ -42,11 +43,12 @@ export function AnalyticsScripts() {
         document.head.appendChild(s);
         added.push(s);
         const init = provider.snippet.init;
-        if (init) {
-          // After the loader, so `gtag`/`posthog` exist when it runs. A call,
-          // not an inline <script>: the strict CSP blocks un-nonced inline code.
-          s.addEventListener('load', () => init(window as unknown as AnalyticsWindow));
-        }
+        // After the loader, including Plausible (which has no init callback).
+        s.addEventListener('load', () => {
+          if (!hasConsent('analytics')) return;
+          init?.(window as unknown as AnalyticsWindow);
+          window.dispatchEvent(new Event(ANALYTICS_READY_EVENT));
+        });
       }
     }
     // No cleanup that removes the tags: a provider already loaded cannot be
