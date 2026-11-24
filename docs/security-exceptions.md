@@ -23,7 +23,7 @@ buraya borçlu.
 > istisnanın kendisi ile gerekçesi aynı şey olsun, gerekçesiz bir istisna hiç
 > yazılamasın diye.
 
-Son gözden geçirme: **2026-11-05** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823) · Politika: [#2059](https://github.com/21072026/Internship/issues/2059)
+Son gözden geçirme: **2026-11-16** · Kaynak epic: [#823](https://github.com/21072026/Internship/issues/823) · Politika: [#2059](https://github.com/21072026/Internship/issues/2059)
 
 ## Açık bulgular
 
@@ -244,6 +244,33 @@ zamanlanmış tam suite her sayfayı zorunlu politika altında açıyor.
 
 **Ne zaman kapanır:** Prod'da `CSP_ENFORCE=1` açılıp `csp.violation`
 akışı sessiz kaldığında bu madde yalnız `style-src`'ye iner.
+
+### SCIM 2.0 ve doğrudan HRIS bağlayıcıları (#1970)
+
+**Ne / Taviz:** SCIM 2.0, Workday ve SAP SuccessFactors desteği yok. Anlık,
+IdP tarafından itilen hesap kapatma garantisi verilmiyor.
+
+**Neden kabul edildi:** Tam protokol sunucusu ve doğrudan HRIS bağlayıcıları,
+imzalı sözleşme ve platform önkoşulları olmadan öncelik değil. İnceleme kararı,
+test edilebilir sözleşme kapısı ve kalıcı çözüm kapsamı
+[provisioning-strategy.md](provisioning-strategy.md) içinde;
+takip [#1970](https://github.com/21072026/Internship/issues/1970).
+
+**Telafi edici kontrol / Kapsam:** [Planlı SFTP/HTTPS CSV beslemesi](roster-feeds.md),
+otomatik erişim kapatma ayrıca açıldığında, yalnız kendi organizasyonunun
+mentee hesaplarını kapatır; admin ve mentor hesaplarını kapsamaz. İlk başarılı
+yokluk tespitinden sonra bekleme süresi (varsayılan bir UTC takvim günü) dolmalı
+ve sonraki başarılı çalışma gelmelidir. Oturum geçerlilik damgası ve hatırlanan
+cihaz/push token iptali birlikte uygulanır. Satır tabanı, kapatma yüzdesi sınırı,
+korunan hesaplar veya okunamayan satırlar kapatmayı durdurabilir. Başarısız,
+duraklatılmış veya güncel olmayan besleme erişimi açık bırakabilir: çalışma
+kayıtları ve alarmlar izlenmeli, acil kapatma admin tarafından yapılmalıdır.
+Varsayılan olarak kapalıdır; gerçek zamanlı değildir ve doğrudan HRIS API
+senkronizasyonu anlamına gelmez.
+
+**Gözden geçirme:** 2027-02-16 (üç ay sonra) veya ilgili sistemi adıyla isteyen
+imzalı sözleşme geldiğinde, hangisi önceyse. Kapanış için karar kaydındaki tüm
+kapılar ve ilgili entegrasyonun doğrulanmış teslimi gerekir; tarih teslim sözü değildir.
 
 ## Yeni bir istisna eklerken
 

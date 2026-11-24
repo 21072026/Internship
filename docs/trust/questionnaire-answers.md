@@ -8,7 +8,7 @@ this project can honestly give today** and the file that proves it. Internal
 reference: answering the next 200-line spreadsheet should be copy-and-paste,
 not archaeology.
 
-**Last reviewed: 2026-10-27.**
+**Last reviewed: 2026-11-16** (provisioning answer; other rows retain their existing evidence).
 
 ### How to use this file
 
@@ -62,6 +62,7 @@ not archaeology.
 | Is customer data isolated per tenant? | ⚠️ **The engine exists and is off.** Every authenticated route that touches a tenant-anchored model is wrapped, and isolation is proven in e2e with the flag on — but `MT_ENFORCE_ISOLATION` is `false` in production, where all rows sit in one `default` organisation, so the live app is effectively single-tenant. Do not read "isolation engine" as "isolated". | [`docs/tenant-isolation.md`](../tenant-isolation.md), [#1549](https://github.com/21072026/Internship/issues/1549), [#1564](https://github.com/21072026/Internship/issues/1564) |
 | Can support staff impersonate a user? Is it audited? | ✅ Admin-only, single-use grant, fully audited, and cannot be used to delete the impersonated account. | [`src/lib/impersonation.ts`](../../src/lib/impersonation.ts), [`SECURITY.md`](../../SECURITY.md) |
 | How are API keys handled? | ✅ Stored as SHA-256 hashes, never in plaintext; each key has an owner, scopes, an expiry and can be revoked, all enforced at the door, and an organisation-less `/api/v1` read is refused. | [`src/lib/apiKey.ts`](../../src/lib/apiKey.ts), [#1545](https://github.com/21072026/Internship/issues/1545), [#1546](https://github.com/21072026/Internship/issues/1546) (fixed) |
+| Do you support SCIM? | ❌ No SCIM 2.0 or direct Workday/SAP SuccessFactors connector. Scheduled roster ingestion provides opt-in automatic deprovisioning for tenant mentees, subject to grace periods and safety checks. See the [EN/TR/DE answer below](#provisioning-do-you-support-scim). | [Provisioning decision and contract gate](../provisioning-strategy.md), [offboarding rules](../roster-feeds.md), [#1970](https://github.com/21072026/Internship/issues/1970) |
 
 ## C. Encryption
 
@@ -155,6 +156,70 @@ not archaeology.
 | Which languages does the interface support? | ✅ English, Turkish and German, with key parity enforced in CI (`npm run check:i18n`). | [`src/i18n/dictionaries.ts`](../../src/i18n/dictionaries.ts), [`scripts/check-i18n.ts`](../../scripts/check-i18n.ts) |
 
 ---
+
+## Provisioning: Do you support SCIM?
+
+Copyable answers reviewed **2026-11-16**. Evidence for all three:
+[provisioning strategy / unlock condition](../provisioning-strategy.md),
+[scheduled ingestion](../roster-feed.md), [deprovisioning rules](../roster-feeds.md).
+These answers describe available capability, not proof that a particular tenant
+has configured it. Confirm the feed, schedule, grace period and monitoring before
+agreeing an offboarding deadline.
+
+### English
+
+We do not currently support SCIM 2.0 or direct Workday or SAP SuccessFactors
+connectors. The security requirement behind SCIM is commonly timely removal of
+access when someone leaves. Our current alternative is scheduled roster ingestion:
+your organization supplies a CSV export over SFTP or HTTPS, for example nightly.
+With automatic deprovisioning enabled, a mentee missing from the feed is deactivated
+on a successful run after the configured grace period. Existing sessions are
+invalidated on their next request and remembered devices are revoked. This covers
+mentees in your organization, not staff accounts, and deprovisioning is off by
+default. Safety checks can stop a run; failures or stale exports delay removal,
+so run monitoring and manual urgent offboarding remain necessary. This is scheduled,
+not real-time, and an HR-system CSV export is not a direct HRIS integration.
+SCIM and named connectors require a signed contract explicitly naming them and
+completion of the platform prerequisites documented in our provisioning strategy.
+
+### Türkçe
+
+Şu anda SCIM 2.0 veya doğrudan Workday ya da SAP SuccessFactors bağlayıcısı
+sunmuyoruz. SCIM sorusunun arkasındaki güvenlik gereksinimi çoğunlukla, bir kişi
+ayrıldığında erişiminin zamanında kapatılmasıdır. Bugünkü alternatifimiz planlı
+liste aktarımıdır: kurumunuz SFTP veya HTTPS üzerinden, örneğin her gece, CSV
+dosyası sağlar. Otomatik erişim kapatma açıldığında, listede bulunmayan mentee
+hesabı yapılandırılan bekleme süresinden sonraki başarılı çalışmada pasifleştirilir.
+Mevcut oturumları bir sonraki istekte geçersiz olur ve hatırlanan cihazları iptal
+edilir. Bu özellik kurumunuzun mentee hesaplarını kapsar; admin ve mentor gibi
+personel hesaplarını kapsamaz ve varsayılan olarak kapalıdır. Güvenlik kontrolleri
+çalışmayı durdurabilir; başarısız aktarımlar veya güncel olmayan dosyalar kapatmayı
+geciktirebilir. Bu nedenle çalışma kayıtları ve alarmlar izlenmeli, acil durumlarda
+hesap elle kapatılmalıdır. Süreç planlıdır, gerçek zamanlı değildir; İK sisteminden
+alınan CSV dosyası doğrudan HRIS entegrasyonu anlamına gelmez. Önce beslemenin
+kurulumunu, sıklığını ve bekleme süresini birlikte doğrulamak gerekir. SCIM veya
+adı belirtilen bağlayıcılar için sistemi açıkça adlandıran imzalı sözleşme ve
+karar kaydındaki platform önkoşullarının tamamlanması gerekir; bu bir teslim
+tarihi taahhüdü değildir.
+
+### Deutsch
+
+Wir unterstützen derzeit weder SCIM 2.0 noch direkte Konnektoren für Workday
+oder SAP SuccessFactors. Hinter der SCIM-Frage steht häufig die Sicherheitsanforderung,
+Zugriffe beim Ausscheiden rechtzeitig zu entziehen. Unsere heutige Alternative
+ist ein geplanter Listenimport: Ihre Organisation stellt beispielsweise jede
+Nacht einen CSV-Export über SFTP oder HTTPS bereit. Bei aktivierter automatischer
+Deprovisionierung wird ein fehlendes Mentee-Konto nach der eingestellten Wartefrist
+in einem erfolgreichen Lauf deaktiviert. Bestehende Sitzungen werden bei der
+nächsten Anfrage ungültig; gespeicherte Gerätezugänge werden widerrufen. Das gilt
+für Mentees Ihrer Organisation, nicht für Administrations- oder Mentoringpersonal.
+Die Funktion ist standardmäßig ausgeschaltet. Sicherheitsprüfungen können einen
+Lauf stoppen; Fehler oder veraltete Exporte verzögern den Zugriffsentzug.
+Überwachung und manuelle Deaktivierung bei dringenden Fällen bleiben erforderlich.
+Dies ist ein geplanter Vorgang, keine Echtzeitübertragung. Ein CSV-Export aus
+einem HR-System ist keine direkte HRIS-Anbindung. SCIM und benannte Konnektoren
+setzen einen unterschriebenen Vertrag voraus, der das jeweilige System ausdrücklich
+nennt, sowie die erfüllten Plattformvoraussetzungen aus unserer Provisionierungsstrategie.
 
 ## Answers to keep ready for the awkward questions
 
