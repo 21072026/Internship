@@ -620,3 +620,13 @@ Denetim izi: koşu, ortak `retention.pruned` satırına ek olarak kendi
 anonimleştirildi, kaçı hata verdi, hangi gün penceresiyle) — üründe bir kişinin
 verisini kendiliğinden silen tek iş bu olduğu için "hangi gece gitti?" sorusunun
 tek başına cevaplanabilmesi gerekiyor.
+
+### Product-update interest records (#1406)
+
+`Subscriber` is an organisation-scoped consent record without a User account.
+Organisation admins alone can list/export it. The retention registry removes
+unconfirmed requests after seven days and confirmed/withdrawn records after
+365 days from signup. Mail authorization fails closed on missing or expired rows.
+Account erasure deletes tenant/address-matched Subscriber rows, including their
+referrer; unaffiliated contacts can request operator deletion by tenant/address.
+See [interest-signup.md](interest-signup.md) for the token and delivery boundaries.

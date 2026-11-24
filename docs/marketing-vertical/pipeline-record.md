@@ -231,3 +231,23 @@ sales book** as each record's owner would.
   back; the users list offers "remove" on any row still carrying it.
 - **Live.** The flag is read on every request: a revoke takes effect on the
   dispatcher's next request; no session is revoked.
+
+## "Assigned to you" (#3874)
+
+A record that came to a rep from someone else is listed first on `/sales` and as
+a one-line strip above the columns on `/sales/board`, until the rep opens it.
+Three nullable columns on `MentorshipRelation` carry it:
+
+- **Written** by the two paths that put a record on someone else's book:
+  `transferMentorship()` (both modes, so the board's hand-off and the admin's
+  transfer alike) and the admin's `POST /api/mentorship`. Each sets
+  `assignedAt`, `assignedById` (the actor) and clears `assignmentSeenAt`.
+  A pool claim and a lead the rep typed in are the rep's own doing and write
+  nothing; neither does a bulk import.
+- **Read** by `src/lib/assignedToYou.ts` only: own, `ACTIVE`, in the tenant,
+  `assignedAt` set, `assignmentSeenAt` null, `assignedById` not the viewer.
+  Rows from before the columns read as seen, so the rollout shows no one an old
+  book as "new".
+- **Cleared** when the owner opens `/sales/leads/[id]`
+  (`markAssignmentSeen`, one conditional `updateMany`) — not when an admin or a
+  colleague reads it, and not under impersonation.

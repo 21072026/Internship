@@ -12,9 +12,10 @@ export interface PaymentRow {
   id: string;
   receivedAt: string;
   amountMinor: number;
+  listAmountMinor: number | null;
   currency: string;
   externalPaymentRef: string;
-  source: 'MANUAL' | 'API' | 'IMPORT';
+  source: 'MANUAL' | 'API' | 'IMPORT' | 'INVOICE';
   customerId: string;
   customerRef: string;
   /** The admin-written label the partner sees (#3352); null when none. */
@@ -65,6 +66,7 @@ export async function listPayments(
         amountMinor: true,
         transactionCount: true,
         unitPriceMinor: true,
+        listAmountMinor: true,
         currency: true,
         externalPaymentRef: true,
         source: true,
@@ -82,6 +84,8 @@ export async function listPayments(
       // The breakdown of the commission base when it was entered as one (#3554); both or neither.
       transactionCount: r.transactionCount,
       unitPriceMinor: r.unitPriceMinor,
+      // The month's list price beside a paid invoice amount (#3845/#3846); null when none.
+      listAmountMinor: r.listAmountMinor,
       currency: r.currency,
       externalPaymentRef: r.externalPaymentRef,
       source: r.source,

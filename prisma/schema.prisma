@@ -309,6 +309,7 @@ model Organization {
   unmappedSkillTerms      UnmappedSkillTerm[]
   mentorApplications      MentorApplication[]
   mentorOffers            MentorOffer[]
+  subscribers             Subscriber[]
   companyInquiries        CompanyInquiry[]
   documentRequirements    DocumentRequirement[]
   documentReviews         DocumentReview[]
@@ -2576,6 +2577,11 @@ model SupportReport {
   contactAllowed Boolean
   status         SupportReportStatus @default(NEW)
   githubIssueUrl String?             @db.VarChar(512)
+  // What the admin last told the reporter with a status change (#3877): the
+  // note of the "tell the reporter" mail, kept so the reporter's own list
+  // (/account/feedback) can show it. Written only when that mail was asked for.
+  reporterNote   String?             @db.VarChar(1000)
+  reporterNoteAt DateTime?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
@@ -4581,6 +4587,16 @@ model MentorshipRelation {
   // because re-pointing `relationId` would re-attribute the outgoing mentor's
   // work to the incoming one — InteractionLog has no author column of its own.
   previousRelationId         String?
+  // "Assigned to you" (#3874, src/lib/assignedToYou.ts): when the record last
+  // came to its owner from someone else (an admin's assignment or transfer, a
+  // colleague's hand-off), by whom, and when the owner first opened it since.
+  // The sales home lists own active records with assignedAt set, assignedById
+  // not the owner and assignmentSeenAt null. Plain id, no foreign key — an
+  // erased account simply reads as "someone". All nullable: older rows were
+  // never "new" and read as seen.
+  assignedAt                 DateTime?
+  assignedById               String?
+  assignmentSeenAt           DateTime?
   // What the pair agreed to (#1784, story #1782). `expectedEndDate` is when
   // the pairing is MEANT to finish; `completedAt` is when it actually ended —
   // deliberately two columns. Not `stageDeadline` either: that is the pipeline
@@ -9423,6 +9439,9 @@ enum AffiliatePaymentSource {
   // commission is frozen as imported: the writer never creates, changes or
   // reports drift for it.
   IMPORT
+  // A paid invoice from the monthly invoice CSV (#3846): the amount is what the
+  // customer paid; the commission is computed like any other payment.
+  INVOICE
 }
 
 enum AffiliatePayoutMethod {
@@ -9520,6 +9539,10 @@ model AffiliateProgramSettings {
   // Not part of the commission plan: it prices future entries and never
   // re-evaluates a stored payment.
   priceList        Json?
+  // Which column of the monthly invoice CSV holds what (#3846,
+  // src/lib/affiliateInvoiceImportRule.ts): header names as the file spells
+  // them, saved by the last import. Organisation data; null = never imported.
+  invoiceColumns   Json?
 }
 
 // A picture or video the public partner page's theme shows (#3535): the logo,
@@ -9619,13 +9642,19 @@ model AffiliatePayment {
   org                Organization           @relation(fields: [orgId], references: [id])
   customerId         String
   customer           AffiliateCustomer      @relation(fields: [customerId], references: [id])
-  // The commission base (#3551): undiscounted, gross, VAT included — not the
-  // amount actually paid. Always the resolved base (resolvePaymentBase()).
+  // The commission base (#3551), gross, VAT included: what the customer paid
+  // (an invoice, #3846), or the list price when only a transaction count was
+  // given (#3844). Always the resolved base (resolvePaymentBase()/priceByList()).
   amountMinor        Int
   // The breakdown, when the payment arrived as count × unit price (#3552):
   // both set or both null. Null on every payment recorded as a bare amount.
   transactionCount   Int?
   unitPriceMinor     Int?
+  // The price list's gross price for `transactionCount` (#3845), when the payment
+  // was priced by it. A first payment's one-off commission is chosen by this
+  // amount; the percent phase earns on `amountMinor` (what was paid). Null: the
+  // one-off commission reads `amountMinor` too.
+  listAmountMinor    Int?
   currency           String                 @db.VarChar(3)
   // Never in the future (the writer refuses it).
   receivedAt         DateTime
@@ -9933,4 +9962,33 @@ model CompanyMembership {
   @@unique([companyId, userId])
   @@index([orgId, companyId])
   @@index([userId])
+}
+
+// Public interest list (#1406), separate from User/newsletter preferences.
+// A request is never marketing permission until the address owner confirms it.
+model Subscriber {
+  id                    String       @id
+  orgId                 String
+  org                   Organization @relation(fields: [orgId], references: [id])
+  email                 String       @db.VarChar(191)
+  role                  String       @db.VarChar(10)
+  locale                String       @db.VarChar(5)
+  consent               Boolean
+  consentAt             DateTime
+  consentTextVersion    String
+  createdAt             DateTime     @default(now())
+  confirmedAt           DateTime?
+  unsubscribedAt        DateTime?
+  confirmationTokenHash String?      @db.VarChar(64)
+  confirmationExpiresAt DateTime?
+  unsubscribeTokenHash  String       @db.VarChar(64)
+  utmSource             String?
+  utmMedium             String?
+  utmCampaign           String?
+  utmTerm               String?
+  utmContent            String?
+  referrer              String?      @db.Text
+
+  @@unique([orgId, email])
+  @@index([createdAt])
 }

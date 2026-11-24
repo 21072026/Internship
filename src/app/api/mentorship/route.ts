@@ -547,6 +547,9 @@ export async function POST(request: Request) {
           kind,
           // A placement enters the funnel when it starts; coaching never does (#1503).
           funnelEnteredAt: kind === 'PLACEMENT' ? start : null,
+          // "Assigned to you" (#3874): an admin put this record on the owner's book.
+          assignedAt: new Date(),
+          assignedById: session.user.id,
         }),
       );
     } catch (e) {

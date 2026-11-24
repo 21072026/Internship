@@ -12,6 +12,9 @@ The rules live in one pure, unit-tested module, `src/lib/rosterDeprovisionRule.t
 against MySQL. Where this page and the code disagree, the code is right and this page has a
 bug.
 
+For the SCIM/Workday/SuccessFactors deferral, contract gate and buyer-facing answer,
+see the [provisioning strategy](provisioning-strategy.md) (#1970).
+
 ## The promise
 
 > When HR removes someone from the feed, their access ends on the next run after the grace

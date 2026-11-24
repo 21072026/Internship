@@ -1,4 +1,5 @@
 'use client';
+import { track, ANALYTICS_EVENTS } from '@/lib/track';
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -79,6 +80,7 @@ export function CompanyInquiryForm({ variant = 'internship' }: { variant?: 'inte
         }),
       });
       if (res.ok) {
+        track(ANALYTICS_EVENTS.COMPANY_INQUIRY_SUBMITTED);
         setStatus('sent');
         return;
       }

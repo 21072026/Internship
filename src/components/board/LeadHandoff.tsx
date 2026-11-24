@@ -8,7 +8,8 @@ import { Select } from '@/components/ui/Select';
 import { Textarea } from '@/components/ui/Textarea';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 import { useToast } from '@/components/ui/Toast';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
+import { formatDate } from '@/lib/relativeTime';
 import { HANDOFF_ACTIONS, HANDOFF_NOTE_MAX, todayIso, type HandoffAction } from '@/lib/leadHandoffRule';
 
 // The rep strip above the sales and admin boards and its dialog: drop a lead
@@ -24,12 +25,23 @@ export interface TeamMember {
   fullName: string;
   avatarUrl: string | null;
   self: boolean;
+  /** Load line (#3875): their open records, and overdue follow-ups when the viewer may see them (else null). */
+  open?: number;
+  overdue?: number | null;
 }
 
 interface Pending {
   relationId: string;
   leadName: string;
   recipientId: string | null;
+}
+
+/** GET /api/sales/leads/[id]/handoff (#3873): who has it now, and its follow-up. */
+interface Current {
+  ownerId: string;
+  ownerName: string;
+  nextActionAt: string | null;
+  nextActionNote: string | null;
 }
 
 /** Plain-text slots: the title and the toast are strings, not elements. */
@@ -141,9 +153,22 @@ function LeadHandoffStrip({ members, onDrop }: { members: TeamMember[]; onDrop: 
                 {initials(m.fullName)}
               </span>
             )}
-            <span className="whitespace-nowrap">
-              {m.fullName}
-              {m.self && <span className="ml-1 text-xs text-gray-400">({h.you})</span>}
+            <span className="flex flex-col leading-tight">
+              <span className="whitespace-nowrap">
+                {m.fullName}
+                {m.self && <span className="ml-1 text-xs text-gray-400">({h.you})</span>}
+              </span>
+              {typeof m.open === 'number' && (
+                <span className="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400" data-testid={`handoff-target-load-${m.id}`}>
+                  {h.loadOpen.replace('{n}', String(m.open))}
+                  {typeof m.overdue === 'number' && (
+                    <span className={m.overdue > 0 ? 'text-red-600 dark:text-red-400' : undefined}>
+                      {' · '}
+                      {h.loadOverdue.replace('{n}', String(m.overdue))}
+                    </span>
+                  )}
+                </span>
+              )}
             </span>
           </li>
         ))}
@@ -165,6 +190,7 @@ function LeadHandoffDialog({
 }) {
   const t = useT();
   const h = t.leadHandoff;
+  const locale = useLocale();
   const toast = useToast();
   const open = pending !== null;
   const dialogRef = useModalFocus<HTMLDivElement>(open, onClose);
@@ -174,6 +200,8 @@ function LeadHandoffDialog({
   const [dueOn, setDueOn] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [current, setCurrent] = useState<Current | null>(null);
+  const [keep, setKeep] = useState(false);
 
   useEffect(() => {
     if (!pending) return;
@@ -182,13 +210,31 @@ function LeadHandoffDialog({
     setNote('');
     setDueOn(todayIso());
     setError(null);
+    setKeep(false);
+    setCurrent(null);
+    // Who has the record now, and the follow-up it carries (#3873). Read-only and
+    // best effort: without it the dialog is what it was, minus the keep option.
+    let alive = true;
+    fetch(`/api/sales/leads/${pending.relationId}/handoff`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: Current | null) => alive && setCurrent(d))
+      .catch(() => alive && setCurrent(null));
+    return () => {
+      alive = false;
+    };
   }, [pending]);
 
   if (!pending) return null;
 
   const recipient = members.find((m) => m.id === recipientId);
-  const noteRequired = action === 'other';
-  const canSubmit = !!recipientId && (!noteRequired || note.trim().length > 0) && !busy;
+  const hasFollowUp = !!current && (!!current.nextActionAt || !!current.nextActionNote);
+  const keeping = keep && hasFollowUp;
+  const noteRequired = !keeping && action === 'other';
+  const canSubmit = !!recipientId && recipientId !== current?.ownerId && (!noteRequired || note.trim().length > 0) && !busy;
+  // One follow-up as a phrase: its day (a calendar day at UTC midnight), its note, or both.
+  const followUpText = current
+    ? [current.nextActionAt ? formatDate(current.nextActionAt, locale, { timeZone: 'UTC' }) : null, current.nextActionNote].filter(Boolean).join(' — ')
+    : '';
   const title = pending.recipientId && recipient
     ? fill(h.dialogTitle, { lead: pending.leadName, name: recipient.fullName })
     : fill(h.dialogTitleNoRecipient, { lead: pending.leadName });
@@ -200,7 +246,11 @@ function LeadHandoffDialog({
       const res = await fetch(`/api/sales/leads/${pending.relationId}/handoff`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ toUserId: recipientId, action, note: note.trim() || null, dueOn: dueOn || null }),
+        body: JSON.stringify(
+          keeping
+            ? { toUserId: recipientId, action, keepFollowUp: true }
+            : { toUserId: recipientId, action, note: note.trim() || null, dueOn: dueOn || null },
+        ),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -234,6 +284,14 @@ function LeadHandoffDialog({
         </h2>
 
         <div className="space-y-4">
+          {current && (
+            <p className="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-700 dark:bg-gray-900 dark:text-gray-300" data-testid="lead-handoff-current">
+              {hasFollowUp
+                ? fill(h.currentLine, { name: current.ownerName, followUp: followUpText })
+                : fill(h.currentNoFollowUp, { name: current.ownerName })}
+            </p>
+          )}
+
           {!pending.recipientId && (
             <Select
               label={h.recipientLabel}
@@ -246,51 +304,72 @@ function LeadHandoffDialog({
             />
           )}
 
-          <fieldset>
-            <legend className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">{h.actionLabel}</legend>
-            <div className="flex flex-wrap gap-2" role="radiogroup">
-              {HANDOFF_ACTIONS.map((a) => (
-                <label
-                  key={a}
-                  className={`inline-flex min-h-11 cursor-pointer items-center rounded-lg border px-3 text-sm ${
-                    action === a
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="lead-handoff-action"
-                    value={a}
-                    checked={action === a}
-                    onChange={() => setAction(a)}
-                    data-testid={`lead-handoff-action-${a}`}
-                    className="sr-only"
-                  />
-                  {h.actions[a]}
+          {hasFollowUp && (
+            <fieldset>
+              <legend className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">{h.followUpChoice}</legend>
+              <div className="flex flex-col gap-1.5 text-sm text-gray-700 dark:text-gray-200" role="radiogroup">
+                <label className="inline-flex items-center gap-2">
+                  <input type="radio" name="lead-handoff-follow-up" checked={!keep} onChange={() => setKeep(false)} data-testid="lead-handoff-follow-up-new" />
+                  {h.followUpNew}
                 </label>
-              ))}
-            </div>
-          </fieldset>
+                <label className="inline-flex items-center gap-2">
+                  <input type="radio" name="lead-handoff-follow-up" checked={keep} onChange={() => setKeep(true)} data-testid="lead-handoff-follow-up-keep" />
+                  {h.followUpKeep}
+                </label>
+              </div>
+            </fieldset>
+          )}
 
-          <Textarea
-            aria-label={h.noteLabel}
-            data-testid="lead-handoff-note"
-            placeholder={noteRequired ? h.notePlaceholderOther : h.notePlaceholder}
-            maxLength={HANDOFF_NOTE_MAX}
-            required={noteRequired}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
+          {/* Keeping the follow-up leaves nothing to write: the step fields go. */}
+          {!keeping && (
+            <>
+              <fieldset>
+                <legend className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">{h.actionLabel}</legend>
+                <div className="flex flex-wrap gap-2" role="radiogroup">
+                  {HANDOFF_ACTIONS.map((a) => (
+                    <label
+                      key={a}
+                      className={`inline-flex min-h-11 cursor-pointer items-center rounded-lg border px-3 text-sm ${
+                        action === a
+                          ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="lead-handoff-action"
+                        value={a}
+                        checked={action === a}
+                        onChange={() => setAction(a)}
+                        data-testid={`lead-handoff-action-${a}`}
+                        className="sr-only"
+                      />
+                      {h.actions[a]}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
 
-          <Input
-            id="lead-handoff-due"
-            type="date"
-            label={h.dueLabel}
-            data-testid="lead-handoff-due"
-            value={dueOn}
-            onChange={(e) => setDueOn(e.target.value)}
-          />
+              <Textarea
+                aria-label={h.noteLabel}
+                data-testid="lead-handoff-note"
+                placeholder={noteRequired ? h.notePlaceholderOther : h.notePlaceholder}
+                maxLength={HANDOFF_NOTE_MAX}
+                required={noteRequired}
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+
+              <Input
+                id="lead-handoff-due"
+                type="date"
+                label={h.dueLabel}
+                data-testid="lead-handoff-due"
+                value={dueOn}
+                onChange={(e) => setDueOn(e.target.value)}
+              />
+            </>
+          )}
 
           {error && (
             <p role="alert" className="text-sm text-red-600" data-testid="lead-handoff-error">

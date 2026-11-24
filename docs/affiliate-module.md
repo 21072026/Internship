@@ -17,7 +17,7 @@ per organisation, and every number in tests and examples here is synthetic.
 |---|---|---|
 | 1 | Where it runs | A module of the CRM, gated by the `affiliate` capability (MARKETING vertical). Every row carries `orgId`. |
 | 2 | Commission rules | **A per-organisation commission plan (data)**, evaluated by one pure engine. The engine has no defaults that mirror a real contract. |
-| 3 | Payment source | **Manual entry by an ADMIN** (`source` = `MANUAL`) and the account event `payment_received` from the source system (`API`, [#3355](#payments-from-the-source-system-3355)) both go through the one payment writer, `recordAffiliatePayment()`. Both carry the [commission base](#commission-base-35513552): the undiscounted gross amount for the period's transaction count, never the discounted amount paid. No commission is written anywhere else — except the one-off migration (`IMPORT`, below), which takes a previous system's history as recorded. Refunds and cancellations are not handled yet (#3475). |
+| 3 | Payment source | **Manual entry by an ADMIN** (`source` = `MANUAL`) and the account event `payment_received` from the source system (`API`, [#3355](#payments-from-the-source-system-3355)) both go through the one payment writer, `recordAffiliatePayment()`. Since #3846 the monthly invoice CSV (`INVOICE`, [Monthly invoice import](#monthly-invoice-import-3846)) is a third entry path. All of them carry the [commission base](#commission-base-35513552): the paid gross amount, with the month's list price beside it when known — the one-off commission is chosen by the list price, the percent earns on what was paid. No commission is written anywhere else — except the one-off migration (`IMPORT`, below), which takes a previous system's history as recorded. Refunds and cancellations are not handled yet (#3475). |
 | 4 | Attribution | A customer (the customer's id on the product side, opaque here) is linked to a partner **automatically** when an account event carries a matching `referral_code` ([Automatic attribution](#automatic-attribution-3354)), or by an ADMIN on the first manual payment entry. One partner per customer, first link wins. |
 | 5 | Identity | Existing CRM sign-in, new `AFFILIATE` role. Partners moved from a previous system are **invited** (invitation / sign-in link); no password hash from another system is ever imported. |
 | 6 | Referral codes | Permanent once issued, unique per organisation. A migrated partner keeps the exact code the previous system used (a number, a custom slug, or a user name with `.` and `@`, #3550). One rule: `src/lib/affiliateCodeRule.ts` — a letter or digit, then letters, digits, `.`, `@`, `-`, `_`, at most 100. A code with a space is reported by the migration as needing a new code. `/r/ada%40example` and `/r/ada@example` are one code; links carry `@` as `%40`. |
@@ -50,6 +50,8 @@ partner on the queue (see "Re-evaluation after a plan change"); an unchanged sav
 | `windowMonths` | A customer's payments earn percent commission for this many months from that customer's first payment. Null = no limit. |
 | `payoutDays` | Days after a payment by which its commission is due (shown to the admin, not enforced). |
 | `afterNotice` | `STOP_ALL` (nothing accrues once a termination takes effect) or `RUN_OUT` (customers referred before it keep earning inside their window; nothing for customers referred after). |
+| `monthAligned` | (#3845) `true`: the percent phase starts at the **beginning of the calendar month** in which the switch customer first paid, and a customer's window runs `windowMonths` calendar months from the beginning of its first paying month. `false` (and every plan stored before #3845, which has no such key): both start at the payment itself. A new plan in the form starts as `true`. |
+| `timeZone` | (#3845) IANA zone whose calendar months `monthAligned` counts in; default `Europe/Berlin`. Refused if the runtime does not know it. |
 
 **Engine semantics** (fixed, documented here, not configurable):
 
@@ -59,6 +61,16 @@ partner on the queue (see "Re-evaluation after a plan change"); an unchanged sav
   paying customer. From then on, every payment received **at or after** that
   instant earns `percentBps` — for all of the partner's customers, the earlier ones
   included — inside each customer's window. Nothing is recomputed retroactively.
+- **Month-aligned plans** (#3845): the switch instant is moved back to the
+  beginning of that payment's month (`monthStartInZone()`, Intl only, DST-safe),
+  so the month's earlier payments of earlier customers earn the percent too. A
+  first payment of a customer **before** the Nth still earns only its tier, even
+  inside that month. The window end is `customerWindowEndsAt()` — month-aligned,
+  the 1st of the month `windowMonths` after the first paying month.
+- **Which amount** (#3845): a first payment's tier band is picked by the payment's
+  `listAmountMinor` (the price list's price for the month's transactions) when it
+  has one, else by `amountMinor`; the percent phase always earns on `amountMinor`
+  (what was paid). A count priced by the list (#3844) stores the same value in both.
 - A customer's ordinal is decided by **first-payment date**, not by entry order.
   The engine therefore judges a partner's **whole** history in one pass, and a
   back-dated entry is answered by running it again.
@@ -112,11 +124,23 @@ unit-tested with synthetic plans.
 
 ### Commission base (#3551/#3552)
 
-A payment's `amountMinor` is the **commission base**, not the amount the customer
-actually paid: the undiscounted, gross (VAT included) amount for the period's
-transaction count. A discount the customer got does not lower the partner's
-commission. In a partial month (a free period ending mid-month) the free and the
-paid transactions are added up, and the base is the amount for that total.
+**Two bases, decided by the programme owner on 2026-11-17 (#3842)** — this
+replaces the earlier single rule "always the undiscounted list price" (#3551):
+
+- **The one-off (tier) commission** of a customer's first payment is chosen by the
+  **list price of that month's transactions**, gross (VAT included): the
+  price list (shape (c) below) turns the count into an
+  amount (`listAmountMinor`). A month at or below the free limit is not a payment
+  and does not make a paying customer. In a partial month (a free period ending
+  mid-month) the free and the paid transactions are added up.
+- **Every percent commission** earns on what the customer **actually paid**, gross
+  — `amountMinor`, from the paid invoice ([Monthly invoice
+  import](#monthly-invoice-import-3846)) or a typed entry. A discount on the
+  invoice therefore lowers the percent, never the one-off commission.
+
+A payment without a list price (a bare amount, the earlier shapes below) uses
+`amountMinor` for both. The engine reads `listAmountMinor ?? amountMinor` for the
+tier and `amountMinor` for the percent (#3845).
 
 A payment may arrive in two shapes, and the writer accepts both:
 
@@ -137,10 +161,10 @@ caller multiplies. Refusals come back as `invalid_input` with one issue:
 `amountMinor` only, so existing payments and their commissions do not change.
 Every entry path takes both shapes (#3553) and leaves the decision to the rule:
 
-- **Admin form** (`/admin/affiliates/payments`): "Transactions × price" (the
-  default, with the product shown live, e.g. `340 × €0.15 = €51.00`) or "Base
-  amount", with the undiscounted/gross/partial-month note under the fields. A
-  refusal names its issue.
+- **Admin form** (`/admin/affiliates/payments`): since #3844 "Number of
+  transactions" (priced by the price list, shown live) or "Base amount"; the
+  earlier "Transactions × price" fields are gone from the form (the API still
+  takes them). A refusal names its issue.
 - **Admin API** (`POST /api/admin/affiliate/payments`): `amountMinor`,
   `transactionCount` + `unitPriceMinor`, or all three; a refusal is
   `400 { code: 'invalid_input', issues: [<issue>] }`. A client sending only
@@ -176,6 +200,23 @@ list only the amount can be entered. A **reference left empty** becomes
 `<customer number>-YYYY-MM` (`defaultPaymentRef()`), the month of the received
 day, so a second entry for the same customer and month is caught as a duplicate;
 the API answers with the reference it used.
+
+### The partner contract and the two bases (#3847)
+
+The contract text is organisation data (`AffiliateProgramSettings.contract`,
+edited on the settings page) — it is never written in this repository. A
+contract that defines the commission base as the amounts **actually paid** only
+matches the percent half of the rule above. When the two bases are adopted, the
+admin updates the text so that it says both:
+
+- the one-off commission of a customer's first paying month is measured on the
+  **list price of that month's transactions** (gross, VAT included, on the
+  published price list, regardless of any discount);
+- the percent commission is measured on the amounts the customer **actually
+  paid** (gross), for the agreed number of months from its first paying month.
+
+Saving the text bumps `contractVersion`, so every partner accepts the new version
+before the portal opens again ([The partner's account](#the-partners-account)).
 
 ### Re-evaluation after a plan change (#3170)
 
@@ -227,7 +268,8 @@ All models carry `orgId` and are registered in `TENANT_MODELS`.
   account's cancellation, null while live (#3542, [Customer status](#customer-status-3542)).
 - **AffiliatePayment** — `amountMinor` (the [commission base](#commission-base-35513552)),
   `transactionCount` + `unitPriceMinor` (the breakdown when it arrived as one, both
-  or neither), `currency`, `receivedAt` (never in the future), `source` (MANUAL / API / IMPORT), `externalPaymentRef` (**required,
+  or neither), `listAmountMinor` (the month's list price, #3845 — the tier is chosen by it),
+  `currency`, `receivedAt` (never in the future), `source` (MANUAL / API / IMPORT / INVOICE), `externalPaymentRef` (**required,
   unique per organisation**, so a double entry is caught even under a mistyped customer).
 - **AffiliateCommission** — one per payment at most: `kind` (TIER / PERCENT, or
   IMPORTED for a migrated one),
@@ -990,6 +1032,43 @@ through `evaluatePartner()`). The board adds only admin-only pieces on top, in
 - A fixed number of queries whatever the programme's size: the partners, the shared
   funnel and threshold queries, and for the window warning every customer's status
   (`partnerCustomerStatuses()`) and the first valid payment per customer.
+
+## Monthly invoice import (#3846)
+
+Once a month the admin imports last month's invoices as one CSV file at
+`/admin/affiliates/invoices` (`POST /api/admin/affiliate/invoices/import`,
+`affiliate.write`). The rule is pure in `src/lib/affiliateInvoiceImportRule.ts`, the
+run in `src/lib/affiliateInvoiceImport.ts` on the shared engine (`runImport`): the
+preview is the same run with a writer that does not write, and the import is
+offered only after a preview of exactly that file and those columns.
+
+- **Columns are the organisation's data.** The admin picks, from the file's own
+  header, which column holds the invoice number, the date that decides the month
+  (today the invoice date), the customer number, the PAID gross amount and —
+  optionally — the currency, a payment status with the value meaning "paid", and
+  the month's transaction count. No upstream column name is written in code. The
+  choice is saved on `AffiliateProgramSettings.invoiceColumns` by the first real
+  run and comes back next month.
+- **A row** is skipped when its status is not the "paid" value, when the paid
+  amount is zero, or when it is negative (a credit note — refunds wait for #3475);
+  it is an error when a mapped cell is missing or unreadable. Days read as
+  `DD.MM.YYYY` or `YYYY-MM-DD`; amounts in the migration's shapes (`45,22`,
+  `1.234,56`).
+- **The plan per row:** the invoice number already recorded → UNCHANGED (a
+  re-upload adds nothing); twice in the file → the second SKIP; a customer number
+  no partner brought → SKIP (the file names no partner); a month for which the
+  customer already has a payment **typed by hand** (e.g. the first month entered
+  by transaction count) → SKIP, so it is not counted twice. Several invoices of one
+  month from files are fine — each has its own number.
+- **The write** is `recordAffiliatePayment()` with source `INVOICE`, reference =
+  invoice number, `receivedAt` = the date, `amountMinor` = the paid amount. With a
+  transaction column and a price list, the month's list price is stored as
+  `listAmountMinor` (the count beside it): the one-off commission is chosen by
+  it, the percent earns on what was paid (#3845). One audit row per real run
+  (`affiliate.invoice_import`, counts only).
+- **Shown:** an invoice with a list price reads `250 transactions · list price
+  €24.40` under its amount, in the admin's payments and on the partner's
+  commissions.
 
 ## Payments from the source system (#3355)
 

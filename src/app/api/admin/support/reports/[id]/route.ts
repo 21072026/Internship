@@ -8,6 +8,7 @@ import { sendSupportReportUpdateEmail } from '@/services/emailService';
 import { withTenantScope } from '@/lib/orgContext';
 import { reportAdminOrg, SUPPORT_REPORT_STATUSES } from '@/lib/supportReportAccess';
 import { withRequestScope } from '@/lib/requestContext';
+import { notifyEvent } from '@/lib/notifications/router';
 
 // One bug report (#3130): GET the full record (context + file metadata, never
 // bytes), PATCH its status. Another org's id is 404, like a missing one.
@@ -48,11 +49,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (!parsed.success) return NextResponse.json({ error: 'Invalid request' }, { status: 400 });
     const { id } = await params;
     return withTenantScope(admin.session, async () => {
+      const before = await prisma.supportReport.findFirst({ where: { id, orgId: admin.orgId }, select: { status: true, userId: true } });
+      if (!before) return NextResponse.json({ error: 'Not found' }, { status: 404 });
       const { count } = await prisma.supportReport.updateMany({
         where: { id, orgId: admin.orgId },
         data: { status: parsed.data.status },
       });
       if (count === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      // The reporter's bell (#3878): a real change of status, or a note to them.
+      // In-app only, so no consent to contact is needed; never to the admin
+      // acting on their own report.
+      const tellInApp =
+        before.userId !== admin.session.user.id &&
+        (before.status !== parsed.data.status || (parsed.data.notifyReporter && !!parsed.data.note));
       let notified = false;
       if (parsed.data.notifyReporter) {
         const report = await prisma.supportReport.findFirst({
@@ -61,6 +70,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         });
         if (!report?.contactAllowed) {
           return NextResponse.json({ error: 'The reporter did not allow contact', code: 'contact_not_allowed' }, { status: 409 });
+        }
+        // The note is the reporter's answer: kept for their own list (#3877),
+        // whatever becomes of the mail. Without a note the earlier one stays.
+        if (parsed.data.note) {
+          await prisma.supportReport.updateMany({
+            where: { id, orgId: admin.orgId },
+            data: { reporterNote: parsed.data.note, reporterNoteAt: new Date() },
+          });
         }
         if (report.user.isActive) {
           try {
@@ -78,6 +95,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
             logger.warning('support_report.update_mail_failed', { reportId: id, error: e instanceof Error ? e.message : String(e) });
           }
         }
+      }
+      if (tellInApp) {
+        await notifyEvent(before.userId, 'support_report.updated', { reportId: id }, { channels: ['inApp'], orgId: admin.orgId });
       }
       return NextResponse.json({ ok: true, status: parsed.data.status, notified });
     });

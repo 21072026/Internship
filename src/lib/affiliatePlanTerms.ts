@@ -25,6 +25,8 @@ export interface PlanTermsView {
     boundaryCustomer: BoundaryCustomer;
     /** Months from a customer's first payment the percent applies; null = no limit. */
     windowMonths: number | null;
+    /** Phases counted in calendar months (#3845): the start and each window begin on the 1st. */
+    monthAligned: boolean;
   } | null;
   payoutDays: number;
   /**
@@ -58,6 +60,7 @@ export function planTermsView(plan: CommissionPlan): PlanTermsView {
           startsAtCustomer: plan.switchAtCustomer as number,
           boundaryCustomer: plan.boundaryCustomer,
           windowMonths: plan.windowMonths,
+          monthAligned: plan.monthAligned === true,
         }
       : null,
     payoutDays: plan.payoutDays,

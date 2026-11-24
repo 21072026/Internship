@@ -44,7 +44,10 @@ import { INTERACTION_DRAFT_EVENT, isTypingTarget, type InteractionDraftRequest }
 // "All · Interactions · System" control above the list narrows it without
 // splitting the chronology into tabs. All is the default; the choice is
 // remembered in this browser (a convenience, never relied on). The control
-// appears only once there is a system line to filter.
+// appears only once there is a system line to filter — and without it the
+// remembered choice does not apply: a lead with no system line always reads
+// All, or a "System" picked on another lead hid every interaction here with
+// no control in sight to undo it (#3879).
 
 export interface LeadInteraction {
   id: string;
@@ -73,6 +76,8 @@ export interface EarlierPeriodView {
   from: string;
   to: string | null;
   interactions: LeadInteraction[];
+  /** That period's follow-up history lines (#3870), when the viewer may read the follow-up. */
+  events?: LeadSystemEvent[];
 }
 
 const FIRST_ROWS = 3;
@@ -195,8 +200,9 @@ export function SalesInteractionsCard({
     });
   const [draft, setDraft] = useState<InteractionFormDraft | null>(null);
   // All on the server and on first paint; the remembered choice applies after hydration.
-  const [filter, setFilter] = useState<Filter>('all');
+  const [remembered, setFilter] = useState<Filter>('all');
   useEffect(() => setFilter(readFilter()), []);
+  const filter: Filter = systemEvents.length > 0 ? remembered : 'all';
   const pick = (f: Filter) => {
     setFilter(f);
     writeFilter(f);
@@ -325,13 +331,22 @@ export function SalesInteractionsCard({
             </span>
           </button>
           {earlierOpen &&
-            (period.interactions.length === 0 ? (
+            (period.interactions.length + (period.events?.length ?? 0) === 0 ? (
               <p className="mt-2 text-sm text-gray-500" data-testid="sales-lead-earlier-empty">{s.earlierPeriodEmpty}</p>
             ) : (
               <ul className="mt-2 divide-y divide-gray-100 opacity-90 dark:divide-gray-800" data-testid="sales-lead-earlier-interactions">
-                {period.interactions.map((i) => (
-                  <InteractionRow key={i.id} row={i} open={opened.has(i.id)} onToggle={() => toggle(i.id)} />
-                ))}
+                {[
+                  ...period.interactions.map((row): Entry => ({ kind: 'interaction', at: Date.parse(row.date), row })),
+                  ...(period.events ?? []).map((row): Entry => ({ kind: 'system', at: Date.parse(row.at), row })),
+                ]
+                  .sort((a, b) => b.at - a.at)
+                  .map((e) =>
+                    e.kind === 'system' ? (
+                      <SystemRow key={`s-${e.row.id}`} row={e.row} badge={s.followUpEvent.badge} />
+                    ) : (
+                      <InteractionRow key={e.row.id} row={e.row} open={opened.has(e.row.id)} onToggle={() => toggle(e.row.id)} />
+                    ),
+                  )}
               </ul>
             ))}
         </section>

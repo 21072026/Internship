@@ -60,6 +60,7 @@ const DECISIONS = new Map([
   ['MentorshipRequest.rematchNote', ERASED],
   ['MentorshipRelation.closurePlan', ERASED],
   ['MentorshipRequest.cancelReason', ERASED],
+  ['Subscriber.referrer', ERASED], // consent/attribution record deleted by address and tenant (#1406)
   ['CompanyInquiry.message', ERASED],
   ['CompanyInquiry.note', ERASED],
   ['MentorApplication.experience', ERASED],

@@ -1000,6 +1000,22 @@ async function pruneRosterRowResults(ctx: RetentionContext) {
  */
 export const BUILT_IN_RETENTION_ENTRIES: RetentionEntry[] = [
   {
+    key: 'subscriber', defaultDays: 365,
+    reason: 'Interest requests without confirmation expire after seven days; the consent, attribution and opt-out record expires after one year from signup. Missing rows cannot authorize queued or future subscriber mail (#1406).',
+    run: async (ctx) => {
+      const { processed, capped } = await pruneInBatches({
+        batchSize: ctx.batchSize, budget: ctx.budget,
+        selectIds: async (take) => (await prisma.subscriber.findMany({
+          where: { OR: [{ createdAt: { lt: new Date(ctx.now.getTime() - 365 * 86400000) } },
+            { confirmedAt: null, createdAt: { lt: new Date(ctx.now.getTime() - 7 * 86400000) } }] },
+          select: { id: true }, orderBy: { createdAt: 'asc' }, take,
+        })).map(row => row.id),
+        handleBatch: async (ids) => (await prisma.subscriber.deleteMany({ where: { id: { in: ids } } })).count,
+      });
+      return { deleted: processed, capped };
+    },
+  },
+  {
     key: 'activityLog',
     settingKey: 'activityLogRetentionDays',
     defaultDays: 365,

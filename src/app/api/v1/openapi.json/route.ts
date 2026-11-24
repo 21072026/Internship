@@ -5,6 +5,8 @@ import { API_SCOPES } from '@/lib/apiScopes';
 import { brandProductName, hostBrandFor } from '@/lib/orgBrand';
 import { API_ERROR_TYPES, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from '@/lib/api/v1';
 import { REQUISITION_STATUSES } from '@/lib/requisitions';
+import { SUPPORT_REPORT_STATUSES } from '@/lib/supportReportStatus';
+import { SUPPORT_REPORT_PAGE_MAX } from '@/lib/api/v1Support';
 import { IMPORT_ROW_CAP, MAX_OPEN_IMPORTS_PER_KEY } from '@/lib/api/v1Imports';
 import { EXPORT_RESOURCES, EXPORT_RESOURCE_NAMES, EXPORT_ROW_CAP, MAX_OPEN_EXPORTS_PER_KEY } from '@/lib/api/v1Exports';
 
@@ -266,6 +268,30 @@ export async function GET(request: Request) {
             participantIds: { type: 'array', items: str, description: 'Account ids: the organiser and, for a relationship meeting, its mentor and mentee.' },
             guestCount: { type: 'integer', description: 'External guests without an account (never named).' },
             endedAt: nwhen, cancelledAt: nwhen, createdAt: when, updatedAt: when,
+          },
+        },
+        SupportReport: {
+          type: 'object',
+          description: 'An in-app bug report or feedback of the key’s organisation. Every free-text and URL field is masked (query values, tokens, JWTs, password pairs and e-mail addresses removed). The reporter’s e-mail, the screenshot bytes and the session replay are never part of it.',
+          required: ['id', 'type', 'status', 'reporter', 'page', 'description', 'requestIds', 'consoleErrors', 'failedRequests', 'hasScreenshot', 'createdAt', 'updatedAt'],
+          properties: {
+            id: str,
+            type: { type: 'string', enum: ['BUG', 'FEEDBACK'] },
+            status: { type: 'string', enum: [...SUPPORT_REPORT_STATUSES] },
+            rating: { type: ['integer', 'null'] },
+            reporter: { type: 'object', required: ['name', 'role'], properties: { name: str, role: str } },
+            page: { type: 'string', description: 'The page the report was sent from, masked.' },
+            appVersion: str,
+            env: str,
+            description: { type: 'string', description: 'What the reporter wrote, masked.' },
+            requestIds: { type: 'array', items: str, description: 'Request ids of the failed requests, for the server logs.' },
+            consoleErrors: { type: 'array', items: { type: 'object', properties: { kind: str, message: str, stack: str, at: str } } },
+            failedRequests: { type: 'array', items: { type: 'object', properties: { method: str, url: str, status: { type: 'integer' }, durationMs: { type: 'integer' }, requestId: str, at: str } } },
+            contactAllowed: { type: 'boolean' },
+            githubIssueUrl: nstr,
+            hasScreenshot: { type: 'boolean', description: 'Whether GET /support/reports/{id}/screenshot has an image (needs `support:read_screenshots`).' },
+            createdAt: when,
+            updatedAt: when,
           },
         },
         Company: {
@@ -718,6 +744,25 @@ export async function GET(request: Request) {
         eqFilter('companyId', 'Only this company’s requests.'),
       ]),
       '/interview-requests/{id}': itemPath('hiring:read', 'InterviewRequest', 'Get an interview request'),
+      '/support/reports': listPath('support:read', 'SupportReport', 'List bug reports and feedback', `Read only. At most ${SUPPORT_REPORT_PAGE_MAX} per page (a larger \`limit\` is clamped). \`since\` is an alias of \`updatedSince\`. Every call is written to the organisation’s audit log with the key and the report ids.`, [
+        eqFilter('status', 'Only reports in this triage state.', SUPPORT_REPORT_STATUSES),
+        eqFilter('type', 'Only bug reports or only feedback.', ['BUG', 'FEEDBACK']),
+        { name: 'since', in: 'query', required: false, schema: { type: 'string', format: 'date-time' }, description: 'Alias of `updatedSince`.' },
+      ]),
+      '/support/reports/{id}': itemPath('support:read', 'SupportReport', 'Get a bug report'),
+      '/support/reports/{id}/screenshot': {
+        get: {
+          summary: 'Get a bug report’s screenshot',
+          description: 'Requires a key holding BOTH `support:read` and `support:read_screenshots` (never implied by `support:read`). The image bytes. A report of another organisation, one without a screenshot and a missing id all answer 404. Audited.',
+          security: [{ apiKey: ['support:read', 'support:read_screenshots'] }],
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+          responses: {
+            '200': { description: 'The screenshot', headers: rateLimitResponseHeaders, content: { 'image/png': { schema: { type: 'string', format: 'binary' } }, 'image/jpeg': { schema: { type: 'string', format: 'binary' } }, 'image/webp': { schema: { type: 'string', format: 'binary' } } } },
+            '404': { $ref: '#/components/responses/NotFound' },
+            ...errorResponses,
+          },
+        },
+      },
     },
     'x-api-key-scopes': {
       description:

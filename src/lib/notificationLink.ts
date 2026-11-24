@@ -12,7 +12,10 @@ export type LinkKind =
   | 'dashboard'
   // A hiring role (#1944): the applicant board for the company that owns it,
   // the requisition record for an admin, the role's root for everybody else.
-  | 'requisition';
+  | 'requisition'
+  // A report the person sent with the feedback button (#3878): their own list,
+  // scrolled to the report — the same page for every role.
+  | 'feedbackReport';
 
 type LinkIds = {
   relationId?: string;
@@ -20,6 +23,7 @@ type LinkIds = {
   projectId?: string;
   conversationId?: string;
   requisitionId?: string;
+  reportId?: string;
 };
 
 const ROOTS: Record<NotificationRole, string> = {
@@ -60,6 +64,10 @@ export function notificationLink(
   }
 
   if (kind === 'dashboard') return root;
+  if (kind === 'feedbackReport') {
+    const reportId = validId(ids.reportId);
+    return reportId ? `/account/feedback#report-${reportId}` : '/account/feedback';
+  }
   if (kind === 'support') return '/messages/support';
   if (kind === 'project') return projectId ? `/projects/${projectId}` : root;
   if (kind === 'requisition') {

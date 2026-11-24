@@ -4,6 +4,8 @@ import { authOptions } from '@/lib/auth';
 import { MentorBoard } from '@/components/board/MentorBoard';
 import { salesTeamReadAllowed } from '@/lib/salesBook';
 import { actorFromSession, can, dispatcherMay } from '@/lib/authz';
+import { tenantWhere } from '@/lib/tenantFilter';
+import { AssignedToYouCard } from '@/components/sales/AssignedToYouCard';
 
 // The rep's board (#2580): the mentor board over the viewer's own sales book
 // (GET /api/mentorship?surface=sales, src/lib/salesBookRule.ts — an ADMIN's too;
@@ -18,16 +20,20 @@ import { actorFromSession, can, dispatcherMay } from '@/lib/authz';
 export default async function SalesBoardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) notFound();
-  const [teamRead, actor] = await Promise.all([salesTeamReadAllowed(session), actorFromSession(session)]);
+  const [teamRead, actor, tenant] = await Promise.all([salesTeamReadAllowed(session), actorFromSession(session), tenantWhere(session)]);
   const writeAll =
     !!actor &&
     (dispatcherMay(actor, 'relation.write', session.user.orgId ?? null) || (await can(actor, 'relation.write', undefined, session)));
   return (
-    <MentorBoard
-      detailBase="/sales/leads"
-      handoff
-      surface="sales"
-      viewer={{ id: session.user.id, writeAll, teamRead }}
-    />
+    <>
+      {/* New on the rep's list (#3874): one line above the columns, each name a link. */}
+      <AssignedToYouCard viewerId={session.user.id} tenant={tenant} impersonating={!!session.user.impersonatorId} variant="strip" />
+      <MentorBoard
+        detailBase="/sales/leads"
+        handoff
+        surface="sales"
+        viewer={{ id: session.user.id, writeAll, teamRead }}
+      />
+    </>
   );
 }

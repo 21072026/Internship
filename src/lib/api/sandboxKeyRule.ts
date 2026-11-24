@@ -12,7 +12,9 @@
 //
 // WHAT IT CAN DO: read only. Every `*:read` scope, nothing that writes, no hook
 // subscriptions (the demo refuses /api/v1/hooks anyway — DEMO_BLOCKED_WRITES),
-// and `interactions:read_notes` is not a `:read` scope. It expires after a day
+// and `interactions:read_notes` is not a `:read` scope. `support:read` is left
+// out on purpose: the demo's feedback button is used by real visitors, so its
+// reports are real people's text even on a synthetic database. It expires after a day
 // and carries a daily request allowance on top of the per-minute limit.
 import { API_SCOPES, type ApiScope } from '../apiScopes';
 
@@ -24,7 +26,7 @@ export const MAX_LIVE_SANDBOX_KEYS = 200;
 /** Mints per address per hour. */
 export const SANDBOX_MINTS_PER_HOUR = 3;
 
-export const SANDBOX_SCOPES: readonly ApiScope[] = API_SCOPES.filter((s) => s.endsWith(':read'));
+export const SANDBOX_SCOPES: readonly ApiScope[] = API_SCOPES.filter((s) => s.endsWith(':read') && !s.startsWith('support:'));
 
 /** The database name of a `mysql://user:pass@host:port/NAME?params` URL, or ''. */
 export function databaseName(url: string | undefined | null): string {

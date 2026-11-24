@@ -40,6 +40,9 @@ interface Plan {
   windowMonths: number | null;
   payoutDays: number;
   afterNotice: AfterNotice;
+  /** Month-aligned phases (#3845) and the zone their months are counted in. */
+  monthAligned: boolean;
+  timeZone: string;
 }
 interface Settings {
   plan: Plan | null;
@@ -94,11 +97,13 @@ interface Form {
   windowMonths: string;
   payoutDays: string;
   afterNotice: AfterNotice;
+  monthAligned: boolean;
+  timeZone: string;
 }
 
 function formFrom(plan: Plan | null, currency: string, locale: string): Form {
   if (!plan) {
-    return { currency, tiers: [{ upTo: '', commission: '' }], top: '', percent: '0', switchAt: '', boundary: 'PERCENT', windowMonths: '', payoutDays: '30', afterNotice: 'RUN_OUT' };
+    return { currency, tiers: [{ upTo: '', commission: '' }], top: '', percent: '0', switchAt: '', boundary: 'PERCENT', windowMonths: '', payoutDays: '30', afterNotice: 'RUN_OUT', monthAligned: true, timeZone: 'Europe/Berlin' };
   }
   return {
     currency: plan.currency,
@@ -110,6 +115,8 @@ function formFrom(plan: Plan | null, currency: string, locale: string): Form {
     windowMonths: plan.windowMonths === null ? '' : String(plan.windowMonths),
     payoutDays: String(plan.payoutDays),
     afterNotice: plan.afterNotice,
+    monthAligned: plan.monthAligned,
+    timeZone: plan.timeZone,
   };
 }
 
@@ -124,6 +131,8 @@ function planFrom(f: Form) {
     windowMonths: parseOptionalInt(f.windowMonths),
     payoutDays: parseOptionalInt(f.payoutDays),
     afterNotice: f.afterNotice,
+    monthAligned: f.monthAligned,
+    timeZone: f.timeZone.trim(),
   };
 }
 
@@ -362,6 +371,27 @@ export default function AffiliateSettingsPage() {
               { value: 'STOP_ALL', label: L.afterNoticeStop },
               { value: 'RUN_OUT', label: L.afterNoticeRunOut },
             ]}
+          />
+          <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-300">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={form.monthAligned}
+              onChange={(e) => set({ monthAligned: e.target.checked })}
+              data-testid="affiliate-plan-month-aligned"
+            />
+            <span>
+              {L.monthAligned}
+              <span className="block text-xs text-gray-500">{L.monthAlignedHint}</span>
+            </span>
+          </label>
+          <Input
+            label={L.timeZone}
+            hint={L.timeZoneHint}
+            value={form.timeZone}
+            error={err('timeZone')}
+            onChange={(e) => set({ timeZone: e.target.value })}
+            data-testid="affiliate-plan-time-zone"
           />
           {settings.planResync && <ResyncStatus state={settings.planResync} L={L} />}
           {!readOnly && (

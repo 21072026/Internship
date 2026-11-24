@@ -121,6 +121,7 @@ async function companyContactOps(userId: string): Promise<Prisma.PrismaPromise<u
   const { realAddresses, nameOnlyCompanyIds } = await leadAccountContacts(userId, user, fallbackOrgId);
   return [
     ...contactScrubOps(user.email, user.orgId, userId, fallbackOrgId),
+    prisma.subscriber.deleteMany({ where: { email: user.email.trim().toLowerCase(), orgId: user.orgId ?? fallbackOrgId } }),
     // A lead on a stand-in address (#3136): the person's REAL address is on the
     // account it is linked to. Forgotten through the same builder as any other
     // contact address — the account, its address book and its enquiries.

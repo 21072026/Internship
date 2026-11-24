@@ -6,33 +6,33 @@ import {
 } from '@/lib/notificationLink';
 
 const roles = ['ADMIN', 'MENTOR', 'MENTEE', 'COMPANY', 'SOURCE', 'AFFILIATE'] as const satisfies readonly NotificationRole[];
-const kinds = ['relation', 'thread', 'mentee', 'support', 'project', 'dashboard', 'requisition'] as const satisfies readonly LinkKind[];
+const kinds = ['relation', 'thread', 'mentee', 'support', 'project', 'dashboard', 'requisition', 'feedbackReport'] as const satisfies readonly LinkKind[];
 const ids = { relationId: 'rel_1', menteeId: 'mentee_1', projectId: 'project_1' };
 
 const expected = {
   ADMIN: {
     relation: '/admin/candidates/mentee_1', thread: '/messages/rel_1', mentee: '/admin/candidates/mentee_1',
-    support: '/messages/support', project: '/projects/project_1', dashboard: '/admin', requisition: '/admin',
+    support: '/messages/support', project: '/projects/project_1', dashboard: '/admin', requisition: '/admin', feedbackReport: '/account/feedback',
   },
   MENTOR: {
     relation: '/mentor/mentees/rel_1', thread: '/messages/rel_1', mentee: '/mentor/mentees/rel_1',
-    support: '/messages/support', project: '/projects/project_1', dashboard: '/mentor', requisition: '/mentor',
+    support: '/messages/support', project: '/projects/project_1', dashboard: '/mentor', requisition: '/mentor', feedbackReport: '/account/feedback',
   },
   MENTEE: {
     relation: '/portal', thread: '/messages/rel_1', mentee: '/portal',
-    support: '/messages/support', project: '/projects/project_1', dashboard: '/portal', requisition: '/portal',
+    support: '/messages/support', project: '/projects/project_1', dashboard: '/portal', requisition: '/portal', feedbackReport: '/account/feedback',
   },
   COMPANY: {
     relation: '/company', thread: '/messages/rel_1', mentee: '/company',
-    support: '/messages/support', project: '/projects/project_1', dashboard: '/company', requisition: '/company',
+    support: '/messages/support', project: '/projects/project_1', dashboard: '/company', requisition: '/company', feedbackReport: '/account/feedback',
   },
   SOURCE: {
     relation: '/source', thread: '/messages/rel_1', mentee: '/source',
-    support: '/messages/support', project: '/projects/project_1', dashboard: '/source', requisition: '/source',
+    support: '/messages/support', project: '/projects/project_1', dashboard: '/source', requisition: '/source', feedbackReport: '/account/feedback',
   },
   AFFILIATE: {
     relation: '/affiliate', thread: '/messages/rel_1', mentee: '/affiliate',
-    support: '/messages/support', project: '/projects/project_1', dashboard: '/affiliate', requisition: '/affiliate',
+    support: '/messages/support', project: '/projects/project_1', dashboard: '/affiliate', requisition: '/affiliate', feedbackReport: '/account/feedback',
   },
 } as const satisfies Record<NotificationRole, Record<LinkKind, string>>;
 
@@ -68,6 +68,12 @@ test.describe('notificationLink', () => {
     expect(notificationLink('MENTOR', 'requisition', { requisitionId: 'req_1' })).toBe('/mentor');
     expect(notificationLink('COMPANY', 'requisition', { requisitionId: '../admin' })).toBe('/company');
     expect(notificationLink('COMPANY', 'requisition', {})).toBe('/company');
+  });
+
+  test('a feedback report link opens the reporter\'s own list at that report, for every role (#3878)', () => {
+    expect(notificationLink('MENTEE', 'feedbackReport', { reportId: 'rep_1' })).toBe('/account/feedback#report-rep_1');
+    expect(notificationLink('ADMIN', 'feedbackReport', { reportId: 'rep_1' })).toBe('/account/feedback#report-rep_1');
+    expect(notificationLink('COMPANY', 'feedbackReport', { reportId: '../x' })).toBe('/account/feedback');
   });
 
   test('unknown runtime inputs fall back safely', () => {

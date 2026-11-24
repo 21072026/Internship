@@ -320,6 +320,7 @@ export interface EnvelopeMessage {
 
 export interface Envelope {
   mailIdentity?: MailIdentityContext;
+  subscriberId?: string;
   to: string;
   subject: string;
   category?: string;

@@ -1,10 +1,11 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { BrandTile } from '@/components/BrandMark';
+import { track, ANALYTICS_EVENTS } from '@/lib/track';
 import { useT } from '@/i18n/client';
 
 function VerifyInner() {
@@ -12,17 +13,25 @@ function VerifyInner() {
   const token = useSearchParams().get('token') || '';
   const [state, setState] = useState<'loading' | 'ok' | 'fail'>('loading');
 
+  const attempted = useRef<string | null>(null);
   useEffect(() => {
     if (!token) {
-      setState('fail');
+      if (!attempted.current) setState('fail');
       return;
     }
+    if (attempted.current === token) return;
+    attempted.current = token;
     fetch('/api/auth/verify-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token }),
     })
-      .then((r) => setState(r.ok ? 'ok' : 'fail'))
+      .then((r) => {
+        if (r.ok) {
+          track(ANALYTICS_EVENTS.SIGNUP_VERIFIED);
+        }
+        setState(r.ok ? 'ok' : 'fail');
+      })
       .catch(() => setState('fail'));
   }, [token]);
 

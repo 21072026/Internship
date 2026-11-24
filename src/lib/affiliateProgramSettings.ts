@@ -71,6 +71,8 @@ export function canonicalPlan(plan: CommissionPlan): string {
     plan.windowMonths,
     plan.payoutDays,
     plan.afterNotice,
+    plan.monthAligned,
+    plan.timeZone,
   ]);
 }
 

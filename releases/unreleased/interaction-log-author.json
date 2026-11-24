@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "`InteractionLog.authorId` (nullable, `onDelete: SetNull`, never backfilled): the log form, POST /api/interactions, the mentor's direct e-mail and a mail copied to the CRM address record who logged the row; API-key, meeting-sweep and migration rows stay NULL. Groundwork for system rows on follow-up events (#3818)."
-}

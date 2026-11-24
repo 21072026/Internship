@@ -14,6 +14,8 @@ import {
   percentCommissionMinor,
   addMonthsUtc,
   evaluatePartner,
+  monthStartInZone,
+  customerWindowEndsAt,
 } from '../../src/lib/affiliateCommissionRule.ts';
 
 const PLAN = Object.freeze({
@@ -52,7 +54,17 @@ const outcomes = (ev) => ev.payments.map((e) => (e.outcome.kind === 'NONE' ? `NO
 test('a complete plan parses', () => {
   const r = parseCommissionPlan(PLAN);
   assert.equal(r.ok, true);
-  assert.deepEqual(r.plan, PLAN);
+  // A plan stored before #3845 reads as not month-aligned, in Berlin time.
+  assert.deepEqual(r.plan, { ...PLAN, monthAligned: false, timeZone: 'Europe/Berlin' });
+  const aligned = parseCommissionPlan({ ...PLAN, monthAligned: true, timeZone: 'America/New_York' });
+  assert.deepEqual(aligned.plan, { ...PLAN, monthAligned: true, timeZone: 'America/New_York' });
+});
+
+test('month alignment and its zone are validated (#3845)', () => {
+  const fields = (over) => parseCommissionPlan({ ...PLAN, ...over }).issues?.map((i) => `${i.field}:${i.code}`);
+  assert.deepEqual(fields({ monthAligned: 'yes' }), ['monthAligned:type']);
+  assert.deepEqual(fields({ timeZone: 'Mars/Olympus' }), ['timeZone:type']);
+  assert.deepEqual(fields({ timeZone: '' }), ['timeZone:type']);
 });
 
 test('every problem is reported at once', () => {
@@ -211,4 +223,71 @@ test('due date is receivedAt + payoutDays, and only when something accrues', () 
   const ev = evaluatePartner(plan(), ACTIVE, [pay('a', 0, 800), pay('a', 5, 800)]);
   assert.equal(ev.payments[0].dueAt.toISOString(), at(10).toISOString());
   assert.equal(ev.payments[1].dueAt, null);
+});
+
+// ── month-aligned plans (#3845) ─────────────────────────────────────────────
+// Synthetic: 3rd customer switches, 15 %, 24-month window, Berlin months.
+const ALIGNED = plan({ monthAligned: true, timeZone: 'Europe/Berlin', windowMonths: 24 });
+const on = (customerId, iso, amountMinor, extra = {}) => ({ id: `p${String(++seq).padStart(4, '0')}`, customerId, amountMinor, currency: 'XTS', receivedAt: new Date(iso), ...extra });
+
+test('the start of a month in a zone, across DST and the year end', () => {
+  // Berlin: winter UTC+1, summer UTC+2.
+  assert.equal(monthStartInZone(new Date('2026-03-15T12:00:00Z'), 'Europe/Berlin').toISOString(), '2026-02-28T23:00:00.000Z');
+  assert.equal(monthStartInZone(new Date('2026-07-15T12:00:00Z'), 'Europe/Berlin').toISOString(), '2026-06-30T22:00:00.000Z');
+  // 23:30 UTC on 31 Mar is already 1 Apr in Berlin.
+  assert.equal(monthStartInZone(new Date('2026-03-31T22:30:00Z'), 'Europe/Berlin').toISOString(), '2026-03-31T22:00:00.000Z');
+  assert.equal(monthStartInZone(new Date('2026-12-20T00:00:00Z'), 'Europe/Berlin', 1).toISOString(), '2026-12-31T23:00:00.000Z');
+  assert.equal(monthStartInZone(new Date('2026-01-10T00:00:00Z'), 'Europe/Berlin', 24).toISOString(), '2027-12-31T23:00:00.000Z');
+  assert.equal(monthStartInZone(new Date('2026-05-10T00:00:00Z'), 'UTC').toISOString(), '2026-05-01T00:00:00.000Z');
+});
+
+test('month-aligned: the percent starts at the beginning of the switch month, not retroactively before it', () => {
+  const ps = [
+    on('a', '2026-01-05T10:00:00Z', 800), // 1st customer: tier
+    on('b', '2026-02-03T10:00:00Z', 800), // 2nd customer: tier
+    on('a', '2026-02-20T10:00:00Z', 800), // last month: before the switch month → nothing
+    on('a', '2026-03-02T10:00:00Z', 800), // switch month, before the 3rd customer → percent now
+    on('b', '2026-03-10T10:00:00Z', 1_000), // same → percent
+    on('c', '2026-03-20T10:00:00Z', 2_000), // 3rd customer = switch (boundary PERCENT)
+  ];
+  const ev = evaluatePartner(ALIGNED, ACTIVE, ps);
+  assert.deepEqual(outcomes(ev), ['TIER:300', 'TIER:300', 'NONE:BEFORE_SWITCH', 'PERCENT:120', 'PERCENT:150', 'PERCENT:300']);
+  assert.equal(ev.switchedAt.toISOString(), '2026-02-28T23:00:00.000Z');
+  // Not aligned, the same history pays nothing before the 3rd customer's payment.
+  assert.deepEqual(outcomes(evaluatePartner(plan({ windowMonths: 24 }), ACTIVE, ps)), ['TIER:300', 'TIER:300', 'NONE:BEFORE_SWITCH', 'NONE:BEFORE_SWITCH', 'NONE:BEFORE_SWITCH', 'PERCENT:300']);
+});
+
+test('month-aligned: a customer before the Nth first paying in the switch month keeps its one-off commission only', () => {
+  const ps = [
+    on('a', '2026-03-01T10:00:00Z', 800),
+    on('b', '2026-03-05T10:00:00Z', 2_500), // 2nd customer, same month as the switch
+    on('c', '2026-03-20T10:00:00Z', 2_000), // 3rd = switch
+    on('b', '2026-04-05T10:00:00Z', 2_500), // later → percent
+  ];
+  assert.deepEqual(outcomes(evaluatePartner(ALIGNED, ACTIVE, ps)), ['TIER:300', 'TIER:700', 'PERCENT:300', 'PERCENT:375']);
+});
+
+test('month-aligned: the window runs whole months from the first paying month', () => {
+  const p = plan({ monthAligned: true, timeZone: 'Europe/Berlin', windowMonths: 24, switchAtCustomer: 1 });
+  const ps = [
+    on('a', '2026-01-20T10:00:00Z', 1_000),
+    on('a', '2027-12-31T22:59:59Z', 1_000), // 23:59:59 on 31 Dec 2027 in Berlin: still inside
+    on('a', '2027-12-31T23:00:00Z', 1_000), // 1 Jan 2028 in Berlin: closed
+  ];
+  const ev = evaluatePartner(p, ACTIVE, ps);
+  assert.deepEqual(outcomes(ev), ['PERCENT:150', 'PERCENT:150', 'NONE:WINDOW_CLOSED']);
+  assert.equal(ev.payments[0].windowEndsAt.toISOString(), '2027-12-31T23:00:00.000Z');
+  assert.equal(customerWindowEndsAt(p, new Date('2026-01-20T10:00:00Z')).toISOString(), '2027-12-31T23:00:00.000Z');
+  // A helper caller passing only the window keeps the old day-to-day reading.
+  assert.equal(customerWindowEndsAt({ windowMonths: 24 }, new Date('2026-01-20T10:00:00Z')).toISOString(), '2028-01-20T10:00:00.000Z');
+});
+
+test('the tier is chosen by the list price when known; the percent earns on what was paid', () => {
+  const ps = [
+    pay('a', 0, 800, { listAmountMinor: 2_500 }), // paid 8.00, list 25.00 → band 2 (700)
+    pay('b', 1, 5_000, { listAmountMinor: null }), // no list amount → paid amount picks the band (top)
+    pay('c', 2, 1_000, { listAmountMinor: 9_000 }), // 3rd = switch, boundary PERCENT: 15 % of paid
+    pay('a', 3, 2_000, { listAmountMinor: 9_000 }), // percent on paid
+  ];
+  assert.deepEqual(outcomes(evaluatePartner(plan(), ACTIVE, ps)), ['TIER:700', 'TIER:1100', 'PERCENT:150', 'PERCENT:300']);
 });

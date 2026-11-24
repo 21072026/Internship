@@ -47,7 +47,15 @@ test.beforeAll(async ({ request }) => {
   const interviewRequest = await prisma.interviewRequest.create({
     data: { orgId: t.org.id, companyId: t.company.id, requisitionId: requisition.id, menteeId: t.mentee.id },
   });
+  const report = await prisma.supportReport.create({
+    data: {
+      orgId: t.org.id, userId: t.mentee.id, type: 'BUG', description: 'Contract report', url: 'https://app.example.test/x',
+      appVersion: '0.0.0', env: 'test', userAgent: 'e2e', viewport: '1x1', contactAllowed: false,
+      context: { consoleErrors: [], failedRequests: [] },
+    },
+  });
   Object.assign(seeded, {
+    'support/reports': report.id,
     candidates: t.mentee.id,
     relationships: t.relation.id,
     interactions: interaction.id,
@@ -92,14 +100,17 @@ test.afterAll(async () => {
   await prisma.interviewRequest.deleteMany({ where: { orgId: { in: orgIds } } });
   await prisma.requisition.deleteMany({ where: { orgId: { in: orgIds } } });
   await prisma.apiKey.deleteMany({ where: { orgId: { in: orgIds } } });
+  await prisma.supportReport.deleteMany({ where: { orgId: { in: orgIds } } });
   await prisma.orgEntitlement.deleteMany({ where: { orgId: { in: orgIds } } });
   await tenants?.cleanup();
 });
 
-// Templated GET operations this spec cannot fill, each with why. Empty today:
-// every GET in the document is exercised. A NEW templated path fails the
-// loop below until it is seeded or listed here — never passed by silence.
-const NOT_EXERCISED: Record<string, string> = {};
+// Templated GET operations this spec cannot fill, each with why. A NEW
+// templated path fails the loop below until it is seeded or listed here —
+// never passed by silence.
+const NOT_EXERCISED: Record<string, string> = {
+  '/support/reports/{id}/screenshot': 'binary image bytes, no JSON schema to compare; status and bytes are pinned by e2e/v1-support-reports.spec.ts',
+};
 
 function getScopes(): string[] {
   const scopes = new Set<string>(['interactions:read_notes']);
@@ -127,7 +138,7 @@ test('every GET operation answers with exactly its published 200 schema — no m
     expect(schema, `${path} documents no 200 application/json schema`).toBeTruthy();
 
     let url = `/api/v1${path}`;
-    const idParam = path.match(/^\/([^/]+)\/\{id\}$/);
+    const idParam = path.match(/^\/(.+)\/\{id\}$/);
     if (idParam) {
       const id = seeded[idParam[1]];
       expect(id, `${path}: no seeded row — seed one or list it in NOT_EXERCISED with the reason`).toBeTruthy();

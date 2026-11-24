@@ -31,7 +31,9 @@ import { LeadContactEditor } from '@/components/sales/LeadContactEditor';
 import { shownEmail } from '@/lib/leadEmail';
 import { LeadPageHandoff } from '@/components/sales/LeadPageHandoff';
 import { earlierPeriods, currentSuccessor } from '@/lib/leadJourney';
-import { followUpEventsFor } from '@/lib/followUpEvents';
+import { followUpEventsFor, type FollowUpEventView } from '@/lib/followUpEvents';
+import { markAssignmentSeen } from '@/lib/assignedToYou';
+import { RefreshRouterCache } from '@/components/RefreshRouterCache';
 
 // One of the rep's own records (#2580): who the lead is, the account behind it,
 // its stage, the follow-up, trial-end and estimated-value (#2422) editors, what happened last and a
@@ -103,6 +105,15 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
     },
   });
   if (!relation) notFound();
+  // The owner opened it: it leaves their "Assigned to you" card (#3874). Not
+  // under impersonation — an admin looking over the rep's shoulder has not seen it for them.
+  // When this visit is the one that marked it, the client router cache still
+  // holds /sales and /sales/board with the card on them — a Back press would
+  // show that copy (#3894) — so the page drops the cache once.
+  const justSeen =
+    relation.mentorId === session.user.id && !session.user.impersonatorId
+      ? await markAssignmentSeen(relation.id, session.user.id)
+      : false;
   // Who may WORK this record — every editor below, the hand-off (#3657), the
   // contact log (#3748), the trial end: the rule the write routes apply.
   const writable = await canWriteSalesRecord(session, relation);
@@ -151,6 +162,9 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
     // A meeting's time reads in the viewer's own zone.
     prisma.user.findUnique({ where: { id: session.user.id }, select: { timezone: true } }),
   ]);
+  // The earlier owners' follow-up history (#3870) — under the same gate as this
+  // record's: the notes are working prose, shown only to who may read the follow-up.
+  const earlierFollowUps = await Promise.all(earlier.map((p) => (ownersView ? followUpEventsFor(p.relationId) : [])));
   // The banner's link only when this viewer may open the current record (the same read as this page).
   const successorOpens =
     !!successor &&
@@ -164,7 +178,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   // One follow-up as a phrase: its day, its note, or both.
   const followUpText = (at: Date | null, note: string | null) =>
     [at ? date(at) : null, note].filter(Boolean).join(' — ') || s.followUpEvent.noDate;
-  const systemEvents: LeadSystemEvent[] = followUpEvents.map((e) => {
+  const followUpLine = (e: FollowUpEventView): LeadSystemEvent => {
     const someone = s.followUpEvent.someone;
     const fill = (tpl: string, from: string, to: string) => tpl.replace('{from}', () => from).replace('{to}', () => to);
     const headline =
@@ -179,14 +193,17 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
               : fill(s.followUpEvent.handedOff, e.fromName ?? someone, e.toName ?? someone);
     const detail =
       e.kind === 'HANDED_OFF'
-        ? fill(s.followUpEvent.handedOffFollowUp, '', followUpText(e.toAt, e.toNote))
+        ? e.fromAt || e.fromNote
+          ? fill(s.followUpEvent.handedOffFollowUpFrom, followUpText(e.fromAt, e.fromNote), followUpText(e.toAt, e.toNote))
+          : fill(s.followUpEvent.handedOffFollowUp, '', followUpText(e.toAt, e.toNote))
         : e.kind === 'COMPLETED' || e.kind === 'CLEARED'
           ? e.fromAt || e.fromNote
             ? followUpText(e.fromAt, e.fromNote)
             : null
           : null;
     return { id: e.id, source: 'followUp', at: e.createdAt.toISOString(), headline, detail, by: e.actorName ?? someone };
-  });
+  };
+  const systemEvents: LeadSystemEvent[] = followUpEvents.map(followUpLine);
   for (const m of stageMoves) {
     systemEvents.push({
       id: m.id,
@@ -257,6 +274,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
 
   return (
     <div data-testid="sales-lead">
+      {justSeen && <RefreshRouterCache />}
       <Link href="/sales" className="mb-4 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800">
         <ArrowLeft className="h-4 w-4" />
         {s.back}
@@ -347,12 +365,13 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
             canLog={canLog}
             interactions={interactions.map((i) => ({ id: i.id, date: i.date.toISOString(), type: i.type, subject: i.subject, notes: i.notes }))}
             systemEvents={systemEvents}
-            earlierPeriods={earlier.map((p) => ({
+            earlierPeriods={earlier.map((p, idx) => ({
               relationId: p.relationId,
               ownerName: p.ownerName,
               from: date(p.from),
               to: p.to ? date(p.to) : null,
               interactions: p.interactions.map((i) => ({ id: i.id, date: i.date.toISOString(), type: i.type, subject: i.subject, notes: i.notes })),
+              events: earlierFollowUps[idx].map(followUpLine),
             }))}
           />
         }

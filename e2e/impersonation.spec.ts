@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { decode, encode } from 'next-auth/jwt';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail } from './helpers/db';
 
 test.afterAll(async () => {
@@ -194,6 +195,89 @@ test('impersonation cannot change 2FA or sign out the user\'s devices', async ({
 
     // The impersonation session survived — the admin can still get back out.
     await expect(page.getByTestId('impersonation-banner')).toBeVisible();
+  } finally {
+    await prisma.auditLog.deleteMany({ where: { targetId: mentee.id } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(adminEmail);
+  }
+});
+
+// #3876: the banner is mounted once and outlives every navigation, so a second
+// impersonation in the same tab found the return button still disabled; and the
+// 30-minute cap reverted the session in silence, the bar simply gone.
+async function signInAdmin(page: import('@playwright/test').Page, email: string, password: string) {
+  await page.goto('/auth/signin');
+  await page.fill('input[type="email"], input[name="email"]', email);
+  await page.fill('input[type="password"]', password);
+  await page.click('button[type="submit"]');
+  await page.waitForURL((u) => u.pathname.startsWith('/admin'), { timeout: 20_000 });
+}
+
+test('two impersonations in one tab: the way back works both times (#3876)', async ({ page }) => {
+  test.slow();
+  const adminEmail = uniqueEmail('imp2-admin');
+  const menteeEmail = uniqueEmail('imp2-mentee');
+  await seedUser(adminEmail, 'AdminPass123!', 'ADMIN', 'Imp2 Admin');
+  const mentee = await seedUser(menteeEmail, 'MenteePass123!', 'MENTEE', 'Imp2 Mentee');
+  try {
+    await signInAdmin(page, adminEmail, 'AdminPass123!');
+    await page.goto('/admin/users');
+    for (let round = 1; round <= 2; round++) {
+      // No page.goto between the rounds: the banner must survive as one instance, as in the app.
+      const row = page.getByTestId(`user-row-${mentee.id}`);
+      await expect(row).toBeVisible({ timeout: 20_000 });
+      await row.getByRole('button', { name: 'Login as' }).click();
+      await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+      const back = page.getByTestId('impersonation-return');
+      await expect(back, `round ${round}`).toBeEnabled({ timeout: 10_000 });
+      await back.click();
+      await page.waitForURL((u) => u.pathname.startsWith('/admin/users'), { timeout: 20_000 });
+      await expect(page.getByTestId('impersonation-banner')).toHaveCount(0);
+    }
+    expect(await prisma.auditLog.count({ where: { action: 'IMPERSONATE_STOP', targetId: mentee.id } })).toBe(2);
+  } finally {
+    await prisma.auditLog.deleteMany({ where: { targetId: mentee.id } });
+    await cleanupByEmail(menteeEmail);
+    await cleanupByEmail(adminEmail);
+  }
+});
+
+test('when the 30-minute cap reverts the session, the bar says so instead of vanishing (#3876)', async ({ page, context, baseURL }) => {
+  test.slow();
+  const secret = process.env.NEXTAUTH_SECRET;
+  test.skip(!secret, 'needs NEXTAUTH_SECRET to age the session token');
+  const adminEmail = uniqueEmail('impcap-admin');
+  const menteeEmail = uniqueEmail('impcap-mentee');
+  const admin = await seedUser(adminEmail, 'AdminPass123!', 'ADMIN', 'ImpCap Admin');
+  const mentee = await seedUser(menteeEmail, 'MenteePass123!', 'MENTEE', 'ImpCap Mentee');
+  try {
+    await signInAdmin(page, adminEmail, 'AdminPass123!');
+    await page.goto('/admin/users');
+    await page.getByTestId(`user-row-${mentee.id}`).getByRole('button', { name: 'Login as' }).click();
+    await page.waitForURL((u) => u.pathname.startsWith('/portal'), { timeout: 20_000 });
+    await expect(page.getByTestId('impersonation-banner')).toBeVisible({ timeout: 10_000 });
+
+    // Age the impersonated session past its cap — the same token, its deadline moved back.
+    const cookie = (await context.cookies(baseURL)).find((c) => c.name.endsWith('next-auth.session-token'));
+    expect(cookie, 'session cookie').toBeTruthy();
+    const token = await decode({ token: cookie!.value, secret: secret! });
+    expect(token?.impersonatorId).toBe(admin.id);
+    const aged = await encode({ token: { ...token!, impersonationExpiresAt: Date.now() - 1000 }, secret: secret! });
+    await context.addCookies([{ ...cookie!, value: aged }]);
+
+    await page.goto('/account');
+    await expect(page.getByTestId('impersonation-banner')).toHaveCount(0);
+    const ended = page.getByTestId('impersonation-ended');
+    await expect(ended).toContainText('ended after 30 minutes', { timeout: 10_000 });
+    const session = await (await page.request.get('/api/auth/session')).json();
+    expect(session?.user?.id).toBe(admin.id);
+    expect(session?.user?.impersonatorId ?? null).toBeNull();
+
+    // Closed once, it stays closed in this tab.
+    await page.getByTestId('impersonation-ended-dismiss').click();
+    await expect(ended).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByTestId('impersonation-ended')).toHaveCount(0);
   } finally {
     await prisma.auditLog.deleteMany({ where: { targetId: mentee.id } });
     await cleanupByEmail(menteeEmail);

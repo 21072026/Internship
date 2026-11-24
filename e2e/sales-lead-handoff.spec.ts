@@ -141,6 +141,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   const userIds = Object.entries(ids).filter(([k]) => !k.startsWith('rel-') && k !== 'orgA').map(([, v]) => v);
   await prisma.notification.deleteMany({ where: { userId: { in: userIds } } }).catch(() => {});
+  await prisma.notificationDelivery.deleteMany({ where: { userId: { in: userIds } } }).catch(() => {});
   await prisma.impersonationGrant.deleteMany({ where: { targetId: { in: userIds } } }).catch(() => {});
   await prisma.auditLog.deleteMany({ where: { targetId: { in: userIds } } }).catch(() => {});
   await prisma.activityLog.deleteMany({ where: { orgId: { in: orgIds } } }).catch(() => {});
@@ -214,8 +215,8 @@ test('the team is the active ADMINs and MENTORs of the caller’s org, the calle
   for (const label of ['rep3', 'mentee', 'company', 'foreignRep', 'intMentor']) expect(byId.has(ids[label]), label).toBe(false);
   expect(byId.get(ids.rep1)?.self).toBe(true);
   expect(byId.get(ids.rep2)?.self).toBe(false);
-  // Names and avatars, nothing else.
-  expect(Object.keys(members[0]).sort()).toEqual(['avatarUrl', 'fullName', 'id', 'self']);
+  // Names, avatars and the load counts (#3875), nothing else.
+  expect(Object.keys(members[0]).sort()).toEqual(['avatarUrl', 'fullName', 'id', 'open', 'overdue', 'self']);
   await rep1.dispose();
 });
 
@@ -260,6 +261,13 @@ test('the owner hands their lead on: owner and next step move, the recipient is 
   const bell = await prisma.notification.findFirst({ where: { userId: ids.rep2, type: 'lead.handedOff' } });
   expect(bell?.link).toBe(`/sales/leads/${out.relationId}`);
   expect(bell?.link?.startsWith('/mentor')).toBe(false);
+  // …and a mail (#3871), through the router: one e-mail delivery for the recipient.
+  const mailed = await prisma.notificationDelivery.findMany({
+    where: { userId: ids.rep2, eventKey: 'lead.handedOff', channel: 'email' },
+    select: { status: true },
+  });
+  expect(mailed).toHaveLength(1);
+  expect(mailed[0].status).not.toBe('SKIPPED');
   // The lead hears nothing about who works it.
   expect(await prisma.notification.count({ where: { userId: ids['lead-happy'] } })).toBe(0);
 
@@ -389,3 +397,123 @@ test('the dispatcher gets the button; the same dispatcher under impersonation, w
   expect(await owner(ids['rel-colleague'])).toBe(ids.rep2);
 });
 
+
+test('a lead with history keeps its previous follow-up in the hand-off line, and the earlier period shows its follow-up history (#3870)', async ({ playwright, baseURL, page }) => {
+  test.slow();
+  // History (an interaction) makes the hand-off a transfer: a new record, which
+  // carries no follow-up of its own — the line must still name the old one.
+  const relId = await lead('history', ids.rep1, ids.orgA);
+  const oldDue = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+  await prisma.mentorshipRelation.update({ where: { id: relId }, data: { nextActionAt: oldDue, nextActionNote: `Send the offer ${STAMP}` } });
+  await prisma.interactionLog.create({ data: { relationId: relId, date: new Date(), type: 'Meeting', subject: `Intro call ${STAMP}`, notes: 'Interested.' } });
+  await prisma.followUpEvent.create({
+    data: { relationId: relId, kind: 'ASSIGNED', toAt: oldDue, toNote: `Send the offer ${STAMP}`, actorId: ids.rep1, dedupeKey: `e2e-${STAMP}` },
+  });
+
+  const rep1 = await jar(playwright, baseURL, 'rep1', true);
+  const res = await rep1.post(handoffPath(relId), { data: { toUserId: ids.rep2, action: 'call', note: 'confirm the date' } });
+  expect(res.status()).toBe(200);
+  const out = await res.json();
+  expect(out.mode).toBe('transferred');
+  await rep1.dispose();
+
+  const line = await prisma.followUpEvent.findFirst({ where: { relationId: out.relationId, kind: 'HANDED_OFF' } });
+  expect(line?.fromNote).toBe(`Send the offer ${STAMP}`);
+  expect(line?.fromAt?.toISOString()).toBe(oldDue.toISOString());
+  expect(line?.toNote).toBe('Call: confirm the date');
+
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mail.rep2, PW, '/sales');
+  await gotoSettled(page, `/sales/leads/${out.relationId}`);
+  const handed = page.getByTestId('sales-lead-interactions').getByTestId('sales-lead-system-headline').filter({ hasText: 'Handed over' });
+  await expect(handed).toContainText(`Send the offer ${STAMP} → `);
+  await expect(handed).toContainText('Call: confirm the date');
+
+  const toggle = page.getByTestId('sales-lead-earlier-toggle');
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  const earlier = page.getByTestId('sales-lead-earlier-interactions');
+  await expect(earlier).toContainText(`Intro call ${STAMP}`);
+  await expect(earlier.getByTestId('sales-lead-system-row')).toContainText(`Send the offer ${STAMP}`);
+});
+
+test('the dialog shows who has the lead and its follow-up, and can hand it on with that follow-up kept (#3873)', async ({ playwright, baseURL, page }) => {
+  test.slow();
+  const relId = await lead('keep', ids.rep1, ids.orgA);
+  const due = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
+  due.setUTCHours(0, 0, 0, 0);
+  await prisma.mentorshipRelation.update({ where: { id: relId }, data: { nextActionAt: due, nextActionNote: `Send the contract ${STAMP}` } });
+
+  // The read answers like the write: the owner reads it, a colleague gets 404.
+  const rep1 = await jar(playwright, baseURL, 'rep1', true);
+  const read = await rep1.get(handoffPath(relId));
+  expect(read.status()).toBe(200);
+  expect(await read.json()).toMatchObject({ ownerId: ids.rep1, ownerName: `Handoff rep1 ${STAMP}`, nextActionNote: `Send the contract ${STAMP}` });
+  const rep2 = await jar(playwright, baseURL, 'rep2', true);
+  expect((await rep2.get(handoffPath(relId))).status()).toBe(404);
+  // Nothing to keep is refused before anything moves.
+  const bare = await lead('keepBare', ids.rep1, ids.orgA);
+  const refused = await rep1.post(handoffPath(bare), { data: { toUserId: ids.rep2, action: 'call', keepFollowUp: true } });
+  expect(refused.status()).toBe(400);
+  expect((await refused.json()).code).toBe('no_follow_up');
+  expect(await owner(bare)).toBe(ids.rep1);
+  await rep1.dispose();
+  await rep2.dispose();
+
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mail.rep1, PW, '/sales');
+  await gotoSettled(page, `/sales/leads/${relId}`);
+  await page.getByTestId('sales-lead-handoff').click();
+  const dialog = page.getByTestId('lead-handoff-dialog');
+  const current = dialog.getByTestId('lead-handoff-current');
+  await expect(current).toContainText(`Currently with Handoff rep1 ${STAMP}`);
+  await expect(current).toContainText(`Send the contract ${STAMP}`);
+
+  await dialog.getByTestId('lead-handoff-recipient').selectOption(ids.rep2);
+  await dialog.getByTestId('lead-handoff-follow-up-keep').check();
+  await expect(dialog.getByTestId('lead-handoff-note')).toHaveCount(0);
+  await dialog.getByTestId('lead-handoff-confirm').click();
+  await page.waitForURL((u) => u.pathname === '/sales', { timeout: 20_000 });
+
+  const moved = await prisma.mentorshipRelation.findFirst({
+    where: { menteeId: ids['lead-keep'], status: 'ACTIVE' },
+    select: { id: true, mentorId: true, nextActionAt: true, nextActionNote: true },
+  });
+  expect(moved?.mentorId).toBe(ids.rep2);
+  expect(moved?.nextActionNote).toBe(`Send the contract ${STAMP}`);
+  expect(moved?.nextActionAt?.toISOString()).toBe(due.toISOString());
+  const line = await prisma.followUpEvent.findFirst({ where: { relationId: moved!.id, kind: 'HANDED_OFF' } });
+  expect(line).toMatchObject({ fromNote: `Send the contract ${STAMP}`, toNote: `Send the contract ${STAMP}` });
+});
+
+test('the strip shows each person\'s load: open records for everyone, overdue follow-ups only to the admin (#3875)', async ({ playwright, baseURL, page }) => {
+  test.slow();
+  // One overdue follow-up on rep2's book.
+  const late = await lead('late', ids.rep2, ids.orgA);
+  await prisma.mentorshipRelation.update({ where: { id: late }, data: { nextActionAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) } });
+  const startOfToday = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
+  const openOf = (id: string) => prisma.mentorshipRelation.count({ where: { orgId: ids.orgA, mentorId: id, status: 'ACTIVE' } });
+  const overdueOf = (id: string) =>
+    prisma.mentorshipRelation.count({ where: { orgId: ids.orgA, mentorId: id, status: 'ACTIVE', nextActionAt: { lt: startOfToday } } });
+
+  type Member = { id: string; open: number; overdue: number | null };
+  const rep1 = await jar(playwright, baseURL, 'rep1', true);
+  const asRep = ((await (await rep1.get('/api/sales/team')).json()).members as Member[]).find((m) => m.id === ids.rep2)!;
+  expect(asRep.open).toBe(await openOf(ids.rep2));
+  // A rep sees the open count only — the team page's rule.
+  expect(asRep.overdue).toBeNull();
+  await rep1.dispose();
+
+  const admin = await jar(playwright, baseURL, 'admin', true);
+  const asAdmin = ((await (await admin.get('/api/sales/team')).json()).members as Member[]).find((m) => m.id === ids.rep2)!;
+  expect(asAdmin.open).toBe(await openOf(ids.rep2));
+  expect(asAdmin.overdue).toBe(await overdueOf(ids.rep2));
+  expect(asAdmin.overdue).toBeGreaterThanOrEqual(1);
+  await admin.dispose();
+
+  // On the board: the line under the name.
+  await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
+  await signInAndSettle(page, mail.rep1, PW, '/sales');
+  await gotoSettled(page, '/sales/board');
+  const line = page.getByTestId(`handoff-target-load-${ids.rep2}`);
+  await expect(line).toHaveText(`${await openOf(ids.rep2)} open`);
+});

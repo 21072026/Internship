@@ -59,6 +59,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
   INTERNSHIP: { en: {}, tr: {}, de: {} },
   MARKETING: {
     en: {
+      interest: { roles: { MENTOR: 'Advisor' } },
       // The executive dashboard (#3706): the third score counts records that first
       // reached the tenant's own finished stage — a won deal here, not a placement.
       executive: {
@@ -197,8 +198,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'mentor_offer.accepted': '{menteeName} accepted your offer.',
           'mentor_offer.declined': '{menteeName} declined your offer.',
           'mentorship.mentorChanged': 'Your contact person has changed — {mentorName} is looking after you now.',
-          'mentorship.reassignedAway': '{menteeName} was handed over to another rep — your deal with them has ended.',
-          'mentorship.assignmentCorrected': '{menteeName} was assigned to you by mistake and is no longer your lead.',
+          'mentorship.reassignedAway': 'An admin took the {menteeName} record from you.',
+          'mentorship.assignmentCorrected': 'An admin took the {menteeName} record from you.',
           'mentorship.bulkAssigned': 'New leads assigned to you: {count}.',
           'mentorship.bulkReassignedAway': 'Deals handed over to another rep: {count}.',
           'mentorship.autoLinkSkipped': '{name} registered through an invitation, but the pre-linked lead already has a rep — no deal was created.',
@@ -1248,6 +1249,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     tr: {
+      interest: { roles: { MENTOR: 'Danışman' } },
       executive: {
         subtitle: '0–100 arası üç skor; her biri kendi kayıtlarınız üzerinde basit bir hesap.',
         scores: { placement: { name: 'Kazanılan anlaşmalar' } },
@@ -1369,8 +1371,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'mentor_offer.accepted': '{menteeName} teklifini kabul etti.',
           'mentor_offer.declined': '{menteeName} teklifini kabul etmedi.',
           'mentorship.mentorChanged': 'Muhatabın değişti — artık {mentorName} seninle ilgileniyor.',
-          'mentorship.reassignedAway': '{menteeName} başka bir temsilciye devredildi — onunla fırsatın sona erdi.',
-          'mentorship.assignmentCorrected': '{menteeName} yanlışlıkla sana atanmıştı; artık senin müşteri adayın değil.',
+          'mentorship.reassignedAway': 'Yönetici {menteeName} kaydını senden aldı.',
+          'mentorship.assignmentCorrected': 'Yönetici {menteeName} kaydını senden aldı.',
           'mentorship.bulkAssigned': 'Sana atanan yeni müşteri adayı sayısı: {count}.',
           'mentorship.bulkReassignedAway': 'Başka bir temsilciye devredilen fırsat sayısı: {count}.',
           'mentorship.autoLinkSkipped': '{name} bir davetle kayıt oldu, ancak ön-eşleştirilen müşteri adayının zaten bir temsilcisi var — fırsat oluşturulmadı.',
@@ -2287,6 +2289,7 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
       },
     },
     de: {
+      interest: { roles: { MENTOR: 'Ansprechperson' } },
       executive: {
         subtitle: 'Drei Scores von 0 bis 100, jeder eine einfache Rechnung über Ihre eigenen Daten.',
         scores: { placement: { name: 'Gewonnene Deals' } },
@@ -2407,8 +2410,8 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           'mentor_offer.accepted': '{menteeName} hat dein Angebot angenommen.',
           'mentor_offer.declined': '{menteeName} hat dein Angebot abgelehnt.',
           'mentorship.mentorChanged': 'Deine Ansprechperson hat sich geändert — {mentorName} betreut dich jetzt.',
-          'mentorship.reassignedAway': '{menteeName} wurde an einen anderen Vertriebsmitarbeiter übergeben — dein Deal mit der Person ist beendet.',
-          'mentorship.assignmentCorrected': '{menteeName} wurde dir versehentlich zugewiesen und ist nicht mehr dein Lead.',
+          'mentorship.reassignedAway': 'Ein Admin hat dir den Datensatz {menteeName} abgenommen.',
+          'mentorship.assignmentCorrected': 'Ein Admin hat dir den Datensatz {menteeName} abgenommen.',
           'mentorship.bulkAssigned': 'Neu zugewiesene Leads: {count}.',
           'mentorship.bulkReassignedAway': 'An einen anderen Vertriebsmitarbeiter übergebene Deals: {count}.',
           'mentorship.autoLinkSkipped': '{name} hat sich über eine Einladung registriert, aber der vorverknüpfte Lead hat bereits einen Vertriebsmitarbeiter — es wurde kein Deal angelegt.',

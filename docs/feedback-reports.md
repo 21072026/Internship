@@ -214,3 +214,29 @@ file (the route-auth and OpenAPI analysers follow a guard only within the file);
   stored context is masked; the reporter and an anonymous caller are refused by
   the admin routes; an admin finds the report, reads the console and network
   tabs and resolves it.
+
+## The reporter's own list (#3877)
+
+`/account/feedback` ("My feedback", linked from the feedback panel and from
+`/account`) lists the reports a person sent, newest first, through
+`GET /api/support/reports`; `GET /api/support/reports/[id]` reads one. Both
+answer with the caller's own reports only — `userId` = the session's user, in
+the org the POST files reports under — and another person's or another org's id
+is **404**. The single reader is `src/lib/myFeedbackReports.ts`, and what it
+returns is the type, the person's own description, the page **path** (no host,
+no query), the status and the team's note. Never the screenshot, the replay, the
+console/network context, the user agent or a GitHub link: those are triage
+material.
+
+The team's note is `SupportReport.reporterNote` / `reporterNoteAt`, written by
+the admin's status `PATCH` when "tell the reporter" is ticked with a note — the
+same text the update mail carries. A status change without a note leaves the
+earlier note in place.
+
+The reporter also hears it in the app (#3878): when an admin changes a report's
+status, or sends a note with it, the reporter gets the in-app notification
+`support_report.updated` ("There is an update on the feedback you sent"),
+linked to `/account/feedback#report-<id>` (link kind `feedbackReport`). It is
+in-app only, so it needs no consent to contact — the mail stays the admin's
+explicit, consent-gated choice. The same status again without a note sends
+nothing, and an admin acting on their own report is not told.

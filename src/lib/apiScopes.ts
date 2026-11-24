@@ -43,6 +43,15 @@ export const API_SCOPES = [
   // /api/v1/hooks: only the subscriptions this key made, never an admin-created one.
   'hooks:write',
   'companies:write',
+  // In-app bug reports and feedback of the org (SupportReport, #3130), READ
+  // ONLY: GET /api/v1/support/reports and one report by id. Real people and
+  // their text: masked by the one masking path (src/lib/feedbackContext.ts),
+  // every read audited. Never a default, never in the sandbox
+  // (src/lib/api/sandboxKeyRule.ts).
+  'support:read',
+  // The screenshot of a report: an image of a real screen, so never implied
+  // by support:read and granted on its own, like interactions:read_notes.
+  'support:read_screenshots',
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
@@ -75,6 +84,8 @@ export const SCOPE_ENTITLEMENT: Record<ApiScope, 'INTEGRATIONS_API' | null> = {
   'interactions:write': 'INTEGRATIONS_API',
   'hooks:write': 'INTEGRATIONS_API',
   'companies:write': null,
+  'support:read': 'INTEGRATIONS_API',
+  'support:read_screenshots': 'INTEGRATIONS_API',
 };
 
 // ── Vertical (MKT-6b) ─────────────────────────────────────────────────────────
@@ -86,6 +97,8 @@ export const SCOPE_ENTITLEMENT: Record<ApiScope, 'INTEGRATIONS_API' | null> = {
 //                connector's own hooks: what every vertical has.
 //   companies  — the company directory (and the account-event ingest).
 //   placements — requisitions, offers, interview requests: internship hiring.
+//   support:*  — 'pipeline': the feedback button is in every product, and
+//                'pipeline' is the capability every vertical carries.
 export const SCOPE_CAPABILITY: Record<ApiScope, VerticalCapability> = {
   'candidates:read': 'pipeline',
   'relationships:read': 'pipeline',
@@ -99,6 +112,8 @@ export const SCOPE_CAPABILITY: Record<ApiScope, VerticalCapability> = {
   'interactions:write': 'pipeline',
   'hooks:write': 'pipeline',
   'companies:write': 'companies',
+  'support:read': 'pipeline',
+  'support:read_screenshots': 'pipeline',
 };
 
 // The capability behind every top-level /api/v1 path segment. `null` means the
@@ -118,6 +133,7 @@ export const V1_PREFIX_CAPABILITY: Record<string, VerticalCapability | null> = {
   requisitions: 'placements',
   offers: 'placements',
   'interview-requests': 'placements',
+  support: 'pipeline',
   me: null,
   'openapi.json': null,
   exports: null,

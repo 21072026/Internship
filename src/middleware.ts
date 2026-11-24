@@ -22,6 +22,9 @@ function isAllowlisted(pathname: string) {
   return (
     pathname.startsWith('/api/auth/') ||
     pathname === '/api/register' ||
+    pathname === '/api/subscribe' ||
+    pathname === '/api/subscribe/confirm' ||
+    pathname === '/api/subscribe/unsubscribe' ||
     // Returning from impersonation must work even if the impersonated user is
     // unverified (the impersonated identity could be a read-only account).
     pathname === '/api/impersonate/stop' ||

@@ -53,7 +53,7 @@ export function CommissionTerms({
             {terms.percent ? (
               <ul className="list-disc space-y-1 pl-5">
                 <li>
-                  {interpolate(L.termsPercentRate, {
+                  {interpolate(terms.percent.monthAligned ? L.termsPercentRateMonth : L.termsPercentRate, {
                     percent: bpsToPercentText(terms.percent.bps, locale === 'en' ? '.' : ','),
                     n: String(terms.percent.startsAtCustomer),
                   })}
@@ -62,7 +62,7 @@ export function CommissionTerms({
                 <li>
                   {terms.percent.windowMonths === null
                     ? L.termsWindowNone
-                    : interpolate(L.termsWindow, { n: String(terms.percent.windowMonths) })}
+                    : interpolate(terms.percent.monthAligned ? L.termsWindowMonth : L.termsWindow, { n: String(terms.percent.windowMonths) })}
                 </li>
               </ul>
             ) : (

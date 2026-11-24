@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "\"My feedback\" (`/account/feedback`, linked from the feedback panel and `/account`): a person reads back the reports they sent — type, their description, the page path, the status and the team's note — through `GET /api/support/reports` and `GET /api/support/reports/[id]` (own reports only; another person's or org's id is 404; never files, context or GitHub links). The admin's status note to the reporter is now kept on the report (`SupportReport.reporterNote` / `reporterNoteAt`, new nullable columns) so it can be shown there (#3877).",
+  "notes": {
+    "en": ["Feedback: you can now see the bug reports and feedback you sent, their status and the team's reply, under \"My feedback\"."],
+    "tr": ["Geri bildirim: gönderdiğin hata bildirimlerini ve geri bildirimleri, durumlarını ve ekibin yanıtını artık \"Gönderdiğim geri bildirimler\" altında görebiliyorsun."],
+    "de": ["Feedback: Unter „Meine Rückmeldungen“ siehst du jetzt deine gesendeten Fehlermeldungen und Rückmeldungen, ihren Stand und die Antwort des Teams."]
+  }
+}

@@ -50,6 +50,28 @@ export interface CommissionPlan {
   payoutDays: number;
   /** What accrues once a partner's termination has taken effect. */
   afterNotice: AfterNotice;
+  /**
+   * Month-aligned phases (#3845): the percent phase starts at the beginning of
+   * the month in which the Nth customer first paid, and a customer's window runs
+   * `windowMonths` calendar months from the beginning of its first paying month.
+   * False (every plan stored before #3845): both start at the payment itself.
+   */
+  monthAligned: boolean;
+  /** IANA zone whose calendar months `monthAligned` uses. Default Europe/Berlin. */
+  timeZone: string;
+}
+
+export const DEFAULT_PLAN_TIME_ZONE = 'Europe/Berlin';
+
+/** Whether `tz` is an IANA zone this runtime knows. */
+export function isTimeZone(tz: unknown): tz is string {
+  if (typeof tz !== 'string' || tz.length === 0 || tz.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export interface PlanIssue {
@@ -126,6 +148,17 @@ export function parseCommissionPlan(input: unknown): PlanParseResult {
   const windowMonths = nullableIntIn(issues, 'windowMonths', o.windowMonths, 1, 600);
   const payoutDays = intIn(issues, 'payoutDays', o.payoutDays, 0, 365);
   const afterNotice = oneOf(issues, 'afterNotice', o.afterNotice, ['STOP_ALL', 'RUN_OUT'] as const);
+  // Both are optional: a plan stored before #3845 reads as not month-aligned, in Berlin time.
+  let monthAligned = false;
+  if (o.monthAligned !== undefined && o.monthAligned !== null) {
+    if (typeof o.monthAligned !== 'boolean') issues.push({ field: 'monthAligned', code: 'type' });
+    else monthAligned = o.monthAligned;
+  }
+  let timeZone = DEFAULT_PLAN_TIME_ZONE;
+  if (o.timeZone !== undefined && o.timeZone !== null) {
+    if (!isTimeZone(o.timeZone)) issues.push({ field: 'timeZone', code: 'type' });
+    else timeZone = o.timeZone;
+  }
 
   // A switch into a 0 % phase would silently end every commission after it.
   if (switchAtCustomer !== null && percentBps === 0) issues.push({ field: 'percentBps', code: 'combination' });
@@ -143,6 +176,8 @@ export function parseCommissionPlan(input: unknown): PlanParseResult {
       windowMonths,
       payoutDays,
       afterNotice,
+      monthAligned,
+      timeZone,
     },
   };
 }
@@ -183,21 +218,74 @@ export function addMonthsUtc(from: Date, months: number): Date {
   );
 }
 
+// ── Calendar months in a zone (#3845) ───────────────────────────────────────
+// Intl only, no library: the wall-clock parts of an instant in `tz`, and the
+// instant of a local midnight on the 1st of a month. DST is handled by reading
+// the zone's offset at the candidate instant and correcting once more.
+
+function zoneParts(at: Date, tz: string): { y: number; m: number; d: number; h: number; mi: number; s: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(at);
+  const n = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return { y: n('year'), m: n('month'), d: n('day'), h: n('hour'), mi: n('minute'), s: n('second') };
+}
+
+/** The zone's offset from UTC at `at`, in milliseconds (positive east of UTC). */
+function zoneOffsetMs(at: Date, tz: string): number {
+  const p = zoneParts(at, tz);
+  return Date.UTC(p.y, p.m - 1, p.d, p.h, p.mi, p.s) - Math.floor(at.getTime() / 1000) * 1000;
+}
+
+/** The instant of local midnight on the 1st of month `month0` (0-based, may overflow) of `year` in `tz`. */
+function zonedMonthStart(year: number, month0: number, tz: string): Date {
+  const wall = Date.UTC(year, month0, 1);
+  let t = wall - zoneOffsetMs(new Date(wall), tz);
+  t = wall - zoneOffsetMs(new Date(t), tz);
+  return new Date(t);
+}
+
+/** The beginning of the calendar month (in `tz`) that contains `at`, plus `addMonths` months. */
+export function monthStartInZone(at: Date, tz: string, addMonths = 0): Date {
+  const p = zoneParts(at, tz);
+  return zonedMonthStart(p.y, p.m - 1 + addMonths, tz);
+}
+
 /**
  * When a customer's percent window ends (exclusive): its first valid payment plus
- * the plan's `windowMonths`; null when the plan sets no limit. The ONE place this
- * date is computed — the engine below, the partner's window notice
+ * the plan's `windowMonths` — from the beginning of that payment's month when the
+ * plan is month-aligned (#3845); null when the plan sets no limit. The ONE place
+ * this date is computed — the engine below, the partner's window notice
  * (src/lib/affiliateWindowNoticeRule.ts, #3556) and the portal all read it here,
  * so a mail and a screen can never name two different days.
  */
-export function customerWindowEndsAt(plan: Pick<CommissionPlan, 'windowMonths'>, firstPaymentAt: Date): Date | null {
-  return plan.windowMonths === null ? null : addMonthsUtc(firstPaymentAt, plan.windowMonths);
+export function customerWindowEndsAt(
+  plan: Pick<CommissionPlan, 'windowMonths'> & Partial<Pick<CommissionPlan, 'monthAligned' | 'timeZone'>>,
+  firstPaymentAt: Date,
+): Date | null {
+  if (plan.windowMonths === null) return null;
+  return plan.monthAligned
+    ? monthStartInZone(firstPaymentAt, plan.timeZone ?? DEFAULT_PLAN_TIME_ZONE, plan.windowMonths)
+    : addMonthsUtc(firstPaymentAt, plan.windowMonths);
 }
 
 export interface PaymentFact {
   id: string;
   customerId: string;
+  /** What the customer paid (gross); the percent phase earns on it. */
   amountMinor: number;
+  /**
+   * The list price of the month's transaction count (#3845), when known. A first
+   * payment's tier commission is chosen by it; null/absent falls back to `amountMinor`.
+   */
+  listAmountMinor?: number | null;
   currency: string;
   receivedAt: Date;
 }
@@ -261,7 +349,9 @@ function isPayment(plan: CommissionPlan, p: PaymentFact): NoneReason | null {
  *   termination gets no ordinal and earns nothing.
  * - Before the switch, a customer's first payment earns one tier commission;
  *   its later payments earn nothing.
- * - The switch instant is the first payment of customer `switchAtCustomer`.
+ * - The switch instant is the first payment of customer `switchAtCustomer` — or,
+ *   for a month-aligned plan (#3845), the beginning of that payment's month in
+ *   the plan's zone, so the month's earlier payments earn percent too.
  *   That payment earns per `boundaryCustomer`; customers after it earn percent
  *   on their first payment. From the switch instant on (inclusive), every
  *   payment of every eligible customer earns percent inside that customer's
@@ -287,7 +377,8 @@ export function evaluatePartner(plan: CommissionPlan, partner: PartnerFacts, pay
 
   const n = plan.switchAtCustomer;
   const switchPayment = n !== null && eligible.length >= n ? eligible[n - 1] : null;
-  const switchedAt = switchPayment ? switchPayment.receivedAt : null;
+  // Month-aligned (#3845): from the beginning of the month the Nth customer first paid in.
+  const switchedAt = switchPayment ? (plan.monthAligned ? monthStartInZone(switchPayment.receivedAt, plan.timeZone) : switchPayment.receivedAt) : null;
 
   const evaluate = (p: PaymentFact): PaymentEvaluation => {
     const base = { paymentId: p.id, customerId: p.customerId };
@@ -323,9 +414,13 @@ export function evaluatePartner(plan: CommissionPlan, partner: PartnerFacts, pay
       return earn('PERCENT', percentCommissionMinor(plan, p.amountMinor));
     };
 
+    // A first payment's tier is chosen by the month's list price when known (#3845).
+    const tierBase = p.listAmountMinor ?? p.amountMinor;
     if (first.id === p.id) {
-      if (n === null || ord < n) return earn('TIER', tierCommissionMinor(plan, p.amountMinor));
-      if (ord === n && plan.boundaryCustomer === 'TIER') return earn('TIER', tierCommissionMinor(plan, p.amountMinor));
+      // Customers before the Nth keep their one-off commission even when they first
+      // paid in the month the percent phase starts (#3845).
+      if (n === null || ord < n) return earn('TIER', tierCommissionMinor(plan, tierBase));
+      if (ord === n && plan.boundaryCustomer === 'TIER') return earn('TIER', tierCommissionMinor(plan, tierBase));
       return percent();
     }
 
