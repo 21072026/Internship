@@ -103,11 +103,33 @@ export function handoffActionFromNote(
   return hit?.action ?? null;
 }
 
-/** The interaction type "Complete follow-up" opens with: the hand-off's pick, else a call. */
+/**
+ * `MentorshipRelation.nextActionType` for a follow-up write (#3900): the pick
+ * the writer sent, else the pick the note's label names, else null (a step in
+ * free text says nothing about what it is). A note of null is no step at all.
+ * The deploy backfill (prisma/backfill-next-action-type.mjs) applies the same
+ * reading to the rows written before the column; the unit test keeps the two
+ * in step.
+ */
+export function nextActionTypeFor(
+  explicit: HandoffAction | null | undefined,
+  note: string | null | undefined,
+  labelsByLocale: readonly Readonly<Record<HandoffAction, string>>[],
+): HandoffAction | null {
+  if (explicit) return explicit;
+  return handoffActionFromNote(note, labelsByLocale);
+}
+
+/**
+ * The interaction type "Complete follow-up" opens with: the stored pick
+ * (#3900), else the one the note's label names (rows the backfill has not
+ * reached), else a call.
+ */
 export function followUpInteractionType(
   note: string | null | undefined,
   labelsByLocale: readonly Readonly<Record<HandoffAction, string>>[],
+  stored?: string | null,
 ): HandoffInteractionType {
-  const action = handoffActionFromNote(note, labelsByLocale);
-  return action ? HANDOFF_INTERACTION_TYPE[action] : 'Call';
+  const action = isHandoffAction(stored) ? stored : handoffActionFromNote(note, labelsByLocale);
+  return action && action !== 'other' ? HANDOFF_INTERACTION_TYPE[action] : 'Call';
 }

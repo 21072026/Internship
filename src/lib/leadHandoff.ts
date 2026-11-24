@@ -13,7 +13,8 @@ import { notify, notifyIfAllowed } from '@/lib/notify';
 import { sendLeadHandedOffEmail } from '@/services/emailService';
 import { getDictionary } from '@/i18n/dictionaries';
 import { defaultLocale, isLocale } from '@/i18n/config';
-import { composeHandoffNote, SALES_HANDOFF_REASON, todayIso, type HandoffAction } from '@/lib/leadHandoffRule';
+import { composeHandoffNote, isHandoffAction, nextActionTypeFor, SALES_HANDOFF_REASON, todayIso, type HandoffAction } from '@/lib/leadHandoffRule';
+import { handoffActionLabelsByLocale } from '@/lib/handoffLabels';
 
 export interface SalesTeamMember {
   id: string;
@@ -166,6 +167,7 @@ export async function handOffLead(opts: {
       status: true,
       nextActionAt: true,
       nextActionNote: true,
+      nextActionType: true,
       mentee: { select: { fullName: true } },
     },
   });
@@ -184,10 +186,20 @@ export async function handOffLead(opts: {
   const locale = isLocale(recipientRow?.preferredLanguage) ? recipientRow!.preferredLanguage : defaultLocale;
   // The follow-up the recipient gets: the one the record has (kept), or the
   // step written in this dialog.
-  let next: { at: Date | null; note: string | null };
+  // `type` is what the step is (#3900): the kept step's own, else read from its
+  // note's label; a new step's is the dialog's pick.
+  let next: { at: Date | null; note: string | null; type: HandoffAction | null };
   if (opts.keepFollowUp === true) {
     if (!relation.nextActionAt && !relation.nextActionNote) return { ok: false, status: 400, code: 'no_follow_up' };
-    next = { at: relation.nextActionAt, note: relation.nextActionNote };
+    next = {
+      at: relation.nextActionAt,
+      note: relation.nextActionNote,
+      type: nextActionTypeFor(
+        isHandoffAction(relation.nextActionType) ? relation.nextActionType : null,
+        relation.nextActionNote,
+        handoffActionLabelsByLocale(),
+      ),
+    };
   } else {
     const labels = getDictionary(locale as Parameters<typeof getDictionary>[0]).leadHandoff.actions;
     const composed = composeHandoffNote(action, labels[action], opts.note);
@@ -195,7 +207,7 @@ export async function handOffLead(opts: {
     // No day picked means today: a hand-off is work to do now, not someday.
     const due = parseNextActionDate(opts.dueOn || todayIso());
     if (!due.ok || !due.value) return { ok: false, status: 400, code: 'invalid_date' };
-    next = { at: due.value, note: composed.value };
+    next = { at: due.value, note: composed.value, type: action };
   }
   // What the notices call the next step: the note, else the day.
   const stepText = next.note ?? (next.at ? next.at.toISOString().slice(0, 10) : '');
@@ -242,6 +254,7 @@ export async function handOffLead(opts: {
       data: nextActionPatch(current ?? { nextActionAt: null }, {
         nextActionAt: next.at,
         nextActionNote: next.note,
+        nextActionType: next.type,
       }),
     }),
     followUpEventWrite({
