@@ -42,6 +42,7 @@ interface Current {
   ownerName: string;
   nextActionAt: string | null;
   nextActionNote: string | null;
+  nextActionTime?: string | null;
 }
 
 /** Plain-text slots: the title and the toast are strings, not elements. */
@@ -198,6 +199,7 @@ function LeadHandoffDialog({
   const [action, setAction] = useState<HandoffAction>('call');
   const [note, setNote] = useState('');
   const [dueOn, setDueOn] = useState('');
+  const [dueAt, setDueAt] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [current, setCurrent] = useState<Current | null>(null);
@@ -209,6 +211,7 @@ function LeadHandoffDialog({
     setAction('call');
     setNote('');
     setDueOn(todayIso());
+    setDueAt('');
     setError(null);
     setKeep(false);
     setCurrent(null);
@@ -233,7 +236,12 @@ function LeadHandoffDialog({
   const canSubmit = !!recipientId && recipientId !== current?.ownerId && (!noteRequired || note.trim().length > 0) && !busy;
   // One follow-up as a phrase: its day (a calendar day at UTC midnight), its note, or both.
   const followUpText = current
-    ? [current.nextActionAt ? formatDate(current.nextActionAt, locale, { timeZone: 'UTC' }) : null, current.nextActionNote].filter(Boolean).join(' — ')
+    ? [
+        current.nextActionAt
+          ? formatDate(current.nextActionAt, locale, { timeZone: 'UTC' }) + (current.nextActionTime ? ` ${current.nextActionTime}` : '')
+          : null,
+        current.nextActionNote,
+      ].filter(Boolean).join(' — ')
     : '';
   const title = pending.recipientId && recipient
     ? fill(h.dialogTitle, { lead: pending.leadName, name: recipient.fullName })
@@ -249,7 +257,7 @@ function LeadHandoffDialog({
         body: JSON.stringify(
           keeping
             ? { toUserId: recipientId, action, keepFollowUp: true }
-            : { toUserId: recipientId, action, note: note.trim() || null, dueOn: dueOn || null },
+            : { toUserId: recipientId, action, note: note.trim() || null, dueOn: dueOn || null, dueAt: dueAt || null },
         ),
       });
       if (!res.ok) {
@@ -360,14 +368,25 @@ function LeadHandoffDialog({
                 onChange={(e) => setNote(e.target.value)}
               />
 
-              <Input
-                id="lead-handoff-due"
-                type="date"
-                label={h.dueLabel}
-                data-testid="lead-handoff-due"
-                value={dueOn}
-                onChange={(e) => setDueOn(e.target.value)}
-              />
+              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,8rem)] gap-3">
+                <Input
+                  id="lead-handoff-due"
+                  type="date"
+                  label={h.dueLabel}
+                  data-testid="lead-handoff-due"
+                  value={dueOn}
+                  onChange={(e) => setDueOn(e.target.value)}
+                />
+                {/* Optional (#3901): the same time of day the follow-up panel offers. */}
+                <Input
+                  id="lead-handoff-due-time"
+                  type="time"
+                  label={t.followUp.time}
+                  data-testid="lead-handoff-due-time"
+                  value={dueAt}
+                  onChange={(e) => setDueAt(e.target.value)}
+                />
+              </div>
             </>
           )}
 

@@ -15,6 +15,7 @@ import {
   isNextActionOverdue,
   isNextActionReminderDue,
   parseNextActionDate,
+  parseNextActionTime,
 } from '@/lib/nextActionRule';
 import { nextStepSuggestions } from '@/lib/nextStepSuggestions';
 
@@ -92,6 +93,7 @@ export function FollowUpPanel({
   relationId,
   nextActionAt,
   nextActionNote,
+  nextActionTime,
   pipelineStatus,
   onSaved,
   quickDates = false,
@@ -101,6 +103,8 @@ export function FollowUpPanel({
   relationId: string;
   nextActionAt: string | null | undefined;
   nextActionNote: string | null | undefined;
+  /** Optional time of day, "HH:MM" (#3901); absent where the page does not read it. */
+  nextActionTime?: string | null;
   /** The record's current stage key; without it no suggestions render. */
   pipelineStatus?: string | null;
   onSaved?: () => void | Promise<void>;
@@ -123,9 +127,10 @@ export function FollowUpPanel({
   const toast = useToast();
   // What is saved, as this panel last knew it: the props, or what the last
   // successful save wrote (so reading mode shows it before the refetch lands).
-  const [shown, setShown] = useState({ at: nextActionAt ?? null, note: nextActionNote ?? null });
+  const [shown, setShown] = useState({ at: nextActionAt ?? null, note: nextActionNote ?? null, time: nextActionTime ?? null });
   const [editing, setEditing] = useState(false);
   const [date, setDate] = useState(followUpInputValue(nextActionAt));
+  const [time, setTime] = useState(nextActionTime ?? '');
   const [note, setNote] = useState(nextActionNote ?? '');
   const [saving, setSaving] = useState(false);
   const editRef = useRef<HTMLButtonElement>(null);
@@ -138,10 +143,11 @@ export function FollowUpPanel({
   const [aiHidden, setAiHidden] = useState(false);
 
   useEffect(() => {
-    setShown({ at: nextActionAt ?? null, note: nextActionNote ?? null });
+    setShown({ at: nextActionAt ?? null, note: nextActionNote ?? null, time: nextActionTime ?? null });
     setDate(followUpInputValue(nextActionAt));
+    setTime(nextActionTime ?? '');
     setNote(nextActionNote ?? '');
-  }, [nextActionAt, nextActionNote]);
+  }, [nextActionAt, nextActionNote, nextActionTime]);
 
   // Leaving the form puts the keyboard back where it came from: on Edit, or on
   // "Add follow-up" once the follow-up was cleared.
@@ -155,6 +161,7 @@ export function FollowUpPanel({
 
   const startEditing = () => {
     setDate(followUpInputValue(shown.at));
+    setTime(shown.time ?? '');
     setNote(shown.note ?? '');
     setError('');
     setEditing(true);
@@ -162,6 +169,7 @@ export function FollowUpPanel({
 
   const cancelEditing = () => {
     setDate(followUpInputValue(shown.at));
+    setTime(shown.time ?? '');
     setNote(shown.note ?? '');
     setError('');
     returnFocus.current = true;
@@ -174,7 +182,7 @@ export function FollowUpPanel({
   const aiOffered = vertical === 'INTERNSHIP' && !!pipelineStatus && !aiHidden;
 
   const save = async (
-    next: { date: string; note: string },
+    next: { date: string; note: string; time?: string },
     savedMessage: string = t.followUp.saved,
     // Complete hands the keyboard to the interaction form it opens; it must not be pulled back here.
     // `completed` marks a clear made by Complete, so the history says so (#3819).
@@ -183,6 +191,12 @@ export function FollowUpPanel({
     setError('');
     if (!parseNextActionDate(next.date).ok) {
       setError(t.followUp.invalidDate);
+      return false;
+    }
+    // A time belongs to a day: without one it is dropped, not refused.
+    const nextTime = next.date ? next.time ?? '' : '';
+    if (!parseNextActionTime(nextTime).ok) {
+      setError(t.followUp.invalidTime);
       return false;
     }
     if (next.note.trim().length > NEXT_ACTION_NOTE_MAX) {
@@ -197,12 +211,13 @@ export function FollowUpPanel({
         body: JSON.stringify({
           nextActionAt: next.date || null,
           nextActionNote: next.note || null,
+          nextActionTime: nextTime || null,
           ...(opts.completed ? { nextActionCompleted: true } : {}),
         }),
       });
       if (!res.ok) throw new Error();
       toast(savedMessage);
-      setShown({ at: next.date || null, note: next.note.trim() || null });
+      setShown({ at: next.date || null, note: next.note.trim() || null, time: nextTime || null });
       returnFocus.current = opts.returnFocus ?? true;
       setEditing(false);
       await onSaved?.();
@@ -280,7 +295,7 @@ export function FollowUpPanel({
       </div>
       {!editing && hasFollowUp && (
         <>
-          <FollowUpReading at={shown.at} note={shown.note} />
+          <FollowUpReading at={shown.at} note={shown.note} time={shown.time} />
           {!readOnly && onComplete && (
             <div className="mt-3">
               <Button size="sm" variant="secondary" disabled={saving} title={t.followUp.completeHint} onClick={complete} data-testid="follow-up-complete">
@@ -304,7 +319,7 @@ export function FollowUpPanel({
         <div data-testid="follow-up-form">
           {/* The follow-up is what comes NEXT; what already happened is an interaction (#3652). */}
           <p className="mb-2 text-xs text-gray-600 dark:text-gray-400" data-testid="follow-up-purpose">{t.followUp.purpose}</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,1fr)]">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,7rem)_minmax(0,1fr)]">
             <Input
               id={`follow-up-date-${relationId}`}
               type="date"
@@ -314,6 +329,16 @@ export function FollowUpPanel({
               autoFocus
               onChange={(e) => setDate(e.target.value)}
               data-testid="follow-up-date"
+            />
+            {/* Optional (#3901): orders the day's steps; the day alone decides due and overdue. */}
+            <Input
+              id={`follow-up-time-${relationId}`}
+              type="time"
+              label={t.followUp.time}
+              value={time}
+              disabled={saving || !date}
+              onChange={(e) => setTime(e.target.value)}
+              data-testid="follow-up-time"
             />
             <Input
               id={`follow-up-note-${relationId}`}
@@ -404,7 +429,7 @@ export function FollowUpPanel({
           )}
           {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button size="sm" loading={saving} onClick={() => save({ date, note })} data-testid="follow-up-save">
+            <Button size="sm" loading={saving} onClick={() => save({ date, note, time })} data-testid="follow-up-save">
               {t.followUp.save}
             </Button>
             <Button size="sm" variant="secondary" disabled={saving} onClick={cancelEditing} data-testid="follow-up-cancel">
@@ -437,7 +462,7 @@ export function FollowUpPanel({
  * rule counts), coloured by the same overdue / due-today rule as the chip, and
  * the next step as written.
  */
-function FollowUpReading({ at, note }: { at: string | null; note: string | null }) {
+function FollowUpReading({ at, note, time }: { at: string | null; note: string | null; time: string | null }) {
   const t = useT();
   const locale = useLocale();
   const now = Date.now();
@@ -455,6 +480,7 @@ function FollowUpReading({ at, note }: { at: string | null; note: string | null 
         {day
           ? formatDate(day, locale, { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
           : t.followUp.noDate}
+        {day && time && <span data-testid="follow-up-read-time"> · {time}</span>}
       </p>
       <p
         className={`whitespace-pre-wrap break-words text-sm ${note ? 'text-gray-700 dark:text-gray-200' : 'italic text-gray-500 dark:text-gray-400'}`}

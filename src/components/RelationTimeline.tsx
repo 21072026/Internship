@@ -22,7 +22,7 @@ import { RelativeTime } from '@/components/ui/RelativeTime';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { useT, useLocale } from '@/i18n/client';
 import { useStageLabel } from '@/lib/pipelineStagesClient';
-import { formatDate, formatDateTime } from '@/lib/relativeTime';
+import { formatDate, formatDateTime, isDayOnly } from '@/lib/relativeTime';
 import type { TimelineEntry, TimelineKind } from '@/lib/relationTimeline';
 
 // The merged history of one pairing (#1702). Presentational only: the ordering,
@@ -295,7 +295,13 @@ function TimelineRow({
             <Badge variant="info" className="text-[10px]">{t.relationTimeline.automatic}</Badge>
           )}
 
-          <RelativeTime date={entry.at} className="ml-auto flex-shrink-0 text-[11px] text-gray-400" />
+          {/* A log typed as a bare day is stored as UTC midnight (#3901): it reads
+              as that day, never as "01:00" or "15 hours ago". */}
+          <RelativeTime
+            date={entry.at}
+            granularity={isDayOnly(entry.at) ? 'day' : 'instant'}
+            className="ml-auto flex-shrink-0 text-[11px] text-gray-400"
+          />
         </div>
 
         {/* The week a report covers is shipped as an ISO instant and formatted
@@ -310,7 +316,9 @@ function TimelineRow({
         {entry.detail && <p className="mt-0.5 text-xs text-gray-500">{entry.detail}</p>}
 
         <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-gray-400">
-          <span>{formatDateTime(entry.at, locale)}</span>
+          <span data-testid="timeline-entry-when">
+            {isDayOnly(entry.at) ? formatDate(entry.at, locale, { timeZone: 'UTC' }) : formatDateTime(entry.at, locale)}
+          </span>
           {byline && <span>· {byline}</span>}
           {entry.href && (
             <a

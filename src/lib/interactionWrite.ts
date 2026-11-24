@@ -2,7 +2,7 @@ import type { InteractionType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import type { z } from 'zod';
-import type { updateInteractionSchema } from '@/lib/interactionSchema';
+import { interactionInstant, type updateInteractionSchema } from '@/lib/interactionSchema';
 import { shellCapabilities } from '@/lib/shellCapabilities';
 import { emit } from '@/lib/events/emit';
 import { recordPairActivity } from '@/lib/metering';
@@ -100,7 +100,7 @@ export async function updateInteraction(id: string, data: z.infer<typeof updateI
     where: { id },
     data: {
       ...rest,
-      ...(date !== undefined ? { date: new Date(date) } : {}),
+      ...(date !== undefined ? { date: interactionInstant(date) } : {}),
       ...(subject !== undefined ? { subject: subject?.trim() ? subject.trim() : null } : {}),
     },
   });

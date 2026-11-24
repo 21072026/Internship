@@ -280,3 +280,43 @@ null when nobody said.
 The note still carries the label text ("Telefonla aranacak: …") for now; showing
 the label in the reader's language from the column instead is part of the shared
 follow-up form (#3903).
+
+## When: a day, and optionally a time (#3901)
+
+Interactions and follow-ups both learnt a time of day, in two different ways,
+because they are two different kinds of date.
+
+**An interaction is an instant.** The log form asks for date *and* time
+(`datetime-local`, defaulting to the moment the form opens) in the person's own
+zone and sends the instant; `interactionInstant()` (`src/lib/interactionSchema.ts`)
+stores it. A log sent as a bare day (`2026-11-24` — the older forms, imports,
+`PUT /api/interactions/[id]` from a date field) is still stored as UTC midnight,
+and the app keeps reading "exactly UTC midnight" as *a day with no time*
+(`isDayOnly`, `src/lib/relativeTime.ts`) — no column and no backfill, since every
+row written before #3901 is already such a midnight. Those rows render as their
+day: the sales interactions card shows "yesterday" without a time, the admin
+timeline shows the date in UTC, never an invented "01:00". An instant that lands
+on UTC midnight to the millisecond is moved by 1 ms on write so it keeps its time.
+
+**A follow-up stays a day.** `nextActionAt` is still the calendar day the
+reminder and the attention queue count, in UTC, exactly as `nextActionRule.ts`
+argues. The optional time is a separate `nextActionTime` column, `"HH:MM"` as
+the owner typed it — a *wall time*, not an instant. Folding it into
+`nextActionAt` would make "Thursday 00:30" typed in Berlin a Wednesday in UTC and
+fire the reminder a day early. So the time:
+
+- never moves the day, never re-arms or delays the reminder, and never makes a
+  step due or overdue earlier or later (those stay per day);
+- orders a day's steps — untimed ("some time that day") first, then by time
+  (`compareNextActions`, and `orderBy: [nextActionAt, nextActionTime]` in the
+  sales calendar);
+- is shown as typed, beside the day: the follow-up panel, the hand-off dialog's
+  "current follow-up" line, the sales calendar. It is not converted per viewer —
+  it is the owner's own schedule;
+- is cleared with the day, and dropped when sent without one;
+- travels with "keep the follow-up" on a hand-off, and a new hand-off step may
+  carry one (`dueAt`).
+
+The subscribed calendar feed (`/api/calendar/feed/[token]`) still publishes a
+follow-up as its day: a wall time without a zone is not an instant an external
+calendar can place, and the feed has no zone of the owner to read.

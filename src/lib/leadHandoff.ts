@@ -7,7 +7,7 @@ import { runUnscoped } from '@/lib/tenantAmbient';
 import { canWriteSalesRecord } from '@/lib/salesBook';
 import { findLeadOwner, LEAD_OWNER_ROLES } from '@/lib/leadOwner';
 import { transferMentorship } from '@/lib/mentorTransfer';
-import { nextActionPatch, parseNextActionDate } from '@/lib/nextActionRule';
+import { nextActionPatch, parseNextActionDate, parseNextActionTime } from '@/lib/nextActionRule';
 import { followUpEventWrite } from '@/lib/followUpEvents';
 import { notify, notifyIfAllowed } from '@/lib/notify';
 import { sendLeadHandedOffEmail } from '@/services/emailService';
@@ -107,6 +107,8 @@ export interface HandoffCurrent {
   ownerName: string;
   nextActionAt: string | null;
   nextActionNote: string | null;
+  /** Optional time of day of the current step (#3901). */
+  nextActionTime: string | null;
 }
 
 /**
@@ -125,6 +127,7 @@ export async function handoffCurrent(session: Session, orgId: string, relationId
       companyId: true,
       nextActionAt: true,
       nextActionNote: true,
+      nextActionTime: true,
       mentor: { select: { fullName: true } },
     },
   });
@@ -134,6 +137,7 @@ export async function handoffCurrent(session: Session, orgId: string, relationId
     ownerName: relation.mentor.fullName,
     nextActionAt: relation.nextActionAt ? relation.nextActionAt.toISOString() : null,
     nextActionNote: relation.nextActionNote,
+    nextActionTime: relation.nextActionTime,
   };
 }
 
@@ -145,6 +149,8 @@ export async function handOffLead(opts: {
   action: HandoffAction;
   note?: string | null;
   dueOn?: string | null;
+  /** Optional time of day for the new step, "HH:MM" (#3901). */
+  dueAt?: string | null;
   /**
    * Hand the record over with the follow-up it already has (#3873) instead of
    * a new step: the day and the note travel to the new owner unchanged, and
@@ -168,6 +174,7 @@ export async function handOffLead(opts: {
       nextActionAt: true,
       nextActionNote: true,
       nextActionType: true,
+      nextActionTime: true,
       mentee: { select: { fullName: true } },
     },
   });
@@ -188,7 +195,7 @@ export async function handOffLead(opts: {
   // step written in this dialog.
   // `type` is what the step is (#3900): the kept step's own, else read from its
   // note's label; a new step's is the dialog's pick.
-  let next: { at: Date | null; note: string | null; type: HandoffAction | null };
+  let next: { at: Date | null; note: string | null; type: HandoffAction | null; time: string | null };
   if (opts.keepFollowUp === true) {
     if (!relation.nextActionAt && !relation.nextActionNote) return { ok: false, status: 400, code: 'no_follow_up' };
     next = {
@@ -199,6 +206,7 @@ export async function handOffLead(opts: {
         relation.nextActionNote,
         handoffActionLabelsByLocale(),
       ),
+      time: relation.nextActionTime,
     };
   } else {
     const labels = getDictionary(locale as Parameters<typeof getDictionary>[0]).leadHandoff.actions;
@@ -207,7 +215,9 @@ export async function handOffLead(opts: {
     // No day picked means today: a hand-off is work to do now, not someday.
     const due = parseNextActionDate(opts.dueOn || todayIso());
     if (!due.ok || !due.value) return { ok: false, status: 400, code: 'invalid_date' };
-    next = { at: due.value, note: composed.value, type: action };
+    const dueTime = parseNextActionTime(opts.dueAt);
+    if (!dueTime.ok) return { ok: false, status: 400, code: 'invalid_time' };
+    next = { at: due.value, note: composed.value, type: action, time: dueTime.value };
   }
   // What the notices call the next step: the note, else the day.
   const stepText = next.note ?? (next.at ? next.at.toISOString().slice(0, 10) : '');
@@ -255,6 +265,7 @@ export async function handOffLead(opts: {
         nextActionAt: next.at,
         nextActionNote: next.note,
         nextActionType: next.type,
+        nextActionTime: next.time,
       }),
     }),
     followUpEventWrite({

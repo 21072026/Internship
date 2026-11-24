@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useLocale } from '@/i18n/client';
-import { formatDate, formatDateTime, isDayOnly, relativeDay, relativeTime } from '@/lib/relativeTime';
+import { formatDate, formatDateTime, formatTime, isDayOnly, relativeDay, relativeTime } from '@/lib/relativeTime';
 
 // "5 dk. önce" on the screen, "25.08.2026 16:30" on hover.
 //
@@ -56,10 +56,16 @@ interface Props {
    * hovers as a date, not as midnight.
    */
   granularity?: 'instant' | 'day';
+  /**
+   * With `'day'`: an instant also shows its time of day in the viewer's zone
+   * ("yesterday · 14:30", #3901), so two entries of one day read in order. A
+   * date-only value never gets one — it has no time to show.
+   */
+  withTime?: boolean;
   'data-testid'?: string;
 }
 
-export function RelativeTime({ date, locale, title, style = 'short', className, granularity = 'instant', 'data-testid': testId }: Props) {
+export function RelativeTime({ date, locale, title, style = 'short', className, granularity = 'instant', withTime = false, 'data-testid': testId }: Props) {
   const appLocale = useLocale();
   const lang = locale ?? appLocale;
   const [now, setNow] = useState(() => Date.now());
@@ -85,6 +91,7 @@ export function RelativeTime({ date, locale, title, style = 'short', className, 
       suppressHydrationWarning
     >
       {granularity === 'day' ? relativeDay(d, lang, { style, now }) : relativeTime(d, lang, { style, now })}
+      {granularity === 'day' && withTime && !isDayOnly(d) && ` · ${formatTime(d, lang)}`}
     </time>
   );
 }

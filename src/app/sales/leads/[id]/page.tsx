@@ -91,6 +91,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
       startDate: true,
       nextActionAt: true,
       nextActionNote: true,
+      nextActionTime: true,
       nextActionType: true,
       trialStartedAt: true,
       trialEndsAt: true,
@@ -344,6 +345,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
         pipelineStatus={relation.pipelineStatus}
         nextActionAt={ownersView ? iso(relation.nextActionAt) : null}
         nextActionNote={ownersView ? relation.nextActionNote : null}
+        nextActionTime={ownersView ? relation.nextActionTime : null}
         followUpType={followUpInteractionType(
           relation.nextActionNote,
           locales.map((l) => getDictionary(l).leadHandoff.actions),

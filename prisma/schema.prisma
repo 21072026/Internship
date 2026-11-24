@@ -4535,6 +4535,12 @@ model MentorshipRelation {
   // (nextActionTypeFor) — and cleared with it. Not carried to a successor
   // record (CARRIED_OVER_FIELDS is an allowlist), stripped with the note.
   nextActionType             String?          @db.VarChar(16)
+  // An optional time of day for the step (#3901), "HH:MM" on the 24-hour clock,
+  // as the owner typed it — a wall time, not an instant: nextActionAt stays the
+  // calendar DAY the reminder and the queue count (nextActionRule.ts), and a
+  // time never moves it. Orders a day's steps and is shown beside the day.
+  // Null = the whole day. Cleared with the day.
+  nextActionTime             String?          @db.VarChar(5)
   // Set when the due-day reminder for the CURRENT nextActionAt went out, by a
   // conditional claim in checkNextActionReminders(); a write that moves the
   // date clears it, so each date reminds its owner exactly once.

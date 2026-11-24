@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Interactions are logged with date and time (`datetime-local`), so a day's entries list in the order they happened; day-only rows keep reading as their day instead of a made-up \"01:00\". Follow-ups take an optional time of day (`nextActionTime`, `HH:MM` wall time) in the follow-up panel and the hand-off dialog, shown beside the day and ordering the sales calendar; due/overdue stay per calendar day (#3901).",
+  "notes": {
+    "en": ["Log interactions with date and time — entries of the same day now appear in the order they happened.", "Follow-ups can have an optional time of day."],
+    "tr": ["Etkileşimler tarih ve saatle kaydediliyor — aynı günün kayıtları artık gerçek sırasıyla listeleniyor.", "Takiplere isteğe bağlı saat eklenebiliyor."],
+    "de": ["Interaktionen werden mit Datum und Uhrzeit erfasst — Einträge desselben Tages erscheinen jetzt in ihrer tatsächlichen Reihenfolge.", "Wiedervorlagen können eine optionale Uhrzeit haben."]
+  }
+}

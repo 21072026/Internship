@@ -19,9 +19,11 @@ import {
   isNextActionReminderDue,
   nextActionDueBefore,
   nextActionOverdueBefore,
+  compareNextActions,
   nextActionPatch,
   parseNextActionDate,
   parseNextActionNote,
+  parseNextActionTime,
   stripNextActionFor,
 } from '../../src/lib/nextActionRule.ts';
 
@@ -84,7 +86,8 @@ test('moving the date re-arms the reminder; editing only the note does not', () 
     nextActionAt: day('2026-03-19'),
     nextActionRemindedAt: null,
   });
-  assert.deepEqual(nextActionPatch(current, { nextActionAt: null }), { nextActionAt: null, nextActionRemindedAt: null });
+  // Clearing the day clears its time of day too (#3901).
+  assert.deepEqual(nextActionPatch(current, { nextActionAt: null }), { nextActionAt: null, nextActionRemindedAt: null, nextActionTime: null });
   assert.deepEqual(nextActionPatch(current, { nextActionAt: day('2026-03-12'), nextActionNote: 'typo fixed' }), {
     nextActionAt: day('2026-03-12'),
     nextActionNote: 'typo fixed',
@@ -99,4 +102,53 @@ test('only the owner and ADMIN see the next-action columns', () => {
   assert.equal(canSeeNextAction({ id: 'mentee', role: 'MENTEE' }, row), false);
   assert.deepEqual(stripNextActionFor({ id: 'mentee', role: 'MENTEE' }, row), { id: 'r1', mentorId: 'owner' });
   assert.equal(stripNextActionFor({ id: 'owner', role: 'MENTOR' }, row), row);
+});
+
+// ── Time of day (#3901) ─────────────────────────────────────────────────────
+
+test('a time of day is HH:MM on the 24-hour clock, or nothing', () => {
+  assert.deepEqual(parseNextActionTime('09:30'), { ok: true, value: '09:30' });
+  assert.deepEqual(parseNextActionTime('23:59'), { ok: true, value: '23:59' });
+  // <input type="time"> may send seconds; they are dropped.
+  assert.deepEqual(parseNextActionTime('14:05:00'), { ok: true, value: '14:05' });
+  for (const blank of [null, undefined, '']) assert.deepEqual(parseNextActionTime(blank), { ok: true, value: null });
+  for (const bad of ['24:00', '9:30', '12:60', '1230', 'noon', 930, '12:30 PM']) {
+    assert.deepEqual(parseNextActionTime(bad), { ok: false, error: 'invalid_time' }, String(bad));
+  }
+});
+
+test('a time never moves the day, never re-arms the reminder, and dies with the day', () => {
+  const current = { nextActionAt: day('2026-03-12') };
+  // Changing only the time keeps the reminder already sent for that day.
+  assert.deepEqual(nextActionPatch(current, { nextActionTime: '10:00' }), { nextActionTime: '10:00' });
+  assert.deepEqual(nextActionPatch(current, { nextActionAt: day('2026-03-12'), nextActionTime: '15:00' }), {
+    nextActionAt: day('2026-03-12'),
+    nextActionTime: '15:00',
+  });
+  // A time sent with the day cleared, or onto a record that has no day, is dropped.
+  assert.deepEqual(nextActionPatch(current, { nextActionAt: null, nextActionTime: '10:00' }), {
+    nextActionAt: null,
+    nextActionRemindedAt: null,
+    nextActionTime: null,
+  });
+  assert.deepEqual(nextActionPatch({ nextActionAt: null }, { nextActionNote: 'call', nextActionTime: '10:00' }), {
+    nextActionNote: 'call',
+    nextActionTime: null,
+  });
+  // Due and overdue read the day only, so a late time on the due day is still due, not later.
+  assert.equal(isNextActionReminderDue({ nextActionAt: day('2026-03-12'), nextActionRemindedAt: null }, NOW), true);
+});
+
+test('follow-ups order by day, then untimed before timed, then by time; no day last', () => {
+  const rows = [
+    { id: 'none', at: null, time: null },
+    { id: 'd2-0900', at: '2026-03-13T00:00:00.000Z', time: '09:00' },
+    { id: 'd1-1500', at: '2026-03-12T00:00:00.000Z', time: '15:00' },
+    { id: 'd1-whole', at: '2026-03-12T00:00:00.000Z', time: null },
+    { id: 'd1-0830', at: day('2026-03-12'), time: '08:30' },
+  ];
+  assert.deepEqual(
+    [...rows].sort(compareNextActions).map((r) => r.id),
+    ['d1-whole', 'd1-0830', 'd1-1500', 'd2-0900', 'none'],
+  );
 });
