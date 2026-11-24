@@ -416,6 +416,7 @@ const TENANT_MODELS: ReadonlySet<Prisma.ModelName> = new Set([
   // itself (the same one registration uses) rather than leaving NULL — a
   // NULL-org row would be invisible to the wrapped admin triage list the
   // moment this registration takes effect.
+  'Subscriber',
   'CompanyInquiry',
   // 2FA recovery codes (#1542). A credential belonging to one tenant's user:
   // another tenant must never be able to list, count or clear them. Registered

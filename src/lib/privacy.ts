@@ -29,7 +29,8 @@
 // 2026-10-29: the retention section says what deleting an account reaches —
 // every text the person wrote or that belongs to them — and that a name quoted
 // in another user's own notes is outside it and reviewed on request (#2098).
-export const PRIVACY_POLICY_VERSION = '2026-10-29';
+// #1406: separate interest list, double opt-in, withdrawal and bounded retention.
+export const PRIVACY_POLICY_VERSION = '2026-11-16';
 
 // Version of the product-news opt-in WORDING on the marketing demo form
 // (`companyInquiry.marketingOptIn` in the dictionaries, #2569). Separate from

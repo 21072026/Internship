@@ -227,6 +227,7 @@ export function getFeatures(t: Dictionary): Feature[] {
     // Stage automation (#1703/#1704): every vertical has a pipeline; MARKETING overlays the mentor wording.
     { key: 'stageAutomation', category: 'tracking', icon: Repeat2, color: 'indigo', title: C.stageAutomation.t, desc: C.stageAutomation.d },
     { key: 'terminology', category: 'platform', icon: Palette, color: 'violet', capability: 'mentorship', title: C.terminology.t, desc: C.terminology.d },
+    { key: 'interestSignup', category: 'platform', icon: MailCheck, color: 'blue', title: t.interest.featureTitle, desc: t.interest.featureBody },
     { key: 'notificationTemplates', category: 'platform', icon: MailCheck, color: 'blue', title: C.notificationTemplates.t, desc: C.notificationTemplates.d },
   ];
 }

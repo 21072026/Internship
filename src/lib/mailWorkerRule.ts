@@ -318,6 +318,7 @@ export interface EnvelopeMessage {
 }
 
 export interface Envelope {
+  subscriberId?: string;
   to: string;
   subject: string;
   category?: string;
