@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "Public API: read-only `GET /api/v1/support/reports` and `/{id}` (scope `support:read`, ≤ 50 per page, `status`/`type`/`since` filters) and `/{id}/screenshot` (also needs `support:read_screenshots`) — the org's in-app bug reports and feedback, re-masked through `src/lib/feedbackContext.ts`, reporter name and role only, every read audited (key + report ids). Not in the sandbox key. `src/lib/api/v1Support.ts`, `docs/public-api.md`.",
-  "notes": {
-    "en": ["Admins can give an API key read-only access to the organization’s bug reports and feedback; every read is recorded in the audit log."],
-    "tr": ["Yöneticiler bir API anahtarına kurumun hata bildirimlerini ve geri bildirimlerini salt-okunur okuma izni verebilir; her okuma denetim kaydına yazılır."],
-    "de": ["Admins können einem API-Schlüssel Lesezugriff auf die Fehlerberichte und das Feedback der Organisation geben; jeder Zugriff wird im Audit-Log festgehalten."]
-  }
-}

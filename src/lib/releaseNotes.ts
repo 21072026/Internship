@@ -65,6 +65,91 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.699.1-beta',
+    date: '2026-11-23',
+    time: '10:57',
+    commit: '426aff4',
+    highlights: {
+      en: [
+        "\"Assigned to you\" now updates when you go back from a record, and explains why it stays while an admin views as the rep.",
+      ],
+      tr: [
+        "\"Sana atananlar\" kartı bir kayıttan geri dönünce güncelleniyor; yönetici temsilci gibi bakarken neden düşmediğini de söylüyor.",
+      ],
+      de: [
+        "„Dir zugewiesen“ aktualisiert sich jetzt, wenn du von einem Datensatz zurückgehst, und erklärt, warum es in der Vertretungsansicht bleibt.",
+      ],
+    },
+  },
+  {
+    version: '0.699.0-beta',
+    date: '2026-11-22',
+    time: '22:13',
+    commit: 'f67d41c',
+    highlights: {
+      en: [
+        "Feedback: when the team updates something you reported, you now get a notification in the app.",
+      ],
+      tr: [
+        "Geri bildirim: ekip bildirdiğin bir şeyde değişiklik yaptığında artık uygulama içinde bildirim alıyorsun.",
+      ],
+      de: [
+        "Feedback: Wenn das Team etwas aktualisiert, das du gemeldet hast, bekommst du jetzt eine Benachrichtigung in der App.",
+      ],
+    },
+  },
+  {
+    version: '0.698.0-beta',
+    date: '2026-11-22',
+    time: '21:56',
+    commit: '1a89d61',
+    highlights: {
+      en: [
+        "Feedback: you can now see the bug reports and feedback you sent, their status and the team's reply, under \"My feedback\".",
+      ],
+      tr: [
+        "Geri bildirim: gönderdiğin hata bildirimlerini ve geri bildirimleri, durumlarını ve ekibin yanıtını artık \"Gönderdiğim geri bildirimler\" altında görebiliyorsun.",
+      ],
+      de: [
+        "Feedback: Unter „Meine Rückmeldungen“ siehst du jetzt deine gesendeten Fehlermeldungen und Rückmeldungen, ihren Stand und die Antwort des Teams.",
+      ],
+    },
+  },
+  {
+    version: '0.697.0-beta',
+    date: '2026-11-22',
+    time: '19:33',
+    commit: 'f1b3316',
+    highlights: {
+      en: [
+        "Admins can give an API key read-only access to the organization’s bug reports and feedback; every read is recorded in the audit log.",
+      ],
+      tr: [
+        "Yöneticiler bir API anahtarına kurumun hata bildirimlerini ve geri bildirimlerini salt-okunur okuma izni verebilir; her okuma denetim kaydına yazılır.",
+      ],
+      de: [
+        "Admins können einem API-Schlüssel Lesezugriff auf die Fehlerberichte und das Feedback der Organisation geben; jeder Zugriff wird im Audit-Log festgehalten.",
+      ],
+    },
+  },
+  {
+    version: '0.696.0-beta',
+    date: '2026-11-22',
+    time: '19:30',
+    commit: 'f5a5206',
+    highlights: {
+      en: [
+        "Board: the colleagues strip now shows how many open leads each person has; admins also see their overdue follow-ups.",
+      ],
+      tr: [
+        "Pano: ekip arkadaşları şeridi artık her kişinin kaç açık lead'i olduğunu gösteriyor; yöneticiler gecikmiş takipleri de görüyor.",
+      ],
+      de: [
+        "Board: Die Kollegenleiste zeigt jetzt, wie viele offene Leads jede Person hat; Admins sehen auch überfällige Wiedervorlagen.",
+      ],
+    },
+  },
+  {
     version: '0.695.0-beta',
     date: '2026-11-21',
     time: '21:34',
