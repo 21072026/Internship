@@ -21,6 +21,8 @@ import { isStageTransition, validateDropoffReason, validateEmploymentAttribution
 import { canTransition } from '@/lib/stageGate';
 import { funnelEnteredAtForKindChange, isEmploymentAttribution, isRelationKind } from '@/lib/placementKind';
 import { nextActionPatch, parseNextActionDate, parseNextActionNote, stripNextActionFor } from '@/lib/nextActionRule';
+import { HANDOFF_ACTIONS, nextActionTypeFor } from '@/lib/leadHandoffRule';
+import { handoffActionLabelsByLocale } from '@/lib/handoffLabels';
 import { followUpEventFor } from '@/lib/followUpEventRule';
 import { followUpEventWrite } from '@/lib/followUpEvents';
 
@@ -46,6 +48,9 @@ const updateRelationSchema = z.object({
   // and are applied below, so this route and any later writer share them.
   nextActionAt: z.string().nullable().optional(),
   nextActionNote: z.string().nullable().optional(),
+  // What the step is (#3900), one of HANDOFF_ACTIONS; absent = read from the
+  // note's label (nextActionTypeFor), null = not stated.
+  nextActionType: z.enum(HANDOFF_ACTIONS).nullable().optional(),
   // Sent with a clearing write by the panel's "Complete" (#3819): the history
   // line says "completed" rather than "cleared". Ignored on any other write.
   nextActionCompleted: z.boolean().optional(),
@@ -239,7 +244,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }
 
       const {
-        stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote, nextActionCompleted,
+        stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote, nextActionType, nextActionCompleted,
         kind, employmentAttribution, expectedEndDate, ...rest
       } = parsed.data;
 
@@ -370,9 +375,18 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       // Independent of the stage SLA (#2563): a stage change in this same
       // request neither reads nor clears these, and moving the date re-arms
       // its one reminder (nextActionPatch).
+      // What the step is (#3900): the pick when one is sent, else what the new
+      // note's label says; untouched when neither the pick nor the note is sent.
+      const nextNote = parsedNextNote?.ok ? parsedNextNote.value : undefined;
       const followUp = nextActionPatch(relation, {
         nextActionAt: parsedNextAt?.ok ? parsedNextAt.value : undefined,
-        nextActionNote: parsedNextNote?.ok ? parsedNextNote.value : undefined,
+        nextActionNote: nextNote,
+        nextActionType:
+          nextActionType !== undefined
+            ? nextActionType
+            : nextNote !== undefined
+              ? nextActionTypeFor(null, nextNote, handoffActionLabelsByLocale())
+              : undefined,
       });
       Object.assign(data, followUp);
       // The history line of this follow-up edit (#3819), if it changed one.

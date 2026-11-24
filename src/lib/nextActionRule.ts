@@ -116,6 +116,8 @@ export interface NextActionState {
   nextActionAt: Date | null;
   nextActionNote: string | null;
   nextActionRemindedAt: Date | null;
+  /** What the step is (#3900) — see nextActionTypeFor in leadHandoffRule.ts. */
+  nextActionType: string | null;
 }
 
 /**
@@ -126,7 +128,7 @@ export interface NextActionState {
  */
 export function nextActionPatch(
   current: Pick<NextActionState, 'nextActionAt'>,
-  next: { nextActionAt?: Date | null; nextActionNote?: string | null }
+  next: { nextActionAt?: Date | null; nextActionNote?: string | null; nextActionType?: string | null }
 ): Partial<NextActionState> {
   const patch: Partial<NextActionState> = {};
   if (next.nextActionAt !== undefined) {
@@ -134,6 +136,10 @@ export function nextActionPatch(
     if (!sameNextActionDay(current.nextActionAt, next.nextActionAt)) patch.nextActionRemindedAt = null;
   }
   if (next.nextActionNote !== undefined) patch.nextActionNote = next.nextActionNote;
+  if (next.nextActionType !== undefined) patch.nextActionType = next.nextActionType;
+  // A step with neither a day nor a note is no step (#3900): clearing both —
+  // "Complete", "Clear" — clears what it was, whatever the caller sent.
+  if (next.nextActionAt === null && next.nextActionNote === null) patch.nextActionType = null;
   return patch;
 }
 
@@ -171,10 +177,10 @@ export function canSeeNextAction(viewer: { id: string; role: string }, relation:
 export function stripNextActionFor<T extends { mentorId: string }>(
   viewer: { id: string; role: string },
   row: T
-): T | Omit<T, 'nextActionAt' | 'nextActionNote' | 'nextActionRemindedAt' | 'contractEndsAt' | 'contractEndRemindedAt'> {
+): T | Omit<T, 'nextActionAt' | 'nextActionNote' | 'nextActionRemindedAt' | 'nextActionType' | 'contractEndsAt' | 'contractEndRemindedAt'> {
   if (canSeeNextAction(viewer, row)) return row;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { nextActionAt, nextActionNote, nextActionRemindedAt, contractEndsAt, contractEndRemindedAt, ...rest } =
+  const { nextActionAt, nextActionNote, nextActionRemindedAt, nextActionType, contractEndsAt, contractEndRemindedAt, ...rest } =
     row as T & Partial<NextActionState> & { contractEndsAt?: unknown; contractEndRemindedAt?: unknown };
   return rest;
 }

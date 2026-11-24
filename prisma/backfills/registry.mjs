@@ -183,4 +183,16 @@ export const BACKFILLS = [
     optional: true,
     why: 'A display name only: a failed run leaves the old "tel.…" names, exactly as before #3821.',
   },
+  // What a follow-up IS (#3900): read from the label a hand-off wrote into the
+  // note, for the rows written before nextActionType existed. Only fills empty
+  // types, guarded on the note it read, so a re-run finds nothing; a free-text
+  // note stays untyped. AFTER the push: it writes the column the push adds.
+  {
+    id: '0039-next-action-type',
+    script: 'prisma/backfill-next-action-type.mjs',
+    args: ['--apply'],
+    once: false,
+    optional: true,
+    why: 'A derived column with a fallback: every reader still reads the note when the type is empty, so a failed run changes nothing anyone sees.',
+  },
 ];

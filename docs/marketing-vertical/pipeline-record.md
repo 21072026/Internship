@@ -251,3 +251,32 @@ Three nullable columns on `MentorshipRelation` carry it:
 - **Cleared** when the owner opens `/sales/leads/[id]`
   (`markAssignmentSeen`, one conditional `updateMany`) — not when an admin or a
   colleague reads it, and not under impersonation.
+
+## What the next step is (#3900)
+
+A follow-up is a day and a note (`nextActionAt`, `nextActionNote`, the rule in
+`src/lib/nextActionRule.ts`) and, since #3900, **what kind of step it is**:
+`nextActionType` — `call` | `email` | `meeting` | `demo` | `other`, the
+hand-off's quick picks (`HANDOFF_ACTIONS`, `src/lib/leadHandoffRule.ts`), or
+null when nobody said.
+
+- **Written with the note, by every follow-up writer.** The hand-off stores its
+  pick (a kept step keeps its own); an owner's edit through
+  `PUT /api/mentorship/[id]` stores the `nextActionType` it sends, else reads it
+  from the new note's label (`nextActionTypeFor`). A day-only edit leaves it.
+- **Cleared with the step.** `nextActionPatch` clears it whenever the day and the
+  note are both cleared ("Complete", "Clear"), whatever the caller sent.
+- **Not carried** to a successor record and **stripped** with the note
+  (`stripNextActionFor`), exactly like the other follow-up columns.
+- **Older rows** are typed by the deploy backfill
+  `prisma/backfill-next-action-type.mjs` (registry `0039`) from the label a
+  hand-off wrote into the note — a plain-ESM mirror of the app's reading,
+  pinned to the dictionary and to the TS rule by
+  `scripts/test/next-action-type.test.mjs`. A free-text note stays untyped.
+- **Readers prefer the column** and fall back to the note's label
+  (`followUpInteractionType`), so a row the backfill has not reached reads as
+  before.
+
+The note still carries the label text ("Telefonla aranacak: …") for now; showing
+the label in the reader's language from the column instead is part of the shared
+follow-up form (#3903).

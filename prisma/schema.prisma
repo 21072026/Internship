@@ -4528,6 +4528,13 @@ model MentorshipRelation {
   // (stripNextActionFor in the same module).
   nextActionAt               DateTime?
   nextActionNote             String?          @db.VarChar(280)
+  // What the next step IS (#3900): call | email | meeting | demo | other — the
+  // hand-off's quick picks (HANDOFF_ACTIONS, src/lib/leadHandoffRule.ts). Null
+  // = not stated (a free-text step). Written with the note on every follow-up
+  // write — the pick when one is sent, else read from the note's label
+  // (nextActionTypeFor) — and cleared with it. Not carried to a successor
+  // record (CARRIED_OVER_FIELDS is an allowlist), stripped with the note.
+  nextActionType             String?          @db.VarChar(16)
   // Set when the due-day reminder for the CURRENT nextActionAt went out, by a
   // conditional claim in checkNextActionReminders(); a write that moves the
   // date clears it, so each date reminds its owner exactly once.
