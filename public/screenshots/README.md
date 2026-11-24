@@ -60,3 +60,9 @@ A headless browser draws no mouse pointer and no native drag image, so the
 clips add a drawn cursor (and, on the board, a lifted copy of the card). What
 happens underneath is the real app: the stage change and the shortlist are
 real requests.
+
+## Channel exports (#2225)
+
+The same producer supports `--channels` for six retina PNGs. The capture matrix,
+synthetic-data checks, LinkedIn exports and German one-pager instructions live
+in [the channel asset guide](../../docs/marketing/channel-assets.md).
