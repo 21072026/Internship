@@ -46,3 +46,20 @@ test('a truncated book never guesses a split: the owner total only', () => {
   assert.deepEqual(Object.fromEntries(c.people[0].byStage), { '': 3 });
   assert.deepEqual(Object.fromEntries(c.people[1].byStage), { '': 1 });
 });
+
+const { followUpChannel, channelCounts, FOLLOW_UP_CHANNELS } = await import('../../src/lib/salesTeamRule.ts');
+
+test('a follow-up waits on a call, an e-mail or something else (#3905)', () => {
+  assert.deepEqual([...FOLLOW_UP_CHANNELS], ['call', 'email', 'other']);
+  assert.equal(followUpChannel('call'), 'call');
+  assert.equal(followUpChannel('email'), 'email');
+  for (const t of ['meeting', 'demo', 'other', null, undefined, 'unknown']) assert.equal(followUpChannel(t), 'other');
+});
+
+test('channel counts fold the grouped rows, every channel present', () => {
+  assert.deepEqual(channelCounts([]), { call: 0, email: 0, other: 0 });
+  assert.deepEqual(
+    channelCounts([{ type: 'call', count: 2 }, { type: 'email', count: 1 }, { type: 'meeting', count: 1 }, { type: null, count: 3 }]),
+    { call: 2, email: 1, other: 4 },
+  );
+});

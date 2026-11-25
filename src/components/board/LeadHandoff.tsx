@@ -27,6 +27,8 @@ export interface TeamMember {
   /** Load line (#3875): their open records, and overdue follow-ups when the viewer may see them (else null). */
   open?: number;
   overdue?: number | null;
+  /** Open follow-ups by channel (#3905), under the same rule as `overdue` (else null). */
+  followUps?: { call: number; email: number; other: number } | null;
 }
 
 interface Pending {
@@ -165,6 +167,15 @@ function LeadHandoffStrip({ members, onDrop }: { members: TeamMember[]; onDrop: 
                     <span className={m.overdue > 0 ? 'text-red-600 dark:text-red-400' : undefined}>
                       {' · '}
                       {h.loadOverdue.replace('{n}', String(m.overdue))}
+                    </span>
+                  )}
+                  {m.followUps && (
+                    <span data-testid={`handoff-target-channels-${m.id}`}>
+                      {' · '}
+                      {h.loadChannels
+                        .replace('{call}', String(m.followUps.call))
+                        .replace('{email}', String(m.followUps.email))
+                        .replace('{other}', String(m.followUps.other))}
                     </span>
                   )}
                 </span>

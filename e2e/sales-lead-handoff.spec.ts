@@ -215,8 +215,8 @@ test('the team is the active ADMINs and MENTORs of the caller’s org, the calle
   for (const label of ['rep3', 'mentee', 'company', 'foreignRep', 'intMentor']) expect(byId.has(ids[label]), label).toBe(false);
   expect(byId.get(ids.rep1)?.self).toBe(true);
   expect(byId.get(ids.rep2)?.self).toBe(false);
-  // Names, avatars and the load counts (#3875), nothing else.
-  expect(Object.keys(members[0]).sort()).toEqual(['avatarUrl', 'fullName', 'id', 'open', 'overdue', 'self']);
+  // Names, avatars and the load counts (#3875, #3905), nothing else.
+  expect(Object.keys(members[0]).sort()).toEqual(['avatarUrl', 'followUps', 'fullName', 'id', 'open', 'overdue', 'self']);
   await rep1.dispose();
 });
 
@@ -485,22 +485,36 @@ test('the dialog shows who has the lead and its follow-up, and can hand it on wi
   expect(line).toMatchObject({ fromNote: `Send the contract ${STAMP}`, toNote: `Send the contract ${STAMP}` });
 });
 
-test('the strip shows each person\'s load: open records for everyone, overdue follow-ups only to the admin (#3875)', async ({ playwright, baseURL, page }) => {
+test('the strip shows each person\'s load: open records for everyone, overdue and per-channel follow-ups only to the admin (#3875, #3905)', async ({ playwright, baseURL, page }) => {
   test.slow();
-  // One overdue follow-up on rep2's book.
+  // One overdue call follow-up on rep2's book, and an e-mail one due next week.
   const late = await lead('late', ids.rep2, ids.orgA);
-  await prisma.mentorshipRelation.update({ where: { id: late }, data: { nextActionAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) } });
+  await prisma.mentorshipRelation.update({ where: { id: late }, data: { nextActionAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), nextActionType: 'call' } });
+  const mail2 = await lead('mail', ids.rep2, ids.orgA);
+  await prisma.mentorshipRelation.update({ where: { id: mail2 }, data: { nextActionAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), nextActionType: 'email' } });
+  const channelOf = async (id: string) => {
+    const rows = await prisma.mentorshipRelation.findMany({
+      where: { orgId: ids.orgA, mentorId: id, status: 'ACTIVE', nextActionAt: { not: null } },
+      select: { nextActionType: true },
+    });
+    return {
+      call: rows.filter((r) => r.nextActionType === 'call').length,
+      email: rows.filter((r) => r.nextActionType === 'email').length,
+      other: rows.filter((r) => r.nextActionType !== 'call' && r.nextActionType !== 'email').length,
+    };
+  };
   const startOfToday = new Date(new Date().toISOString().slice(0, 10) + 'T00:00:00Z');
   const openOf = (id: string) => prisma.mentorshipRelation.count({ where: { orgId: ids.orgA, mentorId: id, status: 'ACTIVE' } });
   const overdueOf = (id: string) =>
     prisma.mentorshipRelation.count({ where: { orgId: ids.orgA, mentorId: id, status: 'ACTIVE', nextActionAt: { lt: startOfToday } } });
 
-  type Member = { id: string; open: number; overdue: number | null };
+  type Member = { id: string; open: number; overdue: number | null; followUps: { call: number; email: number; other: number } | null };
   const rep1 = await jar(playwright, baseURL, 'rep1', true);
   const asRep = ((await (await rep1.get('/api/sales/team')).json()).members as Member[]).find((m) => m.id === ids.rep2)!;
   expect(asRep.open).toBe(await openOf(ids.rep2));
   // A rep sees the open count only — the team page's rule.
   expect(asRep.overdue).toBeNull();
+  expect(asRep.followUps).toBeNull();
   await rep1.dispose();
 
   const admin = await jar(playwright, baseURL, 'admin', true);
@@ -508,6 +522,10 @@ test('the strip shows each person\'s load: open records for everyone, overdue fo
   expect(asAdmin.open).toBe(await openOf(ids.rep2));
   expect(asAdmin.overdue).toBe(await overdueOf(ids.rep2));
   expect(asAdmin.overdue).toBeGreaterThanOrEqual(1);
+  const channels = await channelOf(ids.rep2);
+  expect(asAdmin.followUps).toEqual(channels);
+  expect(channels.call).toBeGreaterThanOrEqual(1);
+  expect(channels.email).toBeGreaterThanOrEqual(1);
   await admin.dispose();
 
   // On the board: the line under the name.
@@ -516,4 +534,13 @@ test('the strip shows each person\'s load: open records for everyone, overdue fo
   await gotoSettled(page, '/sales/board');
   const line = page.getByTestId(`handoff-target-load-${ids.rep2}`);
   await expect(line).toHaveText(`${await openOf(ids.rep2)} open`);
+  await expect(page.getByTestId(`handoff-target-channels-${ids.rep2}`)).toHaveCount(0);
+
+  // The admin's board says the split under the same name.
+  await page.context().clearCookies();
+  await signInAndSettle(page, mail.admin, PW, '/admin');
+  await gotoSettled(page, '/admin/board');
+  await expect(page.getByTestId(`handoff-target-channels-${ids.rep2}`)).toHaveText(
+    ` · follow-ups: ${channels.call} call · ${channels.email} e-mail · ${channels.other} other`,
+  );
 });

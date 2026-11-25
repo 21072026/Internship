@@ -15,6 +15,7 @@ import { getDictionary } from '@/i18n/dictionaries';
 import { defaultLocale, isLocale } from '@/i18n/config';
 import { composeHandoffNote, isHandoffAction, nextActionTypeFor, SALES_HANDOFF_REASON, todayIso, type HandoffAction } from '@/lib/leadHandoffRule';
 import { handoffActionLabelsByLocale } from '@/lib/handoffLabels';
+import { channelCounts, type FollowUpChannelCounts } from '@/lib/salesTeamRule';
 
 export interface SalesTeamMember {
   id: string;
@@ -29,6 +30,12 @@ export interface SalesTeamMember {
    * `canSeeRepOverdue` (admins and the dispatcher only).
    */
   overdue: number | null;
+  /**
+   * Their open follow-ups (a due day set) by channel — call / e-mail / other,
+   * from `nextActionType` (#3905). Same visibility as `overdue`: null for a
+   * viewer who may not see per-person follow-up counts.
+   */
+  followUps: FollowUpChannelCounts | null;
 }
 
 /** Bounded: the strip is a row of faces, not a directory. */
@@ -58,7 +65,7 @@ export async function listSalesTeam(
     }),
   );
   const ids = rows.map((r) => r.id);
-  const [open, overdue] = await Promise.all([
+  const [open, overdue, byType] = await Promise.all([
     ids.length
       ? prisma.mentorshipRelation.groupBy({ by: ['mentorId'], where: { orgId, status: 'ACTIVE', mentorId: { in: ids } }, _count: { _all: true } })
       : Promise.resolve([]),
@@ -66,6 +73,13 @@ export async function listSalesTeam(
       ? prisma.mentorshipRelation.groupBy({
           by: ['mentorId'],
           where: { orgId, status: 'ACTIVE', mentorId: { in: ids }, nextActionAt: { lt: startOfUtcDay(opts.now ?? new Date()) } },
+          _count: { _all: true },
+        })
+      : Promise.resolve([]),
+    opts.withOverdue && ids.length
+      ? prisma.mentorshipRelation.groupBy({
+          by: ['mentorId', 'nextActionType'],
+          where: { orgId, status: 'ACTIVE', mentorId: { in: ids }, nextActionAt: { not: null } },
           _count: { _all: true },
         })
       : Promise.resolve([]),
@@ -77,6 +91,9 @@ export async function listSalesTeam(
     self: r.id === selfId,
     open: openBy.get(r.id) ?? 0,
     overdue: opts.withOverdue ? (overdueBy.get(r.id) ?? 0) : null,
+    followUps: opts.withOverdue
+      ? channelCounts(byType.filter((g) => g.mentorId === r.id).map((g) => ({ type: g.nextActionType, count: g._count._all })))
+      : null,
   }));
 }
 
