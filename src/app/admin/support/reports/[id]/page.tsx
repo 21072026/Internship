@@ -11,6 +11,7 @@ import { PersonHoverCard } from '@/components/PersonHoverCard';
 import { SupportTabs } from '@/components/SupportTabs';
 import { ReplayPlayer } from '@/components/ReplayPlayer';
 import { SupportReportGithubCard } from '@/components/SupportReportGithubCard';
+import { SupportReportPrLinksCard } from '@/components/SupportReportPrLinksCard';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import type { FeedbackContext } from '@/lib/feedbackContext';
@@ -35,6 +36,8 @@ interface Report {
   context: FeedbackContext | null;
   contactAllowed: boolean;
   createdAt: string;
+  /** The PRs it was worked in (#3928) — admin only. */
+  prLinks: unknown;
   user: { id: string; fullName: string; email: string; role: string };
   files: ReportFile[];
 }
@@ -274,6 +277,7 @@ export default function AdminSupportReportPage({ params }: { params: Promise<{ i
           )}
         </div>
       </Card>
+      <SupportReportPrLinksCard reportId={report.id} initial={report.prLinks} />
       <SupportReportGithubCard reportId={report.id} />
       <ImageLightbox {...lightbox.lightboxProps} />
     </div>

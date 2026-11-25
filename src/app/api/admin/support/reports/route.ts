@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { requirePermission } from '@/lib/authz';
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { readPrLinks } from '@/lib/supportReportPrLinks';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
 import { reportAdminOrg, SUPPORT_REPORT_STATUSES } from '@/lib/supportReportAccess';
 
 // The bug-report inbox (#3130): the caller's org only, newest first by default.
-// ?type=BUG|FEEDBACK ?status=NEW|… ?from=YYYY-MM-DD ?to=YYYY-MM-DD (inclusive)
+// ?type=BUG|FEEDBACK ?status=NEW|… ?from=YYYY-MM-DD ?to=YYYY-MM-DD (inclusive) ?pr=with|without
 // ?q=<reporter name or e-mail> ?sort=oldest. No blob is read here.
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -32,6 +33,10 @@ export async function GET(request: Request) {
   if (from && DAY.test(from)) createdAt.gte = new Date(`${from}T00:00:00.000Z`);
   if (to && DAY.test(to)) createdAt.lt = new Date(new Date(`${to}T00:00:00.000Z`).getTime() + 86_400_000);
   if (createdAt.gte || createdAt.lt) where.createdAt = createdAt;
+  // ?pr=with|without (#3928): reports that have, or still lack, the PR that did the work.
+  const pr = p.get('pr');
+  if (pr === 'with') where.prLinks = { not: Prisma.DbNull };
+  else if (pr === 'without') where.prLinks = { equals: Prisma.DbNull };
   if (q) where.user = { is: { OR: [{ fullName: { contains: q } }, { email: { contains: q } }] } };
 
   return withTenantScope(admin.session, async () => {
@@ -41,13 +46,13 @@ export async function GET(request: Request) {
       take: 100,
       select: {
         id: true, type: true, status: true, rating: true, description: true, url: true,
-        contactAllowed: true, createdAt: true,
+        contactAllowed: true, createdAt: true, prLinks: true,
         user: { select: { id: true, fullName: true, email: true, role: true } },
         _count: { select: { files: true } },
       },
     });
     return NextResponse.json({
-      reports: reports.map(({ description, ...r }) => ({ ...r, excerpt: description.slice(0, 160) })),
+      reports: reports.map(({ description, prLinks, ...r }) => ({ ...r, prLinks: readPrLinks(prLinks), excerpt: description.slice(0, 160) })),
     });
   });
 }

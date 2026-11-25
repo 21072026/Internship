@@ -240,3 +240,22 @@ linked to `/account/feedback#report-<id>` (link kind `feedbackReport`). It is
 in-app only, so it needs no consent to contact — the mail stays the admin's
 explicit, consent-gated choice. The same status again without a note sends
 nothing, and an admin acting on their own report is not told.
+
+## The PRs a report was worked in (#3928)
+
+An admin links the pull requests that did the work on the report's page (card
+"Pull requests"), by hand — no GitHub automation (decision 2026-11-25). The
+links live in `SupportReport.prLinks`, a JSON list of `{ url, number, addedAt,
+addedById }`, NULL when there is none. The rule is
+`src/lib/supportReportPrLinks.ts`: only `https://github.com/21072026/Internship/pull/<n>`
+is accepted (stored in that canonical form, refused `invalid_pr_url` /
+`wrong_repo` otherwise), the same PR twice is one link, at most 10.
+
+- Write: `POST` / `DELETE /api/admin/support/reports/[id]/pr-links`
+  (`support.write`), guarded on the row as read (`409 conflict` when another
+  admin changed it meanwhile), one AuditLog row per change
+  (`support_report.pr_link_added` / `_removed`). Another org's report is 404.
+- Read: the admin inbox lists them on each row and filters `?pr=with|without`.
+- **Admin only.** The reporter's list and report (`myFeedbackReports.ts`
+  selects its fields by name), the status mail, the bell and the v1 API never
+  carry the column; `e2e/my-feedback-reports.spec.ts` pins it.
