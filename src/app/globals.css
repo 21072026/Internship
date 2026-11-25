@@ -126,6 +126,12 @@ html.density-compact .space-y-4 > :not([hidden]) ~ :not([hidden]) { margin-top: 
 
 /* Dark mode base surfaces (class strategy); primitives add their own dark: */
 html.dark body { background-color: #030712; color: #f3f4f6; }
+/* Tell the browser the page is dark, so what it draws itself — scrollbars above
+   all (the rep strip and the sidebar scroll), and native form controls — is
+   drawn dark too. Without it a hovered scrollbar was a white bar on a dark page:
+   the class strategy darkens our colours, not the UA's. */
+html.dark { color-scheme: dark; }
+html:not(.dark) { color-scheme: light; }
 
 /*
  * Dark theme — broad neutral/accent remap.

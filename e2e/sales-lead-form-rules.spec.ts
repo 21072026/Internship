@@ -163,19 +163,20 @@ test('completing a handed-off follow-up opens the interaction form on the hand-o
   const type = form.getByRole('combobox');
 
   // The note a hand-off composes: the pick's label, then the sender's words — in the sender's language.
-  const cases: [string, string][] = [
-    ['Send an e-mail: the pricing sheet', 'Email'],
-    ['Randevu yapılacak: Salı', 'Meeting'],
-    ['App-Demo zeigen', 'Meeting'],
-    // `other`, or a follow-up the rep wrote: a call, as before.
-    ['Ask about the trial', 'Call'],
+  // Since #3903 the page shows the words alone (the pick is its own label), so the form gets the words.
+  const cases: [string, string, string][] = [
+    ['Send an e-mail: the pricing sheet', 'Email', 'the pricing sheet'],
+    ['Randevu yapılacak: Salı', 'Meeting', 'Salı'],
+    ['App-Demo zeigen', 'Meeting', ''],
+    // `other`, or a follow-up the rep wrote: a call, as before, with the note as written.
+    ['Ask about the trial', 'Call', 'Ask about the trial'],
   ];
-  for (const [note, expected] of cases) {
+  for (const [note, expected, words] of cases) {
     await setNote(note);
     await gotoSettled(page, `/sales/leads/${relation.id}`);
     await page.getByTestId('follow-up-complete').click();
     await expect(type, note).toHaveValue(expected);
-    await expect(form.locator('textarea')).toHaveValue(note);
+    await expect(form.locator('textarea')).toHaveValue(words);
   }
   // Nothing was logged on the way.
   expect(await prisma.interactionLog.count({ where: { relationId: relation.id } })).toBe(0);
