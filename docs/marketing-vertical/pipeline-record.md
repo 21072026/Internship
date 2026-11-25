@@ -364,3 +364,25 @@ without them. The interaction is written first; a follow-up write that fails
 after it says so ("The contact was logged, but the follow-up was not updated")
 rather than un-saying the contact. The e-mail link's "Did you send it?" is out
 of scope.
+
+## E-mail templates on a lead (#3908)
+
+The sales team's ready-made mails live in the same pool as the composer's
+canned replies — `MessageTemplate`, managed on `/admin/message-templates` — with
+a `channel` column (#3908): `message` (the composer's; every older row, the
+column's default) or `email`. An e-mail template also stores a subject per
+locale (`subjects`). The admin screen has one tab per channel; the pickers ask
+for theirs (`GET /api/message-templates?channel=email`, default `message`, so the
+composer never sees a mail template). Both routes are tenant-scoped like the
+rest of the pool: another org's template is never offered.
+
+On the lead page a picker sits under the contact's e-mail address. Choosing a
+template turns the address link into a `mailto:` with the subject and the text
+filled in — in the **rep's** language (`resolveMessageTemplateText`: they send
+it under their own name), placeholders `{name}` (the contact), `{company}`
+(the account) and `{sender}` (the rep) filled, a missing value left empty,
+every part percent-encoded and line breaks as CRLF (`emailTemplateMailto()`,
+`src/lib/messageTemplates.ts`). The CRM still sends nothing: the rep's own mail
+program does (#3741). Opening the link logs the e-mail as before and counts the
+template's use (the pool sorts by it). The texts themselves are the team's
+data, written on the admin screen; nothing curated ships in the repo.

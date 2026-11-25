@@ -15,7 +15,9 @@ import { afterEdit } from '@/lib/machineTranslation';
 import { locales, type Locale } from '@/i18n/config';
 import {
   MAX_TEMPLATE_BODY,
+  MAX_TEMPLATE_SUBJECT,
   resolveMessageTemplateText,
+  type MessageTemplateChannel,
   type MessageTemplateDto,
 } from '@/lib/messageTemplates';
 import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnnouncement';
@@ -27,6 +29,11 @@ import { useFilterAnnouncement, resultCountMessage } from '@/hooks/useFilterAnno
 // A mentor picks these from the composer and gets the text in *their* language
 // (src/lib/messageTemplates.ts) — which is why this screen wants all three
 // filled in, and says which are missing when they are not.
+//
+// Two pools on one screen (#3908): the composer's canned replies and the
+// e-mail templates a sales rep opens from a lead in their own mail program. An
+// e-mail template has a subject per language too, and may say {name},
+// {company} and {sender}.
 
 type Translations = Partial<Record<Locale, string>>;
 
@@ -46,12 +53,16 @@ export default function AdminMessageTemplatesPage() {
   const [editMachine, setEditMachine] = useState<Locale[]>([]);
   const [search, setSearch] = useState('');
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [channel, setChannel] = useState<MessageTemplateChannel>('message');
+  const [draftSubjects, setDraftSubjects] = useState<Translations>(emptyDraft);
+  const [editSubjects, setEditSubjects] = useState<Translations>(emptyDraft);
+  const email = channel === 'email';
 
   const load = useCallback(async () => {
-    const res = await fetch('/api/admin/message-templates');
+    const res = await fetch(`/api/admin/message-templates?channel=${channel}`);
     if (res.ok) setTemplates((await res.json()).templates ?? []);
     setLoading(false);
-  }, []);
+  }, [channel]);
   useEffect(() => { load(); }, [load]);
 
   const call = async (method: string, body: unknown, key: string) => {
@@ -77,14 +88,15 @@ export default function AdminMessageTemplatesPage() {
   const create = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!locales.some((l) => draft[l]?.trim())) return;
-    if (await call('POST', { translations: draft, machineTranslated: draftMachine }, 'create')) {
+    if (await call('POST', { translations: draft, machineTranslated: draftMachine, channel, ...(email ? { subjects: draftSubjects } : {}) }, 'create')) {
       setDraft(emptyDraft);
+      setDraftSubjects(emptyDraft);
       setDraftMachine([]);
     }
   };
 
   const save = async (id: string) => {
-    if (await call('PATCH', { id, translations: edit, machineTranslated: editMachine }, id)) setEditingId(null);
+    if (await call('PATCH', { id, translations: edit, machineTranslated: editMachine, ...(email ? { subjects: editSubjects } : {}) }, id)) setEditingId(null);
   };
 
   const confirmRemove = async () => {
@@ -99,7 +111,26 @@ export default function AdminMessageTemplatesPage() {
     // with it under the default locale so saving does not drop the wording.
     setEdit(Object.keys(tpl.translations).length > 0 ? tpl.translations : { en: tpl.title });
     setEditMachine(tpl.machineTranslated ?? []);
+    setEditSubjects(tpl.subjects ?? {});
   };
+
+  // An e-mail template's subject line, one per language (#3908).
+  const subjectFields = (value: Translations, onChange: (next: Translations) => void, idPrefix: string) => (
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      {locales.map((l) => (
+        <Input
+          key={l}
+          id={`${idPrefix}-subject-${l}`}
+          label={t.messageTemplateAdmin.subjectLabel.replace('{lang}', l.toUpperCase())}
+          lang={l}
+          maxLength={MAX_TEMPLATE_SUBJECT}
+          value={value[l] ?? ''}
+          onChange={(e) => onChange({ ...value, [l]: e.target.value })}
+          data-testid={`${idPrefix}-subject-${l}`}
+        />
+      ))}
+    </div>
+  );
 
   const localeFields = (value: Translations, onChange: (next: Translations) => void, idPrefix: string, machine: Locale[], setMachine: (m: Locale[]) => void) => (
     <div className="space-y-2">
@@ -159,12 +190,34 @@ export default function AdminMessageTemplatesPage() {
         <p className="text-gray-500 mt-1">{t.messageTemplateAdmin.subtitle}</p>
       </div>
 
+      <div role="group" aria-label={t.messageTemplateAdmin.channelLabel} className="mb-4 inline-flex rounded-md border border-gray-200 p-0.5 text-sm dark:border-gray-700" data-testid="message-template-channel">
+        {(['message', 'email'] as const).map((c) => (
+          <button
+            key={c}
+            type="button"
+            aria-pressed={channel === c}
+            onClick={() => {
+              if (c === channel) return;
+              setLoading(true);
+              setEditingId(null);
+              setSearch('');
+              setChannel(c);
+            }}
+            className={`rounded px-3 py-1 font-medium ${channel === c ? 'bg-gray-800 text-white dark:bg-gray-200 dark:text-gray-900' : 'text-gray-600 hover:text-gray-900 dark:text-gray-300'}`}
+            data-testid={`message-template-channel-${c}`}
+          >
+            {c === 'email' ? t.messageTemplateAdmin.channelEmail : t.messageTemplateAdmin.channelMessage}
+          </button>
+        ))}
+      </div>
+
       <Card className="mb-6 max-w-3xl">
         <CardHeader>
           <CardTitle>{t.messageTemplateAdmin.newTemplate}</CardTitle>
-          <CardDescription>{t.messageTemplateAdmin.newTemplateHint}</CardDescription>
+          <CardDescription>{email ? t.messageTemplateAdmin.emailHint : t.messageTemplateAdmin.newTemplateHint}</CardDescription>
         </CardHeader>
         <form onSubmit={create} className="space-y-3">
+          {email && subjectFields(draftSubjects, setDraftSubjects, 'new-message-template')}
           {localeFields(draft, setDraft, 'new-message-template', draftMachine, setDraftMachine)}
           <div className="flex justify-end">
             <Button type="submit" loading={busy === 'create'} data-testid="create-message-template">
@@ -199,6 +252,7 @@ export default function AdminMessageTemplatesPage() {
               <li key={tpl.id} className="py-3" data-testid={`message-template-${tpl.id}`}>
                 {editingId === tpl.id ? (
                   <div className="space-y-3">
+                    {email && subjectFields(editSubjects, setEditSubjects, `edit-message-template-${tpl.id}`)}
                     {localeFields(edit, setEdit, `edit-message-template-${tpl.id}`, editMachine, setEditMachine)}
                     <div className="flex justify-end gap-2">
                       <Button type="button" size="sm" variant="ghost" onClick={() => setEditingId(null)}>
@@ -218,6 +272,11 @@ export default function AdminMessageTemplatesPage() {
                 ) : (
                   <div className="flex items-start gap-3">
                     <div className="min-w-0 flex-1">
+                      {email && (
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100" data-testid={`message-template-subject-${tpl.id}`}>
+                          {tpl.subjects[locale] ?? tpl.subjects.en ?? Object.values(tpl.subjects)[0] ?? ''}
+                        </p>
+                      )}
                       <p className="whitespace-pre-wrap break-words text-sm text-gray-900 dark:text-gray-100">
                         {resolveMessageTemplateText(tpl, locale)}
                       </p>
