@@ -34,3 +34,23 @@ yok; ayrıca hepsini-sil-yeniden-yaz şekli canlı bir org'da kayıtları var ol
 bırakırdı. Script aynı satırları aynı normalizasyonla yazan minimal bir düz-ESM aynasıdır; preset,
 SLA'lar ve ret kuralları `scripts/test/marketing-ops-clis.test.mjs`'de TS asıllarıyla karşılaştırılır
 — preseti değiştiren commit aynayı da değiştirir. Uçtan uca: `e2e/marketing-ops-clis.spec.ts`.
+
+## Renaming a preset label (#3907)
+
+`LEAD_QUALIFIED` reads **"Bedarf geklärt"** in German since #3907 — "Qualifiziert"
+read as a person's qualification, while the stage means *the customer's need is
+clear*. English ("Qualified") and Turkish ("Nitelendirildi") are unchanged.
+
+No org needed a data change, and none got one. A stored stage label that is
+blank or one of OUR labels for its key in any locale is "untouched" and reads
+back in the viewer's language (#2268, `curatedStageLabel()`); the preset is
+provisioned in English, so those orgs show the new German label at once. A row
+that still stores the **old** German default is covered by
+`FORMER_STAGE_LABELS` (`src/lib/programTemplates.ts`): "Qualifiziert" on
+`LEAD_QUALIFIED` still counts as ours (`isOurStageLabel()`), so it too reads
+"Bedarf geklärt" in German and "Qualified" in English. A label the tenant typed
+is never one of ours, so it is shown verbatim, untouched.
+
+That is the recipe for the next rename: change the label in the preset and
+append the old one to `FORMER_STAGE_LABELS` under its key — never remove an
+entry, or every org still storing that word freezes on it. No backfill script.

@@ -52,3 +52,22 @@ test('a stage-change notification snapshot follows the reader, a typed label doe
   assert.equal(renderNotification(n('Proposal sent'), t, 'tr'), 'Yeni aday → Teklif gönderildi');
   assert.equal(renderNotification(n('Our offer'), t, 'tr'), 'Yeni aday → Our offer');
 });
+
+test('"Qualified" reads "Bedarf geklärt" in German; the old default "Qualifiziert" counts as ours, a typed label stays (#3907)', () => {
+  // The English-provisioned row and a row that still stores the old German default both read today's label.
+  assert.deepEqual(localizeResolvedStageLabels([row('LEAD_QUALIFIED', 'Qualified')], 'de').map((s) => s.label), ['Bedarf geklärt']);
+  assert.deepEqual(localizeResolvedStageLabels([row('LEAD_QUALIFIED', 'Qualifiziert')], 'de').map((s) => s.label), ['Bedarf geklärt']);
+  assert.deepEqual(localizeResolvedStageLabels([row('LEAD_QUALIFIED', 'Qualifiziert')], 'en').map((s) => s.label), ['Qualified']);
+  // A label the tenant typed is theirs, in every language.
+  assert.deepEqual(localizeResolvedStageLabels([row('LEAD_QUALIFIED', 'Bedarf erkannt')], 'de').map((s) => s.label), ['Bedarf erkannt']);
+  assert.deepEqual(localizeResolvedStageLabels([row('LEAD_QUALIFIED', 'Bedarf erkannt')], 'en').map((s) => s.label), ['Bedarf erkannt']);
+});
+
+test('a former label is ours only for its own key', async () => {
+  const { isOurStageLabel } = await import('../../src/lib/programTemplates.ts');
+  assert.equal(isOurStageLabel('LEAD_QUALIFIED', 'Qualifiziert'), true);
+  assert.equal(isOurStageLabel('LEAD_QUALIFIED', 'Bedarf geklärt'), true);
+  assert.equal(isOurStageLabel('LEAD_QUALIFIED', ''), true);
+  assert.equal(isOurStageLabel('LEAD_CONTACTED', 'Qualifiziert'), false);
+  assert.equal(isOurStageLabel('LEAD_QUALIFIED', 'Hot lead'), false);
+});
