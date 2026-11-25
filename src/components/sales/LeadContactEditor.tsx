@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { useToast } from '@/components/ui/Toast';
-import { useT } from '@/i18n/client';
+import { useLocale, useT } from '@/i18n/client';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { openInteractionDraft } from './interactionDraft';
 import { ContactActions, type ContactFollowUp } from '@/components/ContactActions';
+import { EmailTemplatePicker, emailHref, useEmailTemplates } from './EmailTemplatePicker';
 
 // The lead's contact on its record page (#3655): the account's primary contact
 // — name, position, e-mail, phone — shown and, for the record's rep (or an
@@ -23,7 +24,7 @@ export interface LeadContact {
   position: string | null;
 }
 
-function Row({ label, value, testId, href, onOpen, custom, wide }: { label: string; value: string | null; testId: string; href?: string; onOpen?: () => void; custom?: ReactNode; wide?: boolean }) {
+function Row({ label, value, testId, href, onOpen, custom, wide, after }: { label: string; value: string | null; testId: string; href?: string; onOpen?: () => void; custom?: ReactNode; wide?: boolean; after?: ReactNode }) {
   if (!value) return null;
   return (
     <div data-testid={testId} className={wide ? 'col-span-2' : undefined}>
@@ -41,6 +42,7 @@ function Row({ label, value, testId, href, onOpen, custom, wide }: { label: stri
         ) : (
           value
         )}
+        {after}
       </dd>
     </div>
   );
@@ -58,6 +60,8 @@ export function LeadContactEditor({
   canEdit,
   logOnContact = false,
   followUp = null,
+  companyName = null,
+  senderName = null,
   title,
 }: {
   relationId: string;
@@ -74,6 +78,9 @@ export function LeadContactEditor({
   logOnContact?: boolean;
   /** The record's follow-up, for its owner only (the call answer completes or moves it, #3904). */
   followUp?: ContactFollowUp | null;
+  /** The account and the rep, for an e-mail template's {company} and {sender} (#3908). */
+  companyName?: string | null;
+  senderName?: string | null;
 }) {
   const onContact = logOnContact ? (type: 'Call' | 'Email') => openInteractionDraft({ type }) : undefined;
   const t = useT();
@@ -84,6 +91,11 @@ export function LeadContactEditor({
   const [form, setForm] = useState({ name: initial.name ?? '', email: initial.email ?? '', phone: initial.phone ?? '', position: initial.position ?? '' });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const locale = useLocale();
+  // E-mail templates (#3908): offered where the contact may be logged, i.e. to who works the record.
+  const emailTemplates = useEmailTemplates(logOnContact && !!initial.email);
+  const [templateId, setTemplateId] = useState('');
+  const template = emailTemplates.find((x) => x.id === templateId);
 
   const empty = !initial.name && !initial.email && !initial.phone && !initial.position;
 
@@ -218,8 +230,17 @@ export function LeadContactEditor({
             label={s.email}
             value={initial.email}
             testId="sales-lead-email"
-            href={initial.email ? `mailto:${initial.email}` : undefined}
-            onOpen={onContact ? () => onContact('Email') : undefined}
+            href={initial.email ? emailHref(initial.email, template, locale, { name: initial.name, company: companyName, sender: senderName }) : undefined}
+            onOpen={
+              onContact
+                ? () => {
+                    onContact('Email');
+                    // Ranks the pool by use, like the composer's picker; a missed tick costs nothing.
+                    if (template) fetch(`/api/message-templates/${template.id}/use`, { method: 'POST' }).catch(() => {});
+                  }
+                : undefined
+            }
+            after={<EmailTemplatePicker templates={emailTemplates} value={templateId} onChange={setTemplateId} />}
           />
         </dl>
       )}

@@ -395,6 +395,8 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
               initial={contact}
               canEdit={!!company && writable}
               logOnContact={canLog}
+              companyName={company?.name ?? null}
+              senderName={session.user.name ?? null}
               // The call's answer may complete or move the follow-up (#3904): the owner's, like the panel.
               followUp={
                 ownersView && writable

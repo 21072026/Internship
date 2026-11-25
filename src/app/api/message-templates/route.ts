@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
-import { serializeMessageTemplate } from '@/lib/messageTemplates';
+import { serializeMessageTemplate, templateChannel } from '@/lib/messageTemplates';
 import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 
 // The canned responses one writer is offered (#1871) — read-only.
@@ -16,19 +16,24 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 // Free core: messaging and its conveniences are free, always — no plan gate here.
 
 // GET — my pickable pool, most-used first so the replies actually used are the
-// ones at the top of the list.
-export async function GET() {
+// ones at the top of the list. `?channel=email` is the lead e-mail picker's
+// pool (#3908); without it, the composer's canned replies, as always.
+export async function GET(request: Request) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   return await withTenantScope(session, async () => {
     const templates = await prisma.messageTemplate.findMany({
       where: withinTenant(
-        { archivedAt: null, OR: [{ ownerId: null }, { ownerId: session.user.id }] },
+        {
+          archivedAt: null,
+          channel: templateChannel(new URL(request.url).searchParams.get('channel')),
+          OR: [{ ownerId: null }, { ownerId: session.user.id }],
+        },
         await tenantWhere(session)
       ),
       orderBy: [{ useCount: 'desc' }, { createdAt: 'asc' }],
-      select: { id: true, title: true, translations: true, useCount: true, ownerId: true },
+      select: { id: true, title: true, translations: true, useCount: true, ownerId: true, channel: true, subjects: true },
     });
     return NextResponse.json({ templates: templates.map(serializeMessageTemplate) });
   });

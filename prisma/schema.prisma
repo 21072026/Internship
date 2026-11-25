@@ -1637,6 +1637,14 @@ model MessageTemplate {
 
   title             String    @db.Text
   translations      Json?
+  // Where the text is used (#3908): 'message' — a canned reply inserted into the
+  // in-app composer (every row before #3908) — or 'email' — a mail a rep opens in
+  // their own mail program from a lead (`mailto:`, the CRM sends nothing). The
+  // pickers ask for one channel; the admin screen manages each separately.
+  channel           String    @default("message") @db.VarChar(16)
+  // An 'email' template's subject per locale ({ en, tr, de }), same shape and
+  // resolution as `translations`; null on a 'message' template.
+  subjects          Json?
   // Locales filled by machine translation and not yet reviewed (#2055): a
   // JSON array like ["tr","de"]. A locale leaves it when an admin edits
   // or confirms it; null/[] = everything here was written by a person.

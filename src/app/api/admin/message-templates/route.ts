@@ -7,9 +7,13 @@ import { resolveOrgId } from '@/lib/orgScope';
 import { defaultOrgId } from '@/lib/defaultOrg';
 import {
   MAX_TEMPLATE_BODY,
+  MAX_TEMPLATE_SUBJECT,
+  MESSAGE_TEMPLATE_CHANNELS,
   canonicalMessageText,
   normalizeMessageTranslations,
+  normalizeTemplateSubjects,
   serializeMessageTemplate,
+  templateChannel,
 } from '@/lib/messageTemplates';
 import { locales } from '@/i18n/config';
 import { normalizeMachineList } from '@/lib/machineTranslation';
@@ -35,8 +39,17 @@ const translationsSchema = z.object({ en: localeText, tr: localeText, de: locale
 
 // The locales a machine filled and nobody has reviewed yet (#2055).
 const machineSchema = z.array(z.enum(locales)).max(locales.length).optional();
-const createSchema = z.object({ translations: translationsSchema, machineTranslated: machineSchema });
-const updateSchema = z.object({ id: z.string().min(1), translations: translationsSchema, machineTranslated: machineSchema });
+// An e-mail template (#3908) also carries a subject per locale; the channel is
+// fixed at creation (an edit never moves a text between the two pickers).
+const subjectText = z.string().trim().max(MAX_TEMPLATE_SUBJECT).optional();
+const subjectsSchema = z.object({ en: subjectText, tr: subjectText, de: subjectText }).optional();
+const createSchema = z.object({
+  translations: translationsSchema,
+  machineTranslated: machineSchema,
+  channel: z.enum(MESSAGE_TEMPLATE_CHANNELS).optional(),
+  subjects: subjectsSchema,
+});
+const updateSchema = z.object({ id: z.string().min(1), translations: translationsSchema, machineTranslated: machineSchema, subjects: subjectsSchema });
 const deleteSchema = z.object({ id: z.string().min(1) });
 
 const rowSelect = {
@@ -46,6 +59,8 @@ const rowSelect = {
   machineTranslated: true,
   useCount: true,
   ownerId: true,
+  channel: true,
+  subjects: true,
 } as const;
 
 // The admin screen also needs which locales are still machine-translated (#2055);
@@ -56,7 +71,7 @@ function serialize(row: Parameters<typeof serializeMessageTemplate>[0] & { machi
 }
 
 
-// GET — the org-wide pool, most-used first.
+// GET — the org-wide pool of one channel (`?channel=email`, default the composer's), most-used first.
 export async function GET(request: Request) {
   const gate = await requirePermission('content.read', { request });
   if ('error' in gate) return gate.error;
@@ -64,7 +79,10 @@ export async function GET(request: Request) {
 
   return await withTenantScope(session, async () => {
     const templates = await prisma.messageTemplate.findMany({
-      where: withinTenant({ ownerId: null, archivedAt: null }, await tenantWhere(session)),
+      where: withinTenant(
+        { ownerId: null, archivedAt: null, channel: templateChannel(new URL(request.url).searchParams.get('channel')) },
+        await tenantWhere(session),
+      ),
       orderBy: [{ useCount: 'desc' }, { createdAt: 'asc' }],
       select: rowSelect,
     });
@@ -85,12 +103,14 @@ export async function POST(request: Request) {
     const translations = normalizeMessageTranslations(parsed.data.translations);
     const title = canonicalMessageText(translations);
     if (!title) return NextResponse.json({ error: 'Write the reply in at least one language' }, { status: 400 });
+    const channel = templateChannel(parsed.data.channel);
+    const subjects = channel === 'email' ? normalizeTemplateSubjects(parsed.data.subjects) : {};
 
     // Dedupe by hand: `title` is a Text column with no unique index (see the
     // schema comment), and a nullable ownerId would defeat one in MySQL anyway.
     const tenant = await tenantWhere(session);
     const existing = await prisma.messageTemplate.findFirst({
-      where: withinTenant({ ownerId: null, title }, tenant),
+      where: withinTenant({ ownerId: null, title, channel }, tenant),
       select: { id: true, archivedAt: true },
     });
     if (existing?.archivedAt) {
@@ -98,7 +118,12 @@ export async function POST(request: Request) {
       // — the only record of how much the program leans on that reply — survives.
       const revived = await prisma.messageTemplate.update({
         where: { id: existing.id },
-        data: { archivedAt: null, translations, machineTranslated: normalizeMachineList(parsed.data.machineTranslated, translations) },
+        data: {
+          archivedAt: null,
+          translations,
+          subjects: channel === 'email' ? subjects : undefined,
+          machineTranslated: normalizeMachineList(parsed.data.machineTranslated, translations),
+        },
         select: rowSelect,
       });
       return NextResponse.json({ template: serialize(revived) }, { status: 201 });
@@ -111,6 +136,8 @@ export async function POST(request: Request) {
         orgId: resolveOrgId(session) ?? (await defaultOrgId()),
         title,
         translations,
+        channel,
+        ...(channel === 'email' ? { subjects } : {}),
         machineTranslated: normalizeMachineList(parsed.data.machineTranslated, translations),
         createdById: session.user.id,
       },
@@ -134,23 +161,29 @@ export async function PATCH(request: Request) {
     // Another tenant's template answers like a missing one.
     const target = await prisma.messageTemplate.findFirst({
       where: withinTenant({ id: parsed.data.id, ownerId: null, archivedAt: null }, tenant),
-      select: { id: true },
+      select: { id: true, channel: true },
     });
     if (!target) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+    const channel = templateChannel(target.channel);
 
     const translations = normalizeMessageTranslations(parsed.data.translations);
     const title = canonicalMessageText(translations);
     if (!title) return NextResponse.json({ error: 'Write the reply in at least one language' }, { status: 400 });
 
     const clash = await prisma.messageTemplate.findFirst({
-      where: withinTenant({ ownerId: null, title, id: { not: target.id } }, tenant),
+      where: withinTenant({ ownerId: null, title, channel, id: { not: target.id } }, tenant),
       select: { id: true },
     });
     if (clash) return NextResponse.json({ error: 'That reply is already in the pool' }, { status: 409 });
 
     const template = await prisma.messageTemplate.update({
       where: { id: target.id },
-      data: { title, translations, machineTranslated: normalizeMachineList(parsed.data.machineTranslated, translations) },
+      data: {
+        title,
+        translations,
+        ...(channel === 'email' && parsed.data.subjects !== undefined ? { subjects: normalizeTemplateSubjects(parsed.data.subjects) } : {}),
+        machineTranslated: normalizeMachineList(parsed.data.machineTranslated, translations),
+      },
       select: rowSelect,
     });
     return NextResponse.json({ template: serialize(template) });
