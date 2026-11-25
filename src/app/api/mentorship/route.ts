@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { CONTACT_INTERACTION_WHERE } from '@/lib/interactionOutcome';
 import { affiliatePartnerNames, affiliatePartnerNameFor } from '@/lib/affiliateLeadSource';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
@@ -216,7 +217,8 @@ export async function GET(request: Request) {
         },
       },
       company: { select: { id: true, name: true, industry: true } },
-      _count: { select: { interactions: true } },
+      // Contacts only (#3902): an unanswered call is an attempt, counted on its own.
+      _count: { select: { interactions: { where: CONTACT_INTERACTION_WHERE } } },
       // The stage clock (#1724). Only the newest move is needed — the shared
       // helper takes the latest `createdAt` and falls back to `startDate` —
       // so this stays one extra row per relation, not the whole audit trail.

@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- Log an unanswered call or WhatsApp as a contact attempt (`InteractionLog.outcome = NOT_REACHED`, default `REACHED`, so no backfill). An attempt is not contact: last contact, the first-contact stage advance, journey steps, nudges, go-live metrics and the interaction counts read `REACHED` rows only (`CONTACT_INTERACTION_WHERE`, `src/lib/interactionOutcome.ts`); it still counts as outreach for dormancy and as activity for metering. The lead page shows an attempt badge, an attempt count and an \"Attempts\" filter; the relation timeline has an `attempt` kind (not shown to mentees). `NOT_REACHED` on any other type is refused (400 `outcome_not_allowed`). The `interaction.logged@1` webhook payload is unchanged (#3902).",
+  "notes": {
+    "en": ["Log a call nobody answered as \"Not reached\": the lead shows how often it was tried, without counting it as contact."],
+    "tr": ["Açılmayan bir aramayı \"Ulaşılamadı\" olarak kaydet: lead'e kaç kez ulaşılmaya çalışıldığı görünür, temas sayılmaz."],
+    "de": ["Einen unbeantworteten Anruf als „Nicht erreicht“ erfassen: Der Lead zeigt, wie oft er versucht wurde, ohne dass es als Kontakt zählt."]
+  }
+}

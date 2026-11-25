@@ -2435,10 +2435,13 @@ const en = {
         meetingCancelledNoTime: 'Meeting cancelled',
       },
       // The interaction list's filter (#3820); the choice is kept in this browser.
+      attemptBadge: 'Not reached',
+      attemptCount: '{n} not reached',
       interactionFilter: {
         label: 'Show',
         all: 'All',
         interactions: 'Interactions',
+        attempts: 'Attempts',
         system: 'System',
         empty: 'Nothing under this filter yet.',
       },
@@ -8138,6 +8141,7 @@ const en = {
     kind: {
       stage: 'Stage',
       interaction: 'Interaction',
+      attempt: 'Contact attempt',
       meeting: 'Meeting',
       goal: 'Goal',
       question: 'Question',
@@ -8149,6 +8153,7 @@ const en = {
     event: {
       stage_change: 'Stage moved',
       interaction_logged: 'Interaction logged',
+      interaction_attempt: 'Not reached',
       meeting_scheduled: 'Meeting scheduled',
       meeting_held: 'Meeting held',
       meeting_room: 'Meeting room created',
@@ -8955,6 +8960,7 @@ const en = {
     hint: 'Something that already happened: a call, an e-mail, a meeting. Plan what comes next in the follow-up.',
     type: 'Type',
     date: 'Date',
+    notReached: 'Not reached — an attempt',
     subject: 'Subject (optional)',
     notes: 'Notes',
     failed: 'Could not log the interaction. Please try again.',
@@ -15331,10 +15337,13 @@ const tr: Dict = {
         meetingCancelled: '{when} toplantısı iptal edildi',
         meetingCancelledNoTime: 'Toplantı iptal edildi',
       },
+      attemptBadge: 'Ulaşılamadı',
+      attemptCount: '{n} ulaşılamayan deneme',
       interactionFilter: {
         label: 'Göster',
         all: 'Tümü',
         interactions: 'Görüşmeler',
+        attempts: 'Denemeler',
         system: 'Sistem',
         empty: 'Bu filtrede henüz kayıt yok.',
       },
@@ -20898,6 +20907,7 @@ const tr: Dict = {
     kind: {
       stage: 'Aşama',
       interaction: 'Görüşme',
+      attempt: 'Ulaşma denemesi',
       meeting: 'Toplantı',
       goal: 'Hedef',
       question: 'Soru',
@@ -20909,6 +20919,7 @@ const tr: Dict = {
     event: {
       stage_change: 'Aşama değişti',
       interaction_logged: 'Görüşme kaydedildi',
+      interaction_attempt: 'Ulaşılamadı',
       meeting_scheduled: 'Toplantı planlandı',
       meeting_held: 'Toplantı yapıldı',
       meeting_room: 'Toplantı odası oluşturuldu',
@@ -21696,6 +21707,7 @@ const tr: Dict = {
     hint: 'Yapılmış bir şey: arama, e-posta, toplantı. Yapılacak bir sonraki adımı takip alanına yazın.',
     type: 'Tür',
     date: 'Tarih',
+    notReached: 'Ulaşılamadı — deneme',
     subject: 'Konu (isteğe bağlı)',
     notes: 'Notlar',
     failed: 'Etkileşim eklenemedi. Lütfen tekrar deneyin.',
@@ -28015,10 +28027,13 @@ const de: Dict = {
         meetingCancelled: 'Termin am {when} abgesagt',
         meetingCancelledNoTime: 'Termin abgesagt',
       },
+      attemptBadge: 'Nicht erreicht',
+      attemptCount: '{n} nicht erreicht',
       interactionFilter: {
         label: 'Anzeigen',
         all: 'Alle',
         interactions: 'Interaktionen',
+        attempts: 'Versuche',
         system: 'System',
         empty: 'Unter diesem Filter gibt es noch nichts.',
       },
@@ -33584,6 +33599,7 @@ const de: Dict = {
     kind: {
       stage: 'Phase',
       interaction: 'Interaktion',
+      attempt: 'Kontaktversuch',
       meeting: 'Meeting',
       goal: 'Ziel',
       question: 'Frage',
@@ -33595,6 +33611,7 @@ const de: Dict = {
     event: {
       stage_change: 'Phase gewechselt',
       interaction_logged: 'Interaktion protokolliert',
+      interaction_attempt: 'Nicht erreicht',
       meeting_scheduled: 'Meeting geplant',
       meeting_held: 'Meeting abgehalten',
       meeting_room: 'Meetingraum erstellt',
@@ -34382,6 +34399,7 @@ const de: Dict = {
     hint: 'Etwas, das schon passiert ist: ein Anruf, eine E-Mail, ein Termin. Den nächsten Schritt im Follow-up planen.',
     type: 'Typ',
     date: 'Datum',
+    notReached: 'Nicht erreicht — ein Versuch',
     subject: 'Betreff (optional)',
     notes: 'Notizen',
     failed: 'Interaktion konnte nicht erfasst werden. Bitte versuche es erneut.',

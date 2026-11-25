@@ -78,6 +78,14 @@ enum InteractionType {
   WhatsApp
 }
 
+// Did the outreach reach the person (#3902)? NOT_REACHED is an ATTEMPT — a call
+// nobody answered — recorded so "how often was this lead tried" is visible,
+// and kept out of every "was there contact" reading (src/lib/interactionOutcome.ts).
+enum InteractionOutcome {
+  REACHED
+  NOT_REACHED
+}
+
 // Mentee'nin staj/işe alım sürecindeki granular aşaması (Excel status kolonunun karşılığı)
 enum PipelineStatus {
   APPLICATION_100 // 100 tr: ilk temas
@@ -5252,7 +5260,7 @@ model SessionAgendaItem {
 }
 
 model InteractionLog {
-  id         String          @id @default(cuid())
+  id         String             @id @default(cuid())
   relationId String
   date       DateTime
   // Optional short topic/subject line — the free-form `notes` field carries
@@ -5261,23 +5269,28 @@ model InteractionLog {
   // TEXT, not the default VARCHAR(191): a meeting note is prose and overflowed
   // the 191-char default after ~three sentences, which surfaced as an opaque
   // 500 (Prisma P2000) *after* the mentor's email had already been sent.
-  notes      String          @db.Text
+  notes      String             @db.Text
   type       InteractionType
+  // REACHED for every contact and every row written before #3902 (the default
+  // fills them on db push); NOT_REACHED marks an attempt, only on Call/WhatsApp
+  // (src/lib/interactionOutcome.ts). An attempt is not contact: last contact,
+  // the first-contact stage advance and the interaction counts read REACHED only.
+  outcome    InteractionOutcome @default(REACHED)
   // The /api/v1 keyset (#1990); @default(now()) so db push can add it to a table with rows.
-  updatedAt  DateTime        @default(now()) @updatedAt
+  updatedAt  DateTime           @default(now()) @updatedAt
   // Written by the system rather than typed by a mentor (#1489) — a meeting
   // that took place is logged on its own, so the interaction history is the
   // history and not "whatever anybody remembered to re-type afterwards".
   // A plain boolean and not just `meetingId != null`: the link below is
   // SetNull, so deleting the meeting must not turn its log into a hand-written
   // one retroactively.
-  autoLogged Boolean         @default(false)
+  autoLogged Boolean            @default(false)
   // Which meeting produced this log. Also the idempotency key: @unique means
   // one meeting can never write two logs, whichever path gets there first (the
   // "end meeting" click or the sweep that catches meetings nobody ended).
   // SetNull rather than Cascade — deleting the meeting row must not delete the
   // record that the meeting happened (same reasoning as PersonalNote).
-  meetingId  String?         @unique
+  meetingId  String?            @unique
   // Idempotency key of a log written from outside (#2809): `bcc:<hash>` for a
   // mail copied to the org's CRM address — a hash of its Message-ID, so one
   // mail delivered twice is still one log per funnel record. NULL for every

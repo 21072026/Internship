@@ -29,13 +29,17 @@
 // the page bounded, and it guarantees one row never emits two entries — which
 // is what makes the cursor below a total order.
 
+import { ATTEMPT_INTERACTION_WHERE, CONTACT_INTERACTION_WHERE } from '@/lib/interactionOutcome';
 import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { isStageTransition } from '@/lib/stageChange';
 import { SUBMITTED_WEEKLY_REPORT_STATUSES } from '@/lib/weeklyReports';
 import { readableGoalsWhere } from '@/lib/goalVisibilityRule';
 
-export const TIMELINE_KINDS = ['stage', 'interaction', 'meeting', 'goal', 'question', 'evaluation', 'report', 'offer', 'note'] as const;
+// `attempt` (#3902): a call nobody answered — an InteractionLog with outcome
+// NOT_REACHED, listed as its own kind so it never reads as a contact and has
+// its own filter. Not for the mentee: nothing reached them.
+export const TIMELINE_KINDS = ['stage', 'interaction', 'attempt', 'meeting', 'goal', 'question', 'evaluation', 'report', 'offer', 'note'] as const;
 export type TimelineKind = (typeof TIMELINE_KINDS)[number];
 
 export function isTimelineKind(value: string): value is TimelineKind {
@@ -218,6 +222,7 @@ export async function buildRelationTimeline(req: TimelineRequest): Promise<Timel
   const [
     statusChanges,
     interactions,
+    attempts,
     timedMeetings,
     untimedMeetings,
     openGoals,
@@ -246,7 +251,14 @@ export async function buildRelationTimeline(req: TimelineRequest): Promise<Timel
           // scheduledAt). The log wins — a mentor may have edited its notes
           // into a real record — and the meeting query below drops the row
           // that has one, so the pair renders once.
-          where: where<Prisma.InteractionLogWhereInput>(base, afterCursor('date', cursor)),
+          where: where<Prisma.InteractionLogWhereInput>(base, CONTACT_INTERACTION_WHERE, afterCursor('date', cursor)),
+          orderBy: [{ date: 'desc' }, { id: 'desc' }],
+          take,
+        })
+      : [],
+    want('attempt')
+      ? prisma.interactionLog.findMany({
+          where: where<Prisma.InteractionLogWhereInput>(base, ATTEMPT_INTERACTION_WHERE, afterCursor('date', cursor)),
           orderBy: [{ date: 'desc' }, { id: 'desc' }],
           take,
         })
@@ -387,6 +399,13 @@ export async function buildRelationTimeline(req: TimelineRequest): Promise<Timel
         detail: trim(i.notes),
         status: i.type,
         automatic: i.autoLogged,
+      })
+    ),
+    ...attempts.map((i) =>
+      row('attempt', 'interaction_attempt', i.id, i.date, {
+        title: trim(i.subject),
+        detail: trim(i.notes),
+        status: i.type,
       })
     ),
     ...timedMeetings.map((m) =>

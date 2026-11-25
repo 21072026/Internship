@@ -3,6 +3,7 @@
 // which is dependency-free so it can be unit-tested; everything it exports is
 // re-exported here so call sites need only one import.
 
+import { CONTACT_INTERACTION_WHERE } from '@/lib/interactionOutcome';
 import { prisma } from '@/lib/prisma';
 import { resolveLastContacts, type LastContact, type LastContactRelation } from '@/lib/lastContactRule';
 
@@ -25,7 +26,8 @@ export async function getLastContacts(
   const [interactions, directMessages, menteeGroupPosts] = await Promise.all([
     prisma.interactionLog.groupBy({
       by: ['relationId'],
-      where: { relationId: { in: relationIds } },
+      // Contact only: an unanswered call is an attempt, not contact (#3902).
+      where: { relationId: { in: relationIds }, ...CONTACT_INTERACTION_WHERE },
       _max: { date: true },
     }),
     prisma.message.groupBy({
@@ -82,7 +84,7 @@ export async function relationsInContactBetween(
   const inWindow = { gte: from, lt: toExclusive };
 
   const [interactions, directMessages, menteeGroupPosts] = await Promise.all([
-    prisma.interactionLog.groupBy({ by: ['relationId'], where: { relationId: { in: relationIds }, date: inWindow } }),
+    prisma.interactionLog.groupBy({ by: ['relationId'], where: { relationId: { in: relationIds }, date: inWindow, ...CONTACT_INTERACTION_WHERE } }),
     prisma.message.groupBy({
       by: ['relationId'],
       where: { relationId: { in: relationIds }, createdAt: inWindow, OR: [{ conversationId: null }, { conversation: { type: 'DIRECT' } }] },

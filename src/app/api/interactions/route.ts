@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { outcomeAllowed } from '@/lib/interactionOutcome';
 import type { Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
@@ -95,7 +96,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const { relationId, date, subject, notes, type } = parsed.data;
+    const { relationId, date, subject, notes, type, outcome } = parsed.data;
+    // Only a call or a WhatsApp can go unanswered (#3902).
+    if (!outcomeAllowed(type, outcome)) {
+      return NextResponse.json({ error: 'Only a call or a WhatsApp can be unanswered', code: 'outcome_not_allowed' }, { status: 400 });
+    }
 
     const relation = await prisma.mentorshipRelation.findUnique({
       where: { id: relationId },
@@ -120,6 +125,7 @@ export async function POST(request: Request) {
       relation,
       date: interactionInstant(date),
       type,
+      outcome,
       notes,
       subject,
       actorId: session.user.id,

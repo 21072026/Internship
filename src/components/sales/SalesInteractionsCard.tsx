@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { CalendarClock, ChevronRight, GitCommitHorizontal, MessageSquare, Video } from 'lucide-react';
 import { AddInteractionForm, type InteractionFormDraft } from '@/components/AddInteractionForm';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
+import { Badge } from '@/components/ui/Badge';
+import { isAttempt } from '@/lib/interactionOutcome';
 import { useT } from '@/i18n/client';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { contentLang } from '@/lib/contentLanguage';
@@ -55,6 +57,8 @@ export interface LeadInteraction {
   type: string;
   subject: string | null;
   notes: string;
+  /** REACHED, or NOT_REACHED for an attempt nobody answered (#3902). */
+  outcome?: string;
 }
 
 /** A follow-up history line (#3819), already worded by the page in the viewer's language. */
@@ -100,13 +104,21 @@ function writeEarlierOpen(open: boolean) {
 }
 
 function InteractionRow({ row, open, onToggle }: { row: LeadInteraction; open: boolean; onToggle: () => void }) {
+  const t = useT();
+  const attempt = isAttempt(row);
   // Without a subject the note is the headline, and there is no second line.
   const headline = row.subject || row.notes;
   const detail = row.subject ? row.notes : '';
   return (
-    <li className="py-2 text-sm first:pt-0 last:pb-0" data-testid="sales-lead-interaction-row">
+    <li className="py-2 text-sm first:pt-0 last:pb-0" data-testid="sales-lead-interaction-row" data-outcome={attempt ? 'NOT_REACHED' : 'REACHED'}>
       <div className="flex min-w-0 items-center gap-2">
         <InteractionTypeBadge type={row.type} />
+        {/* An attempt (#3902): logged, but nobody was reached — not a contact. */}
+        {attempt && (
+          <Badge variant="danger" className="shrink-0 text-[10px]" data-testid="sales-lead-attempt-badge">
+            {t.sales.lead.attemptBadge}
+          </Badge>
+        )}
         <span lang={row.subject ? undefined : contentLang(row.notes)} className="min-w-0 flex-1 truncate font-medium text-gray-900 dark:text-gray-100" title={headline}>
           {headline}
         </span>
@@ -153,8 +165,9 @@ function SystemRow({ row, badge }: { row: LeadSystemEvent; badge: string }) {
   );
 }
 
-type Filter = 'all' | 'interactions' | 'system';
-const FILTERS: readonly Filter[] = ['all', 'interactions', 'system'];
+// `interactions` is contact only; `attempts` the calls nobody answered (#3902).
+type Filter = 'all' | 'interactions' | 'attempts' | 'system';
+const FILTERS: readonly Filter[] = ['all', 'interactions', 'attempts', 'system'];
 const FILTER_KEY = 'sales.lead.interactionFilter';
 
 function readFilter(): Filter {
@@ -179,12 +192,15 @@ export function SalesInteractionsCard({
   canLog,
   interactions,
   systemEvents = [],
+  attemptCount = 0,
   earlierPeriods = [],
 }: {
   relationId: string;
   canLog: boolean;
   interactions: LeadInteraction[];
   systemEvents?: LeadSystemEvent[];
+  /** Every attempt on this record (#3902), counted by the page over all rows. */
+  attemptCount?: number;
   earlierPeriods?: EarlierPeriodView[];
 }) {
   const t = useT();
@@ -202,7 +218,13 @@ export function SalesInteractionsCard({
   // All on the server and on first paint; the remembered choice applies after hydration.
   const [remembered, setFilter] = useState<Filter>('all');
   useEffect(() => setFilter(readFilter()), []);
-  const filter: Filter = systemEvents.length > 0 ? remembered : 'all';
+  // A filter is offered only for what the record has: no "System" without a
+  // system line, no "Attempts" without an attempt (#3902). A remembered choice
+  // that this record cannot show reads All, or it would hide everything with no
+  // control in sight to undo it (#3879).
+  const hasAttempts = interactions.some(isAttempt);
+  const shownFilters = FILTERS.filter((key) => (key === 'system' ? systemEvents.length > 0 : key === 'attempts' ? hasAttempts : true));
+  const filter: Filter = shownFilters.length > 2 && shownFilters.includes(remembered) ? remembered : 'all';
   const pick = (f: Filter) => {
     setFilter(f);
     writeFilter(f);
@@ -239,7 +261,13 @@ export function SalesInteractionsCard({
     ...interactions.map((row): Entry => ({ kind: 'interaction', at: Date.parse(row.date), row })),
     ...systemEvents.map((row): Entry => ({ kind: 'system', at: Date.parse(row.at), row })),
   ]
-    .filter((e) => filter === 'all' || (filter === 'system') === (e.kind === 'system'))
+    .filter((e) =>
+      filter === 'all'
+        ? true
+        : filter === 'system'
+          ? e.kind === 'system'
+          : e.kind === 'interaction' && (filter === 'attempts') === isAttempt(e.row),
+    )
     .sort((a, b) => b.at - a.at);
   const rows = showAll ? entries : entries.slice(0, FIRST_ROWS);
   const anything = interactions.length + systemEvents.length > 0;
@@ -251,6 +279,11 @@ export function SalesInteractionsCard({
         <p className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-200">
           <MessageSquare className="h-4 w-4 text-gray-500 dark:text-gray-400" aria-hidden="true" />
           {s.interactions}
+          {attemptCount > 0 && (
+            <span className="text-xs font-normal text-gray-500 dark:text-gray-400" data-testid="sales-lead-attempt-count">
+              · {s.attemptCount.replace('{n}', String(attemptCount))}
+            </span>
+          )}
         </p>
         {canLog && (
           <span className="hidden text-xs text-gray-500 sm:inline dark:text-gray-400" data-testid="sales-lead-shortcut-hint">
@@ -264,9 +297,9 @@ export function SalesInteractionsCard({
           <AddInteractionForm relationId={relationId} onAdded={() => router.refresh()} draft={draft} />
         </div>
       )}
-      {systemEvents.length > 0 && (
+      {shownFilters.length > 2 && (
         <div role="group" aria-label={f.label} className="mt-3 inline-flex rounded-md border border-gray-200 p-0.5 text-xs dark:border-gray-700" data-testid="sales-lead-interaction-filter">
-          {FILTERS.map((key) => (
+          {shownFilters.map((key) => (
             <button
               key={key}
               type="button"

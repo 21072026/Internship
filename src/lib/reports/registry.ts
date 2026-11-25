@@ -10,6 +10,7 @@
 // "converted". Loaders take an org, never a session (#1905): the scheduled
 // report subscriptions run with no request at all.
 
+import { CONTACT_INTERACTION_WHERE } from '@/lib/interactionOutcome';
 import { prisma } from '@/lib/prisma';
 import type { Locale } from '@/i18n/config';
 import { outcomeStageKeysFrom, resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
@@ -112,7 +113,7 @@ const LOADERS: Record<string, (ctx: LoaderContext) => Promise<Row[]>> = {
       prisma.mentorshipRelation.groupBy({ by: ['pipelineStatus'], where: withinTenant(menteeIn(ctx), tenant), _count: { _all: true } }),
       prisma.mentorshipRelation.count({ where: withinTenant({ startDate: { gte: weekAgo }, ...menteeIn(ctx) }, tenant) }),
       prisma.interactionLog.count({
-        where: { date: { gte: weekAgo }, ...interactionInTenant(tenant), ...(ctx.person || ctx.relation ? { AND: [{ relation: { is: menteeIn(ctx) } }] } : {}) },
+        where: { date: { gte: weekAgo }, ...CONTACT_INTERACTION_WHERE, ...interactionInTenant(tenant), ...(ctx.person || ctx.relation ? { AND: [{ relation: { is: menteeIn(ctx) } }] } : {}) },
       }),
     ]);
     // "Reached the final stage" is the tenant's own finished set (#1882).

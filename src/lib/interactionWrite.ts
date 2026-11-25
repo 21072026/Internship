@@ -8,6 +8,7 @@ import { emit } from '@/lib/events/emit';
 import { recordPairActivity } from '@/lib/metering';
 import { notifyIfAllowed } from '@/lib/notify';
 import { advanceOnFirstContact } from '@/lib/firstContactAdvance';
+import { isAttempt, type InteractionOutcome } from '@/lib/interactionOutcome';
 
 // Logging an interaction, as ONE write path (#1996): the row, the metering
 // signal, the `interaction.logged` webhook and the mentee's bell. It is what
@@ -24,6 +25,8 @@ export async function createInteraction(opts: {
   type: InteractionType;
   notes: string;
   subject?: string | null;
+  /** Contact (default) or an attempt nobody answered (#3902); the caller has checked outcomeAllowed(). */
+  outcome?: InteractionOutcome;
   /** The person logging it, or null for a machine (an API key) — never the mentee's own echo. */
   actorId: string | null;
 }) {
@@ -35,6 +38,7 @@ export async function createInteraction(opts: {
       subject: opts.subject || null,
       notes: opts.notes,
       type: opts.type,
+      outcome: opts.outcome ?? 'REACHED',
       // The person who logged it (#3818); null for an API key.
       authorId: opts.actorId,
     },
@@ -47,6 +51,9 @@ export async function createInteraction(opts: {
   // awaited, and it cannot fail the write.
   recordPairActivity(relation.orgId);
 
+  // The published payload is frozen (scripts/test/fixtures/webhook-payloads.json):
+  // an attempt (#3902) is still announced as v1 describes it — the outcome would
+  // need an `interaction.logged@2`.
   await emit('interaction.logged', { relationId: relation.id, type: opts.type, date: interaction.date.toISOString() }, {
     orgId: relation.orgId ?? null,
     actor: opts.actorId ? { id: opts.actorId, type: 'user' } : { type: 'apikey' },
@@ -57,13 +64,16 @@ export async function createInteraction(opts: {
   // Mentorship only: in a vertical without the module (MARKETING, #2580) the
   // MENTEE row is the lead on a sales record, not someone with a portal to
   // read a "your mentor logged something" bell in.
-  if (relation.menteeId !== opts.actorId && (await shellCapabilities(relation.orgId)).includes('mentorship')) {
+  // An attempt (#3902) reached nobody, so there is nothing to tell them about.
+  const attempt = isAttempt(interaction);
+  if (!attempt && relation.menteeId !== opts.actorId && (await shellCapabilities(relation.orgId)).includes('mentorship')) {
     await notifyIfAllowed(relation.menteeId, 'interactions', 'interaction.logged', {}, '/portal/journey');
   }
   // A first contact on a lead still in the first stage may move it on (#3746,
   // src/lib/firstContactAdvance.ts — the one writer). The result rides back so
   // the person who logged it can be told, with an Undo.
-  const stageAdvance = await advanceOnFirstContact({ relationId: relation.id, interactionId: interaction.id, type: opts.type });
+  // An attempt is not a contact (src/lib/interactionOutcome.ts): it never moves the lead.
+  const stageAdvance = attempt ? null : await advanceOnFirstContact({ relationId: relation.id, interactionId: interaction.id, type: opts.type });
   return Object.assign(interaction, { stageAdvance });
 }
 

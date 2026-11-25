@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/Textarea';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { useT } from '@/i18n/client';
 import { INTERACTION_TYPES, type InteractionType } from '@/lib/interactionTypes';
+import { canBeAttempt } from '@/lib/interactionOutcome';
 import { stageAdvanceFrom, useStageAdvanceToast } from '@/components/useStageAdvanceToast';
 
 // Compact "log an interaction" form — admins on the candidate detail screen
@@ -59,6 +60,9 @@ export function AddInteractionForm({
   // day did not sort in the order they happened. Defaults to now.
   const [date, setDate] = useState(() => localDateTimeValue(new Date()));
   const [subject, setSubject] = useState('');
+  // An attempt nobody answered (#3902) — offered only where one is possible.
+  const [notReached, setNotReached] = useState(false);
+  const attemptable = canBeAttempt(type);
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +79,7 @@ export function AddInteractionForm({
     if (!draft) return;
     afterLogged.current = draft.onLogged ?? null;
     setDate(localDateTimeValue(new Date()));
+    setNotReached(false);
     setOpen(true);
     setError(null);
     if (draft.type) setType(draft.type);
@@ -93,12 +98,20 @@ export function AddInteractionForm({
       const res = await fetch('/api/interactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ relationId, date: dateTimeToIso(date), subject: subject || undefined, notes, type }),
+        body: JSON.stringify({
+          relationId,
+          date: dateTimeToIso(date),
+          subject: subject || undefined,
+          notes,
+          type,
+          ...(attemptable && notReached ? { outcome: 'NOT_REACHED' } : {}),
+        }),
       });
       if (res.ok) {
         setSubject('');
         setNotes('');
         setType('Meeting');
+        setNotReached(false);
         const after = afterLogged.current;
         close();
         await after?.();
@@ -146,6 +159,7 @@ export function AddInteractionForm({
             value={type}
             onChange={(e) => setType(e.target.value as InteractionType)}
             className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+            data-testid="interaction-form-type"
           >
             {INTERACTION_TYPES.map((ty) => (
               <option key={ty} value={ty}>{t.interactionTypes[ty]}</option>
@@ -164,6 +178,17 @@ export function AddInteractionForm({
           />
         </label>
       </div>
+      {attemptable && (
+        <label className="flex items-center gap-2 text-xs text-gray-700 dark:text-gray-300">
+          <input
+            type="checkbox"
+            checked={notReached}
+            onChange={(e) => setNotReached(e.target.checked)}
+            data-testid="interaction-form-not-reached"
+          />
+          {t.logInteraction.notReached}
+        </label>
+      )}
       <input
         type="text"
         value={subject}

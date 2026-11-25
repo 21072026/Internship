@@ -9,6 +9,7 @@
 // funnel / mentor / project distributions are current pipeline state, so they
 // are intentionally NOT date-filtered. The caller binds the tenant scope.
 
+import { CONTACT_INTERACTION_WHERE } from '@/lib/interactionOutcome';
 import type { Session } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { buildSignupWindow, type SignupCounts } from '@/lib/signupFunnel';
@@ -100,7 +101,7 @@ export async function loadAdminAnalytics(
       where: withinTenant({ ...relWhere, ...PLACEMENT_RELATION_WHERE }, tenant),
       _count: { _all: true },
     }),
-    prisma.interactionLog.count({ where: interactionWhere }),
+    prisma.interactionLog.count({ where: { ...interactionWhere, ...CONTACT_INTERACTION_WHERE } }),
     prisma.meeting.count({ where: meetingWhere }),
     prisma.meeting.groupBy({ by: ['rsvp'], where: meetingWhere, _count: { _all: true } }),
     prisma.project.findMany({

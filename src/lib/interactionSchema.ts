@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { INTERACTION_TYPES } from '@/lib/interactionTypes';
+import { INTERACTION_OUTCOMES } from '@/lib/interactionOutcome';
 import { isDayOnly } from '@/lib/relativeTime';
 
 // The fields of an interaction log, as ONE shape for both doors (#1356): the
@@ -20,6 +21,10 @@ export const interactionFieldsSchema = z.object({
   subject: z.string().max(TEXT_LIMITS.interactionSubject).optional(),
   notes: z.string().min(1, 'Notes are required').max(TEXT_LIMITS.interactionNotes),
   type: z.enum(INTERACTION_TYPES),
+  // Contact or attempt (#3902); absent = REACHED. NOT_REACHED only on a Call or
+  // a WhatsApp — checked by the routes with outcomeAllowed(), against the type
+  // the row ends up with.
+  outcome: z.enum(INTERACTION_OUTCOMES).optional(),
 });
 
 export const createInteractionSchema = interactionFieldsSchema.extend({

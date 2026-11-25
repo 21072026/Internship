@@ -20,6 +20,7 @@
 // Every query names its `orgId` and runs inside `runWithOrg()`: the worker has
 // no session (src/lib/orgContext.ts).
 
+import { CONTACT_INTERACTION_WHERE } from '@/lib/interactionOutcome';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { logger } from '@/lib/logger';
@@ -144,7 +145,8 @@ const relationSelect = {
   startDate: true,
   dormantSince: true,
   statusChanges: { orderBy: { createdAt: 'desc' }, take: 5, select: { createdAt: true, fromStatus: true, toStatus: true } },
-  interactions: { orderBy: { date: 'desc' }, take: 1, select: { date: true } },
+  // "Days since the last interaction" is days since the last CONTACT (#3902).
+  interactions: { where: CONTACT_INTERACTION_WHERE, orderBy: { date: 'desc' }, take: 1, select: { date: true } },
 } as const;
 
 type LoadedRelation = Prisma.MentorshipRelationGetPayload<{ select: typeof relationSelect }>;

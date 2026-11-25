@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ATTEMPT_INTERACTION_WHERE } from '@/lib/interactionOutcome';
 import { AffiliateSourceBadge } from '@/components/AffiliateSourceBadge';
 import { affiliatePartnerNames, affiliatePartnerNameFor } from '@/lib/affiliateLeadSource';
 import { notFound } from 'next/navigation';
@@ -121,7 +122,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   const writable = await canWriteSalesRecord(session, relation);
   const ownersView = writable || canSeeNextAction({ id: session.user.id, role: session.user.role }, relation);
 
-  const [company, lastContact, interactions, earlier, successor, followUpEvents, stageMoves, meetings, viewer] = await Promise.all([
+  const [company, lastContact, interactions, earlier, successor, followUpEvents, stageMoves, meetings, viewer, attemptCount] = await Promise.all([
     relation.companyId
       ? prisma.company.findFirst({
           where: withinTenant({ id: relation.companyId }, tenant),
@@ -135,7 +136,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
       where: { relationId: relation.id },
       orderBy: { date: 'desc' },
       take: INTERACTION_LIMIT,
-      select: { id: true, date: true, type: true, subject: true, notes: true },
+      select: { id: true, date: true, type: true, subject: true, notes: true, outcome: true },
     }),
     earlierPeriods(relation),
     relation.status === 'ACTIVE' ? null : currentSuccessor(relation),
@@ -163,6 +164,8 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
     }),
     // A meeting's time reads in the viewer's own zone.
     prisma.user.findUnique({ where: { id: session.user.id }, select: { timezone: true } }),
+    // How often this lead was tried and not reached (#3902), over every row, not only the listed ones.
+    prisma.interactionLog.count({ where: { relationId: relation.id, ...ATTEMPT_INTERACTION_WHERE } }),
   ]);
   // The earlier owners' follow-up history (#3870) — under the same gate as this
   // record's: the notes are working prose, shown only to who may read the follow-up.
@@ -367,14 +370,15 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
           <SalesInteractionsCard
             relationId={relation.id}
             canLog={canLog}
-            interactions={interactions.map((i) => ({ id: i.id, date: i.date.toISOString(), type: i.type, subject: i.subject, notes: i.notes }))}
+            interactions={interactions.map((i) => ({ id: i.id, date: i.date.toISOString(), type: i.type, subject: i.subject, notes: i.notes, outcome: i.outcome }))}
             systemEvents={systemEvents}
+            attemptCount={attemptCount}
             earlierPeriods={earlier.map((p, idx) => ({
               relationId: p.relationId,
               ownerName: p.ownerName,
               from: date(p.from),
               to: p.to ? date(p.to) : null,
-              interactions: p.interactions.map((i) => ({ id: i.id, date: i.date.toISOString(), type: i.type, subject: i.subject, notes: i.notes })),
+              interactions: p.interactions.map((i) => ({ id: i.id, date: i.date.toISOString(), type: i.type, subject: i.subject, notes: i.notes, outcome: i.outcome })),
               events: earlierFollowUps[idx].map(followUpLine),
             }))}
           />
