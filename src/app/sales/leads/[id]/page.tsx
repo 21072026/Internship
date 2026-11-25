@@ -22,7 +22,7 @@ import { formatDate } from '@/lib/relativeTime';
 import { getServerDictionary } from '@/i18n/server';
 import { getDictionary } from '@/i18n/dictionaries';
 import { locales } from '@/i18n/config';
-import { followUpInteractionType, handoffNoteText } from '@/lib/leadHandoffRule';
+import { followUpInteractionType, handoffActionFromNote, handoffNoteText, isHandoffAction } from '@/lib/leadHandoffRule';
 import { Card, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { SalesRecordPanels } from '@/components/sales/SalesRecordPanels';
@@ -395,6 +395,18 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
               initial={contact}
               canEdit={!!company && writable}
               logOnContact={canLog}
+              // The call's answer may complete or move the follow-up (#3904): the owner's, like the panel.
+              followUp={
+                ownersView && writable
+                  ? {
+                      open: !!(relation.nextActionAt || relation.nextActionNote),
+                      isCall:
+                        (isHandoffAction(relation.nextActionType)
+                          ? relation.nextActionType
+                          : handoffActionFromNote(relation.nextActionNote, locales.map((l) => getDictionary(l).leadHandoff.actions))) === 'call',
+                    }
+                  : null
+              }
               title={<CardTitle className="text-base">{s.contact}</CardTitle>}
             />
             <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 border-t border-gray-100 pt-3 dark:border-gray-800" data-testid="sales-lead-contact">

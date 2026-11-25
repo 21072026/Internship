@@ -9,10 +9,10 @@ import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/pro
  * reused on /sales/leads/[id] and on the admin's lead view.
  *
  *   - On the lead page the contact card's tel: link (#3741) is the one way in:
- *     the device dials (the navigation is stopped here), then "Did you reach
- *     them?" — "No" logs nothing, "Add a note" opens the call draft and logs
- *     nothing, "Yes" logs a Call through POST /api/interactions and the page's
- *     interaction list shows it after the refresh.
+ *     the device dials (the navigation is stopped here), then the question
+ *     (#3904): "Didn't call" logs nothing, "Not reached" logs an attempt,
+ *     "Reached" + Save logs one Call through POST /api/interactions and the
+ *     page's interaction list shows it after the refresh.
  *   - A colleague rep sees neither the record (404) nor the buttons, and the API
  *     refuses them a log on it: 403, no row (@smoke — the security case).
  *   - On /admin/candidates/[id] an admin holding relation.write gets the buttons;
@@ -83,9 +83,10 @@ async function stopTelNavigation(page: Page) {
   });
 }
 const dialled = (page: Page) => page.evaluate(() => (window as unknown as { __dialled: string[] }).__dialled);
-const callCount = () => prisma.interactionLog.count({ where: { relationId: ids.relation, type: 'Call' } });
+const callCount = () => prisma.interactionLog.count({ where: { relationId: ids.relation, type: 'Call', outcome: 'REACHED' } });
+const attemptCount = () => prisma.interactionLog.count({ where: { relationId: ids.relation, type: 'Call', outcome: 'NOT_REACHED' } });
 
-test('the rep calls from the lead page: No and Add a note log nothing, Yes logs a Call and the list shows it', async ({ page, baseURL }) => {
+test('the rep calls from the lead page: Didn\'t call logs nothing, Not reached logs an attempt, Reached logs one Call', async ({ page, baseURL }) => {
   await page.context().setExtraHTTPHeaders(host);
   await page.context().addCookies([{ name: 'locale', value: 'en', url: baseURL! }]);
   await signInAndSettle(page, mail.rep, PW, '/sales');
@@ -96,25 +97,32 @@ test('the rep calls from the lead page: No and Add a note log nothing, Yes logs 
   await expect(phone).toHaveAttribute('href', 'tel:+49307654321');
   await expect(page.getByTestId('contact-call')).toHaveCount(0);
 
-  // "No": the number was dialled, nothing is logged.
+  // "Didn't call" (#3904): the number was dialled, nothing is logged.
   await phone.click();
   expect(await dialled(page)).toEqual(['tel:+49307654321']);
-  await page.getByTestId('contact-reached-no').click();
+  await page.getByTestId('contact-reached-skip').click();
   await expect(page.getByTestId('contact-reached')).toHaveCount(0);
   expect(await callCount()).toBe(0);
+  expect(await attemptCount()).toBe(0);
 
-  // "Add a note": the page's interaction form opens as a call — and still nothing is logged.
+  // "Not reached": an attempt (#3902), never a contact.
   await phone.click();
-  await page.getByTestId('contact-reached-note').click();
-  const form = page.getByTestId('sales-lead-log-interaction');
-  await expect(form.getByRole('combobox')).toHaveValue('Call');
-  await expect(page.getByTestId('contact-reached')).toHaveCount(0);
+  await page.getByTestId('contact-reached-no').click();
+  await expect.poll(attemptCount, { timeout: 10_000 }).toBe(1);
   expect(await callCount()).toBe(0);
-  await form.getByRole('button', { name: /Cancel/i }).click();
+  await page.getByTestId('contact-retry-skip').click();
+  await expect(page.getByTestId('contact-retry')).toHaveCount(0);
 
-  // "Yes": one Call interaction, through the route, and the list shows it.
+  // "Reached", then Cancel: the small form closes and nothing is logged.
   await phone.click();
   await page.getByTestId('contact-reached-yes').click();
+  await page.getByTestId('contact-reached-cancel').click();
+  expect(await callCount()).toBe(0);
+
+  // "Reached" and Save with no note: one Call interaction, through the route, and the list shows it.
+  await phone.click();
+  await page.getByTestId('contact-reached-yes').click();
+  await page.getByTestId('contact-reached-save').click();
   await expect.poll(callCount, { timeout: 10_000 }).toBe(1);
   await expect(page.getByTestId('sales-lead-interactions')).toContainText('Phone call', { timeout: 10_000 });
 });
@@ -188,6 +196,7 @@ async function callAndSayYes(page: Page, baseURL: string, beforeCall?: () => Pro
   await stopTelNavigation(page);
   await page.getByTestId('sales-lead-phone-link').click();
   await page.getByTestId('contact-reached-yes').click();
+  await page.getByTestId('contact-reached-save').click();
 }
 
 test('switched on: Yes on a first-stage lead moves it, the toast names the stage, Undo moves it back', async ({ page, baseURL }) => {

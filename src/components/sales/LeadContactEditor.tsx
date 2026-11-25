@@ -8,7 +8,7 @@ import { useToast } from '@/components/ui/Toast';
 import { useT } from '@/i18n/client';
 import { TEXT_LIMITS } from '@/lib/textLimits';
 import { openInteractionDraft } from './interactionDraft';
-import { ContactActions } from '@/components/ContactActions';
+import { ContactActions, type ContactFollowUp } from '@/components/ContactActions';
 
 // The lead's contact on its record page (#3655): the account's primary contact
 // — name, position, e-mail, phone — shown and, for the record's rep (or an
@@ -57,6 +57,7 @@ export function LeadContactEditor({
   initial,
   canEdit,
   logOnContact = false,
+  followUp = null,
   title,
 }: {
   relationId: string;
@@ -66,11 +67,13 @@ export function LeadContactEditor({
   title?: ReactNode;
   /**
    * The phone/e-mail links also log the contact (#3741). The e-mail link opens an
-   * interaction draft; the phone link asks "Did you reach them?" (#3748, the
-   * internship mentor page's flow, which the maintainer asked for here too): Yes
-   * logs the call at once, "Add a note" opens the draft instead, No logs nothing.
+   * interaction draft; the phone link asks how the call went (#3748, #3904):
+   * Reached (one Call, optionally completing the follow-up), Not reached (an
+   * attempt) or Didn't call (nothing).
    */
   logOnContact?: boolean;
+  /** The record's follow-up, for its owner only (the call answer completes or moves it, #3904). */
+  followUp?: ContactFollowUp | null;
 }) {
   const onContact = logOnContact ? (type: 'Call' | 'Email') => openInteractionDraft({ type }) : undefined;
   const t = useT();
@@ -190,12 +193,12 @@ export function LeadContactEditor({
             custom={
               logOnContact && initial.phone && telHref(initial.phone) ? (
                 // One way in for one number: the tel: link dials, then the question
-                // follows. The only write is ContactActions' POST /api/interactions.
+                // follows. ContactActions writes at most one interaction.
                 <ContactActions
                   relationId={relationId}
                   phone={initial.phone}
                   onLogged={() => router.refresh()}
-                  onAddNote={(type) => openInteractionDraft({ type })}
+                  followUp={followUp}
                   trigger={(prompt) => (
                     <a
                       href={telHref(initial.phone!)}

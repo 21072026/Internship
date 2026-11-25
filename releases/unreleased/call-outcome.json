@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- After a call or WhatsApp, the question takes three answers (#3904): **Reached** opens a small form (note, \"Complete the follow-up\" — ticked when the open step is a call — and an optional next follow-up via the shared editor) and writes one interaction, then completes/replaces the follow-up (`nextActionCompleted`); **Not reached** logs an attempt (`NOT_REACHED`, #3902) and offers to move the follow-up (tomorrow, in 2 days, a date and time); **Didn't call** writes nothing. The separate \"Add a note\" choice is removed, so completing a follow-up after a call no longer creates a second interaction.",
+  "notes": {
+    "en": ["After a call: Reached, Not reached or Didn't call. Reached saves one entry with your note and can complete the follow-up; Not reached records the attempt and lets you move the follow-up."],
+    "tr": ["Aramadan sonra: Görüştüm, Ulaşamadım ya da Aranmadı. Görüştüm notunla tek bir kayıt yazar ve takibi tamamlayabilir; Ulaşamadım denemeyi kaydeder ve takibi ertelemeni sağlar."],
+    "de": ["Nach einem Anruf: Erreicht, Nicht erreicht oder Nicht angerufen. Erreicht speichert einen Eintrag mit deiner Notiz und kann die Wiedervorlage erledigen; Nicht erreicht protokolliert den Versuch und lässt dich die Wiedervorlage verschieben."]
+  }
+}

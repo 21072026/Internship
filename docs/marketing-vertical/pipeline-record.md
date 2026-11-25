@@ -344,3 +344,23 @@ fire the reminder a day early. So the time:
 The subscribed calendar feed (`/api/calendar/feed/[token]`) still publishes a
 follow-up as its day: a wall time without a zone is not an instant an external
 calendar can place, and the feed has no zone of the owner to read.
+
+## After a call: one answer, at most one record (#3904)
+
+Dialling a lead from its page (the contact card's `tel:` link) or from the
+WhatsApp/Call buttons elsewhere asks how it went — `src/components/ContactActions.tsx`:
+
+| Answer | Writes | Follow-up |
+|---|---|---|
+| **Reached** | one `Call` / `WhatsApp` interaction (the note typed in the small form, else "Phone call") through `POST /api/interactions` — the only path the first-contact advance and its Undo toast (#3746) follow | "Complete the follow-up" (shown when one is open; ticked when the open step is a call) clears it with `nextActionCompleted` → history `COMPLETED`; "Set the next follow-up" opens the shared editor (#3903) and writes the new step in the same save |
+| **Not reached** | one attempt (`outcome = NOT_REACHED`, #3902): no contact, no stage move | stays; Tomorrow / In 2 days / a day and time moves only its day (step and words stay) |
+| **Didn't call** | nothing — a mis-tap or a change of mind | untouched |
+
+"Add a note" is gone: the note lives inside "Reached", so a contact and the
+follow-up it completes no longer produce two interactions. The follow-up controls
+render only where the page passes the record's follow-up (`followUp`, the
+owner's view of a sales lead); the mentor and admin pages ask the same question
+without them. The interaction is written first; a follow-up write that fails
+after it says so ("The contact was logged, but the follow-up was not updated")
+rather than un-saying the contact. The e-mail link's "Did you send it?" is out
+of scope.
