@@ -19,8 +19,9 @@ test('the landing FAQ is a FAQPage with exactly the questions on the page, in th
   const [faq] = byType(blocks, 'FAQPage');
   expect(faq).toBeTruthy();
   const questions = faq.mainEntity as { '@type': string; name: string; acceptedAnswer: { text: string } }[];
-  // One entry per rendered question — the page's <details> are the FAQ items.
-  const rendered = await page.locator('details > summary').allTextContents();
+  // One entry per rendered question — the <details> inside the FAQ section are
+  // the FAQ items (the interest-signup form, #1406, has a <details> of its own).
+  const rendered = await page.getByTestId('landing-faq').locator('details > summary').allTextContents();
   expect(questions.length).toBe(rendered.length);
   expect(questions.length).toBeGreaterThan(0);
   for (const q of questions) {

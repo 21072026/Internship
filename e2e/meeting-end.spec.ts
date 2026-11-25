@@ -158,6 +158,10 @@ test('a recurring occurrence (no Meeting row) can be ended through its composite
       daysOfWeek: [0, 1, 2, 3, 4, 5, 6],
       timeOfDay: hhmm,
       timeZone: 'UTC',
+      // Anchored on the occurrence's own date: without it the rule starts on
+      // createdAt's date, so a run in the first ten minutes after UTC midnight
+      // seeds an occurrence on the day BEFORE the series existed — none at all.
+      anchorDate: target,
       fixedLink: 'https://meet.example.com/end-series-room',
       createdById: owner.id,
     },
