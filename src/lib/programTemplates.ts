@@ -562,7 +562,9 @@ const MARKETING_FUNNEL: ProgramTemplate = {
       labels: { en: 'Contacted', tr: 'İletişime geçildi', de: 'Kontaktiert' },
       descriptions: { en: 'First contact is made; what they need is not clear yet.', tr: 'İlk temas kuruldu; ne istediği henüz belli değil.', de: 'Der erste Kontakt steht; der Bedarf ist noch offen.' } },
     { key: 'LEAD_QUALIFIED', order: 2, isTerminal: false, isOffPath: false, color: '#8b5cf6',
-      labels: { en: 'Qualified', tr: 'Nitelendirildi', de: 'Qualifiziert' },
+      // DE (#3907): "Qualifiziert" read as a person's qualification; what the stage
+      // means is that the need is clear. The old label stays ours (FORMER_STAGE_LABELS).
+      labels: { en: 'Qualified', tr: 'Nitelendirildi', de: 'Bedarf geklärt' },
       descriptions: { en: 'What the customer wants is clear and their request is defined.', tr: 'Müşterinin ne istediği belli, talebi netleşti.', de: 'Klar, was der Kunde will; die Anfrage ist konkret.' } },
     { key: TRIAL_ACTIVE_STAGE_KEY, order: 3, isTerminal: false, isOffPath: false, color: '#06b6d4',
       labels: { en: 'Trial running', tr: 'Deneme sürüyor', de: 'Testphase läuft' },
@@ -651,6 +653,25 @@ const RETIRED_STAGE_LABELS: readonly (readonly [string, LocalizedLabel])[] = [
   ['DEAL_NEGOTIATION', { en: 'Negotiation', tr: 'Pazarlık', de: 'Verhandlung' }],
 ];
 
+// Labels that USED to be ours for a still-current key (#3907). An org that
+// stored one never chose it — it is the default it was provisioned or edited
+// with — so it reads as untouched: the viewer gets today's label in their own
+// language. A label the tenant typed is still never one of these, so it stays
+// verbatim. Append, never edit: removing an entry would freeze that word on
+// every org that still stores it.
+const FORMER_STAGE_LABELS: ReadonlyMap<string, readonly string[]> = new Map([
+  ['LEAD_QUALIFIED', ['Qualifiziert']],
+]);
+
+/** True when `label` is (or was) one of OUR labels for `key` in any locale — the tenant never typed it. */
+export function isOurStageLabel(key: string, label: string | null | undefined): boolean {
+  const trimmed = (label ?? '').trim();
+  if (!trimmed) return true;
+  const labels = CURATED_STAGE_LABELS.get(key);
+  if (labels && TEMPLATE_LOCALES.some((l) => labels[l] === trimmed)) return true;
+  return FORMER_STAGE_LABELS.get(key)?.includes(trimmed) ?? false;
+}
+
 const CURATED_STAGE_LABELS: ReadonlyMap<string, LocalizedLabel> = new Map([
   ...RETIRED_STAGE_LABELS,
   ...PROGRAM_TEMPLATES.filter((t) => t.key !== 'canonical_pipeline').flatMap((t) =>
@@ -713,9 +734,7 @@ export function resolvedStageDescription(key: string, stored: string | null | un
 export function curatedStageLabel(key: string, storedLabel: string | null | undefined, locale: Locale): string | null {
   const labels = CURATED_STAGE_LABELS.get(key);
   if (!labels) return null;
-  const trimmed = (storedLabel ?? '').trim();
-  const untouched = !trimmed || TEMPLATE_LOCALES.some((l) => labels[l] === trimmed);
-  return untouched ? labels[locale] ?? labels.en : null;
+  return isOurStageLabel(key, storedLabel) ? labels[locale] ?? labels.en : null;
 }
 
 // ── Reading a template ───────────────────────────────────────────────────────
