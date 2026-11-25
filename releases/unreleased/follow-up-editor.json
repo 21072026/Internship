@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- One follow-up editor (`FollowUpFields`) for the hand-off dialog and the sales lead page's follow-up panel: what is next (call / e-mail / meeting / demo / other), when (Today, Tomorrow, 3 days, 1 week, 2 weeks or a date, plus the optional time) and the note. The panel now writes `nextActionType` and shows the pick in the reader's language, with the note shown without a composed label (`handoffNoteText`). `other` needs a note in both forms and in `PUT /api/mentorship/[id]` (`400 note_required`) (#3903).",
+  "notes": {
+    "en": ["The follow-up on a lead and the hand-off dialog now use the same form: what is next, when (with quick days) and a note."],
+    "tr": ["Lead'deki takip ve devir penceresi artık aynı formu kullanıyor: ne yapılacak, ne zaman (hızlı gün seçimiyle) ve not."],
+    "de": ["Wiedervorlage am Lead und Übergabedialog nutzen jetzt dasselbe Formular: was als Nächstes, wann (mit Schnellauswahl) und eine Notiz."]
+  }
+}

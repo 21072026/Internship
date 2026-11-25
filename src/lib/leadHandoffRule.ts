@@ -133,3 +133,38 @@ export function followUpInteractionType(
   const action = isHandoffAction(stored) ? stored : handoffActionFromNote(note, labelsByLocale);
   return action && action !== 'other' ? HANDOFF_INTERACTION_TYPE[action] : 'Call';
 }
+
+/**
+ * The follow-up's own words, without the pick label a hand-off composed into it
+ * (#3903): "Call: ask about pricing" → "ask about pricing", "Call" → "". The
+ * sales follow-up panel shows the pick as its own label (from
+ * `nextActionType`, in the reader's language) and edits the words alone, so
+ * the label must not be shown — or saved back — twice. Every locale's labels
+ * are tried, as in `handoffActionFromNote`; a note with no leading label is
+ * returned as it is.
+ */
+export function handoffNoteText(
+  note: string | null | undefined,
+  labelsByLocale: readonly Readonly<Record<HandoffAction, string>>[],
+): string {
+  const text = (note ?? '').trim();
+  if (!text) return '';
+  const labels = labelsByLocale
+    .flatMap((l) => (Object.keys(HANDOFF_INTERACTION_TYPE) as Exclude<HandoffAction, 'other'>[]).map((a) => l[a]?.trim()))
+    .filter((l): l is string => !!l)
+    .sort((a, b) => b.length - a.length);
+  for (const label of labels) {
+    if (text === label) return '';
+    if (text.startsWith(`${label}:`)) return text.slice(label.length + 1).trim();
+  }
+  return text;
+}
+
+/**
+ * The one check both follow-up forms make before they write (#3903): `other`
+ * IS the words, so it needs some — the same `note_required` the hand-off
+ * route answers.
+ */
+export function followUpNoteMissing(action: HandoffAction | null | undefined, note: string | null | undefined): boolean {
+  return action === 'other' && !(note ?? '').trim();
+}

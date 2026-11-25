@@ -3,14 +3,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { UserRoundPlus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Textarea } from '@/components/ui/Textarea';
 import { useModalFocus } from '@/components/ui/useModalFocus';
 import { useToast } from '@/components/ui/Toast';
 import { useLocale, useT } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
-import { HANDOFF_ACTIONS, HANDOFF_NOTE_MAX, todayIso, type HandoffAction } from '@/lib/leadHandoffRule';
+import { followUpNoteMissing, type HandoffAction } from '@/lib/leadHandoffRule';
+import { FollowUpFields, localDayFromToday } from '@/components/FollowUpFields';
 
 // The rep strip above the sales and admin boards and its dialog: drop a lead
 // card on a colleague (or use the card's "Hand over" button — the single-pointer
@@ -210,7 +209,7 @@ function LeadHandoffDialog({
     setRecipientId(pending.recipientId ?? '');
     setAction('call');
     setNote('');
-    setDueOn(todayIso());
+    setDueOn(localDayFromToday(0));
     setDueAt('');
     setError(null);
     setKeep(false);
@@ -232,8 +231,8 @@ function LeadHandoffDialog({
   const recipient = members.find((m) => m.id === recipientId);
   const hasFollowUp = !!current && (!!current.nextActionAt || !!current.nextActionNote);
   const keeping = keep && hasFollowUp;
-  const noteRequired = !keeping && action === 'other';
-  const canSubmit = !!recipientId && recipientId !== current?.ownerId && (!noteRequired || note.trim().length > 0) && !busy;
+  const noteRequired = !keeping && followUpNoteMissing(action, note);
+  const canSubmit = !!recipientId && recipientId !== current?.ownerId && !noteRequired && !busy;
   // One follow-up as a phrase: its day (a calendar day at UTC midnight), its note, or both.
   const followUpText = current
     ? [
@@ -331,62 +330,22 @@ function LeadHandoffDialog({
           {/* Keeping the follow-up leaves nothing to write: the step fields go. */}
           {!keeping && (
             <>
-              <fieldset>
-                <legend className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">{h.actionLabel}</legend>
-                <div className="flex flex-wrap gap-2" role="radiogroup">
-                  {HANDOFF_ACTIONS.map((a) => (
-                    <label
-                      key={a}
-                      className={`inline-flex min-h-11 cursor-pointer items-center rounded-lg border px-3 text-sm ${
-                        action === a
-                          ? 'border-blue-500 bg-blue-50 text-blue-700'
-                          : 'border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="lead-handoff-action"
-                        value={a}
-                        checked={action === a}
-                        onChange={() => setAction(a)}
-                        data-testid={`lead-handoff-action-${a}`}
-                        className="sr-only"
-                      />
-                      {h.actions[a]}
-                    </label>
-                  ))}
-                </div>
-              </fieldset>
-
-              <Textarea
-                aria-label={h.noteLabel}
-                data-testid="lead-handoff-note"
-                placeholder={noteRequired ? h.notePlaceholderOther : h.notePlaceholder}
-                maxLength={HANDOFF_NOTE_MAX}
-                required={noteRequired}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
+              {/* The same editor as the record's follow-up panel (#3903). */}
+              <FollowUpFields
+                value={{ action, date: dueOn, time: dueAt, note }}
+                onChange={(v) => {
+                  if (v.action) setAction(v.action);
+                  setDueOn(v.date);
+                  setDueAt(v.date ? v.time : '');
+                  setNote(v.note);
+                }}
+                idPrefix="lead-handoff"
+                testIdPrefix="lead-handoff"
+                actions
+                quickDates
+                disabled={busy}
+                notePlaceholder={h.notePlaceholder}
               />
-
-              <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,8rem)] gap-3">
-                <Input
-                  id="lead-handoff-due"
-                  type="date"
-                  label={h.dueLabel}
-                  data-testid="lead-handoff-due"
-                  value={dueOn}
-                  onChange={(e) => setDueOn(e.target.value)}
-                />
-                {/* Optional (#3901): the same time of day the follow-up panel offers. */}
-                <Input
-                  id="lead-handoff-due-time"
-                  type="time"
-                  label={t.followUp.time}
-                  data-testid="lead-handoff-due-time"
-                  value={dueAt}
-                  onChange={(e) => setDueAt(e.target.value)}
-                />
-              </div>
             </>
           )}
 

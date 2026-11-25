@@ -21,7 +21,7 @@ import { isStageTransition, validateDropoffReason, validateEmploymentAttribution
 import { canTransition } from '@/lib/stageGate';
 import { funnelEnteredAtForKindChange, isEmploymentAttribution, isRelationKind } from '@/lib/placementKind';
 import { nextActionPatch, parseNextActionDate, parseNextActionNote, parseNextActionTime, stripNextActionFor } from '@/lib/nextActionRule';
-import { HANDOFF_ACTIONS, nextActionTypeFor } from '@/lib/leadHandoffRule';
+import { HANDOFF_ACTIONS, followUpNoteMissing, nextActionTypeFor } from '@/lib/leadHandoffRule';
 import { handoffActionLabelsByLocale } from '@/lib/handoffLabels';
 import { followUpEventFor } from '@/lib/followUpEventRule';
 import { followUpEventWrite } from '@/lib/followUpEvents';
@@ -279,6 +279,14 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       const parsedNextTime = nextActionTime !== undefined ? parseNextActionTime(nextActionTime) : null;
       if (parsedNextTime && !parsedNextTime.ok) {
         return NextResponse.json({ error: 'Invalid next action time', code: parsedNextTime.error }, { status: 400 });
+      }
+      // The hand-off's rule, on this write too (#3903): `other` IS the words, so
+      // a step marked `other` needs some — the note sent, else the one stored.
+      if (
+        nextActionType !== undefined &&
+        followUpNoteMissing(nextActionType, parsedNextNote?.ok ? parsedNextNote.value : relation.nextActionNote)
+      ) {
+        return NextResponse.json({ error: 'Write what should happen', code: 'note_required' }, { status: 400 });
       }
       const stageChanging = !!pipelineStatus && isStageTransition(relation.pipelineStatus, pipelineStatus);
 

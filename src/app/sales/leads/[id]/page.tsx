@@ -21,7 +21,7 @@ import { formatDate } from '@/lib/relativeTime';
 import { getServerDictionary } from '@/i18n/server';
 import { getDictionary } from '@/i18n/dictionaries';
 import { locales } from '@/i18n/config';
-import { followUpInteractionType } from '@/lib/leadHandoffRule';
+import { followUpInteractionType, handoffNoteText } from '@/lib/leadHandoffRule';
 import { Card, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { SalesRecordPanels } from '@/components/sales/SalesRecordPanels';
@@ -344,7 +344,9 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
         status={relation.status}
         pipelineStatus={relation.pipelineStatus}
         nextActionAt={ownersView ? iso(relation.nextActionAt) : null}
-        nextActionNote={ownersView ? relation.nextActionNote : null}
+        // The words alone: the pick reads as its own label, in the reader's language (#3903).
+        nextActionNote={ownersView ? handoffNoteText(relation.nextActionNote, locales.map((l) => getDictionary(l).leadHandoff.actions)) || null : null}
+        nextActionType={ownersView ? relation.nextActionType : null}
         nextActionTime={ownersView ? relation.nextActionTime : null}
         followUpType={followUpInteractionType(
           relation.nextActionNote,

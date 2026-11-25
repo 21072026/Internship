@@ -277,9 +277,33 @@ null when nobody said.
   (`followUpInteractionType`), so a row the backfill has not reached reads as
   before.
 
-The note still carries the label text ("Telefonla aranacak: …") for now; showing
-the label in the reader's language from the column instead is part of the shared
-follow-up form (#3903).
+A hand-off still composes the label into the note ("Telefonla aranacak: …"), so
+e-mails, the attention queue and older readers keep reading it; the sales
+follow-up panel reads the column instead (#3903, below).
+
+## One follow-up form (#3903)
+
+The hand-off dialog and the lead page's follow-up panel render the **same
+editor**, `src/components/FollowUpFields.tsx`: *what* is next (the hand-off's
+picks), *when* (Today · Tomorrow · 3 days · 1 week · 2 weeks, or a day, plus the
+optional time of #3901) and the words. Controlled and presentation-only — each
+screen keeps its own write (`POST /api/sales/leads/[id]/handoff`,
+`PUT /api/mentorship/[id]`).
+
+- **One rule.** `other` IS the words, so it needs some: `followUpNoteMissing()`
+  (`leadHandoffRule.ts`) in both forms, and `PUT /api/mentorship/[id]` answers
+  `400 note_required` for `nextActionType: 'other'` with no note sent or stored —
+  the same code the hand-off route gives.
+- **The panel writes the pick as `nextActionType` and the words alone.** It does
+  not compose a label into the note. On read, the sales lead page passes the
+  note through `handoffNoteText()` (every locale's labels, longest first), so a
+  hand-off's "Call: ask about pricing" shows as the pick **Call** — in the
+  reader's language, from the column — and the words "ask about pricing". Saved
+  again from the panel, the note becomes the words alone; the pick stays in the
+  column. A saved step with no pick opens as `other` (free words), a new one as
+  a call.
+- **Only the sales panel offers the picks** (`actionPicks`). The internship
+  follow-up (admin candidates, mentor mentees) keeps day, time and note.
 
 ## When: a day, and optionally a time (#3901)
 

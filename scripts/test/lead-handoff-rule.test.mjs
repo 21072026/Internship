@@ -78,3 +78,20 @@ test('a note that names no pick opens a call', () => {
   assert.equal(followUpInteractionType('Callback later', LABELS), 'Call');
   assert.equal(handoffActionFromNote('Callback later', LABELS), null);
 });
+
+const { handoffNoteText, followUpNoteMissing } = await import('../../src/lib/leadHandoffRule.ts');
+
+test('the panel shows the words without the composed pick label, in any language (#3903)', () => {
+  assert.equal(handoffNoteText('Call: ask about pricing', LABELS), 'ask about pricing');
+  assert.equal(handoffNoteText('Call', LABELS), '');
+  assert.equal(handoffNoteText('E-posta atılacak: teklif', LABELS), 'teklif');
+  assert.equal(handoffNoteText('Callback later', LABELS), 'Callback later');
+  assert.equal(handoffNoteText(null, LABELS), '');
+});
+
+test('"other" needs words in both follow-up forms (#3903)', () => {
+  assert.equal(followUpNoteMissing('other', '  '), true);
+  assert.equal(followUpNoteMissing('other', 'x'), false);
+  assert.equal(followUpNoteMissing('call', ''), false);
+  assert.equal(followUpNoteMissing(null, ''), false);
+});
