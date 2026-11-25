@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { CalendarClock, Pencil, Plus, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { AiBadge } from '@/components/AiBadge';
 import { useToast } from '@/components/ui/Toast';
@@ -18,6 +17,8 @@ import {
   parseNextActionTime,
 } from '@/lib/nextActionRule';
 import { nextStepSuggestions } from '@/lib/nextStepSuggestions';
+import { followUpNoteMissing, isHandoffAction, type HandoffAction } from '@/lib/leadHandoffRule';
+import { FollowUpFields } from '@/components/FollowUpFields';
 
 /** The stored UTC day as the `YYYY-MM-DD` a date input reads. */
 export function followUpInputValue(at: string | null | undefined): string {
@@ -76,18 +77,7 @@ const CHIP_CLASS =
  * panel says so and offers "Add follow-up". Presentation only: the same PUT,
  * the same rules, the same suggestions and quick dates inside the form.
  */
-/** The local calendar day `days` from today, as the `YYYY-MM-DD` a date input reads. */
-export function localDayFromToday(days: number, now: Date = new Date()): string {
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + days);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-const QUICK_DAYS = [
-  { days: 1, key: 'quickTomorrow' },
-  { days: 3, key: 'quick3Days' },
-  { days: 7, key: 'quick1Week' },
-  { days: 14, key: 'quick2Weeks' },
-] as const;
+export { localDayFromToday } from '@/components/FollowUpFields';
 
 export function FollowUpPanel({
   relationId,
@@ -99,6 +89,8 @@ export function FollowUpPanel({
   quickDates = false,
   onComplete,
   readOnly = false,
+  actionPicks = false,
+  nextActionType = null,
 }: {
   relationId: string;
   nextActionAt: string | null | undefined;
@@ -120,6 +112,15 @@ export function FollowUpPanel({
   onComplete?: (note: string | null, clear: () => Promise<boolean>) => void;
   /** Reading only (the sales team view, a colleague's record): no edit, add or complete control. */
   readOnly?: boolean;
+  /**
+   * The sales follow-up (#3903): the same "what is next" picks as the hand-off
+   * dialog (FollowUpFields), written as `nextActionType`. The caller passes the
+   * note WITHOUT a composed pick label (handoffNoteText), so the words are
+   * edited alone and the pick reads in the reader's language.
+   */
+  actionPicks?: boolean;
+  /** The stored pick (#3900); read with `actionPicks` only. */
+  nextActionType?: string | null;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -127,7 +128,11 @@ export function FollowUpPanel({
   const toast = useToast();
   // What is saved, as this panel last knew it: the props, or what the last
   // successful save wrote (so reading mode shows it before the refetch lands).
-  const [shown, setShown] = useState({ at: nextActionAt ?? null, note: nextActionNote ?? null, time: nextActionTime ?? null });
+  const storedType = isHandoffAction(nextActionType) ? nextActionType : null;
+  const [shown, setShown] = useState({ at: nextActionAt ?? null, note: nextActionNote ?? null, time: nextActionTime ?? null, type: storedType });
+  // A new step starts as a call; a saved one without a pick is free words — `other`.
+  const actionFor = (type: HandoffAction | null, note: string | null) => (type ?? (note ? 'other' : 'call'));
+  const [action, setAction] = useState<HandoffAction>(actionFor(storedType, nextActionNote ?? null));
   const [editing, setEditing] = useState(false);
   const [date, setDate] = useState(followUpInputValue(nextActionAt));
   const [time, setTime] = useState(nextActionTime ?? '');
@@ -143,11 +148,12 @@ export function FollowUpPanel({
   const [aiHidden, setAiHidden] = useState(false);
 
   useEffect(() => {
-    setShown({ at: nextActionAt ?? null, note: nextActionNote ?? null, time: nextActionTime ?? null });
+    setShown({ at: nextActionAt ?? null, note: nextActionNote ?? null, time: nextActionTime ?? null, type: storedType });
     setDate(followUpInputValue(nextActionAt));
     setTime(nextActionTime ?? '');
     setNote(nextActionNote ?? '');
-  }, [nextActionAt, nextActionNote, nextActionTime]);
+    setAction(actionFor(storedType, nextActionNote ?? null));
+  }, [nextActionAt, nextActionNote, nextActionTime, storedType]);
 
   // Leaving the form puts the keyboard back where it came from: on Edit, or on
   // "Add follow-up" once the follow-up was cleared.
@@ -163,6 +169,7 @@ export function FollowUpPanel({
     setDate(followUpInputValue(shown.at));
     setTime(shown.time ?? '');
     setNote(shown.note ?? '');
+    setAction(actionFor(shown.type, shown.note));
     setError('');
     setEditing(true);
   };
@@ -171,6 +178,7 @@ export function FollowUpPanel({
     setDate(followUpInputValue(shown.at));
     setTime(shown.time ?? '');
     setNote(shown.note ?? '');
+    setAction(actionFor(shown.type, shown.note));
     setError('');
     returnFocus.current = true;
     setEditing(false);
@@ -182,7 +190,7 @@ export function FollowUpPanel({
   const aiOffered = vertical === 'INTERNSHIP' && !!pipelineStatus && !aiHidden;
 
   const save = async (
-    next: { date: string; note: string; time?: string },
+    next: { date: string; note: string; time?: string; action?: HandoffAction | null },
     savedMessage: string = t.followUp.saved,
     // Complete hands the keyboard to the interaction form it opens; it must not be pulled back here.
     // `completed` marks a clear made by Complete, so the history says so (#3819).
@@ -199,6 +207,11 @@ export function FollowUpPanel({
       setError(t.followUp.invalidTime);
       return false;
     }
+    // The hand-off's rule (#3903): `other` is the words, so it needs some.
+    if (followUpNoteMissing(next.action, next.note)) {
+      setError(t.leadHandoff.errors.note_required);
+      return false;
+    }
     if (next.note.trim().length > NEXT_ACTION_NOTE_MAX) {
       setError(t.followUp.tooLong.replace('{max}', String(NEXT_ACTION_NOTE_MAX)));
       return false;
@@ -212,12 +225,20 @@ export function FollowUpPanel({
           nextActionAt: next.date || null,
           nextActionNote: next.note || null,
           nextActionTime: nextTime || null,
+          // A cleared step has no pick; the server clears it with the step anyway.
+          ...(actionPicks ? { nextActionType: next.date || next.note.trim() ? next.action ?? null : null } : {}),
           ...(opts.completed ? { nextActionCompleted: true } : {}),
         }),
       });
       if (!res.ok) throw new Error();
       toast(savedMessage);
-      setShown({ at: next.date || null, note: next.note.trim() || null, time: nextTime || null });
+      const cleared = !next.date && !next.note.trim();
+      setShown({
+        at: next.date || null,
+        note: next.note.trim() || null,
+        time: nextTime || null,
+        type: actionPicks && !cleared ? next.action ?? null : cleared ? null : shown.type,
+      });
       returnFocus.current = opts.returnFocus ?? true;
       setEditing(false);
       await onSaved?.();
@@ -295,7 +316,7 @@ export function FollowUpPanel({
       </div>
       {!editing && hasFollowUp && (
         <>
-          <FollowUpReading at={shown.at} note={shown.note} time={shown.time} />
+          <FollowUpReading at={shown.at} note={shown.note} time={shown.time} type={actionPicks ? shown.type : null} />
           {!readOnly && onComplete && (
             <div className="mt-3">
               <Button size="sm" variant="secondary" disabled={saving} title={t.followUp.completeHint} onClick={complete} data-testid="follow-up-complete">
@@ -319,59 +340,21 @@ export function FollowUpPanel({
         <div data-testid="follow-up-form">
           {/* The follow-up is what comes NEXT; what already happened is an interaction (#3652). */}
           <p className="mb-2 text-xs text-gray-600 dark:text-gray-400" data-testid="follow-up-purpose">{t.followUp.purpose}</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,7rem)_minmax(0,1fr)]">
-            <Input
-              id={`follow-up-date-${relationId}`}
-              type="date"
-              label={t.followUp.date}
-              value={date}
-              disabled={saving}
-              autoFocus
-              onChange={(e) => setDate(e.target.value)}
-              data-testid="follow-up-date"
-            />
-            {/* Optional (#3901): orders the day's steps; the day alone decides due and overdue. */}
-            <Input
-              id={`follow-up-time-${relationId}`}
-              type="time"
-              label={t.followUp.time}
-              value={time}
-              disabled={saving || !date}
-              onChange={(e) => setTime(e.target.value)}
-              data-testid="follow-up-time"
-            />
-            <Input
-              id={`follow-up-note-${relationId}`}
-              label={t.followUp.note}
-              placeholder={t.followUp.notePlaceholder}
-              value={note}
-              maxLength={NEXT_ACTION_NOTE_MAX}
-              disabled={saving}
-              onChange={(e) => setNote(e.target.value)}
-              data-testid="follow-up-note"
-            />
-          </div>
-          {quickDates && (
-            <div className="mt-2 flex flex-wrap items-center gap-1.5" role="group" aria-label={t.followUp.quickLabel} data-testid="follow-up-quick-dates">
-              <span className="text-xs text-gray-600 dark:text-gray-400">{t.followUp.quickLabel}</span>
-              {QUICK_DAYS.map(({ days, key }) => {
-                const value = localDayFromToday(days);
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    className={`${CHIP_CLASS} ${date === value ? '!border-blue-500 !text-blue-700 dark:!text-blue-300' : ''}`}
-                    aria-pressed={date === value}
-                    disabled={saving}
-                    onClick={() => setDate(value)}
-                    data-testid={`follow-up-quick-${days}`}
-                  >
-                    {t.followUp[key]}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <FollowUpFields
+            value={{ action: actionPicks ? action : undefined, date, time, note }}
+            onChange={(v) => {
+              setDate(v.date);
+              setTime(v.time);
+              setNote(v.note);
+              if (v.action) setAction(v.action);
+            }}
+            idPrefix={`follow-up-${relationId}`}
+            testIdPrefix="follow-up"
+            actions={actionPicks}
+            quickDates={quickDates}
+            disabled={saving}
+            autoFocus
+          />
           {showSuggestionRow && (
             <div className="mt-3" data-testid="follow-up-suggestions">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -429,7 +412,7 @@ export function FollowUpPanel({
           )}
           {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button size="sm" loading={saving} onClick={() => save({ date, note, time })} data-testid="follow-up-save">
+            <Button size="sm" loading={saving} onClick={() => save({ date, note, time, action: actionPicks ? action : undefined })} data-testid="follow-up-save">
               {t.followUp.save}
             </Button>
             <Button size="sm" variant="secondary" disabled={saving} onClick={cancelEditing} data-testid="follow-up-cancel">
@@ -462,7 +445,7 @@ export function FollowUpPanel({
  * rule counts), coloured by the same overdue / due-today rule as the chip, and
  * the next step as written.
  */
-function FollowUpReading({ at, note, time }: { at: string | null; note: string | null; time: string | null }) {
+function FollowUpReading({ at, note, time, type }: { at: string | null; note: string | null; time: string | null; type: HandoffAction | null }) {
   const t = useT();
   const locale = useLocale();
   const now = Date.now();
@@ -482,11 +465,17 @@ function FollowUpReading({ at, note, time }: { at: string | null; note: string |
           : t.followUp.noDate}
         {day && time && <span data-testid="follow-up-read-time"> · {time}</span>}
       </p>
+      {/* The pick in the reader's language (#3903); `other` says nothing the words do not. */}
+      {type && type !== 'other' && (
+        <p className="text-sm font-medium text-gray-800 dark:text-gray-100" data-testid="follow-up-read-type">
+          {t.leadHandoff.actions[type]}
+        </p>
+      )}
       <p
         className={`whitespace-pre-wrap break-words text-sm ${note ? 'text-gray-700 dark:text-gray-200' : 'italic text-gray-500 dark:text-gray-400'}`}
         data-testid="follow-up-read-note"
       >
-        {note || t.followUp.noNote}
+        {note || (type && type !== 'other' ? '' : t.followUp.noNote)}
       </p>
     </div>
   );

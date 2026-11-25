@@ -34,6 +34,7 @@ export function SalesRecordPanels({
   nextActionAt,
   nextActionNote,
   nextActionTime = null,
+  nextActionType = null,
   followUpType = 'Call',
   trialStartedAt,
   trialEndsAt,
@@ -53,6 +54,8 @@ export function SalesRecordPanels({
   nextActionNote: string | null;
   /** Optional time of day of the follow-up (#3901). */
   nextActionTime?: string | null;
+  /** The stored pick of the follow-up (#3900); the panel offers the same picks as the hand-off (#3903). */
+  nextActionType?: string | null;
   /**
    * The type "Complete follow-up" opens the interaction form with: the board
    * hand-off's pick when the note came from one, else a call (#3821). Read on
@@ -104,6 +107,8 @@ export function SalesRecordPanels({
           pipelineStatus={pipelineStatus}
           onSaved={refresh}
           quickDates
+          actionPicks
+          nextActionType={nextActionType}
           readOnly={readOnly}
           onComplete={
             !readOnly && status === 'ACTIVE'
