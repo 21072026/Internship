@@ -78,3 +78,25 @@ export function teamBookCounts(
 export function canSeeRepOverdue(viewer: { role: string | null | undefined; dispatcher: boolean }): boolean {
   return viewer.role === 'ADMIN' || viewer.dispatcher;
 }
+
+/** The channels the load line counts open follow-ups by (#3905). */
+export const FOLLOW_UP_CHANNELS = ['call', 'email', 'other'] as const;
+export type FollowUpChannel = (typeof FOLLOW_UP_CHANNELS)[number];
+export type FollowUpChannelCounts = Record<FollowUpChannel, number>;
+
+/**
+ * Which channel a follow-up waits on, from its `nextActionType` (#3900): a call
+ * or an e-mail; a meeting, a demo, `other` and an untyped step are "other". The
+ * load line is a phone-or-mail split — what the meeting asked for — not the
+ * hand-off's whole vocabulary.
+ */
+export function followUpChannel(type: string | null | undefined): FollowUpChannel {
+  return type === 'call' || type === 'email' ? type : 'other';
+}
+
+/** Fold `groupBy([mentorId, nextActionType])` rows into one person's counts. */
+export function channelCounts(rows: readonly { type: string | null; count: number }[]): FollowUpChannelCounts {
+  const out: FollowUpChannelCounts = { call: 0, email: 0, other: 0 };
+  for (const r of rows) out[followUpChannel(r.type)] += r.count;
+  return out;
+}
