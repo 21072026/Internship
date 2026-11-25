@@ -70,8 +70,14 @@ export function useLeadHandoff(opts: {
   includeSelf: boolean;
   nameOf: (relationId: string) => string | undefined;
   onHandedOff: () => void;
+  /**
+   * A name on the strip also filters the board to that person (#3906): given
+   * only where the viewer may see the team's records (the board's own rule), so
+   * nobody is offered a filter the board would refuse. Absent, names are plain.
+   */
+  select?: { selected: readonly string[]; onToggle: (memberId: string) => void };
 }) {
-  const { includeSelf, nameOf, onHandedOff } = opts;
+  const { includeSelf, nameOf, onHandedOff, select } = opts;
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [pending, setPending] = useState<Pending | null>(null);
 
@@ -97,7 +103,7 @@ export function useLeadHandoff(opts: {
   return {
     enabled,
     openFor: (relationId: string) => open(relationId, null),
-    strip: enabled ? <LeadHandoffStrip members={members} onDrop={(memberId, relationId) => open(relationId, memberId)} /> : null,
+    strip: enabled ? <LeadHandoffStrip members={members} select={select} onDrop={(memberId, relationId) => open(relationId, memberId)} /> : null,
     dialog: (
       <LeadHandoffDialog
         pending={pending}
@@ -112,7 +118,15 @@ export function useLeadHandoff(opts: {
   };
 }
 
-function LeadHandoffStrip({ members, onDrop }: { members: TeamMember[]; onDrop: (memberId: string, relationId: string) => void }) {
+function LeadHandoffStrip({
+  members,
+  onDrop,
+  select,
+}: {
+  members: TeamMember[];
+  onDrop: (memberId: string, relationId: string) => void;
+  select?: { selected: readonly string[]; onToggle: (memberId: string) => void };
+}) {
   const t = useT();
   const h = t.leadHandoff;
   const [over, setOver] = useState<string | null>(null);
@@ -123,7 +137,7 @@ function LeadHandoffStrip({ members, onDrop }: { members: TeamMember[]; onDrop: 
       className="mb-4 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 p-3"
     >
       <p className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">
-        {h.stripLabel} · <span className="font-normal">{h.stripHint}</span>
+        {h.stripLabel} · <span className="font-normal">{select ? h.stripHintFilter : h.stripHint}</span>
       </p>
       <ul className="flex gap-2 overflow-x-auto pb-1">
         {members.map((m) => (
@@ -156,10 +170,27 @@ function LeadHandoffStrip({ members, onDrop }: { members: TeamMember[]; onDrop: 
               </span>
             )}
             <span className="flex flex-col leading-tight">
-              <span className="whitespace-nowrap">
-                {m.fullName}
-                {m.self && <span className="ml-1 text-xs text-gray-400">({h.you})</span>}
-              </span>
+              {select ? (
+                // The drop target stays the whole chip; the name is the filter (#3906).
+                <button
+                  type="button"
+                  aria-pressed={select.selected.includes(m.id)}
+                  title={h.filterBy.replace('{name}', m.fullName)}
+                  onClick={() => select.onToggle(m.id)}
+                  data-testid={`handoff-target-filter-${m.id}`}
+                  className={`whitespace-nowrap rounded text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                    select.selected.includes(m.id) ? 'font-semibold text-blue-700 dark:text-blue-300' : ''
+                  }`}
+                >
+                  {m.fullName}
+                  {m.self && <span className="ml-1 text-xs text-gray-400">({h.you})</span>}
+                </button>
+              ) : (
+                <span className="whitespace-nowrap">
+                  {m.fullName}
+                  {m.self && <span className="ml-1 text-xs text-gray-400">({h.you})</span>}
+                </span>
+              )}
               {typeof m.open === 'number' && (
                 <span className="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400" data-testid={`handoff-target-load-${m.id}`}>
                   {h.loadOpen.replace('{n}', String(m.open))}

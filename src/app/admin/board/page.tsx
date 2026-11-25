@@ -240,6 +240,11 @@ export default function AdminBoardPage() {
     includeSelf: true,
     nameOf: useCallback((id: string) => relationsRef.current.find((r) => r.id === id)?.mentee.fullName, []),
     onHandedOff: fetchRelations,
+    // A name on the strip sets the owner filter to that person; again, takes them off (#3906).
+    select: {
+      selected: owners,
+      onToggle: (id: string) => setOwners(owners.includes(id) ? owners.filter((o) => o !== id) : [id]),
+    },
   });
 
   const [pendingMove, setPendingMove] = useState<{ relationId: string; toStatus: string } | null>(null);

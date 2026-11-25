@@ -4582,6 +4582,8 @@ const en = {
   leadHandoff: {
     stripLabel: 'Hand over to a colleague',
     stripHint: 'Drag a card onto a person',
+    stripHintFilter: 'Click a name to see their leads, or drag a card onto a person',
+    filterBy: "Show {name}'s leads",
     loadOpen: '{n} open',
     loadOverdue: '{n} overdue follow-ups',
     loadChannels: 'follow-ups: {call} call · {email} e-mail · {other} other',
@@ -17440,6 +17442,8 @@ const tr: Dict = {
   leadHandoff: {
     stripLabel: 'Bir ekip arkadaşına devret',
     stripHint: 'Kartı bir kişinin üzerine sürükleyin',
+    stripHintFilter: 'Lead\'lerini görmek için bir isme tıklayın ya da kartı bir kişinin üzerine sürükleyin',
+    filterBy: '{name} kişisinin lead\'lerini göster',
     loadOpen: '{n} açık',
     loadOverdue: '{n} gecikmiş takip',
     loadChannels: 'takip: {call} telefon · {email} e-posta · {other} diğer',
@@ -30146,6 +30150,8 @@ const de: Dict = {
   leadHandoff: {
     stripLabel: 'An Kolleg:in übergeben',
     stripHint: 'Karte auf eine Person ziehen',
+    stripHintFilter: 'Auf einen Namen klicken, um dessen Leads zu sehen, oder eine Karte auf eine Person ziehen',
+    filterBy: 'Leads von {name} anzeigen',
     loadOpen: '{n} offen',
     loadOverdue: '{n} überfällige Wiedervorlagen',
     loadChannels: 'Wiedervorlagen: {call} Anruf · {email} E-Mail · {other} sonstige',
