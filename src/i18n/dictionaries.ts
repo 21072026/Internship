@@ -8048,6 +8048,12 @@ const en = {
     failed: 'The list could not be loaded.',
     type: { BUG: 'Bug', FEEDBACK: 'Feedback' },
     status: { NEW: 'Received', TRIAGED: 'Looked at', IN_PROGRESS: 'Being worked on', RESOLVED: 'Resolved', WONT_FIX: 'Will not be changed' },
+    // #3929: how far along it all is, and the filter by that outcome.
+    progress: '{done} of {total} completed, {open} waiting',
+    progressWontFix: '{n} will not be changed',
+    filterLabel: 'Show',
+    filter: { all: 'All', open: 'Waiting', done: 'Completed', wontFix: 'Will not be changed' },
+    filterEmpty: 'Nothing here with this filter.',
   },
   salesToday: {
     title: 'Today',
@@ -20850,6 +20856,11 @@ const tr: Dict = {
     failed: 'Liste yüklenemedi.',
     type: { BUG: 'Hata', FEEDBACK: 'Geri bildirim' },
     status: { NEW: 'Alındı', TRIAGED: 'İncelendi', IN_PROGRESS: 'Üzerinde çalışılıyor', RESOLVED: 'Çözüldü', WONT_FIX: 'Değiştirilmeyecek' },
+    progress: '{total} bildirimden {done} tamamlandı, {open} bekliyor',
+    progressWontFix: '{n} değiştirilmeyecek',
+    filterLabel: 'Göster',
+    filter: { all: 'Tümü', open: 'Bekleyen', done: 'Tamamlanan', wontFix: 'Değiştirilmeyecek' },
+    filterEmpty: 'Bu filtrede bildirim yok.',
   },
   salesToday: {
     title: 'Bugün',
@@ -33566,6 +33577,11 @@ const de: Dict = {
     failed: 'Die Liste konnte nicht geladen werden.',
     type: { BUG: 'Fehler', FEEDBACK: 'Feedback' },
     status: { NEW: 'Eingegangen', TRIAGED: 'Gesichtet', IN_PROGRESS: 'In Arbeit', RESOLVED: 'Erledigt', WONT_FIX: 'Wird nicht geändert' },
+    progress: '{done} von {total} erledigt, {open} offen',
+    progressWontFix: '{n} wird nicht geändert',
+    filterLabel: 'Anzeigen',
+    filter: { all: 'Alle', open: 'Offen', done: 'Erledigt', wontFix: 'Wird nicht geändert' },
+    filterEmpty: 'Nichts mit diesem Filter.',
   },
   salesToday: {
     title: 'Heute',
