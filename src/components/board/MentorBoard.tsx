@@ -250,6 +250,19 @@ export function MentorBoard({
     includeSelf: manyOwners,
     nameOf: useCallback((id: string) => relationsRef.current.find((r) => r.id === id)?.mentee.fullName, []),
     onHandedOff: fetchRelations,
+    // A name on the strip filters the team view to that person (#3906) — only for
+    // whom the team view is open; from "Mine" it switches to the team view first.
+    select: teamAllowed
+      ? {
+          selected: teamView ? owners : [],
+          onToggle: (id: string) => {
+            if (!teamView) {
+              setView('team');
+              setOwners([id]);
+            } else setOwners(owners.includes(id) ? owners.filter((o) => o !== id) : [id]);
+          },
+        }
+      : undefined,
   });
   const showHandoff = handoff && leadHandoff.enabled;
 

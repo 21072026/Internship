@@ -274,3 +274,37 @@ test('the dispatcher works every record: no banner, editors present, every card 
   await expect(theirs).toHaveCount(1, { timeout: 20_000 });
   await expect(theirs).toHaveAttribute('data-writable', 'true');
 });
+
+test('a name on the strip filters the board to that person; again, takes them off; a card still drops onto it (#3906)', async ({ page }) => {
+  test.slow();
+  await signIn(page, 'rep1');
+  await gotoSettled(page, '/sales/board');
+  const cards = page.getByTestId('board-card');
+  const own = cards.filter({ hasText: `Team lead-r1 ${STAMP}` });
+  const theirs = cards.filter({ hasText: `Team lead-r2 ${STAMP}` });
+  await expect(own).toHaveCount(1, { timeout: 20_000 });
+
+  // From "Mine": the name opens the team view filtered to rep2.
+  const name = page.getByTestId(`handoff-target-filter-${ids.rep2}`);
+  await expect(name).toHaveAttribute('aria-pressed', 'false');
+  await name.click();
+  await page.waitForURL((u) => u.searchParams.get('view') === 'team' && u.searchParams.get('owners') === ids.rep2);
+  await expect(theirs).toHaveCount(1, { timeout: 20_000 });
+  await expect(own).toHaveCount(0);
+  await expect(page.getByTestId(`handoff-target-filter-${ids.rep2}`)).toHaveAttribute('aria-pressed', 'true');
+
+  // Again (by keyboard): the filter goes, the whole team is back.
+  await page.getByTestId(`handoff-target-filter-${ids.rep2}`).focus();
+  await page.keyboard.press('Enter');
+  await page.waitForURL((u) => !u.searchParams.get('owners'));
+  await expect(own).toHaveCount(1, { timeout: 20_000 });
+  await expect(theirs).toHaveCount(1);
+
+  // Dragging a card onto the person still hands it over: the dialog opens for them.
+  await own.dragTo(page.getByTestId(`handoff-target-${ids.rep2}`));
+  const dialog = page.getByTestId('lead-handoff-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText(`Team rep2 ${STAMP}`);
+  await dialog.getByTestId('lead-handoff-cancel').click();
+  expect((await prisma.mentorshipRelation.findUniqueOrThrow({ where: { id: ids['rel-r1'] } })).mentorId).toBe(ids.rep1);
+});

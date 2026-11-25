@@ -543,4 +543,16 @@ test('the strip shows each person\'s load: open records for everyone, overdue an
   await expect(page.getByTestId(`handoff-target-channels-${ids.rep2}`)).toHaveText(
     ` · follow-ups: ${channels.call} call · ${channels.email} e-mail · ${channels.other} other`,
   );
+
+  // The admin board's names filter it too (#3906): the owner filter follows the click.
+  await page.getByTestId(`handoff-target-filter-${ids.rep2}`).click();
+  await page.waitForURL((u) => u.searchParams.get('owners') === ids.rep2);
+  await expect(page.getByTestId(`handoff-target-filter-${ids.rep2}`)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('board-card').filter({ hasText: `Handoff lead-late ${STAMP}` })).toHaveCount(1, { timeout: 20_000 });
+  // Nobody else's card: the admin's own lead is not on the filtered board.
+  const own = await lead('admin-own', ids.admin, ids.orgA);
+  await page.reload();
+  await expect(page.getByTestId('board-card').filter({ hasText: `Handoff lead-late ${STAMP}` })).toHaveCount(1, { timeout: 20_000 });
+  await expect(page.getByTestId('board-card').filter({ hasText: `Handoff lead-admin-own ${STAMP}` })).toHaveCount(0);
+  expect(own).toBeTruthy();
 });
