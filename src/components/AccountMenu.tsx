@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { LogOut, Settings, ChevronUp } from 'lucide-react';
+import { LogOut, Settings, ChevronUp, MessageSquareWarning } from 'lucide-react';
 import { signOutEverywhere } from '@/lib/signOutClient';
 import { SidebarAvatar } from '@/components/SidebarAvatar';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -15,7 +15,7 @@ import type { Locale } from '@/i18n/config';
 
 // Consolidated sidebar footer: the collapsed row shows just the user's identity
 // (avatar + name + email) and a chevron; clicking opens an upward popover with
-// the account link, sign-out, language + theme controls and the version. Keeps
+// the account link, "My feedback", sign-out, language + theme controls and the version. Keeps
 // the footer from becoming a crowded stack of controls.
 export function AccountMenu({
   name,
@@ -71,6 +71,19 @@ export function AccountMenu({
           >
             <Settings className="h-4 w-4" />
             {t.account.nav}
+          </Link>
+          {/* The reports this person sent with the feedback button (#3877), one
+              click from every role's shell (#3910) — it used to be findable only
+              from the account page and the feedback panel. */}
+          <Link
+            href="/account/feedback"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+            data-testid="account-menu-feedback"
+          >
+            <MessageSquareWarning className="h-4 w-4" />
+            {t.myFeedback.link}
           </Link>
           {/* A button rather than a link to /api/auth/signout: signing out has
               to give up the remembered device too, or the next page load would

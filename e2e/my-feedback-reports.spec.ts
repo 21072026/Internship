@@ -145,3 +145,17 @@ test('a status change rings the reporter\'s bell in the app, linked to the repor
   await gotoSettled(page, `/account/feedback#report-${ids.mine}`);
   await expect(page.getByTestId(`my-feedback-${ids.mine}`).getByTestId('my-feedback-status')).toHaveText('Being worked on');
 });
+
+test('"My feedback" is in the account menu of every role shell and opens the page (#3910)', async ({ page }) => {
+  // A mentee's portal and an admin's shell render the same AccountMenu.
+  for (const [label, landing] of [['me', '/portal'], ['admin', '/admin']] as const) {
+    await page.context().clearCookies();
+    await signInAndSettle(page, mail[label], PW, landing);
+    await page.getByTestId('account-menu-button').first().click();
+    const item = page.getByTestId('account-menu-feedback').first();
+    await expect(item).toBeVisible();
+    await expect(item).toHaveAttribute('role', 'menuitem');
+    await item.click();
+    await page.waitForURL((u) => u.pathname === '/account/feedback', { timeout: 20_000 });
+  }
+});
