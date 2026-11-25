@@ -39,6 +39,8 @@ interface Ev {
   who: string;
   date: string;
   allDay?: boolean;
+  /** A follow-up's own time of day (#3901), "HH:MM" as its owner typed it — a wall time, shown as is. */
+  wallTime?: string | null;
   durationMinutes?: number | null;
   overdue?: boolean;
   link?: string | null;
@@ -317,8 +319,9 @@ export function CalendarView({
   // time inputs); a 12-hour calendar next to a 24-hour form reads as a bug.
   const clock = (iso: string) =>
     new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(iso));
-  // A day-long item (a follow-up, a trial end) has no time of its own.
-  const time = (e: Ev) => (e.allDay ? t.calendar.allDay : clock(e.date));
+  // A day-long item (a follow-up, a trial end) has no time of its own — unless
+  // the follow-up was given one (#3901), which is shown as typed.
+  const time = (e: Ev) => (e.allDay ? e.wallTime || t.calendar.allDay : clock(e.date));
   // The context line of the sales kinds: the follow-up's own step, or what the day is.
   const detail = (e: Ev) =>
     e.type === 'followup' ? e.title || t.calendar.followUp : e.type === 'trial' ? t.calendar.trialEnd : secondaryLabel(e);
@@ -359,7 +362,7 @@ export function CalendarView({
       <span className="flex items-center gap-1 truncate">
         <EventIcon type={e.type} />
         <OwnerBadge e={e} />
-        {withTime && !e.allDay && <span className="tabular-nums opacity-70">{time(e)}</span>}
+        {withTime && (!e.allDay || e.wallTime) && <span className="tabular-nums opacity-70">{time(e)}</span>}
         <span className="truncate">{primaryLabel(e)}</span>
       </span>
     );

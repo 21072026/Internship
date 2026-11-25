@@ -24,6 +24,19 @@ export interface InteractionFormDraft {
   onLogged?: () => unknown;
 }
 
+/** `<input type="datetime-local">`'s value for `d` in the browser's own zone. */
+export function localDateTimeValue(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** The local wall time the input holds, as the instant the server stores; a bare day passes through. */
+function dateTimeToIso(value: string): string {
+  if (!value.includes('T')) return value;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? value : d.toISOString();
+}
+
 export function AddInteractionForm({
   relationId,
   onAdded,
@@ -41,7 +54,10 @@ export function AddInteractionForm({
   const [open, setOpen] = useState(false);
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const [type, setType] = useState<InteractionType>('Meeting');
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
+  // Date AND time, in the person's own zone (#3901): a log typed as a bare day
+  // was stored as UTC midnight and read "01:00" in Berlin, and two logs of one
+  // day did not sort in the order they happened. Defaults to now.
+  const [date, setDate] = useState(() => localDateTimeValue(new Date()));
   const [subject, setSubject] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
@@ -58,6 +74,7 @@ export function AddInteractionForm({
   useEffect(() => {
     if (!draft) return;
     afterLogged.current = draft.onLogged ?? null;
+    setDate(localDateTimeValue(new Date()));
     setOpen(true);
     setError(null);
     if (draft.type) setType(draft.type);
@@ -76,7 +93,7 @@ export function AddInteractionForm({
       const res = await fetch('/api/interactions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ relationId, date, subject: subject || undefined, notes, type }),
+        body: JSON.stringify({ relationId, date: dateTimeToIso(date), subject: subject || undefined, notes, type }),
       });
       if (res.ok) {
         setSubject('');
@@ -104,7 +121,11 @@ export function AddInteractionForm({
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          // "Now" is when the form opens, not when the page was rendered.
+          setDate(localDateTimeValue(new Date()));
+          setOpen(true);
+        }}
         className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-700"
         data-testid="interaction-form-open"
       >
@@ -134,10 +155,12 @@ export function AddInteractionForm({
         <label className="flex flex-col gap-0.5 text-xs text-gray-600 dark:text-gray-400">
           {t.logInteraction.date}
           <input
-            type="date"
+            type="datetime-local"
             value={date}
+            required
             onChange={(e) => setDate(e.target.value)}
             className="rounded-lg border border-gray-300 px-2 py-1 text-sm"
+            data-testid="interaction-form-date"
           />
         </label>
       </div>

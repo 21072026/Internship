@@ -17,6 +17,8 @@ const schema = z.object({
   action: z.enum(HANDOFF_ACTIONS),
   note: z.string().max(HANDOFF_NOTE_MAX).nullable().optional(),
   dueOn: z.string().max(10).nullable().optional(),
+  // Optional time of day, "HH:MM" (#3901), checked by parseNextActionTime.
+  dueAt: z.string().max(12).nullable().optional(),
   // Keep the record's follow-up as it is (#3873); the step fields are then ignored.
   keepFollowUp: z.boolean().optional(),
 });

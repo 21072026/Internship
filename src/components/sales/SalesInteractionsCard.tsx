@@ -110,7 +110,7 @@ function InteractionRow({ row, open, onToggle }: { row: LeadInteraction; open: b
         <span lang={row.subject ? undefined : contentLang(row.notes)} className="min-w-0 flex-1 truncate font-medium text-gray-900 dark:text-gray-100" title={headline}>
           {headline}
         </span>
-        <RelativeTime date={row.date} granularity="day" className="shrink-0 text-xs text-gray-500 dark:text-gray-400" />
+        <RelativeTime date={row.date} granularity="day" withTime className="shrink-0 text-xs text-gray-500 dark:text-gray-400" />
       </div>
       {detail && (
         <button

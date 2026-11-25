@@ -43,6 +43,8 @@ export type SalesCalendarEvent =
       /** `YYYY-MM-DD`, the UTC day stored. */
       date: string;
       allDay: true;
+      /** The optional time of day (#3901), "HH:MM" as typed; null = the whole day. */
+      wallTime: string | null;
       overdue: boolean;
       link: string;
       relationId: string;
@@ -95,8 +97,9 @@ export async function loadSalesCalendar(opts: {
     }),
     prisma.mentorshipRelation.findMany({
       where: { orgId, mentorId: userId, status: 'ACTIVE', nextActionAt: { gte: dayFrom, lte: dayTo } },
-      select: { id: true, nextActionAt: true, nextActionNote: true, ...lead },
-      orderBy: { nextActionAt: 'asc' },
+      select: { id: true, nextActionAt: true, nextActionNote: true, nextActionTime: true, ...lead },
+      // Within a day: the whole-day steps first, then by time (#3901, compareNextActions).
+      orderBy: [{ nextActionAt: 'asc' }, { nextActionTime: 'asc' }],
       take: MAX_PER_KIND,
     }),
     prisma.mentorshipRelation.findMany({
@@ -127,6 +130,7 @@ export async function loadSalesCalendar(opts: {
       who: r.mentee.fullName,
       date: utcDay(r.nextActionAt!),
       allDay: true as const,
+      wallTime: r.nextActionTime ?? null,
       overdue: isNextActionOverdue(r.nextActionAt!, now),
       link: salesLeadHref(r.id),
       relationId: r.id,

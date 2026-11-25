@@ -74,6 +74,7 @@ interface Relation {
   // The owner's follow-up (#2563), independent of the stage deadline above.
   nextActionAt?: string | null;
   nextActionNote?: string | null;
+  nextActionTime?: string | null;
   // The trial window of a funnel record (#2551/#2553); null outside a trial.
   trialStartedAt?: string | null;
   trialEndsAt?: string | null;
@@ -613,6 +614,7 @@ export default function AdminMenteeDetailPage() {
                 relationId={rel.id}
                 nextActionAt={rel.nextActionAt}
                 nextActionNote={rel.nextActionNote}
+                nextActionTime={rel.nextActionTime}
                 pipelineStatus={rel.pipelineStatus}
                 onSaved={load}
               />

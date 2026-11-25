@@ -88,6 +88,7 @@ interface RelationDetail {
   // The owner's follow-up (#2563) — only ever present for the owner and ADMIN.
   nextActionAt?: string | null;
   nextActionNote?: string | null;
+  nextActionTime?: string | null;
   // The trial window of a funnel record (#2551/#2553); null outside a trial.
   trialStartedAt?: string | null;
   trialEndsAt?: string | null;
@@ -509,6 +510,7 @@ export default function MenteeDetailPage() {
           relationId={relation.id}
           nextActionAt={relation.nextActionAt}
           nextActionNote={relation.nextActionNote}
+          nextActionTime={relation.nextActionTime}
           pipelineStatus={relation.pipelineStatus}
           onSaved={fetchRelation}
         />

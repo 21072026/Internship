@@ -9,7 +9,7 @@ import { orgScoped, resolveOrgId } from '@/lib/orgScope';
 import { inCallerTenant } from '@/lib/tenantFilter';
 import { scopeForRole, logScopeDenial, andScope } from '@/lib/authzScope';
 import { createInteraction } from '@/lib/interactionWrite';
-import { createInteractionSchema } from '@/lib/interactionSchema';
+import { createInteractionSchema, interactionInstant } from '@/lib/interactionSchema';
 import { z } from 'zod';
 
 
@@ -118,7 +118,7 @@ export async function POST(request: Request) {
     // the one write path the public API shares (#1996).
     const interaction = await createInteraction({
       relation,
-      date: new Date(date),
+      date: interactionInstant(date),
       type,
       notes,
       subject,

@@ -20,7 +20,7 @@ import { isPendingActivation } from '@/lib/menteeAccount';
 import { isStageTransition, validateDropoffReason, validateEmploymentAttribution } from '@/lib/stageChange';
 import { canTransition } from '@/lib/stageGate';
 import { funnelEnteredAtForKindChange, isEmploymentAttribution, isRelationKind } from '@/lib/placementKind';
-import { nextActionPatch, parseNextActionDate, parseNextActionNote, stripNextActionFor } from '@/lib/nextActionRule';
+import { nextActionPatch, parseNextActionDate, parseNextActionNote, parseNextActionTime, stripNextActionFor } from '@/lib/nextActionRule';
 import { HANDOFF_ACTIONS, nextActionTypeFor } from '@/lib/leadHandoffRule';
 import { handoffActionLabelsByLocale } from '@/lib/handoffLabels';
 import { followUpEventFor } from '@/lib/followUpEventRule';
@@ -51,6 +51,9 @@ const updateRelationSchema = z.object({
   // What the step is (#3900), one of HANDOFF_ACTIONS; absent = read from the
   // note's label (nextActionTypeFor), null = not stated.
   nextActionType: z.enum(HANDOFF_ACTIONS).nullable().optional(),
+  // Optional time of day, "HH:MM" (#3901); null / '' = the whole day. The
+  // shape is checked by parseNextActionTime below, with the day's own rules.
+  nextActionTime: z.string().nullable().optional(),
   // Sent with a clearing write by the panel's "Complete" (#3819): the history
   // line says "completed" rather than "cleared". Ignored on any other write.
   nextActionCompleted: z.boolean().optional(),
@@ -244,7 +247,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }
 
       const {
-        stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote, nextActionType, nextActionCompleted,
+        stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote, nextActionType, nextActionTime, nextActionCompleted,
         kind, employmentAttribution, expectedEndDate, ...rest
       } = parsed.data;
 
@@ -272,6 +275,10 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       const parsedNextNote = nextActionNote !== undefined ? parseNextActionNote(nextActionNote) : null;
       if (parsedNextNote && !parsedNextNote.ok) {
         return NextResponse.json({ error: 'Next action note is too long', code: parsedNextNote.error }, { status: 400 });
+      }
+      const parsedNextTime = nextActionTime !== undefined ? parseNextActionTime(nextActionTime) : null;
+      if (parsedNextTime && !parsedNextTime.ok) {
+        return NextResponse.json({ error: 'Invalid next action time', code: parsedNextTime.error }, { status: 400 });
       }
       const stageChanging = !!pipelineStatus && isStageTransition(relation.pipelineStatus, pipelineStatus);
 
@@ -387,6 +394,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
             : nextNote !== undefined
               ? nextActionTypeFor(null, nextNote, handoffActionLabelsByLocale())
               : undefined,
+        nextActionTime: parsedNextTime?.ok ? parsedNextTime.value : undefined,
       });
       Object.assign(data, followUp);
       // The history line of this follow-up edit (#3819), if it changed one.

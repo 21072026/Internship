@@ -106,6 +106,53 @@ export function parseNextActionNote(input: unknown): ParsedNextActionNote {
   return { ok: true, value: text };
 }
 
+export type ParsedNextActionTime =
+  | { ok: true; value: string | null }
+  | { ok: false; error: 'invalid_time' };
+
+const TIME_OF_DAY = /^([01]\d|2[0-3]):([0-5]\d)(?::[0-5]\d(?:\.\d+)?)?$/;
+
+/**
+ * Read the optional time of day an editor sent (#3901): `HH:MM` on the 24-hour
+ * clock (what `<input type="time">` produces; seconds are dropped), or null /
+ * '' for "the whole day".
+ *
+ * A WALL time, kept apart from the day on purpose. Folding it into
+ * `nextActionAt` would turn the calendar day into an instant, and "Thursday
+ * 00:30" typed in Berlin would become Wednesday in UTC — the reminder and the
+ * queue would then fire a day early. So the day keeps counting in UTC exactly
+ * as before, and the time only orders the day's steps and is shown beside it,
+ * as the owner typed it (it is their own schedule, not converted per viewer).
+ */
+export function parseNextActionTime(input: unknown): ParsedNextActionTime {
+  if (input === null || input === undefined || input === '') return { ok: true, value: null };
+  if (typeof input !== 'string') return { ok: false, error: 'invalid_time' };
+  const m = TIME_OF_DAY.exec(input.trim());
+  if (!m) return { ok: false, error: 'invalid_time' };
+  return { ok: true, value: `${m[1]}:${m[2]}` };
+}
+
+/**
+ * Order two follow-ups (#3901): by day — no day last — then, within a day, an
+ * untimed step ("some time that day") before the timed ones, which follow by
+ * their time. The same order the list queries ask MySQL for (NULLs first on
+ * an ascending sort).
+ */
+export function compareNextActions(
+  a: { at: Date | string | null; time?: string | null },
+  b: { at: Date | string | null; time?: string | null },
+): number {
+  const day = (v: Date | string | null) => (v ? utcDayIndex(typeof v === 'string' ? Date.parse(v) : v) : null);
+  const da = day(a.at);
+  const db = day(b.at);
+  if (da !== db) {
+    if (da === null) return 1;
+    if (db === null) return -1;
+    return da - db;
+  }
+  return (a.time ?? '').localeCompare(b.time ?? '');
+}
+
 /** Same UTC day, or both absent. */
 export function sameNextActionDay(a: Date | null | undefined, b: Date | null | undefined): boolean {
   if (!a || !b) return !a && !b;
@@ -118,6 +165,8 @@ export interface NextActionState {
   nextActionRemindedAt: Date | null;
   /** What the step is (#3900) — see nextActionTypeFor in leadHandoffRule.ts. */
   nextActionType: string | null;
+  /** Optional wall time of day, "HH:MM" (#3901) — see parseNextActionTime. */
+  nextActionTime: string | null;
 }
 
 /**
@@ -128,7 +177,7 @@ export interface NextActionState {
  */
 export function nextActionPatch(
   current: Pick<NextActionState, 'nextActionAt'>,
-  next: { nextActionAt?: Date | null; nextActionNote?: string | null; nextActionType?: string | null }
+  next: { nextActionAt?: Date | null; nextActionNote?: string | null; nextActionType?: string | null; nextActionTime?: string | null }
 ): Partial<NextActionState> {
   const patch: Partial<NextActionState> = {};
   if (next.nextActionAt !== undefined) {
@@ -137,6 +186,11 @@ export function nextActionPatch(
   }
   if (next.nextActionNote !== undefined) patch.nextActionNote = next.nextActionNote;
   if (next.nextActionType !== undefined) patch.nextActionType = next.nextActionType;
+  // A time is a time OF the day: changing it never re-arms the reminder (the
+  // reminder is per day), and a step without a day has no time (#3901).
+  if (next.nextActionTime !== undefined) patch.nextActionTime = next.nextActionTime;
+  const dayAfter = next.nextActionAt !== undefined ? next.nextActionAt : current.nextActionAt;
+  if (!dayAfter && (next.nextActionAt === null || next.nextActionTime !== undefined)) patch.nextActionTime = null;
   // A step with neither a day nor a note is no step (#3900): clearing both —
   // "Complete", "Clear" — clears what it was, whatever the caller sent.
   if (next.nextActionAt === null && next.nextActionNote === null) patch.nextActionType = null;
@@ -177,10 +231,10 @@ export function canSeeNextAction(viewer: { id: string; role: string }, relation:
 export function stripNextActionFor<T extends { mentorId: string }>(
   viewer: { id: string; role: string },
   row: T
-): T | Omit<T, 'nextActionAt' | 'nextActionNote' | 'nextActionRemindedAt' | 'nextActionType' | 'contractEndsAt' | 'contractEndRemindedAt'> {
+): T | Omit<T, 'nextActionAt' | 'nextActionNote' | 'nextActionRemindedAt' | 'nextActionType' | 'nextActionTime' | 'contractEndsAt' | 'contractEndRemindedAt'> {
   if (canSeeNextAction(viewer, row)) return row;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { nextActionAt, nextActionNote, nextActionRemindedAt, nextActionType, contractEndsAt, contractEndRemindedAt, ...rest } =
+  const { nextActionAt, nextActionNote, nextActionRemindedAt, nextActionType, nextActionTime, contractEndsAt, contractEndRemindedAt, ...rest } =
     row as T & Partial<NextActionState> & { contractEndsAt?: unknown; contractEndRemindedAt?: unknown };
   return rest;
 }
