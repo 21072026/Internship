@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { CONTACT_INTERACTION_WHERE } from '@/lib/interactionOutcome';
 import { requireRoleOrPermission } from '@/lib/authz';
 import { prisma } from '@/lib/prisma';
 import { withTenantScope } from '@/lib/orgContext';
@@ -80,7 +81,8 @@ export async function GET(request: Request) {
       // number and the per-mentee export row, so the two can never disagree.
       prisma.interactionLog.groupBy({
         by: ['relationId'],
-        where: { ...interactionWhere, date: inRange },
+        // Contacts only (#3902): attempts are not interactions in this count.
+        where: { ...interactionWhere, date: inRange, ...CONTACT_INTERACTION_WHERE },
         _count: { _all: true },
       }),
       prisma.goal.findMany({

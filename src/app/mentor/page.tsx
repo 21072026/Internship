@@ -1,4 +1,5 @@
 import { getServerSession } from 'next-auth';
+import { CONTACT_INTERACTION_WHERE } from '@/lib/interactionOutcome';
 import { redirect } from 'next/navigation';
 import { OnboardingChecklist } from '@/components/OnboardingChecklist';
 import { MentorAttentionQueue } from '@/components/MentorAttentionQueue';
@@ -48,7 +49,8 @@ async function getMentorData(mentorId: string) {
       // Only the count: the cards' "last contact" line comes from
       // getLastContacts below, and the "Recent interactions" panel has its own
       // query. Selecting three logs per relation here fed nothing.
-      _count: { select: { interactions: true } },
+      // Contacts only (#3902): an unanswered call is an attempt, counted on its own.
+      _count: { select: { interactions: { where: CONTACT_INTERACTION_WHERE } } },
     },
     orderBy: { startDate: 'desc' },
   });

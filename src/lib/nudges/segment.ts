@@ -17,6 +17,7 @@
 // returns them AND (if the segment has relation conditions) one of their
 // active relations in that role matches all of them.
 
+import { CONTACT_INTERACTION_WHERE } from '@/lib/interactionOutcome';
 import type { Prisma } from '@prisma/client';
 import { daysInStage, DAY_MS } from '@/lib/stageClock';
 import { segmentRoles, type Segment, type SegmentCondition } from './rule';
@@ -49,7 +50,7 @@ function roleWhere(role: 'MENTOR' | 'MENTEE', segment: Segment, orgId: string, n
         break;
       case 'daysSinceLastInteraction': {
         const cutoff = new Date(now.getTime() - c.value * DAY_MS);
-        rel.push({ startDate: { lte: cutoff }, interactions: { none: { date: { gte: cutoff } } } });
+        rel.push({ startDate: { lte: cutoff }, interactions: { none: { date: { gte: cutoff }, ...CONTACT_INTERACTION_WHERE } } });
         break;
       }
       case 'tag':

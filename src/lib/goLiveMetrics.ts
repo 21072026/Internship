@@ -10,6 +10,7 @@
 //
 // Nothing here returns a person or a record: counts, one median, one rate.
 
+import { CONTACT_INTERACTION_WHERE } from '@/lib/interactionOutcome';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { withinTenant, type TenantWhere } from '@/lib/tenantFilter';
@@ -43,7 +44,8 @@ export async function goLiveMetrics(input: {
     select: {
       startDate: true,
       companyId: true,
-      interactions: { orderBy: { date: 'asc' }, take: 1, select: { date: true } },
+      // The first CONTACT (#3902): an unanswered call has not reached anyone yet.
+      interactions: { where: CONTACT_INTERACTION_WHERE, orderBy: { date: 'asc' }, take: 1, select: { date: true } },
     },
   });
 

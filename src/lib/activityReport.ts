@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import { CONTACT_INTERACTION_WHERE } from '@/lib/interactionOutcome';
 import { prisma } from '@/lib/prisma';
 import { menteeRelationWhere } from '@/lib/menteeRelation';
 import { REAL_STAGE_MOVE } from '@/lib/stageChange';
@@ -82,7 +83,7 @@ export async function getMenteeActivity(
     }),
     prisma.goal.count({ where: { ...relFilter, completedAt: period } }),
     prisma.goal.count({ where: { ...relFilter, status: 'OPEN' } }),
-    prisma.interactionLog.count({ where: { ...relFilter, date: period } }),
+    prisma.interactionLog.count({ where: { ...relFilter, date: period, ...CONTACT_INTERACTION_WHERE } }),
     prisma.meeting.count({ where: { ...relFilter, createdAt: period } }),
     // Real moves only (#2264): an old no-op row would be reported to the
     // mentee as a stage they moved through.

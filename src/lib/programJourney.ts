@@ -26,6 +26,7 @@
 
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
+import { CONTACT_INTERACTION_WHERE } from '@/lib/interactionOutcome';
 import { logger } from '@/lib/logger';
 import { notifyIfAllowed } from '@/lib/notify';
 import { notificationLink } from '@/lib/notificationLink';
@@ -92,7 +93,8 @@ export async function satisfactionEvidence(relationId: string, conditions: reado
     }
     if (cond === 'goal_exists') out[cond] = (await prisma.goal.findFirst({ where: { relationId }, orderBy: { createdAt: 'asc' }, select: { createdAt: true } }))?.createdAt ?? null;
     if (cond === 'message_exists') out[cond] = (await prisma.message.findFirst({ where: { relationId }, orderBy: { createdAt: 'asc' }, select: { createdAt: true } }))?.createdAt ?? null;
-    if (cond === 'interaction_logged') out[cond] = (await prisma.interactionLog.findFirst({ where: { relationId }, orderBy: { date: 'asc' }, select: { date: true } }))?.date ?? null;
+    // An unanswered call (#3902) is not the contact a journey step waits for.
+    if (cond === 'interaction_logged') out[cond] = (await prisma.interactionLog.findFirst({ where: { relationId, ...CONTACT_INTERACTION_WHERE }, orderBy: { date: 'asc' }, select: { date: true } }))?.date ?? null;
   }
   return out;
 }

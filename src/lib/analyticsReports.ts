@@ -12,6 +12,7 @@
 // Who may see the result (role, ADVANCED_ANALYTICS, the `mentorship`
 // capability) is still each CALLER's decision — nothing here gates.
 
+import { CONTACT_INTERACTION_WHERE } from '@/lib/interactionOutcome';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import type { Locale } from '@/i18n/config';
@@ -72,7 +73,8 @@ const COMPARISON_RELATION_SELECT = (finishedKeys: string[]) =>
     employmentAttribution: true,
     startDate: true,
     funnelEnteredAt: true,
-    _count: { select: { interactions: true } },
+    // Contacts only (#3902).
+    _count: { select: { interactions: { where: CONTACT_INTERACTION_WHERE } } },
     statusChanges: {
       // Time-to-hire is measured to the tenant's OWN finished stage,
       // never to a key its pipeline may not contain.

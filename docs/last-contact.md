@@ -22,7 +22,8 @@ sorguları `src/lib/lastContact.ts`. Bir ilişkinin **son teması**, aşağıdak
 
 | Sinyal | Sayılır mı? | Neden |
 |---|---|---|
-| `InteractionLog` kaydı | ✅ | Zaten kuralın eski hâli; elle girilen ve otomatik (toplantı) kayıtlar dâhil |
+| `InteractionLog` kaydı (`outcome = REACHED`) | ✅ | Zaten kuralın eski hâli; elle girilen ve otomatik (toplantı) kayıtlar dâhil |
+| `InteractionLog` **ulaşma denemesi** (`outcome = NOT_REACHED`, #3902) | ❌ | Açılmayan bir arama temas değildir; sayılsa "yakın zamanda temas yok" uyarısını tam da kimseye ulaşılamadığında susturur. Kural `src/lib/interactionOutcome.ts` (`CONTACT_INTERACTION_WHERE`) |
 | Mentorluk başlığındaki **birebir (DIRECT) mesaj** — her iki yönde | ✅ | Mentor yazmış ya da mentee cevaplamış; ikisi de tam olarak bu iki kişi arasında geçen temastır |
 | **Grup mesajı** — mentee'nin **kendi** yazdığı | ✅ | Bir proje kanalına yazan kişi, kayıt olup kaybolmuş biri değildir. Yaşam belirtisi kişiye aittir, eşleşmeye değil: mentee'nin bir grup mesajı, içinde bulunduğu **bütün** mentorluklara işlenir |
 | **Grup mesajı** — başkasının yazdığı | ❌ | Grup sohbeti bir yayındır. Dokuz mentee'nin bulunduğu kanala mentorun düştüğü tek satır, dokuz mentee ile temas değildir; öyle sayılsa listeyi hepsi için birden susturur — bu dokümanın düzeltmeye çalıştığı hatanın tersi |
@@ -51,7 +52,8 @@ Hepsi aynı fonksiyondan okur; biri değişirse hepsi değişir:
 
 - **Etkileşim sayaçları değişmedi.** `/mentor` panosundaki "Toplam Etkileşim",
   mentee listesindeki rozet ve `/mentor/interactions` sayfası hâlâ
-  `InteractionLog` satırlarını sayar. Orada gösterilen şey bir *kayıt defteri*;
+  `InteractionLog` satırlarını sayar — #3902'den beri yalnızca **temas**
+  (`REACHED`) satırlarını; denemeler satış kaydında ayrı sayılır. Orada gösterilen şey bir *kayıt defteri*;
   bir mesajı oraya satır olarak eklemek defterin ne olduğunu değiştirirdi.
   Değişen şey **tazelik** — yani "temas var mı?" sorusu.
 - **Mentorun grup mesajı hiçbir yerde temas sayılmıyor** — ne bu kuralda, ne de

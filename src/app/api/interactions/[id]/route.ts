@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { outcomeAllowed } from '@/lib/interactionOutcome';
 import { getServerSession, type Session } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
@@ -78,6 +79,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         { error: 'Validation failed', details: z.flattenError(parsed.error) },
         { status: 400 }
       );
+    }
+
+    // An attempt is a Call or a WhatsApp (#3902), whichever field the edit changes.
+    const nextType = parsed.data.type ?? interaction.type;
+    const nextOutcome = parsed.data.outcome ?? interaction.outcome;
+    if (!outcomeAllowed(nextType, nextOutcome)) {
+      return NextResponse.json({ error: 'Only a call or a WhatsApp can be unanswered', code: 'outcome_not_allowed' }, { status: 400 });
     }
 
     // The one edit path, shared with the chat card (#1953).

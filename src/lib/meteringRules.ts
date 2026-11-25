@@ -74,6 +74,8 @@ export function isBillableRelationState(state: string | null | undefined): boole
  * same boundary lib/lastContactRule.ts draws, for the same reason.
  */
 export const ACTIVITY_SIGNALS = [
+  // Every log, an unanswered call (`outcome = NOT_REACHED`, #3902) included:
+  // work logged on a record is activity whether or not anyone picked up.
   { relation: 'interactions', at: 'date' },
   { relation: 'messages', at: 'createdAt' },
   { relation: 'meetings', at: 'createdAt' },

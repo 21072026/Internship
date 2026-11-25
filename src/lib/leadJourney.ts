@@ -28,7 +28,7 @@ export interface EarlierPeriod {
   from: Date;
   /** When the period ended (the hand-off); null for a row closed before completedAt was stamped. */
   to: Date | null;
-  interactions: { id: string; date: Date; type: string; subject: string | null; notes: string }[];
+  interactions: { id: string; date: Date; type: string; subject: string | null; notes: string; outcome: string }[];
 }
 
 /** The earlier owners' periods of this lead, newest first, each with its interactions. */
@@ -52,7 +52,7 @@ export async function earlierPeriods(anchor: Anchor): Promise<EarlierPeriod[]> {
     where: { relationId: { in: chain.map((c) => c.id) } },
     orderBy: { date: 'desc' },
     take: PERIOD_INTERACTION_LIMIT * chain.length,
-    select: { id: true, relationId: true, date: true, type: true, subject: true, notes: true },
+    select: { id: true, relationId: true, date: true, type: true, subject: true, notes: true, outcome: true },
   });
   return chain.map((c) => ({
     relationId: c.id,

@@ -11,6 +11,7 @@ import {
   HelpCircle,
   Lock,
   MessageSquare,
+  PhoneMissed,
   Target,
   Handshake,
 } from 'lucide-react';
@@ -33,6 +34,7 @@ import type { TimelineEntry, TimelineKind } from '@/lib/relationTimeline';
 const ICONS: Record<TimelineKind, typeof History> = {
   stage: ArrowRight,
   interaction: MessageSquare,
+  attempt: PhoneMissed,
   meeting: CalendarClock,
   goal: Target,
   question: HelpCircle,
@@ -50,6 +52,7 @@ const ICONS: Record<TimelineKind, typeof History> = {
 const ICON_TONES: Record<TimelineKind, string> = {
   stage: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
   interaction: 'bg-gray-100 text-gray-700',
+  attempt: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
   meeting: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
   goal: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
   question: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300',
@@ -270,7 +273,7 @@ function TimelineRow({
             </span>
           )}
 
-          {entry.kind === 'interaction' && entry.status && (
+          {(entry.kind === 'interaction' || entry.kind === 'attempt') && entry.status && (
             <InteractionTypeBadge type={entry.status} className="text-[10px]" />
           )}
 
