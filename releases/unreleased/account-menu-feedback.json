@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- \"My feedback\" (`/account/feedback`, #3877) is now an item of the account menu in every role shell (`AccountMenu`), not only a link on the account page and in the feedback panel (#3910).",
+  "notes": {
+    "en": ["\"My feedback\" is now in the account menu, so the reports you sent are one click away."],
+    "tr": ["\"Gönderdiğim geri bildirimler\" artık hesap menüsünde; gönderdiğin bildirimler bir tık uzakta."],
+    "de": ["„Meine Rückmeldungen“ stehen jetzt im Kontomenü – deine Meldungen sind nur einen Klick entfernt."]
+  }
+}
