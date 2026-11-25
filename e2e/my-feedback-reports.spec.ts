@@ -159,3 +159,35 @@ test('"My feedback" is in the account menu of every role shell and opens the pag
     await page.waitForURL((u) => u.pathname === '/account/feedback', { timeout: 20_000 });
   }
 });
+
+test('the page says how far along it is and filters by outcome; "will not be changed" is not completed (#3929)', async ({ page }) => {
+  // The colleague's own reports only: one per status (their first report stays NEW).
+  const statuses = ['TRIAGED', 'IN_PROGRESS', 'RESOLVED', 'RESOLVED', 'WONT_FIX'] as const;
+  for (const [i, status] of statuses.entries()) {
+    await report(`c-${i}`, ids.colleague, orgId, `Colleague ${status} ${i} ${STAMP}`);
+    await prisma.supportReport.update({ where: { id: ids[`c-${i}`] }, data: { status } });
+  }
+  await signInAndSettle(page, mail.colleague, PW, '/portal');
+  await gotoSettled(page, '/account/feedback');
+  // 6 reports: NEW + TRIAGED + IN_PROGRESS waiting, 2 RESOLVED, 1 WONT_FIX.
+  await expect(page.getByTestId('my-feedback-progress')).toHaveText('2 of 6 completed, 3 waiting · 1 will not be changed');
+  await expect(page.locator('li[id^="report-"]')).toHaveCount(6);
+
+  await page.getByTestId('my-feedback-filter-done').click();
+  await expect(page.getByTestId('my-feedback-filter-done')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('li[id^="report-"]')).toHaveCount(2);
+  await expect(page.getByTestId('my-feedback-status')).toHaveText(['Resolved', 'Resolved']);
+  expect(new URL(page.url()).searchParams.get('status')).toBe('done');
+
+  await page.getByTestId('my-feedback-filter-open').click();
+  await expect(page.locator('li[id^="report-"]')).toHaveCount(3);
+  await page.getByTestId('my-feedback-filter-wontFix').click();
+  await expect(page.locator('li[id^="report-"]')).toHaveCount(1);
+  // The filter survives a reload; nobody else's report is ever on the list.
+  await page.reload();
+  await expect(page.getByTestId('my-feedback-filter-wontFix')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('li[id^="report-"]')).toHaveCount(1);
+  await page.getByTestId('my-feedback-filter-all').click();
+  await expect(page.getByText(`The goals page froze ${STAMP}`)).toHaveCount(0);
+  expect(new URL(page.url()).searchParams.get('status')).toBeNull();
+});

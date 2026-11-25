@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- \"My feedback\" (`/account/feedback`) says how far along a person's reports are — \"X of N completed, Y waiting\", with \"will not be changed\" counted on its own — and filters the list by that outcome (All / Waiting / Completed / Will not be changed, kept in `?status=`). The rule is `src/lib/myFeedbackFilter.ts`; the list stays the caller's own reports only (#3929).",
+  "notes": {
+    "en": ["\"My feedback\" now shows how many of your reports are completed and how many are waiting, and you can filter by status."],
+    "tr": ["\"Gönderdiğim geri bildirimler\" artık kaç bildiriminin tamamlandığını ve kaçının beklediğini gösteriyor; duruma göre süzebilirsin."],
+    "de": ["„Meine Rückmeldungen“ zeigt jetzt, wie viele deiner Meldungen erledigt und wie viele offen sind, und lässt sich nach Status filtern."]
+  }
+}
