@@ -118,7 +118,10 @@ test.describe('meeting attendance', () => {
     target.setUTCSeconds(0, 0);
     const hhmm = `${String(target.getUTCHours()).padStart(2, '0')}:${String(target.getUTCMinutes()).padStart(2, '0')}`;
     const series = await prisma.meetingSeries.create({
-      data: { relationId: relationIds[3], title: 'Standing 1:1', daysOfWeek: [0, 1, 2, 3, 4, 5, 6], timeOfDay: hhmm, timeZone: 'UTC', createdById: mentorId },
+      data: { relationId: relationIds[3], title: 'Standing 1:1', daysOfWeek: [0, 1, 2, 3, 4, 5, 6], timeOfDay: hhmm, timeZone: 'UTC', createdById: mentorId,
+        // The occurrence's own date (see meeting-end.spec.ts): createdAt as the
+        // anchor drops the occurrence when the run straddles UTC midnight.
+        anchorDate: target },
     });
     await signInAndSettle(page, mentor, PW, '/mentor');
     const occurrence = encodeURIComponent(`${series.id}:${target.toISOString()}`);

@@ -244,6 +244,8 @@ test('old telemetry rows are pruned and recent ones survive', async () => {
         'prospectContact',
         'pushSubscription',
         'rosterRowResult',
+        // Interest signups (#1406): unconfirmed after 7 days, all after a year.
+        'subscriber',
         'supportReport',
         'trialReminder',
       ].sort()
