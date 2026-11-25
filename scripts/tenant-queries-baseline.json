@@ -617,6 +617,14 @@
       "count": 1,
       "reason": "The MentorshipRelation.update keys on relationId only after the relation was loaded and checked with inCallerTenant(relation.orgId, resolveOrgId(session)) (another org → 404), more than 40 lines above."
     },
+    "src/app/api/subscribe/confirm/route.ts": {
+      "count": 1,
+      "reason": "Public confirm credential authorizes exactly its Subscriber UUID: HMAC purpose validated before query and stored SHA-256 hash matched in the same write. No caller-selected tenant/address and no returned row (#1406)."
+    },
+    "src/app/api/subscribe/unsubscribe/route.ts": {
+      "count": 1,
+      "reason": "Public unsubscribe credential authorizes exactly its Subscriber UUID: HMAC purpose validated before query and stored SHA-256 hash matched in the same write. No caller-selected tenant/address and no returned row (#1406)."
+    },
     "src/app/api/tags/[id]/merge/route.ts": {
       "count": 1,
       "reason": "Tag.delete keys on source.id, where source was fetched with { id, orgId: resolveOrgId(session) } (both merge ends org-filtered); an org-less legacy admin is the only unfiltered case and has no tenant to cross from."
@@ -673,10 +681,6 @@
       "count": 1,
       "reason": "Public-by-design: generated brand icons are served to anyone by (version, kind), restricted to allowlisted PNG kinds and image/png rows; the stored source upload is never served and no tenant data beyond the public icon bytes is returned."
     },
-    "src/app/mentor/page.tsx": {
-      "count": 1,
-      "reason": "getMentorData() is only called with session.user.id, so the findMany reads the caller's own mentor relations (mentorId)."
-    },
     "src/app/p/[userId]/opengraph-image.tsx": {
       "count": 1,
       "reason": "Public-by-design: only opted-in profiles (publicProfile: true, MENTEE/MENTOR) with PII-free fields are read, and the result is dropped unless the owner's org vertical matches the request host's world."
@@ -712,14 +716,6 @@
     "src/app/weekly-reports/booklet/[relationId]/page.tsx": {
       "count": 1,
       "reason": "WeeklyReport.findMany filters by relationId only after the relation was loaded and checked with inCallerTenant(relation.orgId, session.user.orgId) plus canReadWeeklyReports (admin-only page)."
-    },
-    "src/app/api/subscribe/confirm/route.ts": {
-      "count": 1,
-      "reason": "Public confirm credential authorizes exactly its Subscriber UUID: HMAC purpose validated before query and stored SHA-256 hash matched in the same write. No caller-selected tenant/address and no returned row (#1406)."
-    },
-    "src/app/api/subscribe/unsubscribe/route.ts": {
-      "count": 1,
-      "reason": "Public unsubscribe credential authorizes exactly its Subscriber UUID: HMAC purpose validated before query and stored SHA-256 hash matched in the same write. No caller-selected tenant/address and no returned row (#1406)."
     }
   }
 }
