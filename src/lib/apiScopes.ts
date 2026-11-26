@@ -52,6 +52,11 @@ export const API_SCOPES = [
   // The screenshot of a report: an image of a real screen, so never implied
   // by support:read and granted on its own, like interactions:read_notes.
   'support:read_screenshots',
+  // The screenshot of a report an ADMIN shared for the feedback review (#3936),
+  // and no other: `SupportReport.screenshotSharedAt` set. Like the one above,
+  // never implied by support:read and never a default; a review key holds this
+  // one instead of support:read_screenshots.
+  'support:read_shared_screenshots',
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
@@ -86,6 +91,7 @@ export const SCOPE_ENTITLEMENT: Record<ApiScope, 'INTEGRATIONS_API' | null> = {
   'companies:write': null,
   'support:read': 'INTEGRATIONS_API',
   'support:read_screenshots': 'INTEGRATIONS_API',
+  'support:read_shared_screenshots': 'INTEGRATIONS_API',
 };
 
 // ── Vertical (MKT-6b) ─────────────────────────────────────────────────────────
@@ -114,6 +120,7 @@ export const SCOPE_CAPABILITY: Record<ApiScope, VerticalCapability> = {
   'companies:write': 'companies',
   'support:read': 'pipeline',
   'support:read_screenshots': 'pipeline',
+  'support:read_shared_screenshots': 'pipeline',
 };
 
 // The capability behind every top-level /api/v1 path segment. `null` means the

@@ -9274,6 +9274,10 @@ const en = {
     replayTooLarge: 'This recording is too large to send ({size}, at most {max}). Record a shorter one.',
   },
   adminReports: {
+    // The feedback review's view of a screenshot (#3936).
+    screenshotShare: 'Share the screenshot with the feedback review',
+    screenshotShareHint: 'Off: the review reads the text only. On: it may also look at this screenshot.',
+    screenshotShareOn: 'Shared: the feedback review may look at this screenshot. Untick to take it back.',
     // PR links (#3928): admin only, typed in by hand.
     prTitle: 'Pull requests',
     prHint: 'The PRs this report was worked in. Only admins see them — never the person who sent it.',
@@ -22068,6 +22072,9 @@ const tr: Dict = {
     replayTooLarge: 'Bu kayıt gönderilemeyecek kadar büyük ({size}, en fazla {max}). Daha kısa bir kayıt al.',
   },
   adminReports: {
+    screenshotShare: 'Ekran görüntüsünü geri bildirim değerlendirmesiyle paylaş',
+    screenshotShareHint: 'Kapalı: değerlendirme yalnızca metni okur. Açık: bu görüntüye de bakabilir.',
+    screenshotShareOn: 'Paylaşıldı: değerlendirme bu görüntüye bakabilir. Geri almak için işareti kaldır.',
     prTitle: 'Pull request\'ler',
     prHint: 'Bu bildirimin üzerinde çalışılan PR\'lar. Yalnızca adminler görür — bildirimi gönderen kişi asla.',
     prNone: 'Henüz bağlı PR yok.',
@@ -34812,6 +34819,9 @@ const de: Dict = {
     replayTooLarge: 'Diese Aufzeichnung ist zu groß zum Senden ({size}, höchstens {max}). Nimm eine kürzere auf.',
   },
   adminReports: {
+    screenshotShare: 'Screenshot für die Feedback-Auswertung freigeben',
+    screenshotShareHint: 'Aus: Die Auswertung liest nur den Text. An: Sie darf auch diesen Screenshot ansehen.',
+    screenshotShareOn: 'Freigegeben: Die Auswertung darf diesen Screenshot ansehen. Häkchen entfernen, um es zurückzunehmen.',
     prTitle: 'Pull Requests',
     prHint: 'Die PRs, in denen diese Meldung bearbeitet wurde. Nur Admins sehen sie – nie die Person, die sie gesendet hat.',
     prNone: 'Noch kein PR verknüpft.',

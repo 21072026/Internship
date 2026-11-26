@@ -741,4 +741,6 @@ A key works for its own org only. These rows live in `e2e/fixtures/authz-matrix.
 | `GET /api/v1/support/reports/{id}` | 401 | 403 | 200 | 200 | 404 |
 | `GET /api/v1/support/reports/{id}/screenshot` | 401 | 403 | 403 (scope `support:read_screenshots`) | 200 image | 404 |
 
+With `support:read` + `support:read_shared_screenshots` instead (#3936, the feedback review's key): the screenshot is 200 only while an admin has shared it on the report page (`PUT /api/admin/support/reports/{id}/screenshot-share`, `support.write`, audited); otherwise 404, like a report without one. `support:read_shared_screenshots` alone is 403.
+
 Every 200 writes one `AuditLog` row containing the actor `api_key:<id>` and the report ids. The sandbox key never holds `support:*`.

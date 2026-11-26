@@ -2568,39 +2568,44 @@ enum SupportReportStatus {
 }
 
 model SupportReport {
-  id             String              @id @default(cuid())
-  orgId          String
-  org            Organization        @relation(fields: [orgId], references: [id])
-  userId         String
-  type           SupportReportType
-  rating         Int?
-  description    String              @db.Text
+  id                   String              @id @default(cuid())
+  orgId                String
+  org                  Organization        @relation(fields: [orgId], references: [id])
+  userId               String
+  type                 SupportReportType
+  rating               Int?
+  description          String              @db.Text
   // Stamped by the browser but re-masked by the server (src/lib/feedbackContext.ts).
-  url            String              @db.VarChar(512)
+  url                  String              @db.VarChar(512)
   // Stamped by the SERVER: the build that answered, not what the client claims.
-  appVersion     String              @db.VarChar(64)
-  env            String              @db.VarChar(16)
-  userAgent      String              @db.VarChar(512)
-  viewport       String              @db.VarChar(32)
+  appVersion           String              @db.VarChar(64)
+  env                  String              @db.VarChar(16)
+  userAgent            String              @db.VarChar(512)
+  viewport             String              @db.VarChar(32)
   // { consoleErrors[], failedRequests[] } — nullable on purpose (a non-null
   // Json column backfills '' on MariaDB and breaks every existing row).
-  context        Json?
-  contactAllowed Boolean
-  status         SupportReportStatus @default(NEW)
-  githubIssueUrl String?             @db.VarChar(512)
+  context              Json?
+  contactAllowed       Boolean
+  status               SupportReportStatus @default(NEW)
+  githubIssueUrl       String?             @db.VarChar(512)
   // What the admin last told the reporter with a status change (#3877): the
   // note of the "tell the reporter" mail, kept so the reporter's own list
   // (/account/feedback) can show it. Written only when that mail was asked for.
-  reporterNote   String?             @db.VarChar(1000)
-  reporterNoteAt DateTime?
+  reporterNote         String?             @db.VarChar(1000)
+  reporterNoteAt       DateTime?
+  // The admin shared this report's screenshot with the feedback review (#3936):
+  // a key holding only `support:read_shared_screenshots` may read the image
+  // while this is set. Null = not shared (every report until an admin says so).
+  screenshotSharedAt   DateTime?
+  screenshotSharedById String?
   // The PRs that did the work (#3928), typed in by an admin: a JSON array of
   // { url, number, addedAt, addedById } — at most SUPPORT_PR_LINK_MAX, only
   // `https://github.com/<repo>/pull/<n>` of this repository
   // (src/lib/supportReportPrLinks.ts). ADMIN ONLY: never selected for the
   // reporter's own list, their mail or their bell, nor by the v1 API.
-  prLinks        Json?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  prLinks              Json?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
 
   user  User                @relation("SupportReportAuthor", fields: [userId], references: [id], onDelete: Cascade)
   files SupportReportFile[]

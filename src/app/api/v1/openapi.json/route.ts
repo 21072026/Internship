@@ -290,6 +290,7 @@ export async function GET(request: Request) {
             contactAllowed: { type: 'boolean' },
             githubIssueUrl: nstr,
             hasScreenshot: { type: 'boolean', description: 'Whether GET /support/reports/{id}/screenshot has an image (needs `support:read_screenshots`).' },
+            screenshotShared: { type: 'boolean', description: 'Whether an admin shared the screenshot for the feedback review: readable with `support:read_shared_screenshots`.' },
             createdAt: when,
             updatedAt: when,
           },
@@ -753,8 +754,8 @@ export async function GET(request: Request) {
       '/support/reports/{id}/screenshot': {
         get: {
           summary: 'Get a bug report’s screenshot',
-          description: 'Requires a key holding BOTH `support:read` and `support:read_screenshots` (never implied by `support:read`). The image bytes. A report of another organisation, one without a screenshot and a missing id all answer 404. Audited.',
-          security: [{ apiKey: ['support:read', 'support:read_screenshots'] }],
+          description: 'Requires `support:read` plus `support:read_screenshots` (any report) or `support:read_shared_screenshots` (only a report whose screenshot an admin shared — `screenshotShared`). Neither is implied by `support:read`. The image bytes. A report of another organisation, one without a screenshot, one not shared (for the shared scope) and a missing id all answer 404. Audited.',
+          security: [{ apiKey: ['support:read', 'support:read_screenshots'] }, { apiKey: ['support:read', 'support:read_shared_screenshots'] }],
           parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
           responses: {
             '200': { description: 'The screenshot', headers: rateLimitResponseHeaders, content: { 'image/png': { schema: { type: 'string', format: 'binary' } }, 'image/jpeg': { schema: { type: 'string', format: 'binary' } }, 'image/webp': { schema: { type: 'string', format: 'binary' } } } },

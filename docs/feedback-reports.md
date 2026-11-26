@@ -259,3 +259,16 @@ is accepted (stored in that canonical form, refused `invalid_pr_url` /
 - **Admin only.** The reporter's list and report (`myFeedbackReports.ts`
   selects its fields by name), the status mail, the bell and the v1 API never
   carry the column; `e2e/my-feedback-reports.spec.ts` pins it.
+
+## Sharing a screenshot with the feedback review (#3936)
+
+The feedback review (#3935) reads reports through the v1 API with `support:read`:
+masked text, no images. A screenshot is a real person's screen, so the review
+sees one only where an admin chose to show it: the report page has "Share the
+screenshot with the feedback review" under the screenshot
+(`PUT /api/admin/support/reports/[id]/screenshot-share`, `support.write`, one
+AuditLog row per change, `409 no_screenshot` without one). While it is on,
+`SupportReport.screenshotSharedAt` is set and a key holding
+`support:read_shared_screenshots` may read that image; unticking takes it back.
+The older `support:read_screenshots` (every screenshot) is unchanged and is not
+the review's scope.

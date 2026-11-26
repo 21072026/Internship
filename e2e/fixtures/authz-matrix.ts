@@ -574,5 +574,7 @@ export const V1_SUPPORT_PROBES: SupportApiProbe[] = [
   { scopes: 'support:read', path: '/api/v1/support/reports/:ownShot/screenshot', expect: 403, why: 'the screenshot needs its own scope' },
   { scopes: 'support:read_screenshots', path: '/api/v1/support/reports/:ownShot/screenshot', expect: 403, why: 'the screenshot scope alone reads nothing' },
   { scopes: 'support:read,support:read_screenshots', path: '/api/v1/support/reports/:ownShot/screenshot', expect: 200, why: 'both scopes' },
+  { scopes: 'support:read,support:read_shared_screenshots', path: '/api/v1/support/reports/:ownShot/screenshot', expect: 404, why: 'a screenshot nobody shared (#3936)' },
+  { scopes: 'support:read_shared_screenshots', path: '/api/v1/support/reports/:ownShot/screenshot', expect: 403, why: 'the shared-screenshot scope alone reads nothing' },
   { scopes: 'support:read,support:read_screenshots', path: '/api/v1/support/reports/:foreign/screenshot', expect: 404, why: 'another org’s screenshot' },
 ];
