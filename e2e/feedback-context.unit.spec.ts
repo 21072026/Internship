@@ -73,3 +73,18 @@ test.describe('feedback context', { tag: '@smoke' }, () => {
     expect(sanitizeFeedbackContext(null)).toEqual({ consoleErrors: [], failedRequests: [] });
   });
 });
+
+test.describe('maskScreenText (#3938): what a screenshot may show of page text', () => {
+  test('e-mail addresses, credentials and international phone numbers are masked', async () => {
+    const { maskScreenText } = await import('../src/lib/feedbackContext');
+    expect(maskScreenText('Write to clara@shop.example today')).toBe('Write to [email] today');
+    expect(maskScreenText('Call +49 30 7654321 or 0049 30 1234567')).toBe('Call [phone] or [phone]');
+    expect(maskScreenText('token=abc123secret')).not.toContain('abc123secret');
+  });
+  test('dates, amounts, ids and ordinary text stay as they are, the same string', async () => {
+    const { maskScreenText } = await import('../src/lib/feedbackContext');
+    for (const s of ['2026-11-26', '12.500,00 €', 'Order 30765432', 'PR #3938', 'Follow-up · 14:30', '']) {
+      expect(maskScreenText(s)).toBe(s);
+    }
+  });
+});

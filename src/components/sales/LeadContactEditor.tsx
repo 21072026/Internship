@@ -148,7 +148,7 @@ export function LeadContactEditor({
     return (
       <div>
       {header()}
-      <div className="space-y-3" data-testid="sales-lead-contact-form">
+      <div className="space-y-3" data-testid="sales-lead-contact-form" data-private>
         {field('name', s.contactName, TEXT_LIMITS.companyContactName)}
         {field('position', s.contactPosition, TEXT_LIMITS.companyContactPosition)}
         {field('email', s.email, TEXT_LIMITS.companyContactEmail, 'email')}
@@ -194,7 +194,8 @@ export function LeadContactEditor({
       ) : (
         // Compact (#3803): two columns — name and position, then the phone — and the
         // e-mail on a line of its own, since it is the long one.
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-3" data-testid="sales-lead-contact-person">
+        // `data-private` (#3938): the lead's name, phone and e-mail are painted over in a feedback screenshot.
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-3" data-testid="sales-lead-contact-person" data-private>
           <Row label={s.contactName} value={initial.name} testId="sales-lead-contact-name" />
           <Row label={s.contactPosition} value={initial.position} testId="sales-lead-contact-position" />
           <Row
