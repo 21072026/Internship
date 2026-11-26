@@ -51,3 +51,25 @@ test('someone else\'s draft, a cleared image or an unknown id is refused, and so
   assert.deepEqual(planImageSet(rows, many, 'rep'), { ok: false, error: 'too_many_images' });
   assert.deepEqual(currentImages(rows).map((r) => r.id), ['cur1', 'cur2']);
 });
+
+const { imagesByEvent } = await import('../../src/lib/followUpImageRule.ts');
+
+test('an image belongs to the step-setting line it was attached with', () => {
+  const at = (s) => new Date(`2026-11-26T10:00:${s}Z`);
+  const events = [
+    { id: 'e1', kind: 'ASSIGNED', createdAt: at('00') },
+    { id: 'e2', kind: 'COMPLETED', createdAt: at('10') },
+    { id: 'e3', kind: 'HANDED_OFF', createdAt: at('20') },
+  ];
+  const images = [
+    { id: 'a', attachedAt: at('00') },
+    { id: 'b', attachedAt: at('19') }, // a hair before its event's row: same transaction
+    { id: 'c', attachedAt: at('30') },
+    { id: 'draft', attachedAt: null },
+  ];
+  const map = imagesByEvent(events, images);
+  assert.deepEqual(map.get('e1'), ['a']);
+  assert.deepEqual(map.get('e3'), ['b', 'c']);
+  assert.equal(map.get('e2'), undefined);
+  assert.deepEqual(imagesByEvent([], images).size, 0);
+});

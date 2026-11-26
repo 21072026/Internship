@@ -8236,6 +8236,17 @@ const en = {
     complete: 'Complete follow-up',
     completeHint: 'Opens the interaction form with the follow-up\'s note. The follow-up is cleared once you save the interaction; cancel and it stays.',
     completed: 'Follow-up completed',
+    // Images on a follow-up (#3932).
+    imageAdd: 'Add image',
+    imageUploading: 'Uploading…',
+    imagePasteHint: 'Or paste a screenshot into the note with Ctrl+V.',
+    imageRemove: 'Remove image {n}',
+    imageOpen: 'Open image {n}',
+    imageAlt: 'Follow-up image {n}',
+    imageNotImage: 'Only images can be added (PNG, JPEG, WebP, GIF).',
+    imageTooLarge: 'The image is too large (at most 5 MB).',
+    imageTooMany: 'A follow-up holds at most {max} images.',
+    imageFailed: 'The image could not be uploaded.',
   },
   // The trial end on a funnel record (#2553): shown on the record and the board
   // card, set or extended by the owner or an admin.
@@ -21040,6 +21051,16 @@ const tr: Dict = {
     complete: 'Takibi tamamla',
     completeHint: 'Etkileşim formunu takip notuyla açar. Takip, etkileşimi kaydettiğinde kapanır; vazgeçersen olduğu gibi kalır.',
     completed: 'Takip tamamlandı',
+    imageAdd: 'Resim ekle',
+    imageUploading: 'Yükleniyor…',
+    imagePasteHint: 'Ya da ekran görüntüsünü Ctrl+V ile nota yapıştır.',
+    imageRemove: '{n}. resmi kaldır',
+    imageOpen: '{n}. resmi aç',
+    imageAlt: 'Takip resmi {n}',
+    imageNotImage: 'Yalnızca resim eklenebilir (PNG, JPEG, WebP, GIF).',
+    imageTooLarge: 'Resim çok büyük (en fazla 5 MB).',
+    imageTooMany: 'Bir takipte en fazla {max} resim olabilir.',
+    imageFailed: 'Resim yüklenemedi.',
   },
   // A lost customer came back (#2842).
   winBack: {
@@ -33774,6 +33795,16 @@ const de: Dict = {
     complete: 'Wiedervorlage erledigt',
     completeHint: 'Öffnet das Interaktionsformular mit der Notiz der Wiedervorlage. Sie wird gelöscht, sobald Sie die Interaktion speichern; brechen Sie ab, bleibt sie bestehen.',
     completed: 'Wiedervorlage erledigt',
+    imageAdd: 'Bild hinzufügen',
+    imageUploading: 'Wird hochgeladen…',
+    imagePasteHint: 'Oder einen Screenshot mit Strg+V in die Notiz einfügen.',
+    imageRemove: 'Bild {n} entfernen',
+    imageOpen: 'Bild {n} öffnen',
+    imageAlt: 'Bild zur Wiedervorlage {n}',
+    imageNotImage: 'Nur Bilder können hinzugefügt werden (PNG, JPEG, WebP, GIF).',
+    imageTooLarge: 'Das Bild ist zu groß (höchstens 5 MB).',
+    imageTooMany: 'Eine Wiedervorlage hat höchstens {max} Bilder.',
+    imageFailed: 'Das Bild konnte nicht hochgeladen werden.',
   },
   // A lost customer came back (#2842).
   winBack: {

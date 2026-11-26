@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- Follow-up images in the UI (#3932): the shared follow-up form takes images — \"Add image\" or a screenshot pasted into the note (Ctrl+V) — in the sales follow-up panel and the hand-off dialog; the panel shows them as thumbnails and each history line shows the images it set (`imagesByEvent()`), all opening in the in-app lightbox. The hand-off dialog now scrolls when it is taller than the screen.",
+  "notes": {
+    "en": ["Add images to a follow-up or a hand-off: pick a file or paste a screenshot into the note. The new owner sees them on the lead."],
+    "tr": ["Takibe ve devre resim ekle: dosya seç ya da ekran görüntüsünü nota yapıştır. Yeni sahip resimleri lead'de görür."],
+    "de": ["Bilder zur Wiedervorlage oder Übergabe hinzufügen: Datei wählen oder Screenshot in die Notiz einfügen. Die neue Person sieht sie am Lead."]
+  }
+}

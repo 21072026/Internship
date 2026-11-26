@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { prisma, seedUser, uniqueEmail, cleanupByEmail } from './helpers/db';
-import { MARKETING_HOST, asHost, signInViaApi } from './helpers/auth';
+import { MARKETING_HOST, asHost, signInViaApi, signInAndSettle, gotoSettled } from './helpers/auth';
 import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/programTemplates';
 
 // Images on a follow-up (#3931). Uploaded as a draft, attached by the follow-up
@@ -56,6 +56,8 @@ test.beforeAll(async () => {
   await person('foreignAdmin', 'ADMIN', orgIds[1]);
   ids.rel = (await prisma.mentorshipRelation.create({ data: { orgId: orgIds[0], mentorId: ids.rep, menteeId: ids.lead, pipelineStatus: 'LEAD_QUALIFIED' } })).id;
   ids.rel2 = (await prisma.mentorshipRelation.create({ data: { orgId: orgIds[0], mentorId: ids.rep, menteeId: ids.lead2, pipelineStatus: 'LEAD_QUALIFIED' } })).id;
+  await person('lead3', 'MENTEE', orgIds[0]);
+  ids.rel3 = (await prisma.mentorshipRelation.create({ data: { orgId: orgIds[0], mentorId: ids.rep, menteeId: ids.lead3, pipelineStatus: 'LEAD_QUALIFIED' } })).id;
 });
 
 test.afterAll(async () => {
@@ -152,4 +154,59 @@ test('a kept hand-off carries the images; a new step brings the sender\'s drafts
   expect(firstRow.clearedAt).not.toBeNull();
   await rep2.dispose();
   await rep.dispose();
+});
+
+test('in the panel and the hand-off dialog: pick or paste an image, see it after saving, open it in the app (#3932)', async ({ page, browser }) => {
+  test.slow();
+  await page.context().setExtraHTTPHeaders(H);
+  await signInAndSettle(page, emails.rep, PW, '/sales');
+  await gotoSettled(page, `/sales/leads/${ids.rel3}`);
+
+  await page.getByTestId('follow-up-add').click();
+  await page.getByTestId('follow-up-date').fill('2026-12-15');
+  await page.getByTestId('follow-up-note').fill(`See the screen ${STAMP}`);
+  // Picked from a file…
+  await page.getByTestId('follow-up-image-input').setInputFiles({ name: 'a.png', mimeType: 'image/png', buffer: PNG });
+  await expect(page.getByTestId('follow-up-image')).toHaveCount(1);
+  // …and pasted into the note (Ctrl+V): the image is taken, the note text stays.
+  await page.getByTestId('follow-up-note').evaluate((el, b64) => {
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+    const dt = new DataTransfer();
+    dt.items.add(new File([bytes], 'paste.png', { type: 'image/png' }));
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+  }, PNG.toString('base64'));
+  await expect(page.getByTestId('follow-up-image')).toHaveCount(2);
+  await expect(page.getByTestId('follow-up-note')).toHaveValue(`See the screen ${STAMP}`);
+  // A file that is not an image is refused in place.
+  await page.getByTestId('follow-up-image-input').setInputFiles({ name: 'doc.png', mimeType: 'image/png', buffer: Buffer.from('%PDF-1.7') });
+  await expect(page.getByTestId('follow-up-image-error')).toBeVisible();
+  // One taken off again before saving.
+  await page.getByTestId('follow-up-image-remove').first().click();
+  await expect(page.getByTestId('follow-up-image')).toHaveCount(1);
+  await page.getByTestId('follow-up-save').click();
+
+  await expect(page.getByTestId('follow-up-read-images-item')).toHaveCount(1);
+  expect(await prisma.followUpImage.count({ where: { relationId: ids.rel3, attachedAt: { not: null }, clearedAt: null } })).toBe(1);
+  await page.getByTestId('follow-up-read-images-item').click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // The hand-off dialog: an image for the new step, which the new owner sees on the panel and on the history line.
+  await page.getByTestId('sales-lead-handoff').click();
+  const dialog = page.getByTestId('lead-handoff-dialog');
+  await dialog.getByTestId('lead-handoff-recipient').selectOption(ids.rep2);
+  await dialog.getByTestId('lead-handoff-note').fill('Call about the screen');
+  await dialog.getByTestId('lead-handoff-image-input').setInputFiles({ name: 'b.png', mimeType: 'image/png', buffer: PNG });
+  await expect(dialog.getByTestId('lead-handoff-image')).toHaveCount(1);
+  await dialog.getByTestId('lead-handoff-confirm').click();
+  await page.waitForURL((u) => u.pathname === '/sales', { timeout: 20_000 });
+  const moved = await prisma.mentorshipRelation.findFirstOrThrow({ where: { menteeId: ids.lead3, status: 'ACTIVE' }, select: { id: true } });
+
+  const ctx = await browser.newContext({ extraHTTPHeaders: H });
+  const rep2 = await ctx.newPage();
+  await signInAndSettle(rep2, emails.rep2, PW, '/sales');
+  await gotoSettled(rep2, `/sales/leads/${moved.id}`);
+  await expect(rep2.getByTestId('follow-up-read-images-item')).toHaveCount(1);
+  await expect(rep2.getByTestId('sales-lead-system-images-item').first()).toBeVisible();
+  await ctx.close();
 });

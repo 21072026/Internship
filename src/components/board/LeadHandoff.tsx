@@ -10,6 +10,7 @@ import { useLocale, useT } from '@/i18n/client';
 import { formatDate } from '@/lib/relativeTime';
 import { followUpNoteMissing, type HandoffAction } from '@/lib/leadHandoffRule';
 import { FollowUpFields, localDayFromToday } from '@/components/FollowUpFields';
+import { FollowUpImagePicker, useFollowUpImageDrafts } from '@/components/FollowUpImages';
 
 // The rep strip above the sales and admin boards and its dialog: drop a lead
 // card on a colleague (or use the card's "Hand over" button — the single-pointer
@@ -245,6 +246,8 @@ function LeadHandoffDialog({
   const [error, setError] = useState<string | null>(null);
   const [current, setCurrent] = useState<Current | null>(null);
   const [keep, setKeep] = useState(false);
+  // The new step's images (#3932): drafts on this record, sent as `imageIds`.
+  const drafts = useFollowUpImageDrafts(pending?.relationId ?? null);
 
   useEffect(() => {
     if (!pending) return;
@@ -256,6 +259,7 @@ function LeadHandoffDialog({
     setError(null);
     setKeep(false);
     setCurrent(null);
+    drafts.reset([]);
     // Who has the record now, and the follow-up it carries (#3873). Read-only and
     // best effort: without it the dialog is what it was, minus the keep option.
     let alive = true;
@@ -266,6 +270,7 @@ function LeadHandoffDialog({
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset on a new dialog only
   }, [pending]);
 
   if (!pending) return null;
@@ -274,7 +279,7 @@ function LeadHandoffDialog({
   const hasFollowUp = !!current && (!!current.nextActionAt || !!current.nextActionNote);
   const keeping = keep && hasFollowUp;
   const noteRequired = !keeping && followUpNoteMissing(action, note);
-  const canSubmit = !!recipientId && recipientId !== current?.ownerId && !noteRequired && !busy;
+  const canSubmit = !!recipientId && recipientId !== current?.ownerId && !noteRequired && !busy && !drafts.uploading;
   // One follow-up as a phrase: its day (a calendar day at UTC midnight), its note, or both.
   const followUpText = current
     ? [
@@ -298,7 +303,14 @@ function LeadHandoffDialog({
         body: JSON.stringify(
           keeping
             ? { toUserId: recipientId, action, keepFollowUp: true }
-            : { toUserId: recipientId, action, note: note.trim() || null, dueOn: dueOn || null, dueAt: dueAt || null },
+            : {
+                toUserId: recipientId,
+                action,
+                note: note.trim() || null,
+                dueOn: dueOn || null,
+                dueAt: dueAt || null,
+                ...(drafts.ids.length ? { imageIds: drafts.ids } : {}),
+              },
         ),
       });
       if (!res.ok) {
@@ -325,7 +337,7 @@ function LeadHandoffDialog({
         aria-labelledby="lead-handoff-title"
         data-testid="lead-handoff-dialog"
         tabIndex={-1}
-        className="w-full max-w-md rounded-lg bg-white dark:bg-gray-800 p-5 shadow-xl"
+        className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-lg bg-white dark:bg-gray-800 p-5 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="lead-handoff-title" className="mb-4 text-base font-semibold text-gray-900 dark:text-gray-100">
@@ -387,6 +399,8 @@ function LeadHandoffDialog({
                 quickDates
                 disabled={busy}
                 notePlaceholder={h.notePlaceholder}
+                images={<FollowUpImagePicker drafts={drafts} testIdPrefix="lead-handoff" disabled={busy} />}
+                onPasteImages={(files) => void drafts.add(files)}
               />
             </>
           )}

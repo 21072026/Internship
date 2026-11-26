@@ -11,6 +11,7 @@ import { useT } from '@/i18n/client';
 import { RelativeTime } from '@/components/ui/RelativeTime';
 import { contentLang } from '@/lib/contentLanguage';
 import { INTERACTION_DRAFT_EVENT, isTypingTarget, type InteractionDraftRequest } from './interactionDraft';
+import { FollowUpImageThumbs } from '@/components/FollowUpImages';
 
 // The lead page's interactions (#3737/#3738): what already happened, next to
 // the follow-up (what comes next) at the top of the page. The log form leads
@@ -70,6 +71,8 @@ export interface LeadSystemEvent {
   headline: string;
   detail: string | null;
   by: string;
+  /** The images this follow-up line set (#3932); thumbnails under the line. */
+  imageIds?: string[];
 }
 
 type Entry = { kind: 'interaction'; at: number; row: LeadInteraction } | { kind: 'system'; at: number; row: LeadSystemEvent };
@@ -150,7 +153,7 @@ function SystemRow({ row, badge }: { row: LeadSystemEvent; badge: string }) {
   const text = [row.headline, row.detail, row.by].filter(Boolean).join(' · ');
   return (
     <li
-      className="flex min-w-0 items-center gap-2 py-1.5 text-xs text-gray-500 first:pt-0 last:pb-0 dark:text-gray-400"
+      className="flex min-w-0 flex-wrap items-center gap-2 py-1.5 text-xs text-gray-500 first:pt-0 last:pb-0 dark:text-gray-400"
       data-testid="sales-lead-system-row"
       data-source={row.source}
     >
@@ -161,6 +164,11 @@ function SystemRow({ row, badge }: { row: LeadSystemEvent; badge: string }) {
         <span> · {row.by}</span>
       </span>
       <RelativeTime date={row.at} className="shrink-0" />
+      {row.imageIds && row.imageIds.length > 0 && (
+        <div className="basis-full pl-5">
+          <FollowUpImageThumbs images={row.imageIds.map((id) => ({ id }))} testId="sales-lead-system-images" size="sm" />
+        </div>
+      )}
     </li>
   );
 }

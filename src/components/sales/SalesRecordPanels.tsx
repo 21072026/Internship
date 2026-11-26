@@ -109,6 +109,7 @@ export function SalesRecordPanels({
           quickDates
           actionPicks
           nextActionType={nextActionType}
+          images
           readOnly={readOnly}
           onComplete={
             !readOnly && status === 'ACTIVE'

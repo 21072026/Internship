@@ -416,4 +416,12 @@ from the bytes, never the name), at most 5 MB each.
   erasure only drops `uploaderId`. Like the follow-up note they are the owner's
   working material and are not in the account export.
 
-The UI (paste, attach, show) is #3932.
+**The UI (#3932).** The shared follow-up form (`FollowUpFields`) takes an image
+strip (`FollowUpImagePicker`, `src/components/FollowUpImages.tsx`): "Add image"
+or Ctrl+V into the note — a pasted screenshot is uploaded as a draft at once and
+the note text is left alone. The sales follow-up panel and the hand-off dialog
+use it; saving sends the ids the form holds. The panel's reading view shows the
+current images, and each history line shows the images it set (matched by
+`imagesByEvent()`: the step-setting event the image was attached with). Every
+thumbnail opens in the app's `ImageLightbox`, never a new tab. The "Reached"
+form's next follow-up (#3904) has no images yet.
