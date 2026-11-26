@@ -8,7 +8,8 @@
 //       → the screenshot, ONLY if an admin shared it (#3936,
 //         support:read_shared_screenshots); otherwise says so and writes nothing
 //   node scripts/feedback-review.mjs triage <reportId> [--status TRIAGED|IN_PROGRESS|WONT_FIX|NEW] [--issue <url>|--no-issue]
-//       → PATCH /api/v1/support/reports/{id} (support:triage, #3937)
+//                                        [--pr <pull url>] [--note "<answer for the reporter>"|--no-note]
+//       → PATCH /api/v1/support/reports/{id} (support:triage, #3937; --pr and --note #3972)
 //
 // Environment (never on the command line, never printed):
 //   SUPPORT_REVIEW_API_KEY   the review key: support:read, support:read_shared_screenshots, support:triage
@@ -26,6 +27,7 @@ export function parseArgs(argv) {
   for (let i = 0; i < rest.length; i += 1) {
     const a = rest[i];
     if (a === '--no-issue') flags.issue = null;
+    else if (a === '--no-note') flags.note = null;
     else if (a.startsWith('--')) {
       flags[a.slice(2)] = rest[i + 1];
       i += 1;
@@ -82,15 +84,25 @@ async function screenshot([id, outFile]) {
 }
 
 async function triage([id], flags) {
-  if (!id) fail('usage: triage <reportId> [--status …] [--issue <url>|--no-issue]');
+  if (!id) fail('usage: triage <reportId> [--status …] [--issue <url>|--no-issue] [--pr <url>] [--note <text>|--no-note]');
   const body = {};
   if (flags.status !== undefined) body.status = flags.status;
   if ('issue' in flags) body.issueUrl = flags.issue;
-  if (Object.keys(body).length === 0) fail('triage needs --status, --issue or --no-issue');
+  if (flags.pr !== undefined) body.prUrl = flags.pr;
+  if ('note' in flags) body.reporterNote = flags.note;
+  if (Object.keys(body).length === 0) fail('triage needs --status, --issue, --no-issue, --pr, --note or --no-note');
   const res = await call(`/support/reports/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(body) });
   if (!res.ok) fail(`triage failed: ${await problem(res)}`);
   const { data } = await res.json();
-  console.log(JSON.stringify({ id: data.id, status: data.status, reviewIssueUrl: data.reviewIssueUrl }));
+  console.log(
+    JSON.stringify({
+      id: data.id,
+      status: data.status,
+      reviewIssueUrl: data.reviewIssueUrl,
+      prs: (data.prLinks ?? []).map((l) => l.number),
+      reporterNote: data.reporterNote ? 'set' : null,
+    }),
+  );
 }
 
 async function main() {
@@ -106,7 +118,7 @@ async function main() {
   if (command === 'list') return list(flags);
   if (command === 'screenshot') return screenshot(positional);
   if (command === 'triage') return triage(positional, flags);
-  fail('usage: list | screenshot <id> <out> | triage <id> [--status S] [--issue URL|--no-issue]');
+  fail('usage: list | screenshot <id> <out> | triage <id> [--status S] [--issue URL|--no-issue] [--pr URL] [--note TEXT|--no-note]');
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) await main();

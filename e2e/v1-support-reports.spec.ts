@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'crypto';
 import { prisma, seedUser, cleanupByEmail, uniqueEmail, setOrgFeature } from './helpers/db';
 import { signInViaApi } from './helpers/auth';
@@ -222,4 +223,89 @@ test('support:triage writes a report\'s status and this repository\'s issue, not
   expect((await prisma.supportReport.findUniqueOrThrow({ where: { id: ids.a2 } })).reviewIssueUrl).toBeNull();
   // Nobody was notified.
   expect(await prisma.notification.count({ where: { userId: ids['user-a'] } })).toBe(bellsBefore);
+});
+
+test('support:triage adds a PR of this repository and the reporter note, and nobody is told (#3972)', { tag: '@smoke' }, async ({ request }) => {
+  const pull = (n: number) => `https://github.com/21072026/Internship/pull/${n}`;
+  const patch = (k: { headers: Record<string, string> }, id: string, data: unknown) =>
+    request.patch(`/api/v1/support/reports/${id}`, { headers: { ...k.headers, 'content-type': 'application/json' }, data });
+  const triage = await key(ids['org-a'], 'support:triage');
+  const readOnly = await key(ids['org-a'], 'support:read');
+  expect((await patch(readOnly, ids.a2, { prUrl: pull(3972) })).status()).toBe(403);
+  const bellsBefore = await prisma.notification.count({ where: { userId: ids['user-a'] } });
+
+  // Status, PR and note in one call.
+  const ok = await patch(triage, ids.a2, { status: 'IN_PROGRESS', prUrl: pull(3972), reporterNote: '  The fix is on its way.  ' });
+  expect(ok.status()).toBe(200);
+  const data = (await ok.json()).data;
+  expect(data).toMatchObject({ status: 'IN_PROGRESS', prLinks: [{ number: 3972, url: pull(3972) }], reporterNote: 'The fix is on its way.' });
+  expect(data.reporterNoteAt).toBeTruthy();
+  // The same PR twice is a no-op; a second PR is added.
+  expect((await (await patch(triage, ids.a2, { prUrl: pull(3972) })).json()).data.prLinks).toHaveLength(1);
+  expect((await (await patch(triage, ids.a2, { prUrl: pull(3973) })).json()).data.prLinks.map((l: { number: number }) => l.number)).toEqual([3972, 3973]);
+  // Stored as the admin card reads it, added by the key.
+  const row = await prisma.supportReport.findUniqueOrThrow({ where: { id: ids.a2 }, select: { prLinks: true, reporterNote: true } });
+  expect(row.reporterNote).toBe('The fix is on its way.');
+  expect((row.prLinks as { addedById: string }[])[0].addedById).toMatch(/^api_key:/);
+  // Audited without the note's text.
+  const audit = await prisma.auditLog.findFirstOrThrow({ where: { targetId: ids.a2, action: 'API_SUPPORT_REPORT_TRIAGE' }, orderBy: { createdAt: 'desc' } });
+  expect(audit.detail).not.toContain('on its way');
+  const first = await prisma.auditLog.findMany({ where: { targetId: ids.a2, action: 'API_SUPPORT_REPORT_TRIAGE' }, orderBy: { createdAt: 'asc' } });
+  expect(first.some((a) => JSON.parse(a.detail ?? '{}').reporterNote === 'set' && JSON.parse(a.detail ?? '{}').prAdded === 3972)).toBe(true);
+
+  // Refused: another repository, an issue link as a PR, an empty note, RESOLVED still.
+  for (const body of [
+    { prUrl: 'https://github.com/someone/else/pull/1' },
+    { prUrl: 'https://github.com/21072026/Internship/issues/1' },
+    { reporterNote: '   ' },
+    { reporterNote: 'x'.repeat(1001) },
+  ]) {
+    expect((await patch(triage, ids.a2, body)).status(), JSON.stringify(body)).toBe(422);
+  }
+  expect((await patch(triage, ids.b1, { prUrl: pull(3972) })).status()).toBe(404);
+
+  // null takes the note off; the PRs stay (removing one is the admin's).
+  expect((await patch(triage, ids.a2, { reporterNote: null })).status()).toBe(200);
+  const after = await prisma.supportReport.findUniqueOrThrow({ where: { id: ids.a2 }, select: { reporterNote: true, reporterNoteAt: true, prLinks: true } });
+  expect(after.reporterNote).toBeNull();
+  expect(after.reporterNoteAt).toBeNull();
+  expect(after.prLinks as unknown[]).toHaveLength(2);
+  expect(await prisma.notification.count({ where: { userId: ids['user-a'] } })).toBe(bellsBefore);
+});
+
+test('support:triage marks RESOLVED only with a PR and a note, and that alone rings the reporter (#3972)', { tag: '@smoke' }, async ({ request }) => {
+  const pull = (n: number) => `https://github.com/21072026/Internship/pull/${n}`;
+  const patch = (k: { headers: Record<string, string> }, id: string, data: unknown) =>
+    request.patch(`/api/v1/support/reports/${id}`, { headers: { ...k.headers, 'content-type': 'application/json' }, data });
+  const triage = await key(ids['org-a'], 'support:triage');
+  await prisma.supportReport.update({ where: { id: ids.a1 }, data: { status: 'IN_PROGRESS', prLinks: Prisma.DbNull, reporterNote: null, reporterNoteAt: null } });
+  const bells = () => prisma.notification.count({ where: { userId: ids['user-a'] } });
+  const before = await bells();
+
+  // Without the evidence: refused, whatever else the body carries.
+  const code = async (data: unknown) => {
+    const r = await patch(triage, ids.a1, data);
+    return [r.status(), (await r.json()).errors?.[0]?.code];
+  };
+  expect(await code({ status: 'RESOLVED' })).toEqual([422, 'resolve_needs_pr_and_note']);
+  expect(await code({ status: 'RESOLVED', prUrl: pull(3972) })).toEqual([422, 'resolve_needs_pr_and_note']);
+  expect(await code({ status: 'RESOLVED', reporterNote: 'Done.' })).toEqual([422, 'resolve_needs_pr_and_note']);
+  expect((await prisma.supportReport.findUniqueOrThrow({ where: { id: ids.a1 } })).status).toBe('IN_PROGRESS');
+  // A PR and a note on their own ring nothing.
+  expect((await patch(triage, ids.a1, { prUrl: pull(3972), reporterNote: 'A fix is on its way.' })).status()).toBe(200);
+  expect(await bells()).toBe(before);
+
+  // With both on the report: RESOLVED, one bell, no mail.
+  const reporterEmail = (await prisma.user.findUniqueOrThrow({ where: { id: ids['user-a'] }, select: { email: true } })).email;
+  const mails = () => prisma.emailLog.count({ where: { to: reporterEmail } });
+  const mailsBefore = await mails();
+  const done = await patch(triage, ids.a1, { status: 'RESOLVED', reporterNote: 'Done: the board now shows it.' });
+  expect(done.status()).toBe(200);
+  expect((await done.json()).data).toMatchObject({ status: 'RESOLVED', reporterNote: 'Done: the board now shows it.' });
+  await expect.poll(bells).toBe(before + 1);
+  expect(await mails()).toBe(mailsBefore);
+  // RESOLVED again is no change and no second bell; taking the note off a resolved report is refused.
+  expect((await patch(triage, ids.a1, { status: 'RESOLVED' })).status()).toBe(200);
+  expect(await bells()).toBe(before + 1);
+  expect(await code({ status: 'RESOLVED', reporterNote: null })).toEqual([422, 'resolve_needs_pr_and_note']);
 });

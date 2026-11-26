@@ -89,7 +89,13 @@ test('list → screenshot only when shared → triage, end to end', async ({ bas
 
   const issue = 'https://github.com/21072026/Internship/issues/3939';
   const triaged = await cli(baseURL, ['triage', ids.shot, '--status', 'TRIAGED', '--issue', issue]);
-  expect(JSON.parse(triaged.stdout)).toEqual({ id: ids.shot, status: 'TRIAGED', reviewIssueUrl: issue });
+  expect(JSON.parse(triaged.stdout)).toEqual({ id: ids.shot, status: 'TRIAGED', reviewIssueUrl: issue, prs: [], reporterNote: null });
+  // The PR opened for it, with the reporter's note (#3972): the note's text never reaches stdout.
+  const pull = 'https://github.com/21072026/Internship/pull/3972';
+  const working = await cli(baseURL, ['triage', ids.shot, '--status', 'IN_PROGRESS', '--pr', pull, '--note', 'A fix is on its way.']);
+  expect(JSON.parse(working.stdout)).toEqual({ id: ids.shot, status: 'IN_PROGRESS', reviewIssueUrl: issue, prs: [3972], reporterNote: 'set' });
+  expect(working.stdout).not.toContain('on its way');
+  expect((await prisma.supportReport.findUniqueOrThrow({ where: { id: ids.shot } })).reporterNote).toBe('A fix is on its way.');
   // A refused write says why and changes nothing.
   const refused = await cli(baseURL, ['triage', ids.plain, '--status', 'RESOLVED']).catch((e) => e);
   expect(refused.code).toBe(1);

@@ -73,8 +73,20 @@ Then ask which ones to act on. **Do nothing else until they answer.**
 - **yapılmayacak** → `triage <id> --status WONT_FIX` only after they confirm.
 - **bilgi iste** → nothing to write; the draft reply is for the admin to send
   from the report page (the API never contacts the reporter).
-- Never `RESOLVED`: that is the admin's word once the PR is in (they add the PR
-  link on the report page, #3928).
+- **A PR is opened for an approved report** (#3972) → right after `gh pr create`,
+  once per report of that PR:
+  `node scripts/feedback-review.mjs triage <id> --status IN_PROGRESS --pr <pull url> --note "<answer>"`.
+  The note is what the reporter reads in their own list (/account/feedback): one
+  or two short sentences in the reporter's language (Turkish by default), saying
+  what changes for them — no PR number, no code, no names. It notifies nobody.
+  Show the notes to the maintainer in the same message as the PR link.
+- **The PR is merged and live** → check that the prod deploy of the merge
+  commit succeeded, then per report:
+  `node scripts/feedback-review.mjs triage <id> --status RESOLVED --note "<answer>"`
+  — the note now says it is done and what changed (the reporter's in-app bell
+  rings; no mail). The server refuses RESOLVED without a PR link and a note.
+  Never RESOLVED before the deploy, never for a report whose PR only partly
+  covers it (leave it IN_PROGRESS and say what is left).
 
 ## Hard rules
 
