@@ -292,6 +292,13 @@ export async function GET(request: Request) {
             hasScreenshot: { type: 'boolean', description: 'Whether GET /support/reports/{id}/screenshot has an image (needs `support:read_screenshots`).' },
             screenshotShared: { type: 'boolean', description: 'Whether an admin shared the screenshot for the feedback review: readable with `support:read_shared_screenshots`.' },
             reviewIssueUrl: { type: ['string', 'null'], description: 'The issue the feedback review opened for this report in this repository (`support:triage`).' },
+            prLinks: {
+              type: 'array',
+              description: 'The pull requests of this repository the report was worked in (number and URL).',
+              items: { type: 'object', required: ['number', 'url'], properties: { number: { type: 'integer' }, url: str } },
+            },
+            reporterNote: { type: ['string', 'null'], description: 'The short answer the reporter reads in their own feedback list.' },
+            reporterNoteAt: nwhen,
             createdAt: when,
             updatedAt: when,
           },
@@ -756,14 +763,16 @@ export async function GET(request: Request) {
         patch: writeOp(
           'support:triage',
           'Triage a bug report',
-          'The feedback review write (#3937): `status` (NEW, TRIAGED, IN_PROGRESS or WONT_FIX — never RESOLVED, which is the admin call) and/or `issueUrl`, an issue of this repository (`https://github.com/<repo>/issues/<n>`, null to take it off; another repository is 422 with `errors[0].code` `wrong_repo`). Nothing else is accepted. The reporter is not notified. Audited (old → new).',
+          'The feedback review write (#3937, #3972): `status` (NEW, TRIAGED, IN_PROGRESS, WONT_FIX or RESOLVED — RESOLVED only when the report then has at least one PR link and a reporter note, else 422 `resolve_needs_pr_and_note`), `issueUrl` (an issue of this repository, `https://github.com/<repo>/issues/<n>`, null to take it off; another repository is 422 with `errors[0].code` `wrong_repo`), `prUrl` (a pull request of this repository, added to `prLinks`; the same PR twice is a no-op; 422 `invalid_pr_url`, `wrong_repo` or `too_many`) and `reporterNote` (the answer shown in the own feedback list of the reporter, null to take it off). Nothing else is accepted. The reporter is not mailed; RESOLVED rings their in-app bell. Audited (old → new); 409 `conflict` when the report changed meanwhile.',
           {
             type: 'object',
             additionalProperties: false,
             minProperties: 1,
             properties: {
-              status: { type: 'string', enum: ['NEW', 'TRIAGED', 'IN_PROGRESS', 'WONT_FIX'] },
+              status: { type: 'string', enum: ['NEW', 'TRIAGED', 'IN_PROGRESS', 'WONT_FIX', 'RESOLVED'] },
               issueUrl: { type: ['string', 'null'], maxLength: 300 },
+              prUrl: { type: 'string', maxLength: 300 },
+              reporterNote: { type: ['string', 'null'], minLength: 1, maxLength: 1000 },
             },
           },
           'SupportReport',

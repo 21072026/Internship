@@ -142,9 +142,15 @@ console / failed-request context — every free-text and URL field re-masked on 
 report whose screenshot an admin shared for the feedback review, `screenshotShared: true` in the
 report; any other answers 404, like a report without one). The replay and attachments are not
 exposed. **One write** (#3937): `PATCH …/{id}` with `support:triage` sets `status` (NEW, TRIAGED,
-IN_PROGRESS, WONT_FIX — never RESOLVED) and/or `issueUrl` (an issue of this repository, stored as
-`reviewIssueUrl`; null takes it off); any other key is 422, the reporter is not notified, and each
-change writes one `API_SUPPORT_REPORT_TRIAGE` AuditLog row (old → new). Every read writes one `AuditLog` row
+IN_PROGRESS, WONT_FIX, and — since #3972 — RESOLVED, only when the report then has at least one PR
+link and a reporter note, else 422 `resolve_needs_pr_and_note`), `issueUrl` (an issue of this repository, stored as
+`reviewIssueUrl`; null takes it off), `prUrl` (#3972: a pull request of this repository, added to
+`prLinks` — the same rule as the admin's card, #3928; removing one stays the admin's) and
+`reporterNote` (#3972: the answer the reporter reads in their own list, null takes it off); nobody is
+mailed, and the only signal is the reporter's in-app bell when the report becomes RESOLVED; any other key is 422, and each change writes one
+`API_SUPPORT_REPORT_TRIAGE` AuditLog row (old → new; the note's text is not copied into it). The row
+is guarded on the version read: an admin's edit in between answers 409 `conflict`. The report object
+carries `prLinks` (number + URL) and `reporterNote` / `reporterNoteAt`. Every read writes one `AuditLog` row
 (`API_SUPPORT_REPORT_LIST` / `_READ` / `_SCREENSHOT`, actor `api_key:<id>`, detail = key + report
 **ids only** — never the text). There is no write: status changes and replies are a later
 `support:write`. Support tickets (`SupportTicket`, a conversation without an `orgId` of its own)

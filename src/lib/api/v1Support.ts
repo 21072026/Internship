@@ -14,6 +14,7 @@
 //
 // Real people's text: nothing here logs a description or a context. The audit
 // row names the key, the action and the report ids — ids only.
+import { readPrLinks } from '@/lib/supportReportPrLinks';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import {
@@ -44,6 +45,9 @@ export const supportReportSelect = {
   files: { where: { kind: 'SCREENSHOT' as const }, select: { id: true } },
   screenshotSharedAt: true,
   reviewIssueUrl: true,
+  prLinks: true,
+  reporterNote: true,
+  reporterNoteAt: true,
 } satisfies Prisma.SupportReportSelect;
 
 type SupportReportRow = Prisma.SupportReportGetPayload<{ select: typeof supportReportSelect }>;
@@ -75,6 +79,12 @@ export function serializeSupportReport(r: SupportReportRow) {
     githubIssueUrl: r.githubIssueUrl,
     // The issue the feedback review opened in this repository (#3937).
     reviewIssueUrl: r.reviewIssueUrl,
+    // The PRs the report was worked in (#3928/#3972): number and URL only —
+    // never who added them.
+    prLinks: readPrLinks(r.prLinks).map((l) => ({ number: l.number, url: l.url })),
+    // The answer the reporter reads in their own list (#3877/#3972).
+    reporterNote: r.reporterNote,
+    reporterNoteAt: r.reporterNoteAt,
     hasScreenshot: r.files.length > 0,
     // Shared by an admin for the feedback review (#3936): readable with support:read_shared_screenshots.
     screenshotShared: r.files.length > 0 && !!r.screenshotSharedAt,

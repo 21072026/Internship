@@ -51,6 +51,9 @@ export const API_ERROR_TYPES = [
   // The endpoint's module is not part of the key's organization's product
   // (MKT-6b): internship hiring in a MARKETING org. src/lib/apiScopes.ts.
   'capability_unavailable',
+  // The row changed between the read and the guarded write (#3972: the
+  // feedback review's triage while an admin edits the same report).
+  'conflict',
 ] as const;
 export type ApiErrorType = (typeof API_ERROR_TYPES)[number];
 

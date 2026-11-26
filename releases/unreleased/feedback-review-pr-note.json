@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- `PATCH /api/v1/support/reports/{id}` (`support:triage`) also takes `prUrl` (a pull request of this repository, added to `prLinks` under the #3928 rule) and `reporterNote` (the answer in the reporter's own list, null clears it), and may set `RESOLVED` — only when the report then has at least one PR link and a note (422 `resolve_needs_pr_and_note`); RESOLVED rings the reporter's in-app bell, nothing is mailed. The write is guarded on the version read (409 `conflict`) and audited without the note's text. The report object carries `prLinks`, `reporterNote` and `reporterNoteAt`. `scripts/feedback-review.mjs triage` gained `--pr`, `--note` and `--no-note`; the feedback-review skill writes them when a PR is opened and marks RESOLVED after the deploy (#3972)."
+}
