@@ -12,6 +12,7 @@ import { SupportTabs } from '@/components/SupportTabs';
 import { ReplayPlayer } from '@/components/ReplayPlayer';
 import { SupportReportGithubCard } from '@/components/SupportReportGithubCard';
 import { SupportReportPrLinksCard } from '@/components/SupportReportPrLinksCard';
+import { SupportReportScreenshotShare } from '@/components/SupportReportScreenshotShare';
 import { Button } from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import type { FeedbackContext } from '@/lib/feedbackContext';
@@ -38,6 +39,8 @@ interface Report {
   createdAt: string;
   /** The PRs it was worked in (#3928) — admin only. */
   prLinks: unknown;
+  /** Shared with the feedback review (#3936). */
+  screenshotSharedAt: string | null;
   user: { id: string; fullName: string; email: string; role: string };
   files: ReportFile[];
 }
@@ -197,6 +200,7 @@ export default function AdminSupportReportPage({ params }: { params: Promise<{ i
           ) : (
             <p className="text-sm text-gray-500">{a.noScreenshot}</p>
           )}
+          {screenshot && <SupportReportScreenshotShare reportId={report.id} initial={!!report.screenshotSharedAt} />}
           {attachments.length > 0 && (
             <>
               <h3 className="mb-1 mt-4 text-sm font-semibold text-gray-900 dark:text-gray-100">{a.attachments}</h3>

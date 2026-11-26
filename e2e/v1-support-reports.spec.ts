@@ -162,3 +162,35 @@ test('the scope × endpoint matrix (authz-matrix V1_SUPPORT_PROBES)', { tag: '@s
     expect(res.status(), `${probe.scopes || '(none)'} ${probe.path} — ${probe.why}`).toBe(probe.expect);
   }
 });
+
+test('a shared-screenshots key reads only the screenshots an admin shared; the admin turns it on and off (#3936)', { tag: '@smoke' }, async ({ playwright, baseURL, request }) => {
+  const review = await key(ids['org-a'], 'support:read,support:read_shared_screenshots');
+  const shot = () => request.get(`/api/v1/support/reports/${ids.a1}/screenshot`, { headers: review.headers });
+  // Not shared: the same 404 as a report without a screenshot.
+  expect((await shot()).status()).toBe(404);
+  const listed = await (await request.get(`/api/v1/support/reports/${ids.a1}`, { headers: review.headers })).json();
+  expect(listed.data?.screenshotShared ?? listed.screenshotShared).toBe(false);
+
+  const admin = await playwright.request.newContext({ baseURL });
+  expect((await signInViaApi(admin, ids.adminEmail, PW)).error).toBeNull();
+  const share = (id: string, shared: boolean) => admin.put(`/api/admin/support/reports/${id}/screenshot-share`, { data: { shared } });
+  expect((await share(ids.a1, true)).status()).toBe(200);
+  // A report without a screenshot has nothing to share; another org's is a 404.
+  expect((await share(ids.a2, true)).status()).toBe(409);
+  expect((await share(ids.b1, true)).status()).toBe(404);
+
+  const ok = await shot();
+  expect(ok.status()).toBe(200);
+  expect(Buffer.compare(await ok.body(), PNG)).toBe(0);
+  const after = await (await request.get(`/api/v1/support/reports/${ids.a1}`, { headers: review.headers })).json();
+  expect(after.data?.screenshotShared ?? after.screenshotShared).toBe(true);
+  // The shared scope alone (without support:read) reads nothing.
+  const sharedOnly = await key(ids['org-a'], 'support:read_shared_screenshots');
+  expect((await request.get(`/api/v1/support/reports/${ids.a1}/screenshot`, { headers: sharedOnly.headers })).status()).toBe(403);
+
+  // Taken back: 404 again. Both changes are audited.
+  expect((await share(ids.a1, false)).status()).toBe(200);
+  expect((await shot()).status()).toBe(404);
+  expect(await prisma.auditLog.count({ where: { targetId: ids.a1, action: { in: ['support_report.screenshot_shared', 'support_report.screenshot_unshared'] } } })).toBe(2);
+  await admin.dispose();
+});

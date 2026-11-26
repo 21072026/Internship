@@ -137,8 +137,11 @@ larger `limit` is clamped). What leaves: id, type, status, rating, the reporter'
 role** (no e-mail, no user agent), the page, the build, the description, the request ids and the
 console / failed-request context — every free-text and URL field re-masked on the way out by the
 **one** masking path, `src/lib/feedbackContext.ts` (no second masking code). The screenshot is
-`GET …/{id}/screenshot` and needs **both** `support:read` and `support:read_screenshots`; the
-replay and attachments are not exposed. Every read writes one `AuditLog` row
+`GET …/{id}/screenshot` and needs `support:read` **plus** one of two scopes:
+`support:read_screenshots` (any report's) or `support:read_shared_screenshots` (#3936: only a
+report whose screenshot an admin shared for the feedback review, `screenshotShared: true` in the
+report; any other answers 404, like a report without one). The replay and attachments are not
+exposed. Every read writes one `AuditLog` row
 (`API_SUPPORT_REPORT_LIST` / `_READ` / `_SCREENSHOT`, actor `api_key:<id>`, detail = key + report
 **ids only** — never the text). There is no write: status changes and replies are a later
 `support:write`. Support tickets (`SupportTicket`, a conversation without an `orgId` of its own)

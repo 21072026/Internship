@@ -42,6 +42,7 @@ export const supportReportSelect = {
   updatedAt: true,
   user: { select: { fullName: true, role: true } },
   files: { where: { kind: 'SCREENSHOT' as const }, select: { id: true } },
+  screenshotSharedAt: true,
 } satisfies Prisma.SupportReportSelect;
 
 type SupportReportRow = Prisma.SupportReportGetPayload<{ select: typeof supportReportSelect }>;
@@ -72,6 +73,8 @@ export function serializeSupportReport(r: SupportReportRow) {
     contactAllowed: r.contactAllowed,
     githubIssueUrl: r.githubIssueUrl,
     hasScreenshot: r.files.length > 0,
+    // Shared by an admin for the feedback review (#3936): readable with support:read_shared_screenshots.
+    screenshotShared: r.files.length > 0 && !!r.screenshotSharedAt,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   };

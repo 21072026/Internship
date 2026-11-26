@@ -37,6 +37,7 @@ test.describe('sandbox key rule', { tag: '@smoke' }, () => {
     // Real visitors' feedback on the public demo: never readable with a sandbox key.
     expect(SANDBOX_SCOPES).not.toContain('support:read');
     expect(SANDBOX_SCOPES).not.toContain('support:read_screenshots');
+    expect(SANDBOX_SCOPES).not.toContain('support:read_shared_screenshots');
     for (const s of API_SCOPES.filter((x) => /:write$/.test(x))) expect(SANDBOX_SCOPES).not.toContain(s);
   });
 });
