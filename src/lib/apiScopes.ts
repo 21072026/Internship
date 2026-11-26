@@ -57,6 +57,11 @@ export const API_SCOPES = [
   // never implied by support:read and never a default; a review key holds this
   // one instead of support:read_screenshots.
   'support:read_shared_screenshots',
+  // The ONE write of the feedback review (#3937): the status of a report (NEW → TRIAGED /
+  // IN_PROGRESS / WONT_FIX) and the issue it opened in this repository —
+  // nothing else, and nothing the reporter is told. PATCH
+  // /api/v1/support/reports/{id}; every write audited. Never a default.
+  'support:triage',
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
@@ -92,6 +97,7 @@ export const SCOPE_ENTITLEMENT: Record<ApiScope, 'INTEGRATIONS_API' | null> = {
   'support:read': 'INTEGRATIONS_API',
   'support:read_screenshots': 'INTEGRATIONS_API',
   'support:read_shared_screenshots': 'INTEGRATIONS_API',
+  'support:triage': 'INTEGRATIONS_API',
 };
 
 // ── Vertical (MKT-6b) ─────────────────────────────────────────────────────────
@@ -121,6 +127,7 @@ export const SCOPE_CAPABILITY: Record<ApiScope, VerticalCapability> = {
   'support:read': 'pipeline',
   'support:read_screenshots': 'pipeline',
   'support:read_shared_screenshots': 'pipeline',
+  'support:triage': 'pipeline',
 };
 
 // The capability behind every top-level /api/v1 path segment. `null` means the

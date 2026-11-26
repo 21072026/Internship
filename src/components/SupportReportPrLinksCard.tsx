@@ -12,7 +12,7 @@ import { readPrLinks, type SupportPrLink } from '@/lib/supportReportPrLinks';
 // typed in by hand, removed by hand. The reporter never sees them — their own
 // list, mail and bell do not carry the column. The write is
 // POST/DELETE /api/admin/support/reports/[id]/pr-links.
-export function SupportReportPrLinksCard({ reportId, initial }: { reportId: string; initial: unknown }) {
+export function SupportReportPrLinksCard({ reportId, initial, reviewIssueUrl = null }: { reportId: string; initial: unknown; reviewIssueUrl?: string | null }) {
   const t = useT();
   const a = t.adminReports;
   const [links, setLinks] = useState<SupportPrLink[]>(() => readPrLinks(initial));
@@ -56,6 +56,15 @@ export function SupportReportPrLinksCard({ reportId, initial }: { reportId: stri
         <GitPullRequest className="h-4 w-4" aria-hidden="true" /> {a.prTitle}
       </h2>
       <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">{a.prHint}</p>
+      {/* The issue the feedback review opened for it (#3937), written through the API. */}
+      {reviewIssueUrl && (
+        <p className="mb-3 text-sm text-gray-700 dark:text-gray-300" data-testid="report-review-issue">
+          {a.reviewIssue}{' '}
+          <a href={reviewIssueUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline dark:text-blue-400">
+            #{reviewIssueUrl.split('/').pop()}
+          </a>
+        </p>
+      )}
       {links.length === 0 ? (
         <p className="mb-3 text-sm text-gray-500" data-testid="report-pr-empty">{a.prNone}</p>
       ) : (

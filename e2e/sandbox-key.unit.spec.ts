@@ -38,6 +38,7 @@ test.describe('sandbox key rule', { tag: '@smoke' }, () => {
     expect(SANDBOX_SCOPES).not.toContain('support:read');
     expect(SANDBOX_SCOPES).not.toContain('support:read_screenshots');
     expect(SANDBOX_SCOPES).not.toContain('support:read_shared_screenshots');
+    expect(SANDBOX_SCOPES).not.toContain('support:triage');
     for (const s of API_SCOPES.filter((x) => /:write$/.test(x))) expect(SANDBOX_SCOPES).not.toContain(s);
   });
 });

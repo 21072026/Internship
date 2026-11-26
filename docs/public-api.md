@@ -141,7 +141,10 @@ console / failed-request context — every free-text and URL field re-masked on 
 `support:read_screenshots` (any report's) or `support:read_shared_screenshots` (#3936: only a
 report whose screenshot an admin shared for the feedback review, `screenshotShared: true` in the
 report; any other answers 404, like a report without one). The replay and attachments are not
-exposed. Every read writes one `AuditLog` row
+exposed. **One write** (#3937): `PATCH …/{id}` with `support:triage` sets `status` (NEW, TRIAGED,
+IN_PROGRESS, WONT_FIX — never RESOLVED) and/or `issueUrl` (an issue of this repository, stored as
+`reviewIssueUrl`; null takes it off); any other key is 422, the reporter is not notified, and each
+change writes one `API_SUPPORT_REPORT_TRIAGE` AuditLog row (old → new). Every read writes one `AuditLog` row
 (`API_SUPPORT_REPORT_LIST` / `_READ` / `_SCREENSHOT`, actor `api_key:<id>`, detail = key + report
 **ids only** — never the text). There is no write: status changes and replies are a later
 `support:write`. Support tickets (`SupportTicket`, a conversation without an `orgId` of its own)

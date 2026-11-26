@@ -291,6 +291,7 @@ export async function GET(request: Request) {
             githubIssueUrl: nstr,
             hasScreenshot: { type: 'boolean', description: 'Whether GET /support/reports/{id}/screenshot has an image (needs `support:read_screenshots`).' },
             screenshotShared: { type: 'boolean', description: 'Whether an admin shared the screenshot for the feedback review: readable with `support:read_shared_screenshots`.' },
+            reviewIssueUrl: { type: ['string', 'null'], description: 'The issue the feedback review opened for this report in this repository (`support:triage`).' },
             createdAt: when,
             updatedAt: when,
           },
@@ -750,7 +751,27 @@ export async function GET(request: Request) {
         eqFilter('type', 'Only bug reports or only feedback.', ['BUG', 'FEEDBACK']),
         { name: 'since', in: 'query', required: false, schema: { type: 'string', format: 'date-time' }, description: 'Alias of `updatedSince`.' },
       ]),
-      '/support/reports/{id}': itemPath('support:read', 'SupportReport', 'Get a bug report'),
+      '/support/reports/{id}': {
+        ...itemPath('support:read', 'SupportReport', 'Get a bug report'),
+        patch: writeOp(
+          'support:triage',
+          'Triage a bug report',
+          'The feedback review write (#3937): `status` (NEW, TRIAGED, IN_PROGRESS or WONT_FIX — never RESOLVED, which is the admin call) and/or `issueUrl`, an issue of this repository (`https://github.com/<repo>/issues/<n>`, null to take it off; another repository is 422 with `errors[0].code` `wrong_repo`). Nothing else is accepted. The reporter is not notified. Audited (old → new).',
+          {
+            type: 'object',
+            additionalProperties: false,
+            minProperties: 1,
+            properties: {
+              status: { type: 'string', enum: ['NEW', 'TRIAGED', 'IN_PROGRESS', 'WONT_FIX'] },
+              issueUrl: { type: ['string', 'null'], maxLength: 300 },
+            },
+          },
+          'SupportReport',
+          '200',
+          'Not used.',
+          [idParam],
+        ),
+      },
       '/support/reports/{id}/screenshot': {
         get: {
           summary: 'Get a bug report’s screenshot',
