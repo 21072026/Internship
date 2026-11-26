@@ -803,6 +803,13 @@ run_tool node prisma/set-public-host.mjs --list || true
 log "marketing org readiness (report only)"
 run_tool node prisma/check-marketing-orgs.mjs || true
 
+# Where a notification e-mail stops (hand-off mail, #3871): per stage, counts and
+# reason codes only — delivery ledger, the e-mail job, the mail log, the worker's
+# pulse — so the cause can be read from this log without a database connection.
+# Never fails a deploy, never writes, no PII.
+log "notification mail (report only)"
+run_tool node prisma/diagnose-notification-mail.mjs || true
+
 # ── 5. Swap the container ────────────────────────────────────────────────────
 # Blue/green, because the old way was an outage waiting to happen (#961): it
 # stopped and removed the running container BEFORE proving the new image works,
