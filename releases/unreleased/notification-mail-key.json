@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- Fix: notification e-mails sent through the router (e.g. the hand-off mail to the new rep) never left on deployments with SMTP (#3950). The mail's queue key (`notify:<ledger>`) was the `notification.email` job's own key, so `enqueue()` answered it with that job and no `email.send` row existed — the ledger said SENT, nothing was logged. The mail now has its own key (`notify-mail:<ledger>`, `src/lib/notifications/keys.ts`), and `enqueue()` refuses a key held by a job of another kind instead of returning it.",
+  "notes": {
+    "en": ["Fixed: e-mail notifications such as \"a lead was handed to you\" are delivered again."],
+    "tr": ["Düzeltildi: \"Sana bir lead devredildi\" gibi e-posta bildirimleri yeniden gönderiliyor."],
+    "de": ["Behoben: E-Mail-Benachrichtigungen wie „Dir wurde ein Lead übergeben“ werden wieder zugestellt."]
+  }
+}

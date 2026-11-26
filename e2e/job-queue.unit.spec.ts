@@ -66,6 +66,18 @@ test.describe('enqueue', () => {
     expect((store.jobs[0].payload as { retentionDays: number }).retentionDays).toBe(90);
   });
 
+  test('a key held by a job of ANOTHER kind is refused, never answered with that job (#3950)', async () => {
+    const store = createMemoryQueueStore();
+    await enqueue('notification.email', { eventKey: 'lead.handedOff' } as never, { store, idempotencyKey: 'notify:k1' });
+    // The old bug: the mail of a notification reused its job's key and was
+    // "de-duplicated" against it — a different job — so it never existed.
+    await expect(enqueue('email.send', {} as never, { store, idempotencyKey: 'notify:k1' })).rejects.toThrow('idempotency key collision');
+    expect(store.jobs).toHaveLength(1);
+    // The same kind with the same key is still one row, returned twice.
+    const again = await enqueue('notification.email', { eventKey: 'lead.handedOff' } as never, { store, idempotencyKey: 'notify:k1' });
+    expect(again.id).toBe(store.jobs[0].id);
+  });
+
   test('two different keys are two rows; no key never de-duplicates', async () => {
     const store = createMemoryQueueStore();
     await enqueue('jobs.pruneRuns', {}, { store, idempotencyKey: 'a' });
