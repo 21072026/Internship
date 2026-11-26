@@ -304,3 +304,22 @@ A bare digit run is deliberately not (a date, an amount or an id looks the
 same); a field that holds a phone in local form needs `data-private`. A new
 screen that shows a person's contact details marks the value element the same
 way.
+
+## The feedback review (#3939)
+
+"Geri bildirimlere bak" runs the project skill `.claude/skills/feedback-review/`
+with the maintainer: Claude reads the NEW reports (masked, `support:read`),
+groups them, finds the code and the existing issues, and proposes one of: fix
+now / backlog issue / won't fix / ask for more. **Nothing is written before the
+maintainer says yes for that item.** Then the issue is opened in this
+repository (the `backlog` skill's rules) and the report is marked TRIAGED with
+that issue (`support:triage`, #3937). A screenshot is looked at only where an
+admin shared it (#3936).
+
+Its hands are `scripts/feedback-review.mjs` (`list`, `screenshot`, `triage`),
+reading the key from `SUPPORT_REVIEW_API_KEY` and the deployment from
+`SUPPORT_REVIEW_BASE_URL` — never from the command line, never printed; without
+them it stops (exit 2). The key holds exactly `support:read`,
+`support:read_shared_screenshots`, `support:triage`. Nothing from a report goes
+into an issue, commit or PR verbatim. `e2e/feedback-review-cli.spec.ts` runs
+the script end to end against the app.
