@@ -10,6 +10,7 @@ import { logger } from '@/lib/logger';
 import { createMarketingAccount } from '@/lib/marketingImportStore';
 import { findLeadOwner, resolveDefaultLeadOwner } from '@/lib/leadOwner';
 import { resolveNewLeadNames } from '@/lib/newLeadNameRule';
+import { announceLeadAssigned } from '@/lib/leadAssignedNotice';
 
 // One lead / account typed in by hand (#2562) — the phone call, the trade-fair
 // badge, the LinkedIn message.
@@ -117,6 +118,8 @@ async function handlePost(request: Request) {
       });
       switch (outcome.kind) {
         case 'created':
+          // The owner hears about a lead somebody else put on their book (#3968).
+          await announceLeadAssigned({ ownerId: owner.id, actorId: session.user.id, leadName: fields.contactName || fields.name });
           return NextResponse.json(
             { status: 'created', companyId: outcome.companyId, leadId: outcome.leadId, stage: outcome.stage, ownerId: owner.id },
             { status: 201 },

@@ -13,6 +13,9 @@ import { defaultOrgId } from '@/lib/defaultOrg';
 import { MAX_TAGS_PER_USER } from '@/lib/tags';
 import { transferMentorship } from '@/lib/mentorTransfer';
 import { notify } from '@/lib/notify';
+import { emailAllowed } from '@/lib/notificationPrefs';
+import { emailGroupAllowedForCategory } from '@/lib/emailGroups';
+import { sendMenteesBulkAssignedEmail } from '@/services/emailService';
 import { requirePermission } from '@/lib/authz';
 import { canTransition, createStageGateCache, type GateFailure } from '@/lib/stageGate';
 import { getLocale } from '@/i18n/server';
@@ -227,10 +230,23 @@ export async function POST(request: Request) {
     }
 
     // The summary notices the per-row ones were suppressed for. Never an echo
-    // to the admin who pressed the button (#886), and in-app only — mailing a
-    // batch is the thing this whole shape exists to avoid.
+    // to the admin who pressed the button (#886). The incoming owner also gets
+    // ONE mail with the count (#3968) — a rep away from the app otherwise never
+    // learns that a book was handed to them; one mail per row is still the thing
+    // this whole shape exists to avoid. The outgoing owners keep the bell only.
     if (reassigned > 0 && ownerId !== session.user.id) {
       await notify(ownerId, 'mentorship.bulkAssigned', { count: reassigned }, '/mentor');
+      try {
+        const incoming = await prisma.user.findUnique({
+          where: { id: ownerId },
+          select: { orgId: true, email: true, emailNotifications: true, notificationPrefs: true },
+        });
+        if (incoming?.email && emailAllowed(incoming, 'mentorship') && emailGroupAllowedForCategory(incoming, 'mentee-assigned')) {
+          await sendMenteesBulkAssignedEmail({ userId: ownerId, count: reassigned, orgId: incoming.orgId });
+        }
+      } catch (e) {
+        console.error('Bulk owner assignment mail failed:', e);
+      }
     }
     for (const [fromMentorId, count] of drainedFrom) {
       if (fromMentorId === session.user.id) continue;
