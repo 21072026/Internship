@@ -114,8 +114,12 @@ const NOT_EXERCISED: Record<string, string> = {
 
 function getScopes(): string[] {
   const scopes = new Set<string>(['interactions:read_notes']);
+  // The FIRST security requirement of each GET: the others are alternatives
+  // (any one of them calls the operation, e.g. the screenshot's
+  // `support:read_shared_screenshots`, #3936), and adding them all overflowed
+  // the key's `scopes` column.
   for (const item of Object.values(spec.paths)) {
-    for (const req of item.get?.security ?? []) for (const sc of req.apiKey ?? []) scopes.add(sc);
+    for (const sc of item.get?.security?.[0]?.apiKey ?? []) scopes.add(sc);
   }
   return [...scopes].sort();
 }
