@@ -301,6 +301,14 @@ export async function enqueue<N extends JobName>(
     // column that does not fit) and must not be reported as a successful
     // enqueue. Rethrowing the ORIGINAL error keeps the real cause.
     if (!existing) throw error;
+    // The key belongs to a job of ANOTHER kind: that is not "already queued",
+    // it is two callers sharing one key, and answering with the other job
+    // made the second one silently vanish — every notification mail did,
+    // because its `email.send` used the `notification.email` job's own key
+    // (#3950). Refused loudly instead, so the caller takes its fallback.
+    if (existing.name !== name) {
+      throw new Error(`idempotency key collision: '${key}' is held by a ${existing.name} job, not ${name}`);
+    }
     return existing;
   }
 }

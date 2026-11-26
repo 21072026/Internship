@@ -30,6 +30,7 @@ import { EVENT_MAIL_CATEGORY } from '@/lib/notifications/eventMailRule';
 import { openEmail } from '@/lib/notifications/sealedEmail';
 import type { JobPayloadMap } from '@/lib/jobs/types';
 import type { JobRecord } from '@/lib/jobs/queue';
+import { ledgerKeyOfJob, notificationMailKey } from '@/lib/notifications/keys';
 
 export const STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
@@ -37,8 +38,7 @@ type Payload = JobPayloadMap['notification.email'];
 export type NotificationEmailOutcome = 'sent' | 'claimed_elsewhere' | 'batched_deferred' | 'stale' | 'no_user' | 'skipped_by_send' | 'unreadable';
 
 function ledgerKey(job: Pick<JobRecord, 'idempotencyKey'>): string | null {
-  const k = job.idempotencyKey;
-  return k && k.startsWith('notify:') ? k.slice('notify:'.length) : null;
+  return ledgerKeyOfJob(job.idempotencyKey);
 }
 
 async function settle(dedupeKey: string | null, from: 'QUEUED' | 'SENT', to: 'SENT' | 'SKIPPED' | 'QUEUED' | 'FAILED', extra: { skipReason?: string; error?: string } = {}): Promise<number> {
@@ -97,7 +97,7 @@ export async function runNotificationEmail(payload: Payload, job: JobRecord, now
       category: EVENT_MAIL_CATEGORY[group],
       group,
       locale: mail.locale,
-      ...(key ? { dedupeKey: `notify:${key}` } : {}),
+      ...(key ? { dedupeKey: notificationMailKey(key) } : {}),
     });
     if (result === 'SKIPPED' || result === 'BLOCKED') {
       // BLOCKED (#3771): the org blocks automated mail to leads; final, no retry.
@@ -146,7 +146,7 @@ async function sendPrerendered(payload: Payload, sealed: string, key: string | n
       ...(mail.fromName !== undefined ? { fromName: mail.fromName } : {}),
       ...(mail.replyTo ? { replyTo: mail.replyTo } : {}),
       ...(mail.locale !== undefined ? { locale: mail.locale } : {}),
-      ...(key ? { dedupeKey: `notify:${key}` } : {}),
+      ...(key ? { dedupeKey: notificationMailKey(key) } : {}),
     });
     if (result === 'SKIPPED' || result === 'BLOCKED') {
       // BLOCKED (#3771): the org blocks automated mail to leads; final, no retry.

@@ -48,6 +48,17 @@ operator re-run all run a handler again. Each handler states in its comment what
 makes the second run harmless (a single-shot stamp, a natural key, an
 `idempotencyKey` on the enqueue).
 
+**An idempotency key names ONE job kind** (#3950). `Job.idempotencyKey` is
+unique across every job, and `enqueue()` answers a repeated key with the row
+that already holds it — but only when that row is the same kind. A key held by
+a job of another kind is refused with `idempotency key collision`, never
+answered with that job: the routed notification mail used to reuse its own
+`notification.email` job's key for the `email.send` it queued, was
+"de-duplicated" against it and never sent, while the ledger said SENT. The two
+keys of one notification come from `src/lib/notifications/keys.ts`
+(`notify:<ledger>` for the job, `notify-mail:<ledger>` for the mail). When a job
+queues further jobs, give each its own key.
+
 ## Shutdown
 
 The tick's request stays open until the jobs it claimed have settled, so Next's
