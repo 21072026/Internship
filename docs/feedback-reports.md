@@ -35,7 +35,7 @@ choice is a required answer by design (#3130), which is why the count is
 
 | Layer | Where | Rule |
 |---|---|---|
-| Screenshot | `src/lib/feedbackScreenshot.ts` | DOM → image in the browser (`modern-screenshot`), visible viewport only, JPEG. Anything under `[data-feedback-ui]` is left out; `input[type=password]`, `autocomplete="one-time-code"` / `cc-*` inputs and anything marked `data-private` or `.rr-block` are painted over **in the copy** before rendering. Its own image/font fetches are not recorded as failed requests. |
+| Screenshot | `src/lib/feedbackScreenshot.ts` | DOM → image in the browser (`modern-screenshot`), visible viewport only, JPEG. Anything under `[data-feedback-ui]` is left out; `input[type=password]`, `type=email` / `type=tel`, `autocomplete="one-time-code"` / `cc-*` inputs and anything marked `data-private` or `.rr-block` are painted over **in the copy** before rendering; every other text in the copy goes through `maskScreenText()` (`feedbackContext.ts`: e-mail addresses, credentials, phone numbers in international form) (#3938). Its own image/font fetches are not recorded as failed requests. |
 | Console | `src/lib/feedbackCollector.ts` | the newest 20 of `console.error`, `window.onerror`, `unhandledrejection` |
 | Network | same | the newest 20 failed `fetch` calls (status ≥ 400 or no response): method, URL, status, duration, `x-request-id` (the middleware echoes one on every response, #1601). The report endpoint itself is never recorded. |
 | Page | form fields | `location.href` and the viewport size |
@@ -285,3 +285,22 @@ is refused (422). The reporter is told nothing from here: their bell and their
 mail stay the admin's decision on the report page. Each change is one AuditLog
 row `API_SUPPORT_REPORT_TRIAGE` with old → new. The admin's report page shows
 the review issue in the "Pull requests" card.
+
+## What is marked `data-private` (#3938)
+
+Painted over whole in a feedback screenshot (and blocked in the replay, which
+honours the same selector). Labels stay readable; the values go.
+
+| Where | What |
+|---|---|
+| `src/components/sales/LeadContactEditor.tsx` | the lead's contact card (name, position, phone, e-mail) and its edit form |
+| `src/components/AccountMenu.tsx` | the signed-in person's name and e-mail in every role shell |
+| `src/app/admin/candidates/[id]/page.tsx` | the candidate's e-mail, phone, WhatsApp and birth date (`Field personal`) |
+| `src/app/mentor/mentees/[id]/page.tsx` | the mentee's e-mail, phone and WhatsApp |
+
+Anything else still passes `maskScreenText()`: an e-mail address or an
+international phone number written anywhere on the page is masked in the copy.
+A bare digit run is deliberately not (a date, an amount or an id looks the
+same); a field that holds a phone in local form needs `data-private`. A new
+screen that shows a person's contact details marks the value element the same
+way.

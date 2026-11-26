@@ -95,6 +95,8 @@ test('the rep calls from the lead page: Didn\'t call logs nothing, Not reached l
   const phone = page.getByTestId('sales-lead-phone-link');
   // One way in for one number: the tel: link, no second Call button.
   await expect(phone).toHaveAttribute('href', 'tel:+49307654321');
+  // The contact is painted over in a feedback screenshot (#3938).
+  await expect(page.getByTestId('sales-lead-contact-person')).toHaveAttribute('data-private', /.*/);
   await expect(page.getByTestId('contact-call')).toHaveCount(0);
 
   // "Didn't call" (#3904): the number was dialled, nothing is logged.
@@ -161,6 +163,9 @@ test('the admin lead view: buttons for an admin who may log, none for an observe
   await signInAndSettle(page, mail.admin, PW, '/admin');
   await gotoSettled(page, `/admin/candidates/${ids.lead}`);
   await expect(page.getByTestId('candidate-contact-actions')).toBeVisible({ timeout: 20_000 });
+  // The candidate's e-mail and phone are painted over in a feedback screenshot (#3938).
+  await expect(page.getByTestId('candidate-email')).toHaveAttribute('data-private', /.*/);
+  await expect(page.getByText('+49 30 7654321', { exact: true }).first()).toHaveAttribute('data-private', /.*/);
   await expect(page.getByTestId('contact-call')).toBeVisible();
 
   const observer = await browser.newContext({ extraHTTPHeaders: host });

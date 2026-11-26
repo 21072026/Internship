@@ -132,7 +132,8 @@ export function AccountMenu({
             visible text stays part of it. */}
         <span className="sr-only">{t.account.nav}</span>
         <SidebarAvatar avatarUrl={avatarUrl} name={name} fallback={fallback} className={avatarClassName} />
-        <div className="min-w-0 flex-1">
+        {/* The signed-in person's name and e-mail: not in a feedback screenshot (#3938). */}
+        <div className="min-w-0 flex-1" data-private>
           <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{name}</p>
           <p className="text-xs text-gray-500 truncate">{email}</p>
         </div>

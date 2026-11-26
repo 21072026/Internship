@@ -420,7 +420,7 @@ export default function MenteeDetailPage() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">{relation.mentee.fullName}</h1>
-            <p className="text-gray-500 break-words">{relation.mentee.email}</p>
+            <p className="text-gray-500 break-words" data-private>{relation.mentee.email}</p>
             {/* The in-app thread with this mentee (#1130). It used to be reachable
                 only from the messages inbox, so the page you read about a mentee on
                 had no way to write to them. */}
@@ -596,13 +596,13 @@ export default function MenteeDetailPage() {
               {relation.mentee.phone && (
                 <div>
                   <p className="text-xs text-gray-500">{t.candidateDetail.phone}</p>
-                  <p className="text-sm text-gray-900">{relation.mentee.phone}</p>
+                  <p className="text-sm text-gray-900" data-private>{relation.mentee.phone}</p>
                 </div>
               )}
               {relation.mentee.whatsapp && (
                 <div>
                   <p className="text-xs text-gray-500">{t.candidateDetail.whatsapp}</p>
-                  <p className="text-sm text-gray-900">{relation.mentee.whatsapp}</p>
+                  <p className="text-sm text-gray-900" data-private>{relation.mentee.whatsapp}</p>
                 </div>
               )}
               {(relation.mentee.whatsapp || relation.mentee.phone) && (

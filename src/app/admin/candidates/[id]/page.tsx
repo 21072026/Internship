@@ -121,12 +121,13 @@ interface MenteeDetail {
   menteeRelations: Relation[];
 }
 
-function Field({ label, value }: { label: string; value?: string | number | null }) {
+// `personal` (#3938): the value is painted over in a feedback screenshot.
+function Field({ label, value, personal = false }: { label: string; value?: string | number | null; personal?: boolean }) {
   if (value === undefined || value === null || value === '') return null;
   return (
     <div>
       <p className="text-xs text-gray-500">{label}</p>
-      <p className="text-sm text-gray-900">{value}</p>
+      <p className="text-sm text-gray-900" data-private={personal || undefined}>{value}</p>
     </div>
   );
 }
@@ -439,7 +440,7 @@ export default function AdminMenteeDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 break-words">{user.fullName}</h1>
-            <p className="text-gray-500 break-words" data-testid="candidate-email">
+            <p className="text-gray-500 break-words" data-testid="candidate-email" data-private>
               {user.leadRecord ? (user.contactEmail ?? user.email) : user.email}
             </p>
           </div>
@@ -494,7 +495,7 @@ export default function AdminMenteeDetailPage() {
             <Field label={t.candidateDetail.university} value={user.university} />
             <Field label={t.candidateDetail.department} value={user.department} />
             <Field label={t.candidateDetail.graduationYear} value={user.graduationYear} />
-            <Field label={t.candidateDetail.phone} value={user.phone} />
+            <Field label={t.candidateDetail.phone} value={user.phone} personal />
             {/* Click-to-call on a MARKETING lead (#3748): the same buttons as the
                 rep's lead page, for an admin the server says may log. */}
             {vertical === 'MARKETING' && user.phone && activeRelationId && user.canLogInteraction && (
@@ -502,9 +503,9 @@ export default function AdminMenteeDetailPage() {
                 <ContactActions relationId={activeRelationId} phone={user.phone} onLogged={load} />
               </div>
             )}
-            <Field label={t.candidateDetail.whatsapp} value={user.whatsapp} />
+            <Field label={t.candidateDetail.whatsapp} value={user.whatsapp} personal />
             <Field label={t.candidateDetail.city} value={user.city} />
-            <Field label={t.candidateDetail.birthDate} value={user.birthDate ? formatDate(user.birthDate, locale) : null} />
+            <Field label={t.candidateDetail.birthDate} value={user.birthDate ? formatDate(user.birthDate, locale) : null} personal />
             {user.skills.length > 0 && (
               <div>
                 <p className="text-xs text-gray-500 mb-1">{t.candidateDetail.skills}</p>

@@ -95,6 +95,22 @@ const TEXT_RULES: [RegExp, string][] = [
   [/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g, '[email]'],
 ];
 
+/**
+ * What a screenshot may show of a piece of page text (#3938): the same
+ * credential and e-mail rules as `maskText`, plus phone numbers written in
+ * international form (`+49 30 …`, `0049 …`). Only that form: a bare digit run
+ * is as likely a date, an amount or an id, and masking those would make the
+ * screenshot useless. The fields that hold a phone in any form are marked
+ * `data-private` and painted over whole (src/lib/feedbackScreenshot.ts).
+ * Unchanged text is returned as the same string.
+ */
+const SCREEN_PHONE = /(?<![\w+])(?:\+|00)\d[\d\s()/.-]{6,}\d/g;
+export function maskScreenText(text: string): string {
+  let s = text;
+  for (const [re, to] of TEXT_RULES) s = s.replace(re, to);
+  return s.replace(SCREEN_PHONE, '[phone]');
+}
+
 /** Free text (a console message, a stack) with credentials and addresses removed. */
 export function maskText(raw: unknown, max: number = FEEDBACK_TEXT_MAX): string {
   let s = typeof raw === 'string' ? raw : raw instanceof Error ? `${raw.name}: ${raw.message}` : safeString(raw);

@@ -1,0 +1,4 @@
+{
+  "bump": "patch",
+  "changelog": "- Feedback screenshots carry less personal data (#3938): e-mail / phone inputs and the contact values on the lead page, the account menu, the admin candidate page and the mentor's mentee page are painted over (`data-private`), and any other page text in the copy goes through the new `maskScreenText()` (`src/lib/feedbackContext.ts`: e-mail addresses, credentials, international phone numbers). The page itself does not change."
+}
