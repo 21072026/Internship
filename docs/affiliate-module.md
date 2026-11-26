@@ -740,6 +740,17 @@ A partner exists before its account (the admin creates it, or a migration does).
   their own password under the org's policy — nothing is imported.
 - The invitation is world-bound like every other (`docs/worlds.md`): a token of a
   MARKETING organisation is unknown on any other host.
+- **Invite by address alone (#3963).** The partners page leads with "Invite a
+  partner": an e-mail and an optional name. `POST /api/admin/affiliate/partners/invite`
+  (`affiliate.write`, `src/lib/affiliateEmailInvite.ts`) creates the partner under
+  `lockOrganization()` with a placeholder `randomPartnerCode()` (checked free under
+  that lock) and the address's local part as a stand-in name, then sends the
+  ordinary invitation. 409 `email_is_partner` when the address is a partner's
+  contact already, 409 `email_taken` when it has an account in this product — both
+  before anything is written. The partner sets its name (`partnerName`, ≤ 160,
+  400 `name_invalid`) and code on the registration form. Creating a partner with a
+  code of the admin's choosing — one carried over from an earlier system — sits
+  under "Advanced: create a partner with a code" and behaves as before.
 - **The partner's own code (#3961).** The registration form of a partner
   invitation shows the partner's code, editable, with "Suggest another"
   (`randomPartnerCode()`: 8 characters without 0/o/1/l/i). It asks

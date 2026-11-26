@@ -37,7 +37,8 @@ export type PartnerInviteErrorCode =
   | 'email_taken' // the address already has an account in this product
   | 'code_invalid' // the chosen code is not a code (affiliateCodeRule.ts)
   | 'code_taken' // another partner of the programme has it
-  | 'code_locked'; // the code is fixed already (partnerCodeLock)
+  | 'code_locked' // the code is fixed already (partnerCodeLock)
+  | 'name_invalid'; // the chosen display name is longer than 160 characters
 
 export class PartnerInviteError extends Error {
   readonly code: PartnerInviteErrorCode;
@@ -117,7 +118,7 @@ export async function invitePartner(input: {
  */
 export async function linkPartnerAccount(
   tx: Prisma.TransactionClient,
-  link: { orgId: string; partnerId: string; userId: string; code?: string | null },
+  link: { orgId: string; partnerId: string; userId: string; code?: string | null; displayName?: string | null },
 ): Promise<void> {
   // The chosen code (#3961), when it differs from the current one. Read under
   // the partner's row lock so the lock rule and the write see the same row.
@@ -132,11 +133,15 @@ export async function linkPartnerAccount(
       codeChange = { from: partner.code, to: link.code };
     }
   }
+  // The name the partner gives itself (#3963): always theirs to set while the
+  // account is opened — it is in no link, so nothing in circulation depends on it.
+  const displayName = link.displayName?.trim().replace(/\s+/g, ' ') || null;
+  if (displayName !== null && displayName.length > 160) throw new PartnerInviteError('name_invalid');
   let count: number;
   try {
     ({ count } = await tx.affiliatePartner.updateMany({
       where: { id: link.partnerId, orgId: link.orgId, userId: null, status: 'ACTIVE' },
-      data: { userId: link.userId, ...(codeChange ? { code: codeChange.to } : {}) },
+      data: { userId: link.userId, ...(codeChange ? { code: codeChange.to } : {}), ...(displayName ? { displayName } : {}) },
     }));
   } catch (e) {
     // `@@unique([orgId, code])`: another partner holds it (case-insensitively).
@@ -183,7 +188,9 @@ async function codeLockOf(db: Prisma.TransactionClient | typeof prisma, orgId: s
  * caller does not hold. Read by token with no tenant context, like the register
  * route: the token is the authorisation.
  */
-export async function partnerOfInvitation(token: string): Promise<{ orgId: string; partnerId: string; code: string; lock: CodeLock } | null> {
+export async function partnerOfInvitation(
+  token: string,
+): Promise<{ orgId: string; partnerId: string; code: string; displayName: string; lock: CodeLock } | null> {
   const invitation = await prisma.invitationToken.findUnique({
     where: { token },
     select: { orgId: true, role: true, partnerId: true, used: true, revokedAt: true, expiresAt: true },
@@ -193,11 +200,11 @@ export async function partnerOfInvitation(token: string): Promise<{ orgId: strin
   if ((await worldOfOrg(invitation.orgId)) !== (await hostVertical())) return null;
   const partner = await prisma.affiliatePartner.findFirst({
     where: { id: invitation.partnerId, orgId: invitation.orgId, status: 'ACTIVE' },
-    select: { code: true, userId: true },
+    select: { code: true, displayName: true, userId: true },
   });
   if (!partner) return null;
   const lock = await codeLockOf(prisma, invitation.orgId, invitation.partnerId, partner.userId !== null);
-  return { orgId: invitation.orgId, partnerId: invitation.partnerId, code: partner.code, lock };
+  return { orgId: invitation.orgId, partnerId: invitation.partnerId, code: partner.code, displayName: partner.displayName, lock };
 }
 
 /**

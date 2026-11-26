@@ -18,6 +18,7 @@ const STATUS: Record<PartnerInviteError['code'], number> = {
   code_invalid: 400,
   code_taken: 409,
   code_locked: 409,
+  name_invalid: 400,
 };
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {

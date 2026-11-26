@@ -92,7 +92,7 @@ test('the invited partner chooses a free code; a taken one is refused', { tag: '
   expect((await ask(anon, {})).status()).toBe(404);
   const info = await ask(anon, { token });
   expect(info.status()).toBe(200);
-  expect(await info.json()).toEqual({ code: partners.fresh.code, lock: null });
+  expect(await info.json()).toEqual({ code: partners.fresh.code, displayName: 'Partner fresh', lock: null });
 
   // Availability: never who holds it; the unique key ignores case, so does the answer.
   const status = async (code: string) => (await (await ask(anon, { token, code })).json()).status;
@@ -134,7 +134,7 @@ test('a code in use is fixed even before the account exists', async ({ playwrigh
   const token = await inviteToken(admin, partners.used.id);
   const anon = await context(playwright, baseURL);
 
-  expect(await (await ask(anon, { token })).json()).toEqual({ code: partners.used.code, lock: 'in_use' });
+  expect(await (await ask(anon, { token })).json()).toEqual({ code: partners.used.code, displayName: 'Partner used', lock: 'in_use' });
   const refused = await register(anon, { token, email: partners.used.email, partnerCode: `new-${tag}` });
   expect(refused.status()).toBe(409);
   expect((await refused.json()).code).toBe('code_locked');
