@@ -386,3 +386,34 @@ every part percent-encoded and line breaks as CRLF (`emailTemplateMailto()`,
 program does (#3741). Opening the link logs the e-mail as before and counts the
 template's use (the pool sorts by it). The texts themselves are the team's
 data, written on the admin screen; nothing curated ships in the repo.
+
+## Images on a follow-up (#3931)
+
+A follow-up — set in the panel or written by a hand-off — may carry up to three
+images (a pasted screenshot: "look at this screen"). `FollowUpImage` holds the
+bytes; the rules are `src/lib/followUpImageRule.ts`, the Prisma half
+`src/lib/followUpImages.ts`. Images only for now (PNG, JPEG, WebP, GIF, read
+from the bytes, never the name), at most 5 MB each.
+
+- **Two steps.** `POST /api/mentorship/[id]/follow-up-images` stores a
+  **draft**; the follow-up write that names it attaches it —
+  `PUT /api/mentorship/[id]` with `nextActionImageIds` (the set the form holds:
+  named current images stay, the caller's own drafts are attached, current ones
+  not named are cleared), or the hand-off's `imageIds`. A write may attach only
+  the caller's own drafts on that record (`unknown_image` otherwise). A draft
+  nobody attached within 24 h is deleted on its uploader's next upload; no job.
+- **Cleared, not deleted.** Clearing or completing the follow-up, or a hand-off
+  with a new step, sets `clearedAt`: the image leaves the panel and stays in the
+  record's history (`GET …/follow-up-images` → `current` / `history`). A kept
+  hand-off moves the images to the new record with the follow-up.
+- **Who reads.** Whoever reads the follow-up note (owner, admin —
+  `canSeeNextAction`) and whoever may write it (+ the sales dispatcher); a
+  draft only its uploader. `GET /api/follow-up-images/[id]` serves the bytes
+  `no-store`, `nosniff`, under a `sandbox` CSP. Another rep, the lead and
+  another org get the same 404.
+- **Personal data.** The lead's erasure deletes the images of their records
+  (`accountErasure.ts`, beside the follow-up lines it blanks); an uploader's
+  erasure only drops `uploaderId`. Like the follow-up note they are the owner's
+  working material and are not in the account export.
+
+The UI (paste, attach, show) is #3932.

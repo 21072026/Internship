@@ -1053,6 +1053,7 @@ model User {
   relationLifecycleEvents           RelationLifecycleEvent[]       @relation("RelationLifecycleChangedBy")
   authoredInteractions              InteractionLog[]               @relation("InteractionAuthor")
   followUpEventsActed               FollowUpEvent[]                @relation("FollowUpEventActor")
+  followUpImagesUploaded            FollowUpImage[]                @relation("FollowUpImageUploader")
   passwordResetTokens               PasswordResetToken[]
   emailVerificationTokens           EmailVerificationToken[]
   tags                              UserTag[]                      @relation("UserTags")
@@ -4662,6 +4663,7 @@ model MentorshipRelation {
   statusChanges         StatusChange[]
   lifecycleEvents       RelationLifecycleEvent[]
   followUpEvents        FollowUpEvent[]
+  followUpImages        FollowUpImage[]
   agreementAcceptances  MentoringAgreementAcceptance[]
   slaBreaches           SlaBreach[]
   meetings              Meeting[]
@@ -5877,6 +5879,35 @@ model FollowUpEvent {
   @@unique([relationId, dedupeKey])
   @@index([relationId, createdAt])
   @@index([actorId])
+}
+
+// An image on a record's follow-up (#3931): a screenshot pasted into the
+// follow-up panel or the hand-off dialog. Uploaded first as a DRAFT
+// (`attachedAt` null), then attached by the follow-up write that names it
+// (PUT /api/mentorship/[id] `nextActionImageIds`, the hand-off's `imageIds`);
+// `clearedAt` set when the follow-up it belonged to is cleared, completed or
+// replaced — it leaves the panel and stays in the record's history. Who reads
+// it is who reads the follow-up note (canSeeNextAction): the owner and the
+// admins, never the lead. Rules (types, sizes, how many) in
+// src/lib/followUpImageRule.ts. Tenant data reached through its relation, like
+// FollowUpEvent: no orgId and no TENANT_MODELS entry.
+model FollowUpImage {
+  id          String    @id @default(cuid())
+  relationId  String
+  // Null once that account is erased; the image is the record's, not theirs.
+  uploaderId  String?
+  contentType String    @db.VarChar(32)
+  size        Int
+  data        Bytes     @db.MediumBlob
+  attachedAt  DateTime?
+  clearedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  relation MentorshipRelation @relation(fields: [relationId], references: [id], onDelete: Cascade)
+  uploader User?              @relation("FollowUpImageUploader", fields: [uploaderId], references: [id], onDelete: SetNull)
+
+  @@index([relationId, clearedAt])
+  @@index([uploaderId, attachedAt])
 }
 
 model InvitationToken {
