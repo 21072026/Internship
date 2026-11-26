@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {
   CUSTOMER_MAIL_LOCK_REASON,
   customerMailUnlocked,
+  kindForUnregisteredAddress,
   recipientKindOfRole,
   recipientLocked,
 } from '../../src/lib/customerMailLockRule.ts';
@@ -50,4 +51,17 @@ test('roles: ADMIN and MENTOR are staff; MENTEE a lead; COMPANY a customer; anyt
   assert.equal(recipientKindOfRole('SOURCE'), 'other');
   assert.equal(recipientKindOfRole(null), 'other');
   assert.match(CUSTOMER_MAIL_LOCK_REASON, /locked/i);
+});
+
+test('an address with no account yet: staff only when every open invitation of it is ADMIN/MENTOR', () => {
+  assert.equal(kindForUnregisteredAddress([]), 'contact');
+  assert.equal(kindForUnregisteredAddress(['MENTOR']), 'staff');
+  assert.equal(kindForUnregisteredAddress(['ADMIN', 'MENTOR']), 'staff');
+  // A lead's or a customer's invitation stays locked…
+  assert.equal(kindForUnregisteredAddress(['MENTEE']), 'contact');
+  assert.equal(kindForUnregisteredAddress(['COMPANY']), 'contact');
+  // …and so does an address with both: the lock cannot tell which one this mail carries.
+  assert.equal(kindForUnregisteredAddress(['MENTOR', 'MENTEE']), 'contact');
+  assert.equal(recipientLocked({ vertical: 'MARKETING', kind: kindForUnregisteredAddress(['MENTOR']) }, false), false);
+  assert.equal(recipientLocked({ vertical: 'MARKETING', kind: kindForUnregisteredAddress(['MENTEE']) }, false), true);
 });

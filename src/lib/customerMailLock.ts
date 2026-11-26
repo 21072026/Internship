@@ -18,6 +18,7 @@ import { runUnscoped } from '@/lib/tenantAmbient';
 import { verticalFor } from '@/lib/verticalContext';
 import {
   customerMailUnlocked,
+  kindForUnregisteredAddress,
   recipientKindOfRole,
   recipientLocked,
   type LockFacts,
@@ -46,9 +47,19 @@ async function factsInOrg(orgId: string, address: string): Promise<LockFacts> {
     prisma.user.findFirst({ where: { orgId, email: address }, select: { role: true } }),
   );
   if (account) return { vertical, kind: recipientKindOfRole(account.role) };
-  // Not an account of the org: a contact, a customer's mailbox, or a stranger —
-  // none of them is staff.
-  return { vertical, kind: 'contact' };
+  // Not an account of the org yet. A colleague being invited has no account
+  // until they register, so the org's own open invitations for the address say
+  // who they are (kindForUnregisteredAddress): only ADMIN/MENTOR invitations
+  // make a staff recipient. Anyone else — a contact, a customer's mailbox, a
+  // stranger, a lead's invitation — is not staff.
+  const invitations = await runUnscoped(() =>
+    prisma.invitationToken.findMany({
+      where: { orgId, email: address, used: false, expiresAt: { gt: new Date() } },
+      select: { role: true },
+      take: 20,
+    }),
+  );
+  return { vertical, kind: kindForUnregisteredAddress(invitations.map((i) => i.role)) };
 }
 
 /** An address no org was named for: is it a non-staff recipient of ANY marketing org? */

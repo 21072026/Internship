@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "- The marketing customer-mail lock no longer swallows a colleague's invitation: an address with no account yet is placed by the org's open invitations, and only ADMIN/MENTOR ones make it staff (`kindForUnregisteredAddress`); a lead's or customer's invitation stays locked.",
+  "notes": {
+    "en": ["Inviting a colleague to a sales workspace sends the invitation e-mail again."],
+    "tr": ["Satış çalışma alanına bir iş arkadaşını davet etmek yeniden davet e-postası gönderiyor."],
+    "de": ["Wer Kolleginnen und Kollegen in einen Vertriebsbereich einlädt, verschickt wieder die Einladungs-E-Mail."]
+  }
+}
