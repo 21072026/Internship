@@ -73,3 +73,22 @@ export function removePrLink(current: unknown, number: number): { links: Support
   const next = links.filter((l) => l.number !== number);
   return { links: next, changed: next.length !== links.length };
 }
+
+const ISSUE_URL = /^https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/issues\/(\d{1,7})\/?(?:[?#].*)?$/;
+
+export type ParsedIssueLink = { ok: true; url: string; number: number } | { ok: false; error: 'invalid_issue_url' | 'wrong_repo' };
+
+/**
+ * The issue the feedback review opened for a report (#3937): an issue of THIS
+ * repository, stored as `https://github.com/<repo>/issues/<n>`. The same
+ * narrow rule as a PR link above.
+ */
+export function parseIssueLink(input: unknown): ParsedIssueLink {
+  if (typeof input !== 'string') return { ok: false, error: 'invalid_issue_url' };
+  const m = ISSUE_URL.exec(input.trim());
+  if (!m) return { ok: false, error: 'invalid_issue_url' };
+  if (m[1].toLowerCase() !== SUPPORT_PR_REPO.toLowerCase()) return { ok: false, error: 'wrong_repo' };
+  const number = Number(m[2]);
+  if (!Number.isSafeInteger(number) || number < 1) return { ok: false, error: 'invalid_issue_url' };
+  return { ok: true, url: `https://github.com/${SUPPORT_PR_REPO}/issues/${number}`, number };
+}

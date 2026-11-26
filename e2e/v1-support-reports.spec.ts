@@ -194,3 +194,32 @@ test('a shared-screenshots key reads only the screenshots an admin shared; the a
   expect(await prisma.auditLog.count({ where: { targetId: ids.a1, action: { in: ['support_report.screenshot_shared', 'support_report.screenshot_unshared'] } } })).toBe(2);
   await admin.dispose();
 });
+
+test('support:triage writes a report\'s status and this repository\'s issue, nothing else; the reporter is not told (#3937)', { tag: '@smoke' }, async ({ request }) => {
+  const issue = (n: number) => `https://github.com/21072026/Internship/issues/${n}`;
+  const patch = (k: { headers: Record<string, string> }, id: string, data: unknown) =>
+    request.patch(`/api/v1/support/reports/${id}`, { headers: { ...k.headers, 'content-type': 'application/json' }, data });
+  const readOnly = await key(ids['org-a'], 'support:read');
+  expect((await patch(readOnly, ids.a2, { status: 'TRIAGED' })).status()).toBe(403);
+
+  const triage = await key(ids['org-a'], 'support:triage');
+  const bellsBefore = await prisma.notification.count({ where: { userId: ids['user-a'] } });
+  const ok = await patch(triage, ids.a2, { status: 'TRIAGED', issueUrl: `${issue(3937)}/` });
+  expect(ok.status()).toBe(200);
+  expect((await ok.json()).data).toMatchObject({ status: 'TRIAGED', reviewIssueUrl: issue(3937) });
+  const row = await prisma.supportReport.findUniqueOrThrow({ where: { id: ids.a2 }, select: { status: true, reviewIssueUrl: true, githubIssueUrl: true } });
+  expect(row).toMatchObject({ status: 'TRIAGED', reviewIssueUrl: issue(3937), githubIssueUrl: null });
+  const audit = await prisma.auditLog.findFirstOrThrow({ where: { targetId: ids.a2, action: 'API_SUPPORT_REPORT_TRIAGE' } });
+  expect(JSON.parse(audit.detail ?? '{}')).toMatchObject({ status: ['NEW', 'TRIAGED'], issueUrl: [null, issue(3937)] });
+
+  // Refused: RESOLVED (the admin's word), another repository, any other field, an empty body.
+  for (const body of [{ status: 'RESOLVED' }, { issueUrl: 'https://github.com/someone/else/issues/1' }, { description: 'x' }, {}]) {
+    expect((await patch(triage, ids.a2, body)).status(), JSON.stringify(body)).toBe(422);
+  }
+  // Another org's report is a 404; null takes the issue off.
+  expect((await patch(triage, ids.b1, { status: 'TRIAGED' })).status()).toBe(404);
+  expect((await patch(triage, ids.a2, { issueUrl: null })).status()).toBe(200);
+  expect((await prisma.supportReport.findUniqueOrThrow({ where: { id: ids.a2 } })).reviewIssueUrl).toBeNull();
+  // Nobody was notified.
+  expect(await prisma.notification.count({ where: { userId: ids['user-a'] } })).toBe(bellsBefore);
+});

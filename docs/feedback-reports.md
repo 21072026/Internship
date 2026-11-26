@@ -272,3 +272,16 @@ AuditLog row per change, `409 no_screenshot` without one). While it is on,
 `support:read_shared_screenshots` may read that image; unticking takes it back.
 The older `support:read_screenshots` (every screenshot) is unchanged and is not
 the review's scope.
+
+## The feedback review's write (#3937)
+
+What the review decided goes back to the report through ONE API write:
+`PATCH /api/v1/support/reports/{id}`, scope `support:triage` (never a default,
+not in the sandbox). It sets the status — NEW, TRIAGED, IN_PROGRESS or WONT_FIX,
+never RESOLVED, which stays the admin's call once the PR is in (#3928) — and the
+issue it opened in this repository, `SupportReport.reviewIssueUrl` (not
+`githubIssueUrl`, the support team's private-repository issue). Any other field
+is refused (422). The reporter is told nothing from here: their bell and their
+mail stay the admin's decision on the report page. Each change is one AuditLog
+row `API_SUPPORT_REPORT_TRIAGE` with old → new. The admin's report page shows
+the review issue in the "Pull requests" card.

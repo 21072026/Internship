@@ -743,4 +743,6 @@ A key works for its own org only. These rows live in `e2e/fixtures/authz-matrix.
 
 With `support:read` + `support:read_shared_screenshots` instead (#3936, the feedback review's key): the screenshot is 200 only while an admin has shared it on the report page (`PUT /api/admin/support/reports/{id}/screenshot-share`, `support.write`, audited); otherwise 404, like a report without one. `support:read_shared_screenshots` alone is 403.
 
+`PATCH /api/v1/support/reports/{id}` (#3937) needs `support:triage` (403 without; `support:read` does not imply it): `status` ∈ NEW / TRIAGED / IN_PROGRESS / WONT_FIX and/or `issueUrl` of this repository; RESOLVED, another repository, any other field and an empty body are 422; another org's report is 404. No notification to the reporter; one AuditLog row per change.
+
 Every 200 writes one `AuditLog` row containing the actor `api_key:<id>` and the report ids. The sandbox key never holds `support:*`.

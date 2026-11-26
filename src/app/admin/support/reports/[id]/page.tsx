@@ -41,6 +41,8 @@ interface Report {
   prLinks: unknown;
   /** Shared with the feedback review (#3936). */
   screenshotSharedAt: string | null;
+  /** The issue the feedback review opened (#3937). */
+  reviewIssueUrl: string | null;
   user: { id: string; fullName: string; email: string; role: string };
   files: ReportFile[];
 }
@@ -281,7 +283,7 @@ export default function AdminSupportReportPage({ params }: { params: Promise<{ i
           )}
         </div>
       </Card>
-      <SupportReportPrLinksCard reportId={report.id} initial={report.prLinks} />
+      <SupportReportPrLinksCard reportId={report.id} initial={report.prLinks} reviewIssueUrl={report.reviewIssueUrl} />
       <SupportReportGithubCard reportId={report.id} />
       <ImageLightbox {...lightbox.lightboxProps} />
     </div>

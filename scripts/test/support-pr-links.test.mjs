@@ -48,3 +48,12 @@ test('a stored list is read back clean; malformed entries are dropped', () => {
   assert.deepEqual(readPrLinks(stored).map((l) => l.number), [5]);
   assert.deepEqual(readPrLinks('not a list'), []);
 });
+
+const { parseIssueLink } = await import('../../src/lib/supportReportPrLinks.ts');
+
+test('the review issue is an issue of this repository, stored in one form (#3937)', () => {
+  const issues = `https://github.com/${SUPPORT_PR_REPO}/issues`;
+  assert.deepEqual(parseIssueLink(`${issues}/3937/`), { ok: true, url: `${issues}/3937`, number: 3937 });
+  assert.deepEqual(parseIssueLink('https://github.com/someone/else/issues/1'), { ok: false, error: 'wrong_repo' });
+  for (const bad of [`${base}/1`, `${issues}/0`, 'https://evil.example/x/issues/1', null]) assert.equal(parseIssueLink(bad).ok, false, String(bad));
+});
