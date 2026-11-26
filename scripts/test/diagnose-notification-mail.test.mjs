@@ -33,3 +33,16 @@ test('the report names every event, channel and stage, empty or not', () => {
   assert.ok(text.includes('job worker: lastFinished=5m ago, overdueOver10m=7'));
   assert.equal(formatCounts([], () => 'x'), 'none');
 });
+
+test('the per-mail match and the queue are reported; no address appears', () => {
+  const lines = mailReport({
+    days: 14, deliveries: [], jobs: [], oldestPending: {}, emailLogs: [],
+    queueJobs: [{ status: 'DEAD_LETTER', reason: '535 5.7.8', n: 2 }],
+    matched: { mails: 7, withNone: 5, rows: [{ status: 'SENT', category: 'none', reason: '-', n: 2 }] },
+    lastJobFinished: null, overdueJobs: 0, now: new Date(),
+  });
+  const text = lines.join('\n');
+  assert.ok(text.includes('mail queue email.send mentee-assigned: DEAD_LETTER[535 5.7.8]=2'));
+  assert.ok(text.includes('hand-off mails SENT by the ledger: 7; email log rows to those recipients within 2h: SENT/none=2; with none: 5'));
+  assert.ok(!text.includes('@'));
+});
