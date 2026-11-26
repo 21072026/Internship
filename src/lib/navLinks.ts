@@ -194,6 +194,8 @@ export const ADMIN_NAV_LINKS: NavLink[] = [
   // Automated mail to leads and customers waiting for approval (#2960) — the
   // sales vertical only (pipeline without mentorship, outboundApprovalRule.ts).
   { href: '/admin/outbox', icon: MailCheck, key: 'outbox', capability: 'pipeline', withoutCapability: 'mentorship', group: 'pipeline' },
+  // The org's own mail log (#3955): did a mail to one of our people go out. Every vertical.
+  { href: '/admin/mail-log', icon: MailCheck, key: 'mailLog', permission: 'mail.read', group: 'communication' },
   // Intern team/task projects and their contributor-IP terms, mentee goal
   // templates, programme cohorts and mentor/mentee success stories are
   // internship modules (#2499). A MARKETING

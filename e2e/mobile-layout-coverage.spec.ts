@@ -108,7 +108,9 @@ const FUNNEL: Route[] = [
     '/admin/migrate',
     '/admin/invitations',
     // Mentor–mentee matching — in the sidebar without an entry here (#3059).
-    '/admin/matching'
+    '/admin/matching',
+    // The org's own mail log (#3955).
+    '/admin/mail-log'
   ),
   // An AdminNav destination that is NOT an admin page: interview panels live
   // outside the role shells because an admin convenes them and mentors score

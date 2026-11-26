@@ -93,6 +93,7 @@ const ICONS: Record<string, string> = {
   organizations: 'business',
   orgAttributes: 'options',
   outbox: 'paper-plane',
+  mailLog: 'mail-unread',
   reEngagement: 'refresh',
   reportSubscriptions: 'mail-unread',
   reportsExplorer: 'stats-chart',
