@@ -19,6 +19,7 @@ import {
 import { nextStepSuggestions } from '@/lib/nextStepSuggestions';
 import { followUpNoteMissing, isHandoffAction, type HandoffAction } from '@/lib/leadHandoffRule';
 import { FollowUpFields } from '@/components/FollowUpFields';
+import { FollowUpImagePicker, FollowUpImageThumbs, useCurrentFollowUpImages, useFollowUpImageDrafts } from '@/components/FollowUpImages';
 
 /** The stored UTC day as the `YYYY-MM-DD` a date input reads. */
 export function followUpInputValue(at: string | null | undefined): string {
@@ -91,6 +92,7 @@ export function FollowUpPanel({
   readOnly = false,
   actionPicks = false,
   nextActionType = null,
+  images = false,
 }: {
   relationId: string;
   nextActionAt: string | null | undefined;
@@ -121,6 +123,8 @@ export function FollowUpPanel({
   actionPicks?: boolean;
   /** The stored pick (#3900); read with `actionPicks` only. */
   nextActionType?: string | null;
+  /** Images on the follow-up (#3932): thumbnails when reading, paste / add when editing. */
+  images?: boolean;
 }) {
   const t = useT();
   const locale = useLocale();
@@ -146,6 +150,8 @@ export function FollowUpPanel({
   const [aiNotice, setAiNotice] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiHidden, setAiHidden] = useState(false);
+  const current = useCurrentFollowUpImages(relationId, images);
+  const drafts = useFollowUpImageDrafts(images && !readOnly ? relationId : null);
 
   useEffect(() => {
     setShown({ at: nextActionAt ?? null, note: nextActionNote ?? null, time: nextActionTime ?? null, type: storedType });
@@ -170,6 +176,7 @@ export function FollowUpPanel({
     setTime(shown.time ?? '');
     setNote(shown.note ?? '');
     setAction(actionFor(shown.type, shown.note));
+    drafts.reset(current.images);
     setError('');
     setEditing(true);
   };
@@ -227,6 +234,8 @@ export function FollowUpPanel({
           nextActionTime: nextTime || null,
           // A cleared step has no pick; the server clears it with the step anyway.
           ...(actionPicks ? { nextActionType: next.date || next.note.trim() ? next.action ?? null : null } : {}),
+          // The images the form holds (#3932); a cleared follow-up drops them on the server anyway.
+          ...(images && (next.date || next.note.trim()) ? { nextActionImageIds: drafts.ids } : {}),
           ...(opts.completed ? { nextActionCompleted: true } : {}),
         }),
       });
@@ -239,6 +248,10 @@ export function FollowUpPanel({
         time: nextTime || null,
         type: actionPicks && !cleared ? next.action ?? null : cleared ? null : shown.type,
       });
+      if (images) {
+        if (cleared) current.setImages([]);
+        else await current.reload();
+      }
       returnFocus.current = opts.returnFocus ?? true;
       setEditing(false);
       await onSaved?.();
@@ -317,6 +330,11 @@ export function FollowUpPanel({
       {!editing && hasFollowUp && (
         <>
           <FollowUpReading at={shown.at} note={shown.note} time={shown.time} type={actionPicks ? shown.type : null} />
+          {images && (
+            <div className="mt-2">
+              <FollowUpImageThumbs images={current.images} testId="follow-up-read-images" />
+            </div>
+          )}
           {!readOnly && onComplete && (
             <div className="mt-3">
               <Button size="sm" variant="secondary" disabled={saving} title={t.followUp.completeHint} onClick={complete} data-testid="follow-up-complete">
@@ -354,6 +372,8 @@ export function FollowUpPanel({
             quickDates={quickDates}
             disabled={saving}
             autoFocus
+            images={images ? <FollowUpImagePicker drafts={drafts} testIdPrefix="follow-up" disabled={saving} /> : undefined}
+            onPasteImages={images ? (files) => void drafts.add(files) : undefined}
           />
           {showSuggestionRow && (
             <div className="mt-3" data-testid="follow-up-suggestions">
@@ -412,7 +432,7 @@ export function FollowUpPanel({
           )}
           {error && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{error}</p>}
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button size="sm" loading={saving} onClick={() => save({ date, note, time, action: actionPicks ? action : undefined })} data-testid="follow-up-save">
+            <Button size="sm" loading={saving} disabled={drafts.uploading} onClick={() => save({ date, note, time, action: actionPicks ? action : undefined })} data-testid="follow-up-save">
               {t.followUp.save}
             </Button>
             <Button size="sm" variant="secondary" disabled={saving} onClick={cancelEditing} data-testid="follow-up-cancel">

@@ -33,6 +33,7 @@ import { shownEmail } from '@/lib/leadEmail';
 import { LeadPageHandoff } from '@/components/sales/LeadPageHandoff';
 import { earlierPeriods, currentSuccessor } from '@/lib/leadJourney';
 import { followUpEventsFor, type FollowUpEventView } from '@/lib/followUpEvents';
+import { imagesByEvent } from '@/lib/followUpImageRule';
 import { markAssignmentSeen } from '@/lib/assignedToYou';
 import { RefreshRouterCache } from '@/components/RefreshRouterCache';
 
@@ -170,6 +171,18 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   // The earlier owners' follow-up history (#3870) — under the same gate as this
   // record's: the notes are working prose, shown only to who may read the follow-up.
   const earlierFollowUps = await Promise.all(earlier.map((p) => (ownersView ? followUpEventsFor(p.relationId) : [])));
+  // The images each history line set (#3932): only where the follow-up is readable.
+  const imageRows = ownersView
+    ? await prisma.followUpImage.findMany({
+        where: { relationId: { in: [relation.id, ...earlier.map((p) => p.relationId)] }, attachedAt: { not: null } },
+        select: { id: true, relationId: true, attachedAt: true },
+        orderBy: { attachedAt: 'asc' },
+      })
+    : [];
+  const imagesOn = (relationId: string, events: FollowUpEventView[]) =>
+    imagesByEvent(events, imageRows.filter((r) => r.relationId === relationId));
+  const currentImageMap = imagesOn(relation.id, followUpEvents);
+  const earlierImageMaps = earlier.map((p, idx) => imagesOn(p.relationId, earlierFollowUps[idx]));
   // The banner's link only when this viewer may open the current record (the same read as this page).
   const successorOpens =
     !!successor &&
@@ -183,7 +196,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   // One follow-up as a phrase: its day, its note, or both.
   const followUpText = (at: Date | null, note: string | null) =>
     [at ? date(at) : null, note].filter(Boolean).join(' — ') || s.followUpEvent.noDate;
-  const followUpLine = (e: FollowUpEventView): LeadSystemEvent => {
+  const followUpLine = (e: FollowUpEventView, images?: Map<string, string[]>): LeadSystemEvent => {
     const someone = s.followUpEvent.someone;
     const fill = (tpl: string, from: string, to: string) => tpl.replace('{from}', () => from).replace('{to}', () => to);
     const headline =
@@ -206,9 +219,9 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
             ? followUpText(e.fromAt, e.fromNote)
             : null
           : null;
-    return { id: e.id, source: 'followUp', at: e.createdAt.toISOString(), headline, detail, by: e.actorName ?? someone };
+    return { id: e.id, source: 'followUp', at: e.createdAt.toISOString(), headline, detail, by: e.actorName ?? someone, imageIds: images?.get(e.id) };
   };
-  const systemEvents: LeadSystemEvent[] = followUpEvents.map(followUpLine);
+  const systemEvents: LeadSystemEvent[] = followUpEvents.map((e) => followUpLine(e, currentImageMap));
   for (const m of stageMoves) {
     systemEvents.push({
       id: m.id,
@@ -381,7 +394,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
               from: date(p.from),
               to: p.to ? date(p.to) : null,
               interactions: p.interactions.map((i) => ({ id: i.id, date: i.date.toISOString(), type: i.type, subject: i.subject, notes: i.notes, outcome: i.outcome })),
-              events: earlierFollowUps[idx].map(followUpLine),
+              events: earlierFollowUps[idx].map((e) => followUpLine(e, earlierImageMaps[idx])),
             }))}
           />
         }

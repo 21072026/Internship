@@ -1,5 +1,6 @@
 'use client';
 
+import type { ReactNode } from 'react';
 import { Input } from '@/components/ui/Input';
 import { useT } from '@/i18n/client';
 import { NEXT_ACTION_NOTE_MAX } from '@/lib/nextActionRule';
@@ -48,6 +49,8 @@ export function FollowUpFields({
   disabled = false,
   autoFocus = false,
   notePlaceholder,
+  images,
+  onPasteImages,
 }: {
   value: FollowUpValue;
   onChange: (next: FollowUpValue) => void;
@@ -63,6 +66,10 @@ export function FollowUpFields({
   autoFocus?: boolean;
   /** The placeholder when the pick does not make the words the step. */
   notePlaceholder?: string;
+  /** The image strip under the note (#3932, FollowUpImagePicker); absent = no images on this form. */
+  images?: ReactNode;
+  /** A screenshot pasted into the note field (Ctrl+V) goes here instead of into the text. */
+  onPasteImages?: (files: File[]) => void;
 }) {
   const t = useT();
   const h = t.leadHandoff;
@@ -155,8 +162,20 @@ export function FollowUpFields({
         required={noteIsStep}
         disabled={disabled}
         onChange={(e) => set({ note: e.target.value })}
+        onPaste={
+          onPasteImages
+            ? (e) => {
+                const files = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith('image/'));
+                if (files.length) {
+                  e.preventDefault();
+                  onPasteImages(files);
+                }
+              }
+            : undefined
+        }
         data-testid={`${testIdPrefix}-note`}
       />
+      {images}
     </div>
   );
 }

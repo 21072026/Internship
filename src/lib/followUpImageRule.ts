@@ -76,3 +76,33 @@ export function planImageSet(rows: readonly ImageRow[], wanted: readonly string[
 export function currentImages<T extends ImageRow>(rows: readonly T[]): T[] {
   return rows.filter((r) => r.attachedAt && !r.clearedAt);
 }
+
+/** The follow-up events that set a step an image can belong to. */
+const STEP_KINDS = new Set(['ASSIGNED', 'CHANGED', 'HANDED_OFF']);
+
+/**
+ * Which history line each image belongs to (#3932): the latest step-setting
+ * event (assigned / changed / handed off) at or before the moment the image
+ * was attached. The attach runs in the same transaction as that event, so the
+ * two clocks agree to within `toleranceMs`. An image with no such event (none
+ * recorded) is on no line.
+ */
+export function imagesByEvent(
+  events: readonly { id: string; kind: string; createdAt: Date }[],
+  images: readonly { id: string; attachedAt: Date | null }[],
+  toleranceMs = 5000,
+): Map<string, string[]> {
+  const steps = events.filter((e) => STEP_KINDS.has(e.kind)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const out = new Map<string, string[]>();
+  for (const img of images) {
+    if (!img.attachedAt) continue;
+    const limit = img.attachedAt.getTime() + toleranceMs;
+    let owner: string | null = null;
+    for (const e of steps) {
+      if (e.createdAt.getTime() <= limit) owner = e.id;
+      else break;
+    }
+    if (owner) out.set(owner, [...(out.get(owner) ?? []), img.id]);
+  }
+  return out;
+}
