@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Bug, MessageSquareText, Paperclip, Star } from 'lucide-react';
+import { Bug, GitPullRequest, MessageSquareText, Paperclip, Star } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { RelativeTime } from '@/components/ui/RelativeTime';
@@ -25,6 +25,8 @@ interface Row {
   createdAt: string;
   user: { id: string; fullName: string; email: string };
   _count: { files: number };
+  /** The PRs it was worked in (#3928). */
+  prLinks: { url: string; number: number }[];
 }
 
 const field = 'rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-900 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100';
@@ -41,6 +43,7 @@ export default function AdminSupportReportsPage() {
   const [to, setTo] = useState('');
   const [q, setQ] = useState('');
   const [sort, setSort] = useState<'newest' | 'oldest'>('newest');
+  const [pr, setPr] = useState<'' | 'with' | 'without'>('');
 
   useEffect(() => {
     const p = new URLSearchParams();
@@ -50,6 +53,7 @@ export default function AdminSupportReportsPage() {
     if (to) p.set('to', to);
     if (q.trim()) p.set('q', q.trim());
     if (sort === 'oldest') p.set('sort', 'oldest');
+    if (pr) p.set('pr', pr);
     const ctrl = new AbortController();
     const timer = setTimeout(() => {
       fetch(`/api/admin/support/reports?${p}`, { signal: ctrl.signal })
@@ -58,11 +62,11 @@ export default function AdminSupportReportsPage() {
         .catch(() => { if (!ctrl.signal.aborted) setRows([]); });
     }, q ? 250 : 0);
     return () => { clearTimeout(timer); ctrl.abort(); };
-  }, [type, status, from, to, q, sort]);
+  }, [type, status, from, to, q, sort, pr]);
 
   // WCAG 4.1.3 (#2864): the list is rewritten in place without moving focus,
   // so the new result count is spoken (debounced) while a filter is active.
-  useFilterAnnouncement(rows && (type !== '' || status !== '' || from !== '' || to !== '' || q.trim() !== '') ? resultCountMessage(t.a11y, rows.length) : null);
+  useFilterAnnouncement(rows && (type !== '' || status !== '' || from !== '' || to !== '' || q.trim() !== '' || pr !== '') ? resultCountMessage(t.a11y, rows.length) : null);
 
   return (
     <div>
@@ -85,6 +89,13 @@ export default function AdminSupportReportsPage() {
           <select className={field} value={status} onChange={(e) => setStatus(e.target.value)} data-testid="report-filter-status">
             <option value="">{a.all}</option>
             {SUPPORT_REPORT_STATUSES.map((s) => <option key={s} value={s}>{a[`status${s}`]}</option>)}
+          </select>
+        </label>
+        <label className="flex flex-col text-xs text-gray-600 dark:text-gray-400">{a.filterPr}
+          <select className={field} value={pr} onChange={(e) => setPr(e.target.value as '' | 'with' | 'without')} data-testid="report-filter-pr">
+            <option value="">{a.all}</option>
+            <option value="with">{a.filterPrWith}</option>
+            <option value="without">{a.filterPrWithout}</option>
           </select>
         </label>
         <label className="flex flex-col text-xs text-gray-600 dark:text-gray-400">{a.filterFrom}
@@ -126,6 +137,12 @@ export default function AdminSupportReportsPage() {
                   <div className="flex shrink-0 items-center gap-2 text-xs text-gray-500">
                     {r.rating ? <span className="flex items-center gap-0.5"><Star className="h-3.5 w-3.5 fill-current text-amber-600" aria-hidden="true" />{r.rating}</span> : null}
                     {r._count.files > 0 && <span className="flex items-center gap-0.5"><Paperclip className="h-3.5 w-3.5" aria-hidden="true" />{r._count.files}</span>}
+                    {r.prLinks.length > 0 && (
+                      <span className="flex items-center gap-0.5" title={r.prLinks.map((l) => `#${l.number}`).join(', ')} data-testid={`report-row-prs-${r.id}`}>
+                        <GitPullRequest className="h-3.5 w-3.5" aria-hidden="true" />
+                        {r.prLinks.map((l) => `#${l.number}`).join(', ')}
+                      </span>
+                    )}
                     <Badge variant={r.type === 'BUG' ? 'danger' : 'info'}>{a[`type${r.type}`]}</Badge>
                     <Badge variant={STATUS_VARIANT[r.status]}>{a[`status${r.status}`]}</Badge>
                     <RelativeTime date={r.createdAt} />

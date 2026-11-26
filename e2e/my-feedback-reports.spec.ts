@@ -191,3 +191,53 @@ test('the page says how far along it is and filters by outcome; "will not be cha
   await expect(page.getByText(`The goals page froze ${STAMP}`)).toHaveCount(0);
   expect(new URL(page.url()).searchParams.get('status')).toBeNull();
 });
+
+test('an admin links the PRs a report was worked in; the reporter never sees them (#3928)', { tag: '@smoke' }, async ({ playwright, baseURL, page }) => {
+  const pr = (n: number) => `https://github.com/21072026/Internship/pull/${n}`;
+  const admin = await jar(playwright, baseURL, 'admin');
+  const add = (id: string, url: string) => admin.post(`/api/admin/support/reports/${id}/pr-links`, { data: { url } });
+
+  // Only a PR of this repository, in one canonical form; the same PR twice is one link.
+  expect((await (await add(ids.mine, 'https://github.com/someone/else/pull/1')).json()).code).toBe('wrong_repo');
+  expect((await (await add(ids.mine, `${pr(1)}`.replace('/pull/', '/issues/'))).json()).code).toBe('invalid_pr_url');
+  const first = await add(ids.mine, `${pr(3934)}/`);
+  expect(first.status()).toBe(200);
+  expect(((await first.json()).prLinks as { url: string }[]).map((l) => l.url)).toEqual([pr(3934)]);
+  expect((await (await add(ids.mine, pr(3934))).json()).unchanged).toBe(true);
+  expect((await add(ids.mine, pr(3940))).status()).toBe(200);
+  // Another org's report is a 404, like a missing one.
+  expect((await add(ids.foreignReport, pr(1))).status()).toBe(404);
+  const audits = await prisma.auditLog.count({ where: { targetId: ids.mine, action: 'support_report.pr_link_added' } });
+  expect(audits).toBe(2);
+
+  // The inbox shows them and filters by them.
+  const withPr = (await (await admin.get('/api/admin/support/reports?pr=with')).json()).reports as { id: string; prLinks: { number: number }[] }[];
+  expect(withPr.map((r) => r.id)).toEqual([ids.mine]);
+  expect(withPr[0].prLinks.map((l) => l.number)).toEqual([3934, 3940]);
+  const without = (await (await admin.get('/api/admin/support/reports?pr=without')).json()).reports as { id: string }[];
+  expect(without.map((r) => r.id)).not.toContain(ids.mine);
+
+  // The reporter's list and report never carry them; they cannot write them either.
+  const me = await jar(playwright, baseURL, 'me');
+  for (const path of ['/api/support/reports', `/api/support/reports/${ids.mine}`]) {
+    const body = await (await me.get(path)).text();
+    expect(body, path).not.toContain('/pull/');
+    expect(body, path).not.toContain('prLinks');
+  }
+  expect((await me.post(`/api/admin/support/reports/${ids.mine}/pr-links`, { data: { url: pr(1) } })).status()).toBe(403);
+  await me.dispose();
+
+  // The admin's report page: the card lists them and removes one.
+  // The page reads the context in the shape the server stores (feedbackContext.ts); this file's fixture writes bare strings.
+  await prisma.supportReport.update({ where: { id: ids.mine }, data: { context: { consoleErrors: [], failedRequests: [] } } });
+  await signInAndSettle(page, mail.admin, PW, '/admin');
+  await gotoSettled(page, `/admin/support/reports/${ids.mine}`);
+  const card = page.getByTestId('report-pr-links');
+  await expect(card.getByTestId('report-pr-3934')).toHaveAttribute('href', pr(3934));
+  await card.getByTestId('report-pr-remove-3940').click();
+  await expect(card.getByTestId('report-pr-3940')).toHaveCount(0);
+  await card.getByTestId('report-pr-url').fill('https://example.com/x');
+  await card.getByTestId('report-pr-add').click();
+  await expect(card.getByTestId('report-pr-error')).toBeVisible();
+  await admin.dispose();
+});

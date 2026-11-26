@@ -2592,6 +2592,12 @@ model SupportReport {
   // (/account/feedback) can show it. Written only when that mail was asked for.
   reporterNote   String?             @db.VarChar(1000)
   reporterNoteAt DateTime?
+  // The PRs that did the work (#3928), typed in by an admin: a JSON array of
+  // { url, number, addedAt, addedById } — at most SUPPORT_PR_LINK_MAX, only
+  // `https://github.com/<repo>/pull/<n>` of this repository
+  // (src/lib/supportReportPrLinks.ts). ADMIN ONLY: never selected for the
+  // reporter's own list, their mail or their bell, nor by the v1 API.
+  prLinks        Json?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
 
