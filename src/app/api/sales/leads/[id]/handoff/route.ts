@@ -21,6 +21,8 @@ const schema = z.object({
   dueAt: z.string().max(12).nullable().optional(),
   // Keep the record's follow-up as it is (#3873); the step fields are then ignored.
   keepFollowUp: z.boolean().optional(),
+  // The new step's images (#3931): the sender's own drafts on this record. Ignored when the follow-up is kept.
+  imageIds: z.array(z.string().min(1).max(40)).max(10).optional(),
 });
 
 // The dialog's "currently with … · follow-up …" line (#3873). Same gate as the

@@ -1,0 +1,4 @@
+{
+  "bump": "minor",
+  "changelog": "- Follow-up images, the API half (#3931): `FollowUpImage` (draft → attached → cleared), `POST`/`GET /api/mentorship/[id]/follow-up-images`, `GET /api/follow-up-images/[id]`; `PUT /api/mentorship/[id]` takes `nextActionImageIds` and the hand-off takes `imageIds` (a kept hand-off moves the images). Images only (type read from the bytes), at most 3 × 5 MB per follow-up; read by whoever reads the follow-up note; the lead's erasure deletes them. The UI follows in #3932."
+}

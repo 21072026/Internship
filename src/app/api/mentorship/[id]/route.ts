@@ -25,6 +25,7 @@ import { HANDOFF_ACTIONS, followUpNoteMissing, nextActionTypeFor } from '@/lib/l
 import { handoffActionLabelsByLocale } from '@/lib/handoffLabels';
 import { followUpEventFor } from '@/lib/followUpEventRule';
 import { followUpEventWrite } from '@/lib/followUpEvents';
+import { applyImagePlan, clearCurrentImages, planFollowUpImages } from '@/lib/followUpImages';
 
 // No `status` here any more (#1770): a pairing's state moves only through
 // POST /api/mentorship/[id]/lifecycle, which derives `status` from it. A body
@@ -57,6 +58,9 @@ const updateRelationSchema = z.object({
   // Sent with a clearing write by the panel's "Complete" (#3819): the history
   // line says "completed" rather than "cleared". Ignored on any other write.
   nextActionCompleted: z.boolean().optional(),
+  // The follow-up's images (#3931), as the form holds them: the ones to keep
+  // and the caller's own drafts to attach. Absent = images untouched.
+  nextActionImageIds: z.array(z.string().min(1).max(40)).max(10).optional(),
   // The pair's promised meeting cadence, in weeks (#2014); null clears it.
   // Read by src/lib/meetingCadence.ts — "on cadence" means met within it.
   expectedMeetingIntervalWeeks: z.number().int().min(1).max(52).nullable().optional(),
@@ -247,7 +251,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       }
 
       const {
-        stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote, nextActionType, nextActionTime, nextActionCompleted,
+        stageDeadline, reasonCode, reasonNote, pipelineStatus, nextActionAt, nextActionNote, nextActionType, nextActionTime, nextActionCompleted, nextActionImageIds,
         kind, employmentAttribution, expectedEndDate, ...rest
       } = parsed.data;
 
@@ -415,6 +419,23 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         { completed: nextActionCompleted === true }
       );
 
+      // The follow-up's images (#3931): cleared with the follow-up; otherwise the
+      // set the form names (followUpImageRule.ts planImageSet).
+      const now = new Date();
+      const followUpCleared = followUp.nextActionAt === null && followUp.nextActionNote === null;
+      let imageOps: Prisma.PrismaPromise<unknown>[] = [];
+      if (followUpCleared) {
+        imageOps = [clearCurrentImages(id, now)];
+      } else if (nextActionImageIds !== undefined) {
+        const plan = await planFollowUpImages(id, nextActionImageIds, session.user.id);
+        if (!plan.ok) return NextResponse.json({ error: 'Invalid images', code: plan.error }, { status: 400 });
+        imageOps = applyImagePlan(plan, now);
+      }
+      if (Object.keys(data).length === 0 && imageOps.length > 0) {
+        await prisma.$transaction(imageOps);
+        return NextResponse.json({ relation, changed: true });
+      }
+
       // A stage-only request that selects the current value is a successful
       // no-op. Avoid issuing an empty UPDATE while keeping existing clients'
       // `res.ok` contract intact.
@@ -433,15 +454,20 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       });
       // One transaction: the follow-up columns and their history line land
       // together or not at all.
-      const [updated] = followUpEvent
+      const [updated] = followUpEvent || imageOps.length
         ? await prisma.$transaction([
             update,
-            followUpEventWrite({
-              relationId: id,
-              facts: followUpEvent,
-              recordUpdatedAt: relation.updatedAt,
-              actorId: session.user.id,
-            }),
+            ...(followUpEvent
+              ? [
+                  followUpEventWrite({
+                    relationId: id,
+                    facts: followUpEvent,
+                    recordUpdatedAt: relation.updatedAt,
+                    actorId: session.user.id,
+                  }),
+                ]
+              : []),
+            ...imageOps,
           ])
         : [await update];
 

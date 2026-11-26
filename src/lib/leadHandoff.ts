@@ -16,6 +16,7 @@ import { defaultLocale, isLocale } from '@/i18n/config';
 import { composeHandoffNote, isHandoffAction, nextActionTypeFor, SALES_HANDOFF_REASON, todayIso, type HandoffAction } from '@/lib/leadHandoffRule';
 import { handoffActionLabelsByLocale } from '@/lib/handoffLabels';
 import { channelCounts, type FollowUpChannelCounts } from '@/lib/salesTeamRule';
+import { applyImagePlan, clearCurrentImages, moveCurrentImages, planFollowUpImages } from '@/lib/followUpImages';
 
 export interface SalesTeamMember {
   id: string;
@@ -174,6 +175,8 @@ export async function handOffLead(opts: {
    * `action`/`note`/`dueOn` are ignored. Refused when there is none to keep.
    */
   keepFollowUp?: boolean;
+  /** The new step's images (#3931): the sender's drafts on this record. A kept follow-up keeps its own. */
+  imageIds?: string[];
   request?: Request;
 }): Promise<HandoffOutcome> {
   const { session, orgId, relationId, toUserId, action, request } = opts;
@@ -236,6 +239,17 @@ export async function handOffLead(opts: {
     if (!dueTime.ok) return { ok: false, status: 400, code: 'invalid_time' };
     next = { at: due.value, note: composed.value, type: action, time: dueTime.value };
   }
+  // The new step's images, checked before anything moves (#3931). The record's
+  // current images are named too, so the plan does not ask to clear them here:
+  // the old record keeps them in its history, below.
+  let imagePlan: { attach: string[]; clear: string[] } = { attach: [], clear: [] };
+  if (opts.keepFollowUp !== true && opts.imageIds?.length) {
+    const plan = await planFollowUpImages(relation.id, opts.imageIds, actorId);
+    if (!plan.ok) return { ok: false, status: 400, code: plan.error };
+    if (plan.attach.length !== new Set(opts.imageIds).size) return { ok: false, status: 400, code: 'unknown_image' };
+    imagePlan = { attach: plan.attach, clear: [] };
+  }
+
   // What the notices call the next step: the note, else the day.
   const stepText = next.note ?? (next.at ? next.at.toISOString().slice(0, 10) : '');
 
@@ -275,6 +289,7 @@ export async function handOffLead(opts: {
   // ONE history line for the hand-off (#3819), carrying the follow-up it set —
   // not a "handed off" plus an "assigned" for the same click. In the same
   // transaction as the columns it describes.
+  const imageNow = new Date();
   await prisma.$transaction([
     prisma.mentorshipRelation.update({
       where: { id: newId },
@@ -298,6 +313,12 @@ export async function handOffLead(opts: {
       actorId,
       owners: { from: relation.mentorId, to: recipient.id },
     }),
+    // The images (#3931): a kept follow-up takes its own to the new record; a
+    // new step leaves the old ones in the old record's history and gets the
+    // sender's drafts.
+    ...(opts.keepFollowUp === true
+      ? [moveCurrentImages(relation.id, newId)]
+      : [clearCurrentImages(relation.id, imageNow), ...applyImagePlan(imagePlan, imageNow, newId)]),
   ]);
 
   const menteeName = relation.mentee.fullName;
