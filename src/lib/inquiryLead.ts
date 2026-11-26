@@ -5,7 +5,8 @@
 // sells to that company instead of placing people at it, so the same button
 // produces the marketing record: an account (`Company`), a stand-in lead person
 // and a funnel record at the org's first stage — docs/marketing-vertical/
-// pipeline-record.md. No login is created and nobody is e-mailed.
+// pipeline-record.md. No login is created and the enquirer is not e-mailed;
+// the lead's owner is told (announceLeadAssigned, #3968) unless they did it.
 //
 // THERE IS NO THIRD LEAD WRITER. The enquiry is handed to
 // `createMarketingAccount()` — the one-row, create-only run of the marketing
@@ -34,6 +35,7 @@ import {
 } from '@/lib/marketingImportStore';
 import { leadSourceName } from '@/lib/leadSourceName';
 import { servedHosts } from '@/lib/servedHosts';
+import { announceLeadAssigned } from '@/lib/leadAssignedNotice';
 
 export const CLAIM_STALE_MS = 10 * 60 * 1000;
 
@@ -190,6 +192,14 @@ export async function convertInquiryToMarketingLead(input: {
       targetId: inquiryId,
       detail: `lead company=${outcome.companyId} owner=${input.owner.id}${input.actor ? '' : ' (default owner)'}`,
       ...(input.request ? { request: input.request } : {}),
+    });
+    // The owner hears about the new lead unless they converted it themselves
+    // (#3968). The enquirer is never mailed: the stand-in lead has no login, and
+    // the customer-mail lock keeps a marketing lead's mailbox closed anyway.
+    await announceLeadAssigned({
+      ownerId: input.owner.id,
+      actorId: input.actor?.id ?? null,
+      leadName: inquiry.contactName || inquiry.companyName,
     });
     return {
       kind: 'converted',

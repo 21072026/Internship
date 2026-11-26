@@ -5669,6 +5669,13 @@ const en = {
       body: '{mentee} has been assigned to you as a mentee. Reach out to them to get the mentorship started, and log your first interaction when you do.',
       cta: 'Open your dashboard',
     },
+    menteesBulkAssignedEmail: {
+      subject: '{count} mentees were assigned to you',
+      heading: 'New mentees on your list',
+      greeting: 'Hi {name},',
+      body: '{count} mentees were assigned to you in one go. Open your dashboard to see who they are and reach out.',
+      cta: 'Open your dashboard',
+    },
     leadHandedOffEmail: {
       subject: '{from} handed you a lead: {lead}',
       heading: 'A lead was handed to you',
@@ -5906,6 +5913,13 @@ const en = {
       todoSubject: 'Overdue to-dos',
       todoGreeting: 'Hi {name}, these to-dos are past their due date:',
       todoCta: 'Open to-dos',
+      // The daily sales round-up a rep of an org without mentorship gets (#3968):
+      // their open sales attention items (the /sales dashboard queue) and overdue to-dos.
+      salesSubject: 'Your leads that need attention today',
+      salesGreeting: 'Hi {name}, these records on your book need a step from you:',
+      salesHeading: 'Needs attention',
+      salesMore: 'and {n} more on your dashboard.',
+      salesCta: 'Open your sales dashboard',
       columns: {
         mentee: 'Mentee',
         login: 'Login',
@@ -18572,6 +18586,13 @@ const tr: Dict = {
       body: '{mentee} sana mentee olarak atandı. Mentorluğu başlatmak için onunla iletişime geç ve ilk etkileşimini kaydetmeyi unutma.',
       cta: 'Panonu aç',
     },
+    menteesBulkAssignedEmail: {
+      subject: 'Sana {count} mentee atandı',
+      heading: 'Listene yeni menteeler eklendi',
+      greeting: 'Merhaba {name},',
+      body: 'Sana tek seferde {count} mentee atandı. Kim olduklarını görmek ve iletişime geçmek için panonu aç.',
+      cta: 'Panonu aç',
+    },
     leadHandedOffEmail: {
       subject: '{from} sana bir lead devretti: {lead}',
       heading: 'Sana bir lead devredildi',
@@ -18798,6 +18819,12 @@ const tr: Dict = {
       todoSubject: 'Gecikmiş yapılacaklar',
       todoGreeting: 'Merhaba {name}, son günü geçmiş yapılacaklar:',
       todoCta: 'Yapılacakları aç',
+      // Mentorluk modülü olmayan bir org'un temsilcisine giden günlük satış özeti (#3968).
+      salesSubject: 'Bugün ilgi bekleyen lead kayıtların',
+      salesGreeting: 'Merhaba {name}, listendeki şu kayıtlar senden bir adım bekliyor:',
+      salesHeading: 'İlgi bekleyenler',
+      salesMore: 've panonda {n} kayıt daha.',
+      salesCta: 'Satış panonu aç',
       columns: {
         mentee: 'Mentee',
         login: 'Giriş',
@@ -31351,6 +31378,13 @@ const de: Dict = {
       body: '{mentee} wurde dir als Mentee zugewiesen. Melde dich bei der Person, um das Mentoring zu starten, und erfasse dabei deine erste Interaktion.',
       cta: 'Dashboard öffnen',
     },
+    menteesBulkAssignedEmail: {
+      subject: 'Dir wurden {count} Mentees zugewiesen',
+      heading: 'Neue Mentees auf deiner Liste',
+      greeting: 'Hallo {name},',
+      body: 'Dir wurden auf einmal {count} Mentees zugewiesen. Öffne dein Dashboard, um zu sehen, wer sie sind, und melde dich bei ihnen.',
+      cta: 'Dashboard öffnen',
+    },
     leadHandedOffEmail: {
       subject: '{from} hat dir einen Lead übergeben: {lead}',
       heading: 'Dir wurde ein Lead übergeben',
@@ -31577,6 +31611,12 @@ const de: Dict = {
       todoSubject: 'Überfällige Aufgaben',
       todoGreeting: 'Hallo {name}, diese Aufgaben sind überfällig:',
       todoCta: 'Aufgaben öffnen',
+      // Die tägliche Vertriebsübersicht für Reps einer Organisation ohne Mentoring (#3968).
+      salesSubject: 'Deine Leads, die heute Aufmerksamkeit brauchen',
+      salesGreeting: 'Hallo {name}, diese Datensätze auf deiner Liste brauchen einen Schritt von dir:',
+      salesHeading: 'Braucht Aufmerksamkeit',
+      salesMore: 'und {n} weitere auf deinem Dashboard.',
+      salesCta: 'Vertriebs-Dashboard öffnen',
       columns: {
         mentee: 'Mentee',
         login: 'Login',

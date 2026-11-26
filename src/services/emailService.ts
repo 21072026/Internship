@@ -3114,6 +3114,49 @@ export async function sendMenteeAssignedEmail({
   });
 }
 
+// The bulk owner assignment's ONE mail to the incoming owner (#3968): a count,
+// never one mail per row — the route already sends the bell as a count for the
+// same reason. Pre-rendered through the router, e-mail channel only (the bell
+// is the route's own notify()), so the batched catalogue event is not deferred
+// into a digest that does not exist. The recipient is staff: outbound approval
+// and the customer-mail lock never hold it.
+export async function sendMenteesBulkAssignedEmail({
+  userId,
+  count,
+  orgId,
+}: {
+  userId: string;
+  count: number;
+  orgId?: string | null;
+}) {
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { fullName: true, preferredLanguage: true } });
+  if (!u) return;
+  const brand = await emailBrand(orgId);
+  const base = await appUrlForRecipient(orgId, userId);
+  const locale = resolveLocale(u.preferredLanguage);
+  const M = (await emailDictionary(locale, orgId)).notifications.menteesBulkAssignedEmail;
+  const n = String(count);
+  const home = notificationLink('MENTOR', 'dashboard', {}, { capabilities: await shellCapabilities(orgId) });
+  await notifyEvent(userId, 'mentorship.bulkAssigned', { count }, {
+    channels: ['email'],
+    orgId: orgId ?? null,
+    email: {
+      category: 'mentee-assigned',
+      fromName: brand.name,
+      locale: u.preferredLanguage,
+      subject: M.subject.replace('{count}', n),
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, esc(M.heading))}
+          <p>${esc(M.greeting.replace('{name}', u.fullName))}</p>
+          <p>${esc(M.body.replace('{count}', n))}</p>
+          ${ctaBlock(brand, `${base}${home}`, esc(M.cta))}
+        </div>
+      `,
+    },
+  });
+}
+
 // A lead handed to this rep by a colleague or an admin (#3871,
 // src/lib/leadHandoff.ts). The admin's direct assignment already mails the new
 // owner (sendMenteeAssignedEmail); the board's hand-off told them only in-app,
@@ -6081,6 +6124,84 @@ async function sendOverdueTodoMail(
   return true;
 }
 
+/** How many sales attention lines a daily round-up lists before "and N more". */
+const SALES_DIGEST_LIMIT = 15;
+
+/**
+ * The daily round-up a rep of an org WITHOUT mentorship gets instead of the
+ * mentee-activity digest (#3968): the records on their own book that the
+ * /sales dashboard puts in its attention queue — the same `getAttentionItems()`
+ * call with the same SALES_ATTENTION_REASONS, so the mail can never list a
+ * record the dashboard does not, nor nag about the "no contact in N days" rule
+ * the sales surface deliberately leaves out — followed by the overdue to-dos
+ * this branch already mailed on their own. Sent only when either half has
+ * something; one per rep per UTC day (the router dedupes on the key).
+ */
+async function sendSalesDailyMail(
+  u: DigestRecipient,
+  todoReach: Prisma.ProjectTaskWhereInput | null,
+  base: string,
+  brand: Awaited<ReturnType<typeof emailBrand>>,
+): Promise<boolean> {
+  const { getAttentionItems } = await import('@/lib/mentorAttention');
+  const { SALES_ATTENTION_REASONS, salesLeadHref } = await import('@/lib/salesSurface');
+  const locale = resolveLocale(u.preferredLanguage);
+  const dict = await emailDictionary(locale, u.orgId);
+  const A = dict.notifications.activityDigestEmail;
+  const L = dict.mentor.attention;
+  const queue = await getAttentionItems(u.id, { reasons: SALES_ATTENTION_REASONS, orgId: u.orgId ?? undefined });
+  // The dashboard's own labels (MentorAttentionQueue), one per sales reason:
+  // `satisfies` makes a reason added to SALES_ATTENTION_REASONS a type error here.
+  const label = {
+    overdue: L.overdue,
+    trial_expired: L.trialExpired,
+    trial_no_end_date: L.trialNoEndDate,
+    next_action_due: L.nextActionDue,
+    usage_drop: L.usageDrop,
+    trial_inactive: L.trialInactive,
+    free_quota_exceeded: L.freeQuotaExceeded,
+    cancellation_pending: L.cancellationPending,
+    decision_window_closing: L.decisionWindowClosing,
+  } satisfies Record<(typeof SALES_ATTENTION_REASONS)[number], string>;
+  const labelOf = (item: (typeof queue.items)[number], r: (typeof queue.items)[number]['reasons'][number]): string => {
+    const raw = (label as Partial<Record<string, string>>)[r] ?? '';
+    if (r === 'cancellation_pending' && item.contractEndsAt) return raw.replace('{date}', formatDate(item.contractEndsAt, locale, { timeZone: 'UTC' }));
+    if (r === 'decision_window_closing' && item.decisionWindowEndsAt) return raw.replace('{date}', formatDate(item.decisionWindowEndsAt, locale, { timeZone: 'UTC' }));
+    return raw;
+  };
+  const lines = queue.items
+    .slice(0, SALES_DIGEST_LIMIT)
+    .map((item) => {
+      const why = item.reasons.map((r) => labelOf(item, r)).filter(Boolean).join(' · ');
+      return `<li style="margin:4px 0;"><a href="${base}${salesLeadHref(item.relationId)}" style="color:${worldAccent(brand)};">${esc(item.menteeName)}</a> <span style="color:#6b7280;">— ${esc(why)}</span></li>`;
+    })
+    .join('');
+  const more = queue.items.length > SALES_DIGEST_LIMIT
+    ? `<p style="color:#6b7280;font-size:12px;">${esc(A.salesMore.replace('{n}', String(queue.items.length - SALES_DIGEST_LIMIT)))}</p>`
+    : '';
+  const attention = lines ? `<h3 style="margin:16px 0 4px;">${esc(A.salesHeading)}</h3><ul style="padding-left:18px;">${lines}</ul>${more}` : '';
+  const todos = todoReach ? await overdueTodoBlock(todoReach, locale, u.id, A) : '';
+  if (!attention && !todos) return false;
+  await notifyEvent(u.id, 'digest.overdueTodos', {}, {
+    channels: ['email'],
+    orgId: u.orgId ?? null,
+    dedupeKey: dedupeKeyFor({ kind: 'digest', digest: 'activity-sales', userId: u.id, day: utcDayKey(new Date()) }),
+    email: {
+      category: 'activity-digest',
+      locale: u.preferredLanguage,
+      subject: A.salesSubject,
+      html: `<div style="font-family: Arial, sans-serif; max-width: 680px; margin: 0 auto;">
+        ${worldHeading(brand, esc(A.salesSubject), `<h2 style="color:#2563eb;">${esc(A.salesSubject)}</h2>`)}
+        <p>${esc(A.salesGreeting.replace('{name}', u.fullName))}</p>
+        ${attention}
+        ${todos}
+        <p style="margin-top:16px;"><a href="${base}/sales" style="display:inline-block;background:${worldAccent(brand)};color:#fff;padding:10px 20px;text-decoration:none;border-radius:6px;">${esc(A.salesCta)}</a></p>
+      </div>`,
+    },
+  });
+  return true;
+}
+
 // Daily mentee-activity digest. Each mentor gets a summary of THEIR mentees'
 // activity in the last 24h; each admin gets their own org's summary. Respects the
 // 'digest' email preference. Recipients with no mentees / no data are skipped.
@@ -6115,13 +6236,14 @@ export async function sendDailyActivityDigests() {
       continue;
     }
     if (!interactionReminderApplies(await capabilitiesOf(m.orgId))) {
+      // A sales rep (#3968): their attention queue and overdue to-dos in one mail.
       try {
         const leads = await prisma.mentorshipRelation.findMany({ where: { mentorId: m.id }, select: { menteeId: true } });
         if (leads.length === 0) continue;
         const reach = { assigneeId: { in: leads.map((l) => l.menteeId) } };
-        if (await sendOverdueTodoMail(m, reach, await origins.urlFor(m.orgId), await brandOf(m.orgId))) sent++;
+        if (await sendSalesDailyMail(m, reach, await origins.urlFor(m.orgId), await brandOf(m.orgId))) sent++;
       } catch (e) {
-        console.error('Overdue to-do mail failed:', e);
+        console.error('Sales daily mail failed:', e);
       }
       continue;
     }

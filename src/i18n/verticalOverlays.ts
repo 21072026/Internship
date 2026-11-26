@@ -241,6 +241,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           body: '{mentee} has been assigned to you as a lead. Reach out to them to set up a demo, and log your first interaction when you do.',
           cta: 'Open your sales dashboard',
         },
+        menteesBulkAssignedEmail: {
+          subject: '{count} leads were assigned to you',
+          heading: 'New leads on your book',
+          body: '{count} leads were assigned to you in one go. Open your sales dashboard to see who they are and reach out.',
+          cta: 'Open your sales dashboard',
+        },
         mentorAssignedEmail: {
           subject: 'Your contact person: {mentor}',
           heading: 'You have a personal contact person',
@@ -1413,6 +1419,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           body: '{mentee} size müşteri adayı olarak atandı. Bir demo ayarlamak için iletişime geçin ve ilk etkileşiminizi kaydetmeyi unutmayın.',
           cta: 'Satış panonuzu açın',
         },
+        menteesBulkAssignedEmail: {
+          subject: 'Size {count} müşteri adayı atandı',
+          heading: 'Listenizde yeni müşteri adayları var',
+          body: 'Size tek seferde {count} müşteri adayı atandı. Kim olduklarını görmek ve iletişime geçmek için satış panonuzu açın.',
+          cta: 'Satış panonuzu açın',
+        },
         // Müşteri adayına gider: siz diliyle.
         mentorAssignedEmail: {
           subject: 'Muhatabınız: {mentor}',
@@ -2449,6 +2461,12 @@ const OVERLAYS: Record<VerticalKey, Record<Locale, LocaleOverlay>> = {
           subject: 'Neuer Lead zugewiesen: {mentee}',
           heading: 'Du hast einen neuen Lead',
           body: '{mentee} wurde dir als Lead zugewiesen. Melde dich, um eine Demo zu vereinbaren, und erfasse dabei deine erste Interaktion.',
+          cta: 'Vertriebs-Dashboard öffnen',
+        },
+        menteesBulkAssignedEmail: {
+          subject: 'Dir wurden {count} Leads zugewiesen',
+          heading: 'Neue Leads auf deiner Liste',
+          body: 'Dir wurden auf einmal {count} Leads zugewiesen. Öffne dein Vertriebs-Dashboard, um zu sehen, wer sie sind, und melde dich bei ihnen.',
           cta: 'Vertriebs-Dashboard öffnen',
         },
         // Geht an einen Kunden: Sie-Form.
