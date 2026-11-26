@@ -91,6 +91,12 @@ export interface PartnerRow {
   status: 'ACTIVE' | 'SUSPENDED' | 'TERMINATED';
   noticeEffectiveAt: string | null;
   hasAccount: boolean;
+  /**
+   * The partner's newest open invitation (not used, not withdrawn) while it has
+   * no account yet (#3962), so the list says "invited · when" instead of offering
+   * the first invitation again. `expired` once its link no longer works.
+   */
+  invitation: { sentAt: string; expired: boolean } | null;
   customers: number;
   /** Minor units per commission status, in the plan currency. */
   totals: { PENDING: number; APPROVED: number; PAID: number };
@@ -113,7 +119,7 @@ export async function listPartners(
     ...(opts.status ? { status: opts.status } : {}),
     ...(opts.q ? { OR: [{ displayName: { contains: opts.q } }, { code: { contains: opts.q } }, { contactEmail: { contains: opts.q } }] } : {}),
   };
-  const [partners, customers, sums] = await Promise.all([
+  const [partners, customers, sums, invitations] = await Promise.all([
     prisma.affiliatePartner.findMany({
       where,
       orderBy: { createdAt: 'desc' },
@@ -121,7 +127,21 @@ export async function listPartners(
     }),
     prisma.affiliateCustomer.groupBy({ by: ['partnerId'], where: { orgId }, _count: { _all: true } }),
     prisma.affiliateCommission.groupBy({ by: ['partnerId', 'status'], where: { orgId }, _sum: { amountMinor: true } }),
+    // A new invitation withdraws the open one (affiliateInvite.ts), so there is
+    // at most one per partner; newest first keeps the first seen if not.
+    prisma.invitationToken.findMany({
+      where: { orgId, partnerId: { not: null }, used: false, revokedAt: null },
+      orderBy: { createdAt: 'desc' },
+      select: { partnerId: true, createdAt: true, expiresAt: true },
+    }),
   ]);
+  const now = Date.now();
+  const openInvitation = new Map<string, { sentAt: string; expired: boolean }>();
+  for (const i of invitations) {
+    if (i.partnerId && !openInvitation.has(i.partnerId)) {
+      openInvitation.set(i.partnerId, { sentAt: i.createdAt.toISOString(), expired: i.expiresAt.getTime() <= now });
+    }
+  }
   const customerCount = new Map(customers.map((c) => [c.partnerId, c._count._all]));
   const sumBy = new Map(sums.map((s) => [`${s.partnerId}:${s.status}`, s._sum.amountMinor ?? 0]));
   const rows = partners.map((p) => {
@@ -134,6 +154,7 @@ export async function listPartners(
       status: p.status,
       noticeEffectiveAt: p.noticeEffectiveAt?.toISOString() ?? null,
       hasAccount: p.userId !== null,
+      invitation: p.userId === null ? openInvitation.get(p.id) ?? null : null,
       customers: customerCount.get(p.id) ?? 0,
       totals: { PENDING: total('PENDING'), APPROVED: total('APPROVED'), PAID: total('PAID') },
       payoutIban: maskedIbanFromCipher(orgId, p.id, p.payoutDetailsCipher),

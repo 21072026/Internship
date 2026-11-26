@@ -1338,6 +1338,9 @@ const en = {
     invite: 'Send invitation',
     inviteHint: 'Sends a sign-up link to the contact e-mail. A new invitation withdraws the earlier one.',
     invited: 'Invitation sent.',
+    invitedAt: 'Invitation sent',
+    inviteExpired: 'Invitation expired',
+    reinvite: 'Send again',
     inviteLink: 'The e-mail could not be sent. Pass this link on to the partner:',
     inviteErrors: {
       already_linked: 'This partner already has an account.',
@@ -14339,6 +14342,9 @@ const tr: Dict = {
     invite: 'Davet gönder',
     inviteHint: 'İletişim e-postasına kayıt bağlantısı gönderir. Yeni davet öncekini geçersiz kılar.',
     invited: 'Davet gönderildi.',
+    invitedAt: 'Davet gönderildi',
+    inviteExpired: 'Davetin süresi doldu',
+    reinvite: 'Tekrar gönder',
     inviteLink: 'E-posta gönderilemedi. Bu bağlantıyı partnere ilet:',
     inviteErrors: {
       already_linked: 'Bu partnerin zaten bir hesabı var.',
@@ -27105,6 +27111,9 @@ const de: Dict = {
     invite: 'Einladung senden',
     inviteHint: 'Sendet einen Registrierungslink an die Kontakt-E-Mail. Eine neue Einladung zieht die vorherige zurück.',
     invited: 'Einladung gesendet.',
+    invitedAt: 'Einladung gesendet',
+    inviteExpired: 'Einladung abgelaufen',
+    reinvite: 'Erneut senden',
     inviteLink: 'Die E-Mail konnte nicht gesendet werden. Geben Sie diesen Link an den Partner weiter:',
     inviteErrors: {
       already_linked: 'Dieser Partner hat bereits ein Konto.',
