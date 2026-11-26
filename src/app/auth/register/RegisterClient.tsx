@@ -22,6 +22,7 @@ import { useMemo } from 'react';
 import { PasswordRules } from '@/components/auth/PasswordRules';
 import { passwordPolicyError, passwordRefusalText, usePasswordPolicy, type PasswordPolicyDict } from '@/lib/passwordPolicyClient';
 import type { PasswordPolicy } from '@/lib/passwordPolicyRule';
+import { randomPartnerCode, type CodeAvailability } from '@/lib/affiliateCodeRule';
 
 // The password rule is the org's policy (#1544), fetched once and applied with
 // the same pure check the server runs — so the form never accepts a password
@@ -88,6 +89,61 @@ function RegisterForm({ social }: { social: { id: string; label: string }[] }) {
   });
   const passwordValue = watch('password') ?? '';
 
+  // An affiliate partner's invitation (#3961): the partner may pick its own
+  // referral code here. `partner` is what the invitation's holder may know —
+  // the current code and whether it is fixed already; the server decides again
+  // on submit, so this is guidance, not the check.
+  const [partner, setPartner] = useState<{ code: string; lock: 'has_account' | 'in_use' | null } | null>(null);
+  const [partnerCode, setPartnerCode] = useState('');
+  const [codeStatus, setCodeStatus] = useState<CodeAvailability | 'checking' | null>(null);
+  useEffect(() => {
+    if (!inviteToken) return;
+    fetch('/api/invite/partner-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: inviteToken }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { code?: string; lock?: 'has_account' | 'in_use' | null } | null) => {
+        if (!d?.code) return;
+        setPartner({ code: d.code, lock: d.lock ?? null });
+        setPartnerCode(d.code);
+        setCodeStatus('current');
+      })
+      .catch(() => {});
+  }, [inviteToken]);
+  // Availability while typing, debounced. Only the answer for the code still in
+  // the field is kept, so a slow reply cannot overwrite a newer one.
+  useEffect(() => {
+    if (!partner || partner.lock || !inviteToken) return;
+    const code = partnerCode.trim();
+    if (code === partner.code) {
+      setCodeStatus('current');
+      return;
+    }
+    setCodeStatus('checking');
+    let live = true;
+    const timer = setTimeout(() => {
+      fetch('/api/invite/partner-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: inviteToken, code }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d: { status?: CodeAvailability } | null) => {
+          if (live) setCodeStatus(d?.status ?? null);
+        })
+        .catch(() => {
+          if (live) setCodeStatus(null);
+        });
+    }, 400);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [partnerCode, partner, inviteToken]);
+  const codeBlocked = codeStatus === 'taken' || codeStatus === 'invalid';
+
   useEffect(() => {
     if (!inviteToken) return;
     setShowToken(true);
@@ -106,6 +162,10 @@ function RegisterForm({ social }: { social: { id: string; label: string }[] }) {
   }, [inviteToken, getValues, setValue]);
 
   const onSubmit = handleSubmit(async (data) => {
+    if (partner && !partner.lock && codeBlocked) {
+      setError(codeStatus === 'taken' ? t.auth.partnerCodeTaken : t.auth.partnerCodeInvalid);
+      return;
+    }
     setLoading(true);
     setError('');
 
@@ -132,6 +192,8 @@ function RegisterForm({ social }: { social: { id: string; label: string }[] }) {
           // which language the visitor read the page in. Correctable any time
           // under Settings → Language.
           locale,
+          // The partner's chosen referral code (#3961), only while it may change.
+          partnerCode: partner && !partner.lock ? partnerCode.trim() : undefined,
         }),
       });
 
@@ -143,6 +205,11 @@ function RegisterForm({ social }: { social: { id: string; label: string }[] }) {
         // The org has no free admin seat (#1752): the invitee is not the buyer —
         // a neutral sentence, never the plan or a price.
         if (body.code === 'plan_limit_reached') throw new Error(t.auth.adminSeatUnavailable);
+        if (body.code === 'code_taken') {
+          setCodeStatus('taken');
+          throw new Error(t.auth.partnerCodeTaken);
+        }
+        if (body.code === 'code_invalid' || body.code === 'code_locked') throw new Error(t.auth.partnerCodeInvalid);
         throw new Error(passwordRefusalText(body, pw.policy, t.passwordPolicy) ?? body.error ?? 'Registration failed');
       }
 
@@ -219,6 +286,37 @@ function RegisterForm({ social }: { social: { id: string; label: string }[] }) {
               {...register('email')}
               error={errors.email?.message}
             />
+            {partner && (
+              <div className="space-y-1" data-testid="partner-code-field">
+                <Input
+                  label={t.auth.partnerCode}
+                  value={partnerCode}
+                  readOnly={partner.lock !== null}
+                  maxLength={100}
+                  autoComplete="off"
+                  spellCheck={false}
+                  hint={partner.lock ? t.auth.partnerCodeLocked : t.auth.partnerCodeHint}
+                  error={codeStatus === 'taken' ? t.auth.partnerCodeTaken : codeStatus === 'invalid' ? t.auth.partnerCodeInvalid : undefined}
+                  onChange={(e) => setPartnerCode(e.target.value)}
+                  data-testid="partner-code-input"
+                />
+                {!partner.lock && (
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-gray-500" aria-live="polite" data-testid="partner-code-status">
+                      {codeStatus === 'available' ? t.auth.partnerCodeAvailable : codeStatus === 'checking' ? t.auth.partnerCodeChecking : ''}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setPartnerCode(randomPartnerCode())}
+                      className="font-medium text-blue-600 hover:underline"
+                      data-testid="partner-code-random"
+                    >
+                      {t.auth.partnerCodeRandom}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             {/* One person, two products (#2590, docs/worlds.md): an invitation
                 here creates an account of THIS product with its own password, even
                 for a mailbox that has a login elsewhere. A page stays in its own

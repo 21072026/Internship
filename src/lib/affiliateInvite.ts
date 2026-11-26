@@ -16,18 +16,28 @@
 //   be sent; the generic invitation board never resends a partner's invitation.
 // - The link is a guarded write (`userId: null`): two registrations racing on
 //   one partner cannot both own it, and the loser's account is rolled back.
+// - The partner may choose its own code on the registration form (#3961): read
+//   through the live invitation only (`partnerOfInvitation`), written in the
+//   same guarded update as the link, and only while `partnerCodeLock()` says
+//   the code is not fixed yet. A clash is `code_taken` — never the other
+//   partner's name.
 
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { deliverInvitation, invitationRegisterUrl, logInvitationCreated, persistInvitation, type CreateInvitationInput } from '@/lib/inviteCreate';
-import { emailTakenInOrgWorld } from '@/lib/userWorld';
+import { emailTakenInOrgWorld, worldOfOrg } from '@/lib/userWorld';
+import { hostVertical } from '@/lib/hostVertical';
+import { isPartnerCode, partnerCodeLock, type CodeAvailability, type CodeLock } from '@/lib/affiliateCodeRule';
 
 export type PartnerInviteErrorCode =
   | 'partner_not_found'
   | 'already_linked' // the partner has an account already
   | 'partner_inactive' // suspended or terminated partners are not invited
   | 'no_contact_email'
-  | 'email_taken'; // the address already has an account in this product
+  | 'email_taken' // the address already has an account in this product
+  | 'code_invalid' // the chosen code is not a code (affiliateCodeRule.ts)
+  | 'code_taken' // another partner of the programme has it
+  | 'code_locked'; // the code is fixed already (partnerCodeLock)
 
 export class PartnerInviteError extends Error {
   readonly code: PartnerInviteErrorCode;
@@ -107,12 +117,32 @@ export async function invitePartner(input: {
  */
 export async function linkPartnerAccount(
   tx: Prisma.TransactionClient,
-  link: { orgId: string; partnerId: string; userId: string },
+  link: { orgId: string; partnerId: string; userId: string; code?: string | null },
 ): Promise<void> {
-  const { count } = await tx.affiliatePartner.updateMany({
-    where: { id: link.partnerId, orgId: link.orgId, userId: null, status: 'ACTIVE' },
-    data: { userId: link.userId },
-  });
+  // The chosen code (#3961), when it differs from the current one. Read under
+  // the partner's row lock so the lock rule and the write see the same row.
+  let codeChange: { from: string; to: string } | null = null;
+  if (link.code != null) {
+    if (!isPartnerCode(link.code)) throw new PartnerInviteError('code_invalid');
+    await tx.$queryRaw`SELECT id FROM \`AffiliatePartner\` WHERE id = ${link.partnerId} AND orgId = ${link.orgId} FOR UPDATE`;
+    const partner = await tx.affiliatePartner.findFirst({ where: { id: link.partnerId, orgId: link.orgId }, select: { code: true } });
+    if (!partner) throw new PartnerInviteError('already_linked');
+    if (partner.code !== link.code) {
+      if ((await codeLockOf(tx, link.orgId, link.partnerId, false)) !== null) throw new PartnerInviteError('code_locked');
+      codeChange = { from: partner.code, to: link.code };
+    }
+  }
+  let count: number;
+  try {
+    ({ count } = await tx.affiliatePartner.updateMany({
+      where: { id: link.partnerId, orgId: link.orgId, userId: null, status: 'ACTIVE' },
+      data: { userId: link.userId, ...(codeChange ? { code: codeChange.to } : {}) },
+    }));
+  } catch (e) {
+    // `@@unique([orgId, code])`: another partner holds it (case-insensitively).
+    if (codeChange && (e as { code?: string })?.code === 'P2002') throw new PartnerInviteError('code_taken');
+    throw e;
+  }
   if (count !== 1) throw new PartnerInviteError('already_linked');
   await tx.auditLog.create({
     data: {
@@ -123,4 +153,64 @@ export async function linkPartnerAccount(
       detail: JSON.stringify({ partnerId: link.partnerId }),
     },
   });
+  if (codeChange) {
+    await tx.auditLog.create({
+      data: {
+        orgId: link.orgId,
+        actorId: link.userId,
+        action: 'affiliate.partner.code_chosen',
+        targetId: link.partnerId,
+        detail: JSON.stringify({ partnerId: link.partnerId, from: codeChange.from, to: codeChange.to }),
+      },
+    });
+  }
+}
+
+async function codeLockOf(db: Prisma.TransactionClient | typeof prisma, orgId: string, partnerId: string, hasAccount: boolean): Promise<CodeLock> {
+  const [customers, clicks, commissions] = await Promise.all([
+    db.affiliateCustomer.count({ where: { orgId, partnerId } }),
+    db.affiliateClickDaily.count({ where: { orgId, partnerId } }),
+    db.affiliateCommission.count({ where: { orgId, partnerId } }),
+  ]);
+  return partnerCodeLock({ hasAccount, customers, clicks, commissions });
+}
+
+/**
+ * The partner a live AFFILIATE invitation of this world names, for its holder
+ * only (#3961): the registration form shows the current code and whether it may
+ * still be changed. Null for anything else — unknown, used, withdrawn, expired,
+ * another world, another role — so the answer reveals nothing about a token the
+ * caller does not hold. Read by token with no tenant context, like the register
+ * route: the token is the authorisation.
+ */
+export async function partnerOfInvitation(token: string): Promise<{ orgId: string; partnerId: string; code: string; lock: CodeLock } | null> {
+  const invitation = await prisma.invitationToken.findUnique({
+    where: { token },
+    select: { orgId: true, role: true, partnerId: true, used: true, revokedAt: true, expiresAt: true },
+  });
+  if (!invitation || invitation.role !== 'AFFILIATE' || !invitation.partnerId || !invitation.orgId) return null;
+  if (invitation.used || invitation.revokedAt || invitation.expiresAt <= new Date()) return null;
+  if ((await worldOfOrg(invitation.orgId)) !== (await hostVertical())) return null;
+  const partner = await prisma.affiliatePartner.findFirst({
+    where: { id: invitation.partnerId, orgId: invitation.orgId, status: 'ACTIVE' },
+    select: { code: true, userId: true },
+  });
+  if (!partner) return null;
+  const lock = await codeLockOf(prisma, invitation.orgId, invitation.partnerId, partner.userId !== null);
+  return { orgId: invitation.orgId, partnerId: invitation.partnerId, code: partner.code, lock };
+}
+
+/**
+ * Whether `code` is free for this partner. MySQL's collation compares codes
+ * case-insensitively, the same way the unique key does, so `Ada` is taken when
+ * `ada` exists. Never says WHO holds it.
+ */
+export async function partnerCodeAvailability(p: { orgId: string; partnerId: string; code: string }, current: string): Promise<CodeAvailability> {
+  if (!isPartnerCode(p.code)) return 'invalid';
+  if (p.code === current) return 'current';
+  const holder = await prisma.affiliatePartner.findFirst({
+    where: { orgId: p.orgId, code: p.code, NOT: { id: p.partnerId } },
+    select: { id: true },
+  });
+  return holder ? 'taken' : 'available';
 }

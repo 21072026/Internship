@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { register } from 'node:module';
 
 register(new URL('./ts-extensionless-resolve.mjs', import.meta.url));
-const { PARTNER_CODE_RE, PARTNER_CODE_MAX, isPartnerCode, codeFromPath } = await import('../../src/lib/affiliateCodeRule.ts');
+const { PARTNER_CODE_RE, PARTNER_CODE_MAX, isPartnerCode, codeFromPath, randomPartnerCode, RANDOM_CODE_ALPHABET, RANDOM_CODE_LENGTH, partnerCodeLock } = await import('../../src/lib/affiliateCodeRule.ts');
 
 test('old-system user names with . and @ are codes; a leading letter or digit, nothing else', () => {
   for (const ok of ['partner.name', 'ada@example', 'a.b-c_1', 'K_1', 'demo-partner', '7', 'x'.repeat(PARTNER_CODE_MAX)]) {
@@ -52,4 +52,32 @@ test('the migration keeps . and @ and names a code with a space as needing a new
   const { partners, issues } = readPartners(parseDelimited(csv));
   assert.deepEqual(partners.map((p) => p.code), ['ada@example', 'max.muster']);
   assert.deepEqual(issues.map((i) => [i.row, i.code]), [[3, 'code_needs_new']]);
+});
+
+test('a random code is a valid code of unambiguous characters (#3961)', () => {
+  for (const ch of '0o1li') assert.equal(RANDOM_CODE_ALPHABET.includes(ch), false, ch);
+  const seen = new Set();
+  for (let i = 0; i < 500; i++) {
+    const code = randomPartnerCode();
+    assert.equal(code.length, RANDOM_CODE_LENGTH);
+    assert.equal(isPartnerCode(code), true, code);
+    for (const ch of code) assert.ok(RANDOM_CODE_ALPHABET.includes(ch), code);
+    seen.add(code);
+  }
+  // 31^8 codes: 500 draws never repeat in practice.
+  assert.equal(seen.size, 500);
+  // The source of randomness is injectable, and every index is reachable.
+  assert.equal(randomPartnerCode(() => 0), RANDOM_CODE_ALPHABET[0].repeat(RANDOM_CODE_LENGTH));
+  const last = RANDOM_CODE_ALPHABET.length - 1;
+  assert.equal(randomPartnerCode(() => last), RANDOM_CODE_ALPHABET[last].repeat(RANDOM_CODE_LENGTH));
+});
+
+test('the code is fixed once the account exists or the code has been used (#3961)', () => {
+  const fresh = { hasAccount: false, customers: 0, clicks: 0, commissions: 0 };
+  assert.equal(partnerCodeLock(fresh), null);
+  assert.equal(partnerCodeLock({ ...fresh, hasAccount: true }), 'has_account');
+  assert.equal(partnerCodeLock({ ...fresh, customers: 1 }), 'in_use');
+  assert.equal(partnerCodeLock({ ...fresh, clicks: 3 }), 'in_use');
+  assert.equal(partnerCodeLock({ ...fresh, commissions: 1 }), 'in_use');
+  assert.equal(partnerCodeLock({ ...fresh, hasAccount: true, clicks: 3 }), 'has_account');
 });
