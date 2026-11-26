@@ -276,18 +276,28 @@ if (WHY) {
   reachableTokens(entries, WHY);
   process.exit(0);
 }
+// Written whole or not at all: to a temp file beside it, then renamed over it.
+// Two unit tests regenerate this file while `node --test` runs files in
+// parallel; an in-place write let one read the other's half-written file
+// ("the admin chrome scope is missing", flaky on main).
+function writeAtomic(file, contents) {
+  const tmp = `${file}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tmp, contents);
+  fs.renameSync(tmp, file);
+}
+
 const result = build();
 const text = render(result);
 if (CHECK) {
   const problems = coverageProblems(result.roots);
-  fs.writeFileSync(OUT, text); // keep the working copy in step for the tsc that follows
+  writeAtomic(OUT, text); // keep the working copy in step for the tsc that follows
   if (problems.length) {
     console.error('check:i18n-scopes failed:\n' + problems.map((p) => `  - ${p}`).join('\n'));
     process.exit(1);
   }
   console.log(`check:i18n-scopes OK — shell ${result.shell.length}/${result.total} namespaces, ${Object.keys(result.scopes).length} scopes`);
 } else {
-  fs.writeFileSync(OUT, text);
+  writeAtomic(OUT, text);
   const sizes = Object.entries(result.scopes).map(([id, ns]) => `${id}:${ns.length}`).join(' ');
   console.log(`i18n-scopes: shell ${result.shell.length}/${result.total}; ${sizes}`);
 }
