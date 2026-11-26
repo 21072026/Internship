@@ -33,6 +33,21 @@ export function recipientKindOfRole(role: string | null | undefined): LockRecipi
   return 'other';
 }
 
+/**
+ * An address with no account in the org yet: what its OPEN invitations of that
+ * org (unused, unexpired) say it will be. Staff only when there is at least one
+ * and every one of them is a staff role — an ADMIN or MENTOR invitation is a
+ * colleague being let in, and a colleague's invitation is exactly the staff mail
+ * the lock promises to leave alone (it locked every MARKETING invitation before:
+ * the invitee has no account yet, so they read as a contact). If any open
+ * invitation of that address is for a lead or a customer, the lock cannot tell
+ * which one this mail carries, so it stays a contact (fails closed).
+ */
+export function kindForUnregisteredAddress(openInvitationRoles: readonly (string | null | undefined)[]): LockRecipientKind {
+  if (openInvitationRoles.length === 0) return 'contact';
+  return openInvitationRoles.every((r) => recipientKindOfRole(r) === 'staff') ? 'staff' : 'contact';
+}
+
 export interface LockFacts {
   /** The vertical of the organization the recipient belongs to (null: none found). */
   vertical: string | null;

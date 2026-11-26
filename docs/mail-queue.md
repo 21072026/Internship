@@ -513,7 +513,10 @@ product is never affected.
 - **The decision** is pure in `src/lib/customerMailLockRule.ts`
   (`scripts/test/customer-mail-lock.test.mjs`). **The lookups** are in
   `src/lib/customerMailLock.ts`. A recipient is placed by the mail's account (`userId`),
-  then by its org (`orgId`) and the address inside it. A mail that names no org is checked
+  then by its org (`orgId`) and the address inside it. An address with no account in the
+  org yet is placed by the org's open (unused, unexpired) invitations for it: staff only
+  when every one is an ADMIN or MENTOR invitation, so a colleague's invitation leaves and
+  a lead's stays locked (`kindForUnregisteredAddress`). A mail that names no org is checked
   against every MARKETING organization's accounts, account contacts and contact
   e-mails, so a sender that forgot its `orgId` is not a hole. Several recipients: one
   locked recipient locks the whole mail.
