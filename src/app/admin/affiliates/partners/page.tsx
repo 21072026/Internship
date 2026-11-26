@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import { RelativeTime } from '@/components/ui/RelativeTime';
 import { useToast } from '@/components/ui/Toast';
 import { useLocale, useT } from '@/i18n/client';
 import { formatMinorAmount } from '@/lib/money';
@@ -32,6 +33,7 @@ interface Row {
   status: Status;
   noticeEffectiveAt: string | null;
   hasAccount: boolean;
+  invitation: { sentAt: string; expired: boolean } | null;
   customers: number;
   totals: { PENDING: number; APPROVED: number; PAID: number };
   payoutIban: string | null;
@@ -142,6 +144,7 @@ function AffiliatePartners() {
       if (res.ok) {
         if (body.emailSent) toast(L.invited);
         else setInviteLinks({ ...inviteLinks, [id]: body.registerUrl });
+        await load();
       } else {
         const code = body.code as keyof typeof L.inviteErrors | undefined;
         toast(code && code in L.inviteErrors ? L.inviteErrors[code] : L.failed, 'error');
@@ -228,10 +231,29 @@ function AffiliatePartners() {
                 </div>
                 <div className="flex flex-col items-end gap-2">
                   <Badge variant={STATUS_VARIANT[p.status]}>{L[`status${p.status}`]}</Badge>
+                  {!p.hasAccount && p.invitation && (
+                    <span className="flex flex-wrap items-center justify-end gap-x-2 text-xs text-gray-500 dark:text-gray-400" data-testid={`affiliate-invited-${p.code}`}>
+                      <span>
+                        {p.invitation.expired ? L.inviteExpired : L.invitedAt} · <RelativeTime date={p.invitation.sentAt} granularity="day" />
+                      </span>
+                      {canWrite && p.status === 'ACTIVE' && p.contactEmail && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          title={L.inviteHint}
+                          onClick={() => void invite(p.id)}
+                          className="font-medium text-blue-600 hover:underline disabled:opacity-50 dark:text-blue-400"
+                          data-testid={`affiliate-reinvite-${p.code}`}
+                        >
+                          {L.reinvite}
+                        </button>
+                      )}
+                    </span>
+                  )}
                   {p.noticeEffectiveAt && <span className="text-xs text-gray-500">{interpolate(L.noticeFrom, { date: formatDate(p.noticeEffectiveAt, locale, { timeZone: 'UTC' }) })}</span>}
                   {canWrite && (
                     <div className="flex flex-wrap justify-end gap-2">
-                      {p.status === 'ACTIVE' && !p.hasAccount && p.contactEmail && (
+                      {p.status === 'ACTIVE' && !p.hasAccount && p.contactEmail && !p.invitation && (
                         <Button
                           type="button"
                           size="sm"
