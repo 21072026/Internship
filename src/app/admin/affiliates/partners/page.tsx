@@ -68,6 +68,11 @@ function AffiliatePartners() {
   // The register link of an invitation whose mail could not be sent, to pass on by hand.
   const [inviteLinks, setInviteLinks] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  // Invite by address alone (#3963): the partner names itself and picks its code
+  // on the registration form; the server makes a placeholder code meanwhile.
+  const [emailInvite, setEmailInvite] = useState({ email: '', displayName: '' });
+  const [emailIssues, setEmailIssues] = useState<Set<string>>(new Set());
+  const [emailInviteLink, setEmailInviteLink] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/admin/affiliate/partners?${qs}`);
@@ -109,6 +114,40 @@ function AffiliatePartners() {
         toast(L.codeTaken, 'error');
       } else if (body.code === 'invalid_input') {
         setIssues(new Set(body.issues));
+        toast(L.invalid, 'error');
+      } else toast(L.failed, 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function inviteByEmail() {
+    setBusy(true);
+    setEmailIssues(new Set());
+    setEmailInviteLink(null);
+    try {
+      const res = await fetch('/api/admin/affiliate/partners/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(emailInvite),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setEmailInvite({ email: '', displayName: '' });
+        if (body.inviteError) {
+          const code = body.inviteError as keyof typeof L.inviteErrors;
+          toast(code in L.inviteErrors ? L.inviteErrors[code] : L.failed, 'error');
+        } else if (body.invitation?.emailSent) toast(L.invited);
+        else if (body.invitation?.registerUrl) setEmailInviteLink(body.invitation.registerUrl);
+        await load();
+      } else if (body.code === 'email_is_partner') {
+        setEmailIssues(new Set(['email']));
+        toast(L.emailIsPartner, 'error');
+      } else if (body.code === 'email_taken') {
+        setEmailIssues(new Set(['email']));
+        toast(L.inviteErrors.email_taken, 'error');
+      } else if (body.code === 'invalid_input') {
+        setEmailIssues(new Set(body.issues));
         toast(L.invalid, 'error');
       } else toast(L.failed, 'error');
     } finally {
@@ -308,11 +347,50 @@ function AffiliatePartners() {
       )}
 
       {canWrite && (
-        <Card>
+        <Card data-testid="affiliate-email-invite">
           <CardHeader>
-            <CardTitle>{L.add}</CardTitle>
+            <CardTitle>{L.inviteByEmail}</CardTitle>
           </CardHeader>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <p className="mb-3 text-sm text-gray-600 dark:text-gray-400">{L.inviteByEmailHint}</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Input
+              label={L.contactEmail}
+              type="email"
+              required
+              value={emailInvite.email}
+              error={emailIssues.has('email') ? L.invalid : undefined}
+              onChange={(e) => setEmailInvite({ ...emailInvite, email: e.target.value })}
+              data-testid="affiliate-invite-email"
+            />
+            <Input
+              label={L.displayNameOptional}
+              hint={L.displayNameOptionalHint}
+              value={emailInvite.displayName}
+              error={emailIssues.has('displayName') ? L.invalid : undefined}
+              onChange={(e) => setEmailInvite({ ...emailInvite, displayName: e.target.value })}
+              data-testid="affiliate-invite-name"
+            />
+          </div>
+          {emailInviteLink && (
+            <div className="mt-3 space-y-1">
+              <p className="text-sm text-gray-600 dark:text-gray-400">{L.inviteLink}</p>
+              <Input readOnly value={emailInviteLink} aria-label={L.inviteLink} data-testid="affiliate-email-invite-link" />
+            </div>
+          )}
+          <div className="mt-3">
+            <Button type="button" disabled={busy || emailInvite.email.trim() === ''} onClick={() => void inviteByEmail()} data-testid="affiliate-email-invite-send">
+              {L.invite}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      {canWrite && (
+        <details className="rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-900" data-testid="affiliate-advanced">
+          <summary className="cursor-pointer text-sm font-medium text-gray-700 dark:text-gray-300">{L.advanced}</summary>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">{L.advancedHint}</p>
+          <h2 className="mt-3 text-base font-semibold text-gray-900 dark:text-gray-100">{L.add}</h2>
+          <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Input label={L.code} hint={L.codeHint} value={form.code} error={issues.has('code') ? L.invalid : undefined} onChange={(e) => setForm({ ...form, code: e.target.value })} data-testid="affiliate-new-code" />
             <Input label={L.displayName} value={form.displayName} error={issues.has('displayName') ? L.invalid : undefined} onChange={(e) => setForm({ ...form, displayName: e.target.value })} data-testid="affiliate-new-name" />
             <Input label={L.contactEmail} hint={L.contactEmailHint} type="email" value={form.contactEmail} error={issues.has('contactEmail') ? L.invalid : undefined} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} data-testid="affiliate-new-email" />
@@ -322,7 +400,7 @@ function AffiliatePartners() {
               {L.add}
             </Button>
           </div>
-        </Card>
+        </details>
       )}
     </div>
   );

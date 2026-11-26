@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- Affiliate partners can be invited by e-mail alone: `POST /api/admin/affiliate/partners/invite` (`src/lib/affiliateEmailInvite.ts`) creates the partner with a placeholder random code and the address's local part as its name, under the organisation lock, and sends the invitation (409 `email_is_partner` / `email_taken`). The registration form lets the partner set its name (`partnerName`, 400 `name_invalid`) next to its code. Creating a partner with a fixed code moved under \"Advanced\" on the partners page (#3963).",
+  "notes": {
+    "en": ["Invite a partner with just an e-mail address — the partner chooses its name and referral code when signing up. Creating a partner with a fixed code is now under \"Advanced\"."],
+    "tr": ["Bir partneri yalnızca e-posta adresiyle davet edebilirsin; partner adını ve referans kodunu kayıt olurken kendisi seçer. Sabit kodla partner oluşturma artık \"Gelişmiş\" altında."],
+    "de": ["Partner lassen sich jetzt allein mit ihrer E-Mail-Adresse einladen – Name und Empfehlungscode wählt der Partner bei der Registrierung. Das Anlegen mit festem Code steht jetzt unter „Erweitert“."]
+  }
+}

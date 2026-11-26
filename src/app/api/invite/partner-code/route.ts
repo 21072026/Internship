@@ -7,7 +7,8 @@ import { partnerCodeAvailability, partnerOfInvitation } from '@/lib/affiliateInv
 // (#3961, docs/affiliate-module.md § Referral codes). The registration form
 // asks it twice:
 //   - without `code`: the partner's current code and whether it can still be
-//     changed (`lock`: null | 'has_account' | 'in_use');
+//     changed (`lock`: null | 'has_account' | 'in_use'), and its display name
+//     (#3963) — the partner's own, for the holder of its invitation;
 //   - with `code`: `available` | `current` | `taken` | `invalid` — never who
 //     holds a taken code.
 // The token is the credential, so it travels in the body, not the URL (which
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
   const partner = await partnerOfInvitation(parsed.data.token);
   if (!partner) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  if (parsed.data.code === undefined) return NextResponse.json({ code: partner.code, lock: partner.lock });
+  if (parsed.data.code === undefined) return NextResponse.json({ code: partner.code, displayName: partner.displayName, lock: partner.lock });
   const status = partner.lock
     ? parsed.data.code === partner.code ? 'current' : 'invalid'
     : await partnerCodeAvailability({ orgId: partner.orgId, partnerId: partner.partnerId, code: parsed.data.code.trim() }, partner.code);

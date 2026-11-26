@@ -95,6 +95,9 @@ function RegisterForm({ social }: { social: { id: string; label: string }[] }) {
   // on submit, so this is guidance, not the check.
   const [partner, setPartner] = useState<{ code: string; lock: 'has_account' | 'in_use' | null } | null>(null);
   const [partnerCode, setPartnerCode] = useState('');
+  // The name the partner shows under (#3963) — a stand-in when the admin invited
+  // by address alone, so it is always the partner's to correct here.
+  const [partnerName, setPartnerName] = useState('');
   const [codeStatus, setCodeStatus] = useState<CodeAvailability | 'checking' | null>(null);
   useEffect(() => {
     if (!inviteToken) return;
@@ -104,10 +107,11 @@ function RegisterForm({ social }: { social: { id: string; label: string }[] }) {
       body: JSON.stringify({ token: inviteToken }),
     })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d: { code?: string; lock?: 'has_account' | 'in_use' | null } | null) => {
+      .then((d: { code?: string; displayName?: string; lock?: 'has_account' | 'in_use' | null } | null) => {
         if (!d?.code) return;
         setPartner({ code: d.code, lock: d.lock ?? null });
         setPartnerCode(d.code);
+        setPartnerName(d.displayName ?? '');
         setCodeStatus('current');
       })
       .catch(() => {});
@@ -194,6 +198,7 @@ function RegisterForm({ social }: { social: { id: string; label: string }[] }) {
           locale,
           // The partner's chosen referral code (#3961), only while it may change.
           partnerCode: partner && !partner.lock ? partnerCode.trim() : undefined,
+          partnerName: partner && partnerName.trim() ? partnerName.trim() : undefined,
         }),
       });
 
@@ -210,6 +215,7 @@ function RegisterForm({ social }: { social: { id: string; label: string }[] }) {
           throw new Error(t.auth.partnerCodeTaken);
         }
         if (body.code === 'code_invalid' || body.code === 'code_locked') throw new Error(t.auth.partnerCodeInvalid);
+        if (body.code === 'name_invalid') throw new Error(t.auth.partnerNameInvalid);
         throw new Error(passwordRefusalText(body, pw.policy, t.passwordPolicy) ?? body.error ?? 'Registration failed');
       }
 
@@ -288,6 +294,15 @@ function RegisterForm({ social }: { social: { id: string; label: string }[] }) {
             />
             {partner && (
               <div className="space-y-1" data-testid="partner-code-field">
+                <Input
+                  label={t.auth.partnerName}
+                  value={partnerName}
+                  maxLength={160}
+                  autoComplete="organization"
+                  hint={t.auth.partnerNameHint}
+                  onChange={(e) => setPartnerName(e.target.value)}
+                  data-testid="partner-name-input"
+                />
                 <Input
                   label={t.auth.partnerCode}
                   value={partnerCode}

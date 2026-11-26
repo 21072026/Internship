@@ -64,6 +64,8 @@ const registerSchema = z.object({
   // an AFFILIATE invitation; `linkPartnerAccount` decides whether it may still
   // change and writes it in the same guarded update as the account link.
   partnerCode: z.string().trim().max(200).optional(),
+  // …and the name it shows under (#3963), on the same AFFILIATE invitation only.
+  partnerName: z.string().trim().max(200).optional(),
 });
 
 export async function POST(request: Request) {
@@ -304,14 +306,14 @@ export async function POST(request: Request) {
       try {
         user = await prisma.$transaction(async (tx) => {
           const created = await createUser(tx, userData, { source: selfRegistered ? 'register' : 'invite' });
-          await linkPartnerAccount(tx, { orgId, partnerId, userId: created.id, code: parsed.data.partnerCode || null });
+          await linkPartnerAccount(tx, { orgId, partnerId, userId: created.id, code: parsed.data.partnerCode || null, displayName: parsed.data.partnerName || null });
           return created;
         });
       } catch (e) {
         // The chosen code is refused with its own code, so the form can say why
         // and let the person pick another — the invitation is still good.
-        if (e instanceof PartnerInviteError && (e.code === 'code_taken' || e.code === 'code_invalid' || e.code === 'code_locked')) {
-          return NextResponse.json({ error: 'The referral code cannot be used', code: e.code }, { status: e.code === 'code_invalid' ? 400 : 409 });
+        if (e instanceof PartnerInviteError && (e.code === 'code_taken' || e.code === 'code_invalid' || e.code === 'code_locked' || e.code === 'name_invalid')) {
+          return NextResponse.json({ error: 'The referral code or name cannot be used', code: e.code }, { status: e.code === 'code_invalid' || e.code === 'name_invalid' ? 400 : 409 });
         }
         if (e instanceof PartnerInviteError) {
           return NextResponse.json({ error: 'This invitation is no longer valid — ask for a new one' }, { status: 400 });
