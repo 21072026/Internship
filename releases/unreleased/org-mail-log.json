@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- Org admins get their own mail log (#3955): `/admin/mail-log` (`GET /api/admin/mail-log`, `mail.read`) lists the e-mails to the organization's own people — sent, failed, skipped and why, retrying, held for approval — filterable by status, type, recipient and 7/30 days. Only rows stamped with the admin's organization; rows without one and deployment-wide figures stay the super admin's. In every vertical, MARKETING included.",
+  "notes": {
+    "en": ["Admins can now see whether an e-mail to someone in their organization went out — and if not, why — under \"Mail log\"."],
+    "tr": ["Yöneticiler artık org'larındaki birine giden bir e-postanın gidip gitmediğini — gitmediyse nedenini — \"E-posta kaydı\" altında görebiliyor."],
+    "de": ["Admins sehen jetzt unter „E-Mail-Protokoll“, ob eine E-Mail an jemanden aus ihrer Organisation versendet wurde – und wenn nicht, warum."]
+  }
+}

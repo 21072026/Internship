@@ -332,6 +332,18 @@ short throttle that clears does not alert), and the hourly stale check counts
 deferrals as activity. A relay-wide deferral, inline or in the drain, and a
 mail that expires in the queue both run the check.
 
+## The org admin's mail log (#3955)
+
+`/admin/mail-log` (`GET /api/admin/mail-log`, `mail.read`, every vertical —
+MARKETING had no mail view at all) lists the `EmailLog` rows **stamped with the
+admin's own organization**: time, status (sent / failed / skipped / retrying /
+held for approval), category, recipient and one short reason
+(`mailLogReason()`, any address in it removed). Filters: status, category,
+exact recipient, last 7 or 30 days; the latest 200. A row without an `orgId`
+is never shown — whose it is cannot be told — and nothing deployment-wide (the
+relay quota, the queue) is here: those stay the super admin's (`email-log`,
+#2635; the queue screen). The rules are `src/lib/orgMailLogRule.ts`.
+
 ## Operations (#2953)
 
 ### The health block
