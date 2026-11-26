@@ -20,7 +20,7 @@ per organisation, and every number in tests and examples here is synthetic.
 | 3 | Payment source | **Manual entry by an ADMIN** (`source` = `MANUAL`) and the account event `payment_received` from the source system (`API`, [#3355](#payments-from-the-source-system-3355)) both go through the one payment writer, `recordAffiliatePayment()`. Since #3846 the monthly invoice CSV (`INVOICE`, [Monthly invoice import](#monthly-invoice-import-3846)) is a third entry path. All of them carry the [commission base](#commission-base-35513552): the paid gross amount, with the month's list price beside it when known — the one-off commission is chosen by the list price, the percent earns on what was paid. No commission is written anywhere else — except the one-off migration (`IMPORT`, below), which takes a previous system's history as recorded. Refunds and cancellations are not handled yet (#3475). |
 | 4 | Attribution | A customer (the customer's id on the product side, opaque here) is linked to a partner **automatically** when an account event carries a matching `referral_code` ([Automatic attribution](#automatic-attribution-3354)), or by an ADMIN on the first manual payment entry. One partner per customer, first link wins. |
 | 5 | Identity | Existing CRM sign-in, new `AFFILIATE` role. Partners moved from a previous system are **invited** (invitation / sign-in link); no password hash from another system is ever imported. |
-| 6 | Referral codes | Permanent once issued, unique per organisation. A migrated partner keeps the exact code the previous system used (a number, a custom slug, or a user name with `.` and `@`, #3550). One rule: `src/lib/affiliateCodeRule.ts` — a letter or digit, then letters, digits, `.`, `@`, `-`, `_`, at most 100. A code with a space is reported by the migration as needing a new code. `/r/ada%40example` and `/r/ada@example` are one code; links carry `@` as `%40`. |
+| 6 | Referral codes | Fixed once the partner's account exists or the code has been used (a click, a customer, a commission) — until then the invited partner may choose its own on the registration form (#3961, [§ The partner's account](#the-partners-account)). Unique per organisation. A migrated partner keeps the exact code the previous system used (a number, a custom slug, or a user name with `.` and `@`, #3550). One rule: `src/lib/affiliateCodeRule.ts` — a letter or digit, then letters, digits, `.`, `@`, `-`, `_`, at most 100. A code with a space is reported by the migration as needing a new code. `/r/ada%40example` and `/r/ada@example` are one code; links carry `@` as `%40`. |
 | 7 | Payouts | Recorded and approved in the CRM; the bank transfer itself stays manual. |
 | 8 | Contract | Each organisation writes its programme copy and partner contract (per locale). A changed contract bumps its version, and every partner must accept the current version before the portal or its API answers. |
 | 9 | Clicks | Not migrated. New clicks are counted through the tracked link `/r/<code>` as **per-partner, per-day counters only** — no IP, user-agent or cookie is stored ([Link clicks](#link-clicks-3541)). |
@@ -740,6 +740,20 @@ A partner exists before its account (the admin creates it, or a migration does).
   their own password under the org's policy — nothing is imported.
 - The invitation is world-bound like every other (`docs/worlds.md`): a token of a
   MARKETING organisation is unknown on any other host.
+- **The partner's own code (#3961).** The registration form of a partner
+  invitation shows the partner's code, editable, with "Suggest another"
+  (`randomPartnerCode()`: 8 characters without 0/o/1/l/i). It asks
+  `POST /api/invite/partner-code` `{ token, code? }` — public, the token in the body
+  (never the URL), rate-limited, 404 for anything but a live partner invitation of
+  this world — which answers the current code and `lock`, or for a code
+  `available` / `current` / `taken` / `invalid` (case-insensitive, like the unique
+  key) and never who holds it. `/api/register` takes `partnerCode`;
+  `linkPartnerAccount()` writes it in the same guarded update as the link, under
+  the partner's row lock, refusing 409 `code_taken` (the unique key), 400
+  `code_invalid` or 409 `code_locked` without creating the account. The lock is
+  `partnerCodeLock()` in `src/lib/affiliateCodeRule.ts`: an account, or any
+  customer, click or commission — a migrated partner's links are in circulation
+  before its account exists. Audited old → new (`affiliate.partner.code_chosen`).
 
 ## The partner portal
 

@@ -14,6 +14,10 @@ const STATUS: Record<PartnerInviteError['code'], number> = {
   partner_inactive: 409,
   no_contact_email: 400,
   email_taken: 409,
+  // The registration's chosen-code refusals (#3961); never raised by an invitation.
+  code_invalid: 400,
+  code_taken: 409,
+  code_locked: 409,
 };
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
