@@ -18,6 +18,7 @@ import { canWriteSalesRecord, salesTeamReadAllowed } from '@/lib/salesBook';
 import { canSeeNextAction } from '@/lib/nextActionRule';
 import { getLastContacts } from '@/lib/lastContact';
 import { resolvePipelineStages, stageLabel } from '@/lib/pipelineStages';
+import { boardColumnPaint } from '@/lib/boardColumnTone';
 import { formatDate } from '@/lib/relativeTime';
 import { getServerDictionary } from '@/i18n/server';
 import { getDictionary } from '@/i18n/dictionaries';
@@ -191,6 +192,11 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   const { locale, t } = await getServerDictionary();
   const s = t.sales.lead;
   const stages = await resolvePipelineStages(session.user.orgId, locale);
+  const stagePaint = boardColumnPaint(
+    relation.pipelineStatus,
+    stages.map((st) => st.key),
+    stages.find((st) => st.key === relation.pipelineStatus)?.color,
+  );
   const date = (value: Date) => formatDate(value, locale);
   const iso = (value: Date | null) => (value ? value.toISOString() : null);
   // One follow-up as a phrase: its day, its note, or both.
@@ -348,7 +354,16 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
           {/* Plan a meeting with this lead (#3778): the calendar's dialog, prefilled; the server decides who may. */}
           {writable && relation.status === 'ACTIVE' && <PlanMeetingButton relationId={relation.id} leadName={relation.mentee.fullName} variant="outline" />}
           <AffiliateSourceBadge partnerName={affiliatePartner} />
-          <Badge variant="info" data-testid="sales-lead-stage">{stageLabel(stages, relation.pipelineStatus, locale)}</Badge>
+          {/* The stage wears the board column's paint (#3976): the same rule,
+              boardColumnPaint(), so a lead reads the same color on the board and
+              here, in both themes. Only the tint and the border, no top bar. */}
+          <span
+            className={`ui-badge inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-medium text-gray-800 dark:text-gray-100 ${stagePaint.className}`}
+            style={stagePaint.style ? { backgroundColor: stagePaint.style.backgroundColor, borderColor: stagePaint.style.borderColor } : undefined}
+            data-testid="sales-lead-stage"
+          >
+            {stageLabel(stages, relation.pipelineStatus, locale)}
+          </span>
           <Badge variant={relation.status === 'ACTIVE' ? 'success' : 'default'}>
             {relation.status === 'ACTIVE' ? s.statusActive : s.statusCompleted}
           </Badge>

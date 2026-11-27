@@ -108,7 +108,10 @@ export function FollowUpFields({
         </fieldset>
       )}
 
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,7rem)] gap-3">
+      {/* `items-end` (#3976): a label that wraps ("Saat (isteğe bağlı)" in a narrow
+          column) must not push its box below its neighbour — the two boxes share
+          one baseline whatever the labels do. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,8.5rem)] items-end gap-3">
         <Input
           id={`${idPrefix}-date`}
           type="date"

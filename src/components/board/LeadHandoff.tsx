@@ -193,16 +193,23 @@ function LeadHandoffStrip({
                 </span>
               )}
               {typeof m.open === 'number' && (
-                <span className="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400" data-testid={`handoff-target-load-${m.id}`}>
+                // Short on purpose (#3976): the open count, and the overdue count
+                // only when there is one; the whole split is the hover text and
+                // stays in the accessible text (sr-only), so nothing is lost.
+                <span
+                  className="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400"
+                  title={loadDetail(h, m)}
+                  data-testid={`handoff-target-load-${m.id}`}
+                >
                   {h.loadOpen.replace('{n}', String(m.open))}
-                  {typeof m.overdue === 'number' && (
-                    <span className={m.overdue > 0 ? 'text-red-600 dark:text-red-400' : undefined}>
+                  {typeof m.overdue === 'number' && m.overdue > 0 && (
+                    <span className="text-red-600 dark:text-red-400">
                       {' · '}
                       {h.loadOverdue.replace('{n}', String(m.overdue))}
                     </span>
                   )}
                   {m.followUps && (
-                    <span data-testid={`handoff-target-channels-${m.id}`}>
+                    <span className="sr-only" data-testid={`handoff-target-channels-${m.id}`}>
                       {' · '}
                       {h.loadChannels
                         .replace('{call}', String(m.followUps.call))
@@ -218,6 +225,21 @@ function LeadHandoffStrip({
       </ul>
     </section>
   );
+}
+
+/** The load line in full, for the hover text: open, overdue and the split by channel. */
+function loadDetail(h: { loadOpen: string; loadOverdue: string; loadChannels: string }, m: TeamMember): string {
+  const parts = [h.loadOpen.replace('{n}', String(m.open ?? 0))];
+  if (typeof m.overdue === 'number') parts.push(h.loadOverdue.replace('{n}', String(m.overdue)));
+  if (m.followUps) {
+    parts.push(
+      h.loadChannels
+        .replace('{call}', String(m.followUps.call))
+        .replace('{email}', String(m.followUps.email))
+        .replace('{other}', String(m.followUps.other)),
+    );
+  }
+  return parts.join(' · ');
 }
 
 function LeadHandoffDialog({
@@ -245,7 +267,8 @@ function LeadHandoffDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [current, setCurrent] = useState<Current | null>(null);
-  const [keep, setKeep] = useState(false);
+  // Keeping the current follow-up is the default (feedback, #3976): a new one is the exception.
+  const [keep, setKeep] = useState(true);
   // The new step's images (#3932): drafts on this record, sent as `imageIds`.
   const drafts = useFollowUpImageDrafts(pending?.relationId ?? null);
 
@@ -257,7 +280,7 @@ function LeadHandoffDialog({
     setDueOn(localDayFromToday(0));
     setDueAt('');
     setError(null);
-    setKeep(false);
+    setKeep(true);
     setCurrent(null);
     drafts.reset([]);
     // Who has the record now, and the follow-up it carries (#3873). Read-only and
@@ -370,12 +393,12 @@ function LeadHandoffDialog({
               <legend className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">{h.followUpChoice}</legend>
               <div className="flex flex-col gap-1.5 text-sm text-gray-700 dark:text-gray-200" role="radiogroup">
                 <label className="inline-flex items-center gap-2">
-                  <input type="radio" name="lead-handoff-follow-up" checked={!keep} onChange={() => setKeep(false)} data-testid="lead-handoff-follow-up-new" />
-                  {h.followUpNew}
-                </label>
-                <label className="inline-flex items-center gap-2">
                   <input type="radio" name="lead-handoff-follow-up" checked={keep} onChange={() => setKeep(true)} data-testid="lead-handoff-follow-up-keep" />
                   {h.followUpKeep}
+                </label>
+                <label className="inline-flex items-center gap-2">
+                  <input type="radio" name="lead-handoff-follow-up" checked={!keep} onChange={() => setKeep(false)} data-testid="lead-handoff-follow-up-new" />
+                  {h.followUpNew}
                 </label>
               </div>
             </fieldset>
