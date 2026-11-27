@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { UserRoundPlus } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
@@ -170,7 +170,7 @@ function LeadHandoffStrip({
                 {initials(m.fullName)}
               </span>
             )}
-            <span className="flex flex-col leading-tight">
+            <span className="flex items-center gap-1.5">
               {select ? (
                 // The drop target stays the whole chip; the name is the filter (#3906).
                 <button
@@ -192,33 +192,7 @@ function LeadHandoffStrip({
                   {m.self && <span className="ml-1 text-xs text-gray-400">({h.you})</span>}
                 </span>
               )}
-              {typeof m.open === 'number' && (
-                // Short on purpose (#3976): the open count, and the overdue count
-                // only when there is one; the whole split is the hover text and
-                // stays in the accessible text (sr-only), so nothing is lost.
-                <span
-                  className="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400"
-                  title={loadDetail(h, m)}
-                  data-testid={`handoff-target-load-${m.id}`}
-                >
-                  {h.loadOpen.replace('{n}', String(m.open))}
-                  {typeof m.overdue === 'number' && m.overdue > 0 && (
-                    <span className="text-red-600 dark:text-red-400">
-                      {' · '}
-                      {h.loadOverdue.replace('{n}', String(m.overdue))}
-                    </span>
-                  )}
-                  {m.followUps && (
-                    <span className="sr-only" data-testid={`handoff-target-channels-${m.id}`}>
-                      {' · '}
-                      {h.loadChannels
-                        .replace('{call}', String(m.followUps.call))
-                        .replace('{email}', String(m.followUps.email))
-                        .replace('{other}', String(m.followUps.other))}
-                    </span>
-                  )}
-                </span>
-              )}
+              {typeof m.open === 'number' && <LoadBadge member={m} />}
             </span>
           </li>
         ))}
@@ -227,8 +201,102 @@ function LeadHandoffStrip({
   );
 }
 
-/** The load line in full, for the hover text: open, overdue and the split by channel. */
-function loadDetail(h: { loadOpen: string; loadOverdue: string; loadChannels: string }, m: TeamMember): string {
+/**
+ * The load on the strip (#3988): a small badge with the open count and, when a
+ * follow-up is overdue, a red dot with that count. Everything else (overdue,
+ * the split by channel) opens in a popover — at once on hover, on keyboard
+ * focus, and on a tap on a touch screen; Escape and a click elsewhere close it.
+ * What a viewer may see is still the server's rule (canSeeRepOverdue): a rep
+ * gets `overdue`/`followUps` as null, so neither the badge nor the popover can
+ * show them.
+ */
+function LoadBadge({ member: m }: { member: TeamMember }) {
+  const h = useT().leadHandoff;
+  // Where the popover sits: fixed to the viewport, because the strip scrolls
+  // sideways (overflow-x-auto) and would clip anything positioned inside it.
+  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
+  const open = at !== null;
+  const wrap = useRef<HTMLSpanElement>(null);
+  const setOpen = useCallback((want: boolean) => {
+    setAt(() => {
+      if (!want) return null;
+      const r = wrap.current?.getBoundingClientRect();
+      return r ? { top: r.bottom + 4, left: r.left + r.width / 2 } : null;
+    });
+  }, []);
+  const popId = `handoff-load-pop-${m.id}`;
+  const overdue = typeof m.overdue === 'number' && m.overdue > 0 ? m.overdue : 0;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (wrap.current && !wrap.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    // A fixed popover would drift from its badge on scroll: close it instead.
+    const onScroll = () => setOpen(false);
+    document.addEventListener('pointerdown', onDown);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    return () => {
+      document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+    };
+  }, [open, setOpen]);
+
+  const lines = loadLines(h, m);
+  return (
+    <span
+      ref={wrap}
+      className="relative inline-flex"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+    >
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={popId}
+        aria-label={lines.join(' · ')}
+        // A tap opens it (a touch screen fires mouseenter first, so a toggle would
+        // close it again); a tap elsewhere or Escape closes.
+        onClick={() => setOpen(true)}
+        onFocus={() => setOpen(true)}
+        onBlur={(e) => {
+          if (!wrap.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
+        }}
+        data-testid={`handoff-target-load-${m.id}`}
+        className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-600 hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+      >
+        <span data-testid={`handoff-target-open-${m.id}`}>{m.open}</span>
+        {overdue > 0 && (
+          <span className="inline-flex items-center gap-0.5 text-red-600 dark:text-red-400" data-testid={`handoff-target-overdue-${m.id}`}>
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-red-500" />
+            {overdue}
+          </span>
+        )}
+      </button>
+      {at && (
+        <span
+          id={popId}
+          role="tooltip"
+          data-testid={`handoff-target-load-detail-${m.id}`}
+          style={{ top: at.top, left: at.left }}
+          className="fixed z-50 -translate-x-1/2 whitespace-nowrap rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs text-gray-700 shadow-lg dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200"
+        >
+          {lines.map((l, i) => (
+            <span key={i} className="block">
+              {l}
+            </span>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** The load in full, one line each: open, overdue and the split by channel — only what the server sent. */
+function loadLines(h: { loadOpen: string; loadOverdue: string; loadChannels: string }, m: TeamMember): string[] {
   const parts = [h.loadOpen.replace('{n}', String(m.open ?? 0))];
   if (typeof m.overdue === 'number') parts.push(h.loadOverdue.replace('{n}', String(m.overdue)));
   if (m.followUps) {
@@ -239,7 +307,7 @@ function loadDetail(h: { loadOpen: string; loadOverdue: string; loadChannels: st
         .replace('{other}', String(m.followUps.other)),
     );
   }
-  return parts.join(' · ');
+  return parts;
 }
 
 function LeadHandoffDialog({
