@@ -416,6 +416,10 @@ export const NOTIFICATION_EVENTS = [
   // exact /sales/leads link); the mail (#3871) is this event with channels
   // ['email'] and the mail the site rendered, so the default stays in-app.
   { key: 'lead.handedOff', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['menteeName', 'from', 'action'] },
+  // A colleague's note on a lead the recipient owns (#3978): the bell is the
+  // note's notify() with the exact /sales/leads link; the mail is this event
+  // with channels ['email'] and the mail the site rendered (sendLeadNoteEmail).
+  { key: 'lead.noteAdded', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp'], delivery: 'immediate', link: 'dashboard', params: ['menteeName', 'from'] },
   { key: 'mentorship.reassignedAway', category: 'mentorship', emailGroup: 'mentorship_lifecycle', defaultChannels: ['inApp', 'email'], delivery: 'immediate', link: 'dashboard', params: ['menteeName'] },
   // A pairing paused, resumed, ended or reopened through the lifecycle endpoint
   // (#1770). In-app only: the send site notifies the pair with `notify()` and

@@ -58,3 +58,10 @@ Hepsi aynı fonksiyondan okur; biri değişirse hepsi değişir:
   Değişen şey **tazelik** — yani "temas var mı?" sorusu.
 - **Mentorun grup mesajı hiçbir yerde temas sayılmıyor** — ne bu kuralda, ne de
   pasiflik kuralındaki "ilk temas" (outreach) tarafında.
+- **Lead notu temas değildir** (#3978). Satış kaydına eklenen serbest not
+  (`POST /api/sales/leads/[id]/notes`, kural `src/lib/leadNoteRule.ts`) kaydın
+  geçmişinde `FollowUpEvent` `NOTE` satırı olarak durur — `InteractionLog`'a hiç
+  yazılmaz, dolayısıyla son temas tarihini, etkileşim sayaçlarını ve fatura
+  sayacını değiştirmez. Notu kaydın sahibi (ya da onu çalışabilen dağıtıcı /
+  admin) ve kaydı daha önce sahiplenip devretmiş kişi ekleyebilir; sahibi
+  dışında birinin notu sahibine uygulama içi bildirim ve e-posta olarak gider.

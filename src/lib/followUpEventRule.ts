@@ -26,7 +26,11 @@
 // language. Dependency-free (no `@/` imports, no Prisma) so
 // scripts/test/follow-up-event-rule.test.mjs imports it under plain node.
 
-export const FOLLOW_UP_EVENT_KINDS = ['ASSIGNED', 'CHANGED', 'CLEARED', 'COMPLETED', 'HANDED_OFF'] as const;
+// NOTE (#3978) is not a follow-up change: a free note on the record, written by
+// src/lib/leadNotes.ts through followUpNoteWrite() — it lives in this history so
+// it reads with who and when beside the rest, and like every line here it is
+// not a contact (docs/last-contact.md).
+export const FOLLOW_UP_EVENT_KINDS = ['ASSIGNED', 'CHANGED', 'CLEARED', 'COMPLETED', 'HANDED_OFF', 'NOTE'] as const;
 export type FollowUpEventKind = (typeof FOLLOW_UP_EVENT_KINDS)[number];
 
 export function isFollowUpEventKind(value: unknown): value is FollowUpEventKind {

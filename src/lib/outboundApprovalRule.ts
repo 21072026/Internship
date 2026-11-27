@@ -189,6 +189,7 @@ export const OUTBOUND_CATEGORIES: Readonly<Record<string, CategoryEntry>> = {
   'mentorship-decision': { exempt: false, trigger: 'pipeline', why: 'a relationship notice' },
   'mentor-assigned': { exempt: false, trigger: 'pipeline', why: 'an owner-assigned notice' },
   'mentee-assigned': { exempt: false, trigger: 'pipeline', why: 'an owner-assigned notice' },
+  'lead-note': { exempt: false, trigger: 'pipeline', why: 'a colleague\'s note on a lead the recipient owns (#3978); staff only, so never held' },
   'mentor-application': { exempt: false, trigger: 'pipeline', why: 'an application decision' },
   'affiliate-application-decision': { exempt: false, trigger: 'pipeline', why: 'the answer to a declined partner application (#3362)' },
   'mentor-offer': { exempt: false, trigger: 'pipeline', why: 'a mentor offering mentorship (#1809), sent only to an opted-in mentee' },
