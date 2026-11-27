@@ -195,6 +195,8 @@ test('in the panel and the hand-off dialog: pick or paste an image, see it after
   await page.getByTestId('sales-lead-handoff').click();
   const dialog = page.getByTestId('lead-handoff-dialog');
   await dialog.getByTestId('lead-handoff-recipient').selectOption(ids.rep2);
+  // Keeping the follow-up is the default since #3976; a new step brings the note and images.
+  await dialog.getByTestId('lead-handoff-follow-up-new').check();
   await dialog.getByTestId('lead-handoff-note').fill('Call about the screen');
   await dialog.getByTestId('lead-handoff-image-input').setInputFiles({ name: 'b.png', mimeType: 'image/png', buffer: PNG });
   await expect(dialog.getByTestId('lead-handoff-image')).toHaveCount(1);

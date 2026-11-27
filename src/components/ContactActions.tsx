@@ -286,18 +286,23 @@ export function ContactActions({
 
       {step?.stage === 'retry' && (
         <div className={box} data-testid="contact-retry">
-          <span className="text-gray-700">{followUp?.open ? c.retryMove : c.retryPlan}</span>
+          <span className="text-gray-700 dark:text-gray-200">{followUp?.open ? c.retryMove : c.retryPlan}</span>
           <div className="flex flex-wrap items-center gap-2">
             <Button size="sm" variant="outline" disabled={saving} onClick={() => moveFollowUp(localDayFromToday(1), '')} data-testid="contact-retry-1">{t.followUp.quickTomorrow}</Button>
             <Button size="sm" variant="outline" disabled={saving} onClick={() => moveFollowUp(localDayFromToday(2), '')} data-testid="contact-retry-2">{c.retryIn2Days}</Button>
           </div>
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,7rem)_auto] items-end gap-2">
+          {/* Two fields on one line and the actions on their own (#3976): this box
+              lives in a narrow side card as often as in a wide page, and three
+              columns there squeezed the labels into each other. */}
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,8.5rem)] items-end gap-2">
             <Input id={`contact-retry-date-${relationId}`} type="date" label={t.followUp.date} value={retryDate} disabled={saving} onChange={(e) => setRetryDate(e.target.value)} data-testid="contact-retry-date" />
             <Input id={`contact-retry-time-${relationId}`} type="time" label={t.followUp.time} value={retryTime} disabled={saving || !retryDate} onChange={(e) => setRetryTime(e.target.value)} data-testid="contact-retry-time" />
-            <Button size="sm" disabled={saving || !retryDate} onClick={() => moveFollowUp(retryDate, retryTime)} data-testid="contact-retry-save">{c.retrySave}</Button>
           </div>
           {error && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{error}</p>}
-          <button disabled={saving} onClick={close} className="self-start text-gray-500 hover:underline" data-testid="contact-retry-skip">{c.retryKeep}</button>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            <Button size="sm" disabled={saving || !retryDate} onClick={() => moveFollowUp(retryDate, retryTime)} data-testid="contact-retry-save">{c.retrySave}</Button>
+            <button type="button" disabled={saving} onClick={close} className="text-gray-500 hover:underline dark:text-gray-400" data-testid="contact-retry-skip">{c.retryKeep}</button>
+          </div>
         </div>
       )}
     </div>

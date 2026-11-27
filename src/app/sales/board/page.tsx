@@ -6,6 +6,9 @@ import { salesTeamReadAllowed } from '@/lib/salesBook';
 import { actorFromSession, can, dispatcherMay } from '@/lib/authz';
 import { tenantWhere } from '@/lib/tenantFilter';
 import { AssignedToYouCard } from '@/components/sales/AssignedToYouCard';
+import { NewSalesLeadButton } from '@/components/sales/NewSalesLeadButton';
+import { shellCapabilities } from '@/lib/shellCapabilities';
+import { salesLeadCreateAvailable } from '@/lib/salesLeadCreate';
 
 // The rep's board (#2580): the mentor board over the viewer's own sales book
 // (GET /api/mentorship?surface=sales, src/lib/salesBookRule.ts — an ADMIN's too;
@@ -20,12 +23,24 @@ import { AssignedToYouCard } from '@/components/sales/AssignedToYouCard';
 export default async function SalesBoardPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) notFound();
-  const [teamRead, actor, tenant] = await Promise.all([salesTeamReadAllowed(session), actorFromSession(session), tenantWhere(session)]);
+  const [teamRead, actor, tenant, capabilities] = await Promise.all([
+    salesTeamReadAllowed(session),
+    actorFromSession(session),
+    tenantWhere(session),
+    shellCapabilities(session.user.orgId),
+  ]);
+  // "New lead" here too (#3976), under the same gate as the sales home and the accounts list.
+  const canCreateLead = await salesLeadCreateAvailable(session.user.orgId, capabilities);
   const writeAll =
     !!actor &&
     (dispatcherMay(actor, 'relation.write', session.user.orgId ?? null) || (await can(actor, 'relation.write', undefined, session)));
   return (
     <>
+      {canCreateLead && (
+        <div className="mb-3 flex justify-end" data-testid="sales-board-actions">
+          <NewSalesLeadButton />
+        </div>
+      )}
       {/* New on the rep's list (#3874): one line above the columns, each name a link. */}
       <AssignedToYouCard viewerId={session.user.id} tenant={tenant} impersonating={!!session.user.impersonatorId} variant="strip" />
       <MentorBoard
