@@ -43,6 +43,28 @@ export function followUpEventWrite(opts: {
   });
 }
 
+/**
+ * A free note on the record (#3978): one NOTE line, its text in `toNote`. The
+ * dedupe key (src/lib/leadNoteRule.ts) makes a double click one row.
+ */
+export function followUpNoteWrite(opts: { relationId: string; text: string; actorId: string; dedupeKey: string }) {
+  return prisma.followUpEvent.createMany({
+    data: [
+      {
+        relationId: opts.relationId,
+        kind: 'NOTE',
+        fromAt: null,
+        toAt: null,
+        fromNote: null,
+        toNote: opts.text,
+        actorId: opts.actorId,
+        dedupeKey: opts.dedupeKey,
+      },
+    ],
+    skipDuplicates: true,
+  });
+}
+
 export interface FollowUpEventView {
   id: string;
   kind: FollowUpEventKind;
@@ -64,9 +86,9 @@ export const FOLLOW_UP_EVENTS_LIMIT = 50;
  * needs. The caller has already decided the viewer may read the record AND
  * its follow-up (canSeeNextAction) — the notes are the owner's working prose.
  */
-export async function followUpEventsFor(relationId: string): Promise<FollowUpEventView[]> {
+export async function followUpEventsFor(relationId: string, opts: { notesOnly?: boolean } = {}): Promise<FollowUpEventView[]> {
   const rows = await prisma.followUpEvent.findMany({
-    where: { relationId },
+    where: { relationId, ...(opts.notesOnly ? { kind: 'NOTE' } : {}) },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: FOLLOW_UP_EVENTS_LIMIT,
     select: {

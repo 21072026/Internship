@@ -2,7 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { CalendarClock, ChevronRight, GitCommitHorizontal, MessageSquare, Video } from 'lucide-react';
+import { CalendarClock, ChevronRight, GitCommitHorizontal, MessageSquare, StickyNote, Video } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { useToast } from '@/components/ui/Toast';
+import { LEAD_NOTE_MAX } from '@/lib/leadNoteRule';
 import { AddInteractionForm, type InteractionFormDraft } from '@/components/AddInteractionForm';
 import { InteractionTypeBadge } from '@/components/InteractionTypeBadge';
 import { Badge } from '@/components/ui/Badge';
@@ -65,8 +68,8 @@ export interface LeadInteraction {
 /** A follow-up history line (#3819), already worded by the page in the viewer's language. */
 export interface LeadSystemEvent {
   id: string;
-  /** A follow-up line (#3819), a stage move read from StatusChange (#3820) or a meeting read from Meeting (#3837). */
-  source: 'followUp' | 'stage' | 'meeting';
+  /** A follow-up line (#3819), a stage move read from StatusChange (#3820), a meeting read from Meeting (#3837) or a free note (#3978). */
+  source: 'followUp' | 'stage' | 'meeting' | 'note';
   at: string;
   headline: string;
   detail: string | null;
@@ -148,6 +151,96 @@ function InteractionRow({ row, open, onToggle }: { row: LeadInteraction; open: b
 // follow-up, not a contact with the lead.
 // One line (#3820): icon, what happened, the detail and who, then when. The
 // whole text is the hover title, since a narrow card clips it.
+// A free note (#3978): the author's own words, so the whole text, wrapped —
+// never cut to one line like the system lines around it.
+function NoteRow({ row, label }: { row: LeadSystemEvent; label: string }) {
+  return (
+    <li className="py-2 text-sm first:pt-0 last:pb-0" data-testid="sales-lead-note-row">
+      <div className="flex min-w-0 items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+        <StickyNote className="h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+        <span className="font-medium text-gray-700 dark:text-gray-200">{label}</span>
+        <span className="min-w-0 flex-1 truncate">· {row.by}</span>
+        <RelativeTime date={row.at} className="shrink-0" />
+      </div>
+      {row.detail && (
+        <p className="mt-1 whitespace-pre-wrap break-words pl-5 text-gray-800 dark:text-gray-100" lang={contentLang(row.detail)} data-testid="sales-lead-note-text">
+          {row.detail}
+        </p>
+      )}
+    </li>
+  );
+}
+
+function LeadNoteForm({ relationId, onAdded }: { relationId: string; onAdded: () => void }) {
+  const t = useT();
+  const n = t.sales.lead.note;
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const length = [...text.trim()].length;
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline dark:text-blue-400" data-testid="sales-lead-note-open">
+        <StickyNote className="h-3.5 w-3.5" aria-hidden />
+        {n.add}
+      </button>
+    );
+  }
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/sales/leads/${relationId}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.code === 'too_long' ? n.tooLong : body.code === 'empty' ? n.empty : n.failed);
+        return;
+      }
+      const body = await res.json().catch(() => ({}));
+      toast(body.notified ? n.savedNotified : n.saved, 'success');
+      setText('');
+      setOpen(false);
+      onAdded();
+    } catch {
+      setError(n.failed);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-2 space-y-2" data-testid="sales-lead-note-form">
+      <label htmlFor={`lead-note-${relationId}`} className="block text-sm font-medium text-gray-700 dark:text-gray-300">{n.label}</label>
+      <textarea
+        id={`lead-note-${relationId}`}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={3}
+        maxLength={LEAD_NOTE_MAX + 20}
+        autoFocus
+        placeholder={n.placeholder}
+        className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+        data-testid="sales-lead-note-input"
+      />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className={`text-xs ${length > LEAD_NOTE_MAX ? 'text-red-600 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'}`} data-testid="sales-lead-note-count">
+          {length}/{LEAD_NOTE_MAX} · {n.hint}
+        </span>
+        <div className="flex gap-2">
+          <Button size="sm" variant="secondary" disabled={busy} onClick={() => { setOpen(false); setError(null); }} data-testid="sales-lead-note-cancel">{n.cancel}</Button>
+          <Button size="sm" loading={busy} disabled={length === 0 || length > LEAD_NOTE_MAX} onClick={() => void save()} data-testid="sales-lead-note-save">{n.save}</Button>
+        </div>
+      </div>
+      {error && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+    </div>
+  );
+}
+
 function SystemRow({ row, badge }: { row: LeadSystemEvent; badge: string }) {
   const Icon = row.source === 'stage' ? GitCommitHorizontal : row.source === 'meeting' ? Video : CalendarClock;
   const text = [row.headline, row.detail, row.by].filter(Boolean).join(' · ');
@@ -198,6 +291,7 @@ function writeFilter(f: Filter) {
 export function SalesInteractionsCard({
   relationId,
   canLog,
+  canNote = false,
   interactions,
   systemEvents = [],
   attemptCount = 0,
@@ -205,6 +299,8 @@ export function SalesInteractionsCard({
 }: {
   relationId: string;
   canLog: boolean;
+  /** May add a free note (#3978): the record's writer, or its previous owner. */
+  canNote?: boolean;
   interactions: LeadInteraction[];
   systemEvents?: LeadSystemEvent[];
   /** Every attempt on this record (#3902), counted by the page over all rows. */
@@ -305,6 +401,7 @@ export function SalesInteractionsCard({
           <AddInteractionForm relationId={relationId} onAdded={() => router.refresh()} draft={draft} />
         </div>
       )}
+      {canNote && <LeadNoteForm relationId={relationId} onAdded={() => router.refresh()} />}
       {shownFilters.length > 2 && (
         <div role="group" aria-label={f.label} className="mt-3 inline-flex rounded-md border border-gray-200 p-0.5 text-xs dark:border-gray-700" data-testid="sales-lead-interaction-filter">
           {shownFilters.map((key) => (
@@ -334,7 +431,11 @@ export function SalesInteractionsCard({
           <ul className="mt-3 divide-y divide-gray-100 dark:divide-gray-800" data-testid="sales-lead-interactions">
             {rows.map((e) =>
               e.kind === 'system' ? (
-                <SystemRow key={`s-${e.row.id}`} row={e.row} badge={s.followUpEvent.badge} />
+                e.row.source === 'note' ? (
+                  <NoteRow key={`n-${e.row.id}`} row={e.row} label={s.followUpEvent.note} />
+                ) : (
+                  <SystemRow key={`s-${e.row.id}`} row={e.row} badge={s.followUpEvent.badge} />
+                )
               ) : (
                 <InteractionRow key={e.row.id} row={e.row} open={opened.has(e.row.id)} onToggle={() => toggle(e.row.id)} />
               ),
@@ -383,7 +484,11 @@ export function SalesInteractionsCard({
                   .sort((a, b) => b.at - a.at)
                   .map((e) =>
                     e.kind === 'system' ? (
-                      <SystemRow key={`s-${e.row.id}`} row={e.row} badge={s.followUpEvent.badge} />
+                      e.row.source === 'note' ? (
+                        <NoteRow key={`n-${e.row.id}`} row={e.row} label={s.followUpEvent.note} />
+                      ) : (
+                        <SystemRow key={`s-${e.row.id}`} row={e.row} badge={s.followUpEvent.badge} />
+                      )
                     ) : (
                       <InteractionRow key={e.row.id} row={e.row} open={opened.has(e.row.id)} onToggle={() => toggle(e.row.id)} />
                     ),
