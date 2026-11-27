@@ -4665,6 +4665,16 @@ const en = {
   // pipeline stage. Two audiences, two tones on purpose: the mentor is being
   // told a queue is aging, the mentee must not be made to feel accused of
   // being slow, so the mentee half never says "overdue" or "late".
+  boardLegend: {
+    toggle: 'What do the badges mean?',
+    title: 'What the badges on a card mean',
+    close: 'Close the explanation',
+    stageDays: 'Days the record has been in its current stage. Grey while it is within the time set for that stage.',
+    stageOverdue: 'Red with an exclamation mark: longer in this stage than the time set for it (an admin sets each stage\'s time). Hover the badge for the deadline.',
+    followUpSample: 'Follow-up 28/11',
+    followUp: 'Follow-up: the day you plan to do the next step (call, e-mail, meeting). "Due today" appears next to it on that day, "Overdue" after it.',
+    trialEnd: 'Trial end: days left until the customer\'s trial ends; "Ends today" and "Ended" on and after that day.',
+  },
   stageClock: {
     chip: '{n}d',
     chipToday: 'today',
@@ -17621,6 +17631,16 @@ const tr: Dict = {
     wipSaturatedAction: 'Limitleri düzenle',
     groups: { pre: 'Staj öncesi', internship: 'Staj', result: 'Sonuç', custom: 'Özel aşamalar' },
   },
+  boardLegend: {
+    toggle: 'Simgeler ne demek?',
+    title: 'Karttaki simgeler ne anlama geliyor',
+    close: 'Açıklamayı kapat',
+    stageDays: 'Kaydın şu anki aşamada geçirdiği gün sayısı. O aşama için belirlenen süre içindeyken gri.',
+    stageOverdue: 'Kırmızı ve ünlemli: kayıt bu aşamada kendisi için belirlenen süreden uzun kaldı (her aşamanın süresini yönetici belirler). Son tarihi görmek için simgenin üzerine gel.',
+    followUpSample: 'Takip 28.11.',
+    followUp: 'Takip: bir sonraki adımı (arama, e-posta, toplantı) yapmayı planladığın gün. O gün yanında "Bugün", geçince "Gecikti" yazar.',
+    trialEnd: 'Deneme bitişi: müşterinin deneme süresinin bitmesine kalan gün; o gün "Bugün bitiyor", sonra "Bitti" yazar.',
+  },
   stageClock: {
     chip: '{n} gün',
     chipToday: 'bugün',
@@ -30421,6 +30441,16 @@ const de: Dict = {
     wipSaturated: 'Jede Spalte dieses Boards liegt über ihrem Arbeitslimit, damit zeigt die bernsteinfarbene Warnung nirgendwo mehr hin und wird ausgeblendet. Lege ein Limit fest, das zu diesem Programm passt — eine Zahl für das ganze Board oder eine je Phase.',
     wipSaturatedAction: 'Limits anpassen',
     groups: { pre: 'Vor dem Praktikum', internship: 'Praktikum', result: 'Ergebnis', custom: 'Eigene Phasen' },
+  },
+  boardLegend: {
+    toggle: 'Was bedeuten die Symbole?',
+    title: 'Was die Symbole auf einer Karte bedeuten',
+    close: 'Erklärung schließen',
+    stageDays: 'Tage, die der Datensatz schon in seiner aktuellen Phase ist. Grau, solange die für diese Phase vorgesehene Zeit nicht überschritten ist.',
+    stageOverdue: 'Rot mit Ausrufezeichen: länger in dieser Phase als vorgesehen (die Zeit je Phase legt ein Admin fest). Fahren Sie über das Symbol für die Frist.',
+    followUpSample: 'Wiedervorlage 28.11.',
+    followUp: 'Wiedervorlage: der Tag, an dem Sie den nächsten Schritt (Anruf, E-Mail, Termin) planen. Am Tag selbst steht „Heute fällig“ daneben, danach „Überfällig“.',
+    trialEnd: 'Testende: verbleibende Tage bis zum Ende des Tests beim Kunden; am Tag selbst „Endet heute“, danach „Beendet“.',
   },
   stageClock: {
     chip: '{n} T.',
