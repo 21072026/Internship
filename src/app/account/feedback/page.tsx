@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { MessageSquareReply } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { RelativeTime } from '@/components/ui/RelativeTime';
@@ -137,17 +138,26 @@ export default function MyFeedbackPage() {
                 </div>
                 <p className="mt-2 whitespace-pre-line break-words text-sm text-gray-700 dark:text-gray-300">{r.description}</p>
                 {r.reporterNote && (
-                  <div className="mt-3 border-l-2 border-gray-300 pl-3 dark:border-gray-600" data-testid="my-feedback-reply">
-                    <p className="text-xs font-medium text-gray-600 dark:text-gray-400">
+                  // The team's answer is what the person came back for, so it
+                  // reads as its own callout: tinted, a strong left edge, an
+                  // icon and a bold label, not a grey quote under the report.
+                  <div
+                    className="mt-3 rounded-lg border-l-4 border-blue-500 bg-blue-50 px-3 py-2.5 dark:border-blue-400 dark:bg-blue-950/40"
+                    data-testid="my-feedback-reply"
+                  >
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-blue-800 dark:text-blue-200">
+                      <MessageSquareReply aria-hidden="true" className="h-4 w-4 shrink-0" />
                       {m.reply}
                       {r.reporterNoteAt && (
                         <>
-                          {' · '}
-                          <RelativeTime date={r.reporterNoteAt} />
+                          <span className="font-normal text-blue-700/80 dark:text-blue-300/80">
+                            {' · '}
+                            <RelativeTime date={r.reporterNoteAt} />
+                          </span>
                         </>
                       )}
                     </p>
-                    <p className="mt-1 whitespace-pre-line break-words text-sm text-gray-800 dark:text-gray-200">{r.reporterNote}</p>
+                    <p className="mt-1 whitespace-pre-line break-words text-sm text-gray-900 dark:text-gray-100">{r.reporterNote}</p>
                   </div>
                 )}
               </Card>
