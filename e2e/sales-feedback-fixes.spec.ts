@@ -71,16 +71,22 @@ async function box(page: Page, testId: string) {
   return b;
 }
 
-test('the board offers "New lead" and a short load line with the split on hover', async ({ page }) => {
+test('the board offers "New lead" and a load badge with the split on hover', async ({ page }) => {
   await signIn(page);
   await gotoSettled(page, '/sales/board');
   await expect(page.getByTestId('new-lead-button')).toBeVisible();
-  const line = page.getByTestId(`handoff-target-load-${rep2Id}`);
-  await expect(line).toBeVisible();
-  await expect(line).toHaveAttribute('title', /open/);
-  // One line, not three: the chip is no taller than a two-line name + count.
+  const badge = page.getByTestId(`handoff-target-load-${rep2Id}`);
+  await expect(badge).toBeVisible();
+  await expect(badge).toHaveAttribute('aria-label', /open/);
+  // One row (#3988): name and badge side by side, the chip no taller than the avatar line.
   const chip = await box(page, `handoff-target-${rep2Id}`);
-  expect(chip.height).toBeLessThan(60);
+  expect(chip.height).toBeLessThan(44);
+  // A tap opens the detail, a tap elsewhere closes it.
+  await badge.click();
+  await expect(page.getByTestId(`handoff-target-load-detail-${rep2Id}`)).toBeVisible();
+  await page.mouse.move(0, 0);
+  await page.mouse.click(5, 300);
+  await expect(page.getByTestId(`handoff-target-load-detail-${rep2Id}`)).toHaveCount(0);
 });
 
 test('the hand-off dialog keeps the current follow-up by default, offered first', async ({ page }) => {
