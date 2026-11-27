@@ -16,6 +16,11 @@ import { getDictionary } from '../src/i18n/dictionaries';
 import { runReportSubscriptions } from '@/lib/jobs/reportSubscriptions';
 import { loadReport } from '@/lib/reports/registry';
 import { getReportDefinition } from '@/lib/reports/definitions';
+// sendSalesDailyMail (#3968) reaches these through a lazy `await import('@/…')`,
+// whose own `@/` imports Playwright cannot resolve once the spec has loaded.
+// Importing them up front puts them in the module cache, so the lazy import hits it.
+import '@/lib/mentorAttention';
+import '@/lib/salesSurface';
 
 /** Monday `weeks` from this one, 09:00 UTC — after the seeded subscriptions' 08:00. */
 function mondayAt9(weeks: number): Date {
@@ -187,20 +192,24 @@ test.describe('admin digests and summaries describe one org', () => {
     expect(await tenantAdminIds(mktOrgId)).toEqual([ids.mktAdmin]);
   });
 
-  test('an org without mentorship gets no mentee-activity digest, only its overdue to-dos', async () => {
+  test('an org without mentorship gets no mentee-activity digest, only its to-dos and sales round-up', async () => {
     await sendDailyActivityDigests();
     // The digests leave through the notification.email job (#1711).
     await drainNotificationMail(Object.values(ids));
     // At least one: a parallel spec's full /api/cron run may send another.
     expect((await logsTo(emails.intAdmin, 'activity-digest')).length).toBeGreaterThanOrEqual(1);
     expect((await logsTo(emails.intMentor, 'activity-digest')).length).toBeGreaterThanOrEqual(1);
-    const todoSubjects = (['en', 'tr', 'de'] as const).map(
-      (l) => getDictionary(l).notifications.activityDigestEmail.todoSubject,
-    );
-    for (const who of [emails.mktAdmin, emails.mktRep]) {
+    const subjectsOf = (key: 'todoSubject' | 'salesSubject') =>
+      (['en', 'tr', 'de'] as const).map((l) => getDictionary(l).notifications.activityDigestEmail[key]);
+    // The admin keeps the overdue to-do mail; a rep gets the daily sales
+    // round-up instead (#3968) — neither is the mentee-activity digest.
+    for (const [who, subjects] of [
+      [emails.mktAdmin, subjectsOf('todoSubject')],
+      [emails.mktRep, subjectsOf('salesSubject')],
+    ] as const) {
       const rows = await logsTo(who, 'activity-digest');
       expect(rows.length).toBeGreaterThanOrEqual(1);
-      for (const row of rows) expect(todoSubjects).toContain(row.subject);
+      for (const row of rows) expect(subjects).toContain(row.subject);
     }
   });
 
