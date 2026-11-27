@@ -51,7 +51,7 @@ export function FollowUpChip({ at }: { at: string | null | undefined }) {
   const locale = useLocale();
   if (!at) return null;
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400" data-testid="follow-up-chip">
+    <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400" title={t.boardLegend.followUp} data-testid="follow-up-chip">
       <CalendarClock className="h-3 w-3" />
       {t.followUp.chip.replace('{date}', formatDate(at, locale, { timeZone: 'UTC' }))}
       <FollowUpStatus at={at} className="text-[10px]" />

@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/Toast';
 import { stageGateFrom, useStageGateDialog } from '@/components/StageGateDialog';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { BoardStageFilter } from '@/components/board/BoardStageFilter';
+import { BoardLegend, BoardLegendButton, useBoardLegend } from '@/components/board/BoardLegend';
 import { BoardPhaseGroups } from '@/components/board/BoardPhaseGroups';
 import { BoardColumnHeader } from '@/components/board/BoardColumnHeader';
 import { boardColumnPaint } from '@/lib/boardColumnTone';
@@ -140,6 +141,8 @@ export function MentorBoard({
   const router = useRouter();
   const toast = useToast();
   const narrow = useIsNarrow();
+  // "What do the badges mean?" (#3977) — a hook, so above every early return.
+  const legend = useBoardLegend();
   const [relations, setRelations] = useState<Relation[]>([]);
   // moveTo is also called much later from a toast's "Undo", where the closed-over
   // `relations` would be stale — read the live list through a ref instead.
@@ -478,7 +481,8 @@ export function MentorBoard({
     <div>
       {gateDialog}
       {handoff && leadHandoff.dialog}
-      <div className="mb-6">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-2">
+        <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           {t.nav.board}
           {relations.length > 0 && (
@@ -490,7 +494,11 @@ export function MentorBoard({
         <p className="text-gray-500 mt-1">
           {t.mentor.boardSubtitle}
         </p>
+        </div>
+        {/* What the card badges mean (#3977). */}
+        {relations.length > 0 && <BoardLegendButton open={legend.open} onToggle={legend.toggle} />}
       </div>
+      <BoardLegend open={legend.open && relations.length > 0} onClose={legend.toggle} trial={surface === 'sales'} />
 
       {/* One toolbar row (#3838): Mine/Team and the owner filter on the left,
           "show empty stages" and then the search at the far right; it wraps on
