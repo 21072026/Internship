@@ -215,6 +215,8 @@ export const TEXT_LIMITS = {
   documentTitle: 191,
   /** Organization.brandName — VARCHAR(191) */
   orgBrandName: 191,
+  orgMailAddress: 320,
+  orgMailFromName: 160,
   /**
    * Organization.brandColor — VARCHAR(191), holds a CSS colour ("#1d4ed8").
    * Capped far below the column for the same reason as `companySize`: the

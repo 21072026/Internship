@@ -273,6 +273,12 @@ model Organization {
   publicHostToken      String?   @db.VarChar(64)
   publicHostVerifiedAt DateTime?
 
+  // Tenant sender identity (#1670); #1672 alone owns the mail-verification stamp.
+  mailFromAddress      String?   @db.VarChar(320)
+  mailFromName         String?   @db.VarChar(160)
+  mailReplyTo          String?   @db.VarChar(320)
+  mailDomainVerifiedAt DateTime?
+
   // Conferencing policy (#2007): which video room this tenant's meetings get.
   // On the Organization, NOT on Setting — Setting is keyed by a `String @id`,
   // and giving it an orgId re-keys the table (a drop-and-recreate under

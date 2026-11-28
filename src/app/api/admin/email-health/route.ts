@@ -1,3 +1,5 @@
+import { resolveOrgId } from '@/lib/orgScope';
+import { tenantMailIdentityHealth } from '@/lib/orgMailIdentity';
 import { NextResponse } from 'next/server';
 import { requirePermission } from '@/lib/authz';
 import { getEmailHealth } from '@/lib/emailHealth';
@@ -9,5 +11,5 @@ import { getEmailHealth } from '@/lib/emailHealth';
 export async function GET(request: Request) {
   const gate = await requirePermission('mail.read', { request });
   if ('error' in gate) return gate.error;
-  return NextResponse.json({ email: await getEmailHealth() });
+  return NextResponse.json({ email: await getEmailHealth(), tenantIdentity: await tenantMailIdentityHealth(resolveOrgId(gate.session)) });
 }
