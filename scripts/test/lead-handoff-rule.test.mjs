@@ -13,6 +13,7 @@ import {
   SALES_HANDOFF_REASON,
   composeHandoffNote,
   isHandoffAction,
+  handedOnBy,
   mayReceiveHandoff,
   todayIso,
 } from '../../src/lib/leadHandoffRule.ts';
@@ -101,4 +102,13 @@ test('a person closed to hand-offs takes none from a colleague, but may take one
   assert.equal(mayReceiveHandoff({ recipientId: 'b', acceptsLeadHandoffs: true, actorId: 'a' }), true);
   assert.equal(mayReceiveHandoff({ recipientId: 'b', acceptsLeadHandoffs: false, actorId: 'a' }), false);
   assert.equal(mayReceiveHandoff({ recipientId: 'b', acceptsLeadHandoffs: false, actorId: 'b' }), true);
+});
+
+test('"handed on by me" is the last hand-off, from or by the viewer, of a lead not back with them (#3980)', () => {
+  assert.equal(handedOnBy({ fromUserId: 'me', actorId: 'me' }, 'b', 'me'), true);
+  assert.equal(handedOnBy({ fromUserId: 'a', actorId: 'me' }, 'b', 'me'), true, 'the dispatcher passed it on');
+  assert.equal(handedOnBy({ fromUserId: 'me', actorId: 'admin' }, 'b', 'me'), true, 'taken from me by an admin');
+  assert.equal(handedOnBy({ fromUserId: 'b', actorId: 'b' }, 'c', 'me'), false, 'someone else passed it on later');
+  assert.equal(handedOnBy({ fromUserId: 'me', actorId: 'me' }, 'me', 'me'), false, 'back with me');
+  assert.equal(handedOnBy(null, 'b', 'me'), false);
 });

@@ -12,7 +12,7 @@
 // and e2e/sales-team-book.spec.ts asserts the keys of the answer.
 //
 // Counts per stage and per owner are over the whole book (tenant + status), not
-// the 500 rows, and ignore the owners/stage filters, so a page's tabs and owner
+// the 500 rows, and ignore the owners/stage/handed-off filters, so a page's tabs and owner
 // strip always show the whole team. Server-only.
 import type { Session } from 'next-auth';
 import type { Prisma } from '@prisma/client';
@@ -21,6 +21,7 @@ import { tenantWhere, withinTenant } from '@/lib/tenantFilter';
 import { salesTeamReadAllowed } from '@/lib/salesBook';
 import { salesTeamReadWhere } from '@/lib/salesBookRule';
 import { getLastContacts } from '@/lib/lastContact';
+import { handedOnBy } from '@/lib/leadHandoffRule';
 
 export const SALES_TEAM_BOOK_LIMIT = 500;
 const DAY = 24 * 60 * 60 * 1000;
@@ -32,6 +33,13 @@ export interface SalesTeamBookQuery {
   stage?: string;
   /** Default 'active'. */
   status?: SalesTeamBookStatus;
+  /**
+   * "Handed on by me" (#3980): only the records whose last hand-off took them
+   * from the VIEWER or was done by the viewer, and that are not back with them
+   * (`handedOnBy`). Always the session's own user — never a person named in
+   * the query.
+   */
+  handedOff?: boolean;
 }
 
 export interface SalesTeamBookRow {
@@ -88,7 +96,39 @@ export function parseSalesTeamBookQuery(params: URLSearchParams): SalesTeamBookQ
     ...(owners.length ? { owners } : {}),
     ...(stage && stage.length <= 64 ? { stage } : {}),
     status: params.get('status') === 'all' ? 'all' : 'active',
+    ...(params.get('handedOff') === '1' ? { handedOff: true } : {}),
   };
+}
+
+/** Upper bound on the hand-offs read for "handed on by me" — a rep's own history, not the org's. */
+const HANDED_OFF_SCAN = 2000;
+
+/**
+ * The ids of the records `viewerId` handed on (#3980, `handedOnBy`): the
+ * candidates are the hand-offs from or by them; each candidate is then judged
+ * on its LAST hand-off, which may be someone else's. The tenant and the read
+ * rule are applied by the caller's WHERE on the relations themselves.
+ */
+async function relationsHandedOnBy(viewerId: string, tenant: Awaited<ReturnType<typeof tenantWhere>>): Promise<string[]> {
+  const candidates = await prisma.followUpEvent.findMany({
+    where: { kind: 'HANDED_OFF', OR: [{ fromUserId: viewerId }, { actorId: viewerId }] },
+    orderBy: { createdAt: 'desc' },
+    take: HANDED_OFF_SCAN,
+    select: { relationId: true },
+  });
+  const ids = [...new Set(candidates.map((c) => c.relationId))];
+  if (!ids.length) return [];
+  const [events, owners] = await Promise.all([
+    prisma.followUpEvent.findMany({
+      where: { kind: 'HANDED_OFF', relationId: { in: ids } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      select: { relationId: true, fromUserId: true, actorId: true },
+    }),
+    prisma.mentorshipRelation.findMany({ where: withinTenant({ id: { in: ids } }, tenant), select: { id: true, mentorId: true } }),
+  ]);
+  const last = new Map<string, { fromUserId: string | null; actorId: string | null }>();
+  for (const e of events) if (!last.has(e.relationId)) last.set(e.relationId, e);
+  return owners.filter((r) => handedOnBy(last.get(r.id), r.mentorId, viewerId)).map((r) => r.id);
 }
 
 /** null = this session may not read the team book (the caller answers 404). */
@@ -101,9 +141,11 @@ export async function loadSalesTeamBook(session: Session, query: SalesTeamBookQu
     { ...narrow, ...(query.status === 'all' ? {} : { status: 'ACTIVE' as const }) },
     tenant,
   );
+  const handedOffIds = query.handedOff ? await relationsHandedOnBy(session.user.id, tenant) : null;
   const filtered: Prisma.MentorshipRelationWhereInput = {
     AND: [
       base,
+      ...(handedOffIds ? [{ id: { in: handedOffIds } }] : []),
       ...(query.owners?.length ? [{ mentorId: { in: query.owners } }] : []),
       ...(query.stage ? [{ pipelineStatus: query.stage }] : []),
     ],

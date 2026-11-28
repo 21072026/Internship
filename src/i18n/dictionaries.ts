@@ -2320,7 +2320,7 @@ const en = {
   sales: {
     // The team view (the user's rule, 2026-11-15): "Mine" is the default; "Team"
     // shows every seller's records of the org, read-only unless they are yours.
-    view: { label: 'Show', mine: 'Mine', team: 'Team' },
+    view: { label: 'Show', mine: 'Mine', team: 'Team', handedOff: 'Handed on by me', handedOffHint: 'Leads you handed to a colleague and that are still with them' },
     pool: {
       title: 'Unassigned leads',
       hint: '{count} leads nobody has taken yet. Take one and it lands on your board at the first stage.',
@@ -15379,7 +15379,7 @@ const tr: Dict = {
     },
   },
   sales: {
-    view: { label: 'Göster', mine: 'Benim', team: 'Ekip' },
+    view: { label: 'Göster', mine: 'Benim', team: 'Ekip', handedOff: 'Devrettiklerim', handedOffHint: 'Bir ekip arkadaşına devrettiğin ve hâlâ onda olan lead\'ler' },
     pool: {
       title: 'Atanmamış lead\'ler',
       hint: 'Henüz kimsenin almadığı {count} lead. Birini alırsan ilk aşamada senin panona düşer.',
@@ -28217,7 +28217,7 @@ const de: Dict = {
     },
   },
   sales: {
-    view: { label: 'Anzeigen', mine: 'Meine', team: 'Team' },
+    view: { label: 'Anzeigen', mine: 'Meine', team: 'Team', handedOff: 'Von mir übergeben', handedOffHint: 'Leads, die du übergeben hast und die noch bei der anderen Person liegen' },
     pool: {
       title: 'Nicht zugewiesene Leads',
       hint: '{count} Leads, die noch niemand übernommen hat. Übernimm einen, und er landet in der ersten Stufe auf deinem Board.',
