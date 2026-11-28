@@ -232,6 +232,27 @@ sales book** as each record's owner would.
 - **Live.** The flag is read on every request: a revoke takes effect on the
   dispatcher's next request; no session is revoked.
 
+## Closing hand-offs to a person (#3979)
+
+An ORG_ADMIN may stop colleagues from handing leads to someone — a person who
+only manages, or who is away for a while — on `/admin/users` ("Close lead
+hand-offs", `POST /api/admin/users/[id]/lead-handoffs`, `user.write`, never
+while impersonating, audited `sales.handoffs_closed` / `sales.handoffs_opened`).
+`User.acceptsLeadHandoffs` (default `true`) carries it.
+
+- **One rule.** `mayReceiveHandoff()` (`src/lib/leadHandoffRule.ts`): closed
+  means no colleague may hand them a lead, but taking a lead onto your OWN book
+  stays yours to do. `GET /api/sales/team` answers it per member as
+  `acceptsHandoffs`; `handOffLead()` refuses a closed recipient with
+  `409 recipient_not_accepting` before anything moves — for a rep, the
+  dispatcher and an admin alike.
+- **The board.** The dialog's colleague list leaves them out. On the strip they
+  stay only where a name is also the owner filter (#3906), dashed and marked
+  "no hand-offs", and are not a drop target; elsewhere they are not on it.
+- **Their own book is untouched**: their records stay with them and may still
+  be handed on to someone else. New-lead ownership (the default owner, the
+  hand-typed lead, the import) is a different door and does not read the flag.
+
 ## "Assigned to you" (#3874)
 
 A record that came to a rep from someone else is listed first on `/sales` and as

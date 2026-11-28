@@ -13,7 +13,7 @@ import { notify, notifyIfAllowed } from '@/lib/notify';
 import { sendLeadHandedOffEmail } from '@/services/emailService';
 import { getDictionary } from '@/i18n/dictionaries';
 import { defaultLocale, isLocale } from '@/i18n/config';
-import { composeHandoffNote, isHandoffAction, nextActionTypeFor, SALES_HANDOFF_REASON, todayIso, type HandoffAction } from '@/lib/leadHandoffRule';
+import { composeHandoffNote, isHandoffAction, mayReceiveHandoff, nextActionTypeFor, SALES_HANDOFF_REASON, todayIso, type HandoffAction } from '@/lib/leadHandoffRule';
 import { handoffActionLabelsByLocale } from '@/lib/handoffLabels';
 import { channelCounts, type FollowUpChannelCounts } from '@/lib/salesTeamRule';
 import { applyImagePlan, clearCurrentImages, moveCurrentImages, planFollowUpImages } from '@/lib/followUpImages';
@@ -23,6 +23,12 @@ export interface SalesTeamMember {
   fullName: string;
   avatarUrl: string | null;
   self: boolean;
+  /**
+   * Whether a lead may be handed to them by this viewer (#3979,
+   * `mayReceiveHandoff`): false for someone an admin closed to hand-offs. The
+   * strip keeps them only as an owner filter; the dialog never offers them.
+   */
+  acceptsHandoffs: boolean;
   /** Their ACTIVE records — the team page's "open" (#3875). */
   open: number;
   /**
@@ -62,7 +68,7 @@ export async function listSalesTeam(
       where: { orgId, isActive: true, role: { in: [...LEAD_OWNER_ROLES] } },
       orderBy: [{ fullName: 'asc' }, { id: 'asc' }],
       take: SALES_TEAM_LIMIT,
-      select: { id: true, fullName: true, avatarUrl: true },
+      select: { id: true, fullName: true, avatarUrl: true, acceptsLeadHandoffs: true },
     }),
   );
   const ids = rows.map((r) => r.id);
@@ -87,9 +93,10 @@ export async function listSalesTeam(
   ]);
   const openBy = new Map(open.map((g) => [g.mentorId, g._count._all]));
   const overdueBy = new Map(overdue.map((g) => [g.mentorId, g._count._all]));
-  return rows.map((r) => ({
+  return rows.map(({ acceptsLeadHandoffs, ...r }) => ({
     ...r,
     self: r.id === selfId,
+    acceptsHandoffs: mayReceiveHandoff({ recipientId: r.id, acceptsLeadHandoffs, actorId: selfId }),
     open: openBy.get(r.id) ?? 0,
     overdue: opts.withOverdue ? (overdueBy.get(r.id) ?? 0) : null,
     followUps: opts.withOverdue
@@ -207,8 +214,12 @@ export async function handOffLead(opts: {
   if (!recipient) return { ok: false, status: 400, code: 'invalid_recipient' };
   const recipientRow = await prisma.user.findUnique({
     where: { id: recipient.id },
-    select: { fullName: true, preferredLanguage: true },
+    select: { fullName: true, preferredLanguage: true, acceptsLeadHandoffs: true },
   });
+  // Closed to hand-offs by an admin (#3979): refused before anything moves.
+  if (!mayReceiveHandoff({ recipientId: recipient.id, acceptsLeadHandoffs: recipientRow?.acceptsLeadHandoffs ?? true, actorId })) {
+    return { ok: false, status: 409, code: 'recipient_not_accepting' };
+  }
   // The note is written in the language of the person who will read it.
   const locale = isLocale(recipientRow?.preferredLanguage) ? recipientRow!.preferredLanguage : defaultLocale;
   // The follow-up the recipient gets: the one the record has (kept), or the
