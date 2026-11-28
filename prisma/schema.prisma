@@ -5895,6 +5895,8 @@ model FollowUpEvent {
   @@unique([relationId, dedupeKey])
   @@index([relationId, createdAt])
   @@index([actorId])
+  // "Handed on by me" on the team board (#3980) looks hand-offs up by their previous owner.
+  @@index([fromUserId])
 }
 
 // An image on a record's follow-up (#3931): a screenshot pasted into the

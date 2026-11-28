@@ -253,6 +253,24 @@ while impersonating, audited `sales.handoffs_closed` / `sales.handoffs_opened`).
   be handed on to someone else. New-lead ownership (the default owner, the
   hand-typed lead, the import) is a different door and does not read the flag.
 
+## "Handed on by me" (#3980)
+
+On the sales board's **Team** view a rep can narrow the board to the leads they
+passed on (`?handedOff=1` on the board and on `GET /api/sales/team-book`). It is
+the team read and nothing more: read-only, off with `salesTeamBookForReps` for
+reps (no toggle, the API's 404).
+
+- **Which leads.** `handedOnBy()` (`src/lib/leadHandoffRule.ts`): the record's
+  LAST hand-off took it from the viewer or was done by them (a dispatcher or an
+  admin passing a lead on), and it is not back with the viewer. A lead the viewer
+  passed to B that B passed on to C is no longer the viewer's; a lead handed back
+  is theirs again, so on "Mine".
+- **Always the caller.** The filter takes no person: it is the session's user.
+- **Where it is read from.** The hand-off's `FollowUpEvent` row (`HANDED_OFF`,
+  `fromUserId` / `actorId`; `fromUserId` is indexed for it), judged per record on
+  the newest such row. The tenant and the read rule come from the team book's own
+  WHERE.
+
 ## "Assigned to you" (#3874)
 
 A record that came to a rep from someone else is listed first on `/sales` and as
