@@ -246,9 +246,9 @@ while impersonating, audited `sales.handoffs_closed` / `sales.handoffs_opened`).
   `acceptsHandoffs`; `handOffLead()` refuses a closed recipient with
   `409 recipient_not_accepting` before anything moves — for a rep, the
   dispatcher and an admin alike.
-- **The board.** The dialog's colleague list leaves them out. On the strip they
-  stay only where a name is also the owner filter (#3906), dashed and marked
-  "no hand-offs", and are not a drop target; elsewhere they are not on it.
+- **The board.** They are on neither the hand-off strip nor the dialog's
+  colleague list. Their leads stay reachable through the board's owner filter
+  (`BoardOwnerFilter`), which the strip's clickable names (#3906) only duplicate.
 - **Their own book is untouched**: their records stay with them and may still
   be handed on to someone else. New-lead ownership (the default owner, the
   hand-typed lead, the import) is a different door and does not read the flag.
