@@ -11,9 +11,9 @@ import { defaultTemplateForVertical, templateStagePayload } from '../src/lib/pro
  * POST /api/admin/users/[id]/lead-handoffs, `User.acceptsLeadHandoffs`.
  *
  * Closed, the person is refused as a hand-off recipient (409
- * recipient_not_accepting) — by a rep and by the admin alike — and the board's
- * dialog does not offer them; on the strip they stay only as the owner filter,
- * marked and not a drop target. Their own leads stay theirs. Only `user.write`
+ * recipient_not_accepting) — by a rep and by the admin alike — and the board
+ * offers them nowhere: not on the strip, not in the dialog's list. Their leads
+ * stay reachable through the board's owner filter. Their own leads stay theirs. Only `user.write`
  * may switch it; another org's user is a 404.
  *
  * SYNTHETIC ONLY: a throwaway MARKETING org per run.
@@ -137,12 +137,10 @@ test('the admin directory switches it, and the board neither offers nor accepts 
   await expect(page.getByTestId(`lead-handoffs-toggle-${ids.rep2}`)).toHaveText('Open lead hand-offs');
   await expect(page.getByTestId(`lead-handoffs-toggle-${ids.rep1}`)).toHaveText('Close lead hand-offs');
 
-  // On the admin board: rep2 is on the strip only as the owner filter, marked; the dialog's list leaves them out.
+  // On the admin board: rep2 is not on the strip, the dialog's list leaves them out.
   await gotoSettled(page, '/admin/board');
-  const chip = page.getByTestId(`handoff-target-${ids.rep2}`);
-  await expect(chip).toHaveAttribute('data-closed', 'true');
-  await expect(page.getByTestId(`handoff-target-closed-${ids.rep2}`)).toHaveText('no hand-offs');
-  await expect(page.getByTestId(`handoff-target-${ids.rep1}`)).not.toHaveAttribute('data-closed', 'true');
+  await expect(page.getByTestId(`handoff-target-${ids.rep1}`)).toBeVisible();
+  await expect(page.getByTestId(`handoff-target-${ids.rep2}`)).toHaveCount(0);
   const card = page.getByTestId('board-card').filter({ hasText: `Contact HC rep1 ${STAMP}` });
   await card.getByTestId('board-card-handoff').click();
   const select = page.getByTestId('lead-handoff-recipient');

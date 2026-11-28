@@ -25,7 +25,7 @@ export interface TeamMember {
   fullName: string;
   avatarUrl: string | null;
   self: boolean;
-  /** False when an admin closed this person to hand-offs (#3979): no drop, not in the dialog. Absent = true. */
+  /** False when an admin closed this person to hand-offs (#3979): not on the strip, not in the dialog. Absent = true. */
   acceptsHandoffs?: boolean;
   /** Load line (#3875): their open records, and overdue follow-ups when the viewer may see them (else null). */
   open?: number;
@@ -102,16 +102,16 @@ export function useLeadHandoff(opts: {
     [nameOf],
   );
 
-  // Who a lead can go to (#3979): a person an admin closed to hand-offs stays on
-  // the strip only where a name is also the owner filter, and never as a drop
-  // target or in the dialog's list.
+  // Who a lead can go to (#3979): a person an admin closed to hand-offs is on
+  // neither the strip nor the dialog's list. Their leads stay reachable through
+  // the board's owner filter (BoardOwnerFilter), which the strip's names only
+  // duplicate.
   const recipients = members.filter((m) => m.acceptsHandoffs !== false);
-  const stripMembers = select ? members : recipients;
   const enabled = recipients.length > 0;
   return {
     enabled,
     openFor: (relationId: string) => open(relationId, null),
-    strip: stripMembers.length > 0 ? <LeadHandoffStrip members={stripMembers} select={select} onDrop={(memberId, relationId) => open(relationId, memberId)} /> : null,
+    strip: enabled ? <LeadHandoffStrip members={recipients} select={select} onDrop={(memberId, relationId) => open(relationId, memberId)} /> : null,
     dialog: (
       <LeadHandoffDialog
         pending={pending}
@@ -148,37 +148,22 @@ function LeadHandoffStrip({
         {h.stripLabel} · <span className="font-normal">{select ? h.stripHintFilter : h.stripHint}</span>
       </p>
       <ul className="flex gap-2 overflow-x-auto pb-1">
-        {members.map((m) => {
-          const closed = m.acceptsHandoffs === false;
-          return (
+        {members.map((m) => (
           <li
             key={m.id}
             data-testid={`handoff-target-${m.id}`}
-            data-closed={closed ? 'true' : undefined}
-            title={closed ? h.closedHint : undefined}
-            // Closed to hand-offs (#3979): not a drop target — the browser shows "not allowed".
-            onDragOver={
-              closed
-                ? undefined
-                : (e) => {
-                    e.preventDefault();
-                    setOver(m.id);
-                  }
-            }
+            onDragOver={(e) => {
+              e.preventDefault();
+              setOver(m.id);
+            }}
             onDragLeave={() => setOver((prev) => (prev === m.id ? null : prev))}
-            onDrop={
-              closed
-                ? undefined
-                : (e) => {
-                    e.preventDefault();
-                    setOver(null);
-                    const id = e.dataTransfer.getData('relationId');
-                    if (id) onDrop(m.id, id);
-                  }
-            }
+            onDrop={(e) => {
+              e.preventDefault();
+              setOver(null);
+              const id = e.dataTransfer.getData('relationId');
+              if (id) onDrop(m.id, id);
+            }}
             className={`flex shrink-0 items-center gap-2 rounded-full border px-2 py-1 pr-3 text-sm transition ${
-              closed ? 'border-dashed opacity-60 ' : ''
-            }${
               over === m.id
                 ? 'border-blue-400 bg-blue-50 text-blue-700 ring-2 ring-blue-200'
                 : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200'
@@ -214,16 +199,10 @@ function LeadHandoffStrip({
                   {m.self && <span className="ml-1 text-xs text-gray-400">({h.you})</span>}
                 </span>
               )}
-              {closed && (
-                <span className="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400" data-testid={`handoff-target-closed-${m.id}`}>
-                  {h.closedBadge}
-                </span>
-              )}
               {typeof m.open === 'number' && <LoadBadge member={m} />}
             </span>
           </li>
-          );
-        })}
+        ))}
       </ul>
     </section>
   );
