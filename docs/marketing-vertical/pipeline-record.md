@@ -232,6 +232,45 @@ sales book** as each record's owner would.
 - **Live.** The flag is read on every request: a revoke takes effect on the
   dispatcher's next request; no session is revoked.
 
+## Closing hand-offs to a person (#3979)
+
+An ORG_ADMIN may stop colleagues from handing leads to someone — a person who
+only manages, or who is away for a while — on `/admin/users` ("Close lead
+hand-offs", `POST /api/admin/users/[id]/lead-handoffs`, `user.write`, never
+while impersonating, audited `sales.handoffs_closed` / `sales.handoffs_opened`).
+`User.acceptsLeadHandoffs` (default `true`) carries it.
+
+- **One rule.** `mayReceiveHandoff()` (`src/lib/leadHandoffRule.ts`): closed
+  means no colleague may hand them a lead, but taking a lead onto your OWN book
+  stays yours to do. `GET /api/sales/team` answers it per member as
+  `acceptsHandoffs`; `handOffLead()` refuses a closed recipient with
+  `409 recipient_not_accepting` before anything moves — for a rep, the
+  dispatcher and an admin alike.
+- **The board.** They are on neither the hand-off strip nor the dialog's
+  colleague list. Their leads stay reachable through the board's owner filter
+  (`BoardOwnerFilter`), which the strip's clickable names (#3906) only duplicate.
+- **Their own book is untouched**: their records stay with them and may still
+  be handed on to someone else. New-lead ownership (the default owner, the
+  hand-typed lead, the import) is a different door and does not read the flag.
+
+## "Handed on by me" (#3980)
+
+On the sales board's **Team** view a rep can narrow the board to the leads they
+passed on (`?handedOff=1` on the board and on `GET /api/sales/team-book`). It is
+the team read and nothing more: read-only, off with `salesTeamBookForReps` for
+reps (no toggle, the API's 404).
+
+- **Which leads.** `handedOnBy()` (`src/lib/leadHandoffRule.ts`): the record's
+  LAST hand-off took it from the viewer or was done by them (a dispatcher or an
+  admin passing a lead on), and it is not back with the viewer. A lead the viewer
+  passed to B that B passed on to C is no longer the viewer's; a lead handed back
+  is theirs again, so on "Mine".
+- **Always the caller.** The filter takes no person: it is the session's user.
+- **Where it is read from.** The hand-off's `FollowUpEvent` row (`HANDED_OFF`,
+  `fromUserId` / `actorId`; `fromUserId` is indexed for it), judged per record on
+  the newest such row. The tenant and the read rule come from the team book's own
+  WHERE.
+
 ## "Assigned to you" (#3874)
 
 A record that came to a rep from someone else is listed first on `/sales` and as

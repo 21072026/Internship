@@ -168,3 +168,29 @@ export function handoffNoteText(
 export function followUpNoteMissing(action: HandoffAction | null | undefined, note: string | null | undefined): boolean {
   return action === 'other' && !(note ?? '').trim();
 }
+
+/**
+ * Whether a lead may be handed to this person (#3979). An org admin can turn
+ * hand-offs to someone off (`User.acceptsLeadHandoffs`); a colleague then may
+ * not pass them a lead, but taking a lead onto your own book is always yours to
+ * do. One rule for the strip, the dialog's list and the write.
+ */
+export function mayReceiveHandoff(input: { recipientId: string; acceptsLeadHandoffs: boolean; actorId: string }): boolean {
+  return input.acceptsLeadHandoffs || input.recipientId === input.actorId;
+}
+
+/**
+ * "Handed on by me" on the team board (#3980): a record counts when the LAST
+ * hand-off it went through took it from the viewer, or was done by the viewer
+ * (the dispatcher or an admin passing a lead on), and it is not back with the
+ * viewer now. Only the last one: a lead the viewer passed to B, which B then
+ * passed to C, is C's colleague's business, not the viewer's.
+ */
+export function handedOnBy(
+  lastHandoff: { fromUserId: string | null; actorId: string | null } | null | undefined,
+  currentOwnerId: string,
+  viewerId: string,
+): boolean {
+  if (!lastHandoff || currentOwnerId === viewerId) return false;
+  return lastHandoff.fromUserId === viewerId || lastHandoff.actorId === viewerId;
+}

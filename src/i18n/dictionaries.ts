@@ -2320,7 +2320,7 @@ const en = {
   sales: {
     // The team view (the user's rule, 2026-11-15): "Mine" is the default; "Team"
     // shows every seller's records of the org, read-only unless they are yours.
-    view: { label: 'Show', mine: 'Mine', team: 'Team' },
+    view: { label: 'Show', mine: 'Mine', team: 'Team', handedOff: 'Handed on by me', handedOffHint: 'Leads you handed to a colleague and that are still with them' },
     pool: {
       title: 'Unassigned leads',
       hint: '{count} leads nobody has taken yet. Take one and it lands on your board at the first stage.',
@@ -2428,8 +2428,22 @@ const en = {
       handedOnBanner: 'This lead was handed over on {date}; its owner is now {owner}. This page is the earlier record.',
       handedOnOpen: 'Open the current record',
       // Follow-up history lines in the interaction list (#3819).
+      note: {
+        add: 'Add a note',
+        label: 'Note',
+        placeholder: 'What should the owner know? For example: they called back and asked for the offer next week.',
+        hint: 'Saved in the history with your name; not counted as a contact.',
+        save: 'Save note',
+        cancel: 'Cancel',
+        saved: 'Note saved.',
+        savedNotified: 'Note saved — the lead\'s owner was notified.',
+        empty: 'Write the note first.',
+        tooLong: 'A note can be at most 280 characters.',
+        failed: 'The note could not be saved. Try again.',
+      },
       followUpEvent: {
         badge: 'System',
+        note: 'Note',
         assigned: 'Follow-up set: {to}',
         changed: 'Follow-up changed: {from} → {to}',
         cleared: 'Follow-up removed',
@@ -4564,6 +4578,11 @@ const en = {
     salesDispatcherBadge: 'Lead dispatcher',
     salesDispatcherGrantConfirm: 'Make {name} the lead dispatcher?\n\n{name} will see every sales record of this organization, hand any lead to any rep and manage colleagues\' records like their owner. The change is recorded in the activity log.',
     salesDispatcherRevokeConfirm: 'Remove {name} as lead dispatcher? {name} will see and work only their own records again.',
+    leadHandoffsClose: 'Close lead hand-offs',
+    leadHandoffsOpen: 'Open lead hand-offs',
+    leadHandoffsClosedBadge: 'No lead hand-offs',
+    leadHandoffsCloseConfirm: 'Stop colleagues from handing leads to {name}?\n\n{name} leaves the board\'s hand-over strip and list. Their own leads stay with them. The change is recorded in the activity log.',
+    leadHandoffsOpenConfirm: 'Let colleagues hand leads to {name} again?',
     ssoExemptGrant: 'Grant SSO exemption',
     ssoExemptRevoke: 'Revoke SSO exemption',
     ssoExemptGrantConfirm: 'Let {name} keep signing in with a password even when this organization requires single sign-on?\n\nThis is the break-glass account for an identity-provider outage. Every grant is recorded in the activity log and {name} is notified.',
@@ -4632,6 +4651,7 @@ const en = {
       already_mentored: 'This lead already has another active owner.',
       inactive_relation: 'This record is closed.',
       no_follow_up: 'This lead has no follow-up to keep.',
+      recipient_not_accepting: 'Leads cannot be handed to this person right now.',
     },
     currentLine: 'Currently with {name} · follow-up: {followUp}',
     currentNoFollowUp: 'Currently with {name} · no follow-up',
@@ -4665,6 +4685,16 @@ const en = {
   // pipeline stage. Two audiences, two tones on purpose: the mentor is being
   // told a queue is aging, the mentee must not be made to feel accused of
   // being slow, so the mentee half never says "overdue" or "late".
+  boardLegend: {
+    toggle: 'What do the badges mean?',
+    title: 'What the badges on a card mean',
+    close: 'Close the explanation',
+    stageDays: 'Days the record has been in its current stage. Grey while it is within the time set for that stage.',
+    stageOverdue: 'Red with an exclamation mark: longer in this stage than the time set for it (an admin sets each stage\'s time). Hover the badge for the deadline.',
+    followUpSample: 'Follow-up 28/11',
+    followUp: 'Follow-up: the day you plan to do the next step (call, e-mail, meeting). "Due today" appears next to it on that day, "Overdue" after it.',
+    trialEnd: 'Trial end: days left until the customer\'s trial ends; "Ends today" and "Ended" on and after that day.',
+  },
   stageClock: {
     chip: '{n}d',
     chipToday: 'today',
@@ -5512,6 +5542,7 @@ const en = {
       // told three different true things — and none of them the reason.
       'mentorship.mentorChanged': 'Your mentor has changed — {mentorName} is now your mentor.',
       'lead.handedOff': '{from} handed {menteeName} over to you — next step: {action}',
+      'lead.noteAdded': '{from} added a note to {menteeName}',
       'mentorship.reassignedAway': 'Your mentorship with {menteeName} has ended — they are continuing with another mentor.',
       'relation.lifecycle_paused': 'Your pairing with {name} is paused for now.',
       'relation.lifecycle_resumed': 'Your pairing with {name} has resumed.',
@@ -5685,6 +5716,13 @@ const en = {
       greeting: 'Hi {name},',
       body: '{count} mentees were assigned to you in one go. Open your dashboard to see who they are and reach out.',
       cta: 'Open your dashboard',
+    },
+    leadNoteEmail: {
+      subject: '{from} added a note to {lead}',
+      heading: 'A note on your lead',
+      greeting: 'Hi {name},',
+      body: '{from} added a note to {lead}:',
+      cta: 'Open the lead',
     },
     leadHandedOffEmail: {
       subject: '{from} handed you a lead: {lead}',
@@ -15341,7 +15379,7 @@ const tr: Dict = {
     },
   },
   sales: {
-    view: { label: 'Göster', mine: 'Benim', team: 'Ekip' },
+    view: { label: 'Göster', mine: 'Benim', team: 'Ekip', handedOff: 'Devrettiklerim', handedOffHint: 'Bir ekip arkadaşına devrettiğin ve hâlâ onda olan lead\'ler' },
     pool: {
       title: 'Atanmamış lead\'ler',
       hint: 'Henüz kimsenin almadığı {count} lead. Birini alırsan ilk aşamada senin panona düşer.',
@@ -15448,8 +15486,22 @@ const tr: Dict = {
       takenOverFrom: '{date} tarihinde {owner} tarafından devredildi',
       handedOnBanner: 'Bu lead {date} tarihinde devredildi, sorumlusu artık {owner}. Bu sayfa önceki kayıt.',
       handedOnOpen: 'Güncel kaydı aç',
+      note: {
+        add: 'Not ekle',
+        label: 'Not',
+        placeholder: 'Lead sahibinin bilmesi gereken ne? Örneğin: geri aradı, teklifi gelecek hafta istiyor.',
+        hint: 'Adınla birlikte geçmişe kaydedilir; temas sayılmaz.',
+        save: 'Notu kaydet',
+        cancel: 'Vazgeç',
+        saved: 'Not kaydedildi.',
+        savedNotified: 'Not kaydedildi — lead sahibine haber verildi.',
+        empty: 'Önce notu yaz.',
+        tooLong: 'Not en fazla 280 karakter olabilir.',
+        failed: 'Not kaydedilemedi. Tekrar dene.',
+      },
       followUpEvent: {
         badge: 'Sistem',
+        note: 'Not',
         assigned: 'Takip atandı: {to}',
         changed: 'Takip değişti: {from} → {to}',
         cleared: 'Takip silindi',
@@ -17525,6 +17577,11 @@ const tr: Dict = {
     salesDispatcherBadge: 'Lead dağıtıcısı',
     salesDispatcherGrantConfirm: '{name} lead dağıtıcısı olsun mu?\n\n{name} bu organizasyonun bütün satış kayıtlarını görür, herhangi bir lead\'i herhangi bir temsilciye devredebilir ve iş arkadaşlarının kayıtlarını sahibi gibi yönetebilir. Değişiklik etkinlik günlüğüne yazılır.',
     salesDispatcherRevokeConfirm: '{name} artık lead dağıtıcısı olmasın mı? {name} yeniden yalnızca kendi kayıtlarını görür ve yönetir.',
+    leadHandoffsClose: 'Lead devrini kapat',
+    leadHandoffsOpen: 'Lead devrini aç',
+    leadHandoffsClosedBadge: 'Lead devri kapalı',
+    leadHandoffsCloseConfirm: 'Ekip arkadaşları {name} adlı kişiye lead devredemesin mi?\n\n{name} panodaki devir şeridinden ve listeden çıkar. Kendi lead\'leri kendisinde kalır. Değişiklik etkinlik kaydına yazılır.',
+    leadHandoffsOpenConfirm: 'Ekip arkadaşları {name} adlı kişiye yeniden lead devredebilsin mi?',
     ssoExemptGrant: 'SSO muafiyeti ver',
     ssoExemptRevoke: 'SSO muafiyetini kaldır',
     ssoExemptGrantConfirm: '{name} bu organizasyonda tek oturum açma zorunluyken bile parolayla girmeye devam etsin mi?\n\nBu, kimlik sağlayıcı kesintisi için acil durum hesabıdır. Her yetkilendirme etkinlik günlüğüne yazılır ve {name} bilgilendirilir.',
@@ -17591,6 +17648,7 @@ const tr: Dict = {
       already_mentored: 'Bu müşteri adayının başka bir aktif sahibi var.',
       inactive_relation: 'Bu kayıt kapalı.',
       no_follow_up: 'Bu müşteri adayının korunacak bir takibi yok.',
+      recipient_not_accepting: 'Bu kişiye şu anda lead devredilemiyor.',
     },
     currentLine: 'Şu an: {name} · takip: {followUp}',
     currentNoFollowUp: 'Şu an: {name} · takip yok',
@@ -17620,6 +17678,16 @@ const tr: Dict = {
     wipSaturated: 'Panodaki her sütun kendi iş limitinin üzerinde; bu yüzden turuncu uyarı artık bir yeri işaret etmiyor ve gizlendi. Bu programın gerçekten nasıl yürüdüğüne uyan bir limit belirle — pano için tek sayı ya da aşama başına birer tane.',
     wipSaturatedAction: 'Limitleri düzenle',
     groups: { pre: 'Staj öncesi', internship: 'Staj', result: 'Sonuç', custom: 'Özel aşamalar' },
+  },
+  boardLegend: {
+    toggle: 'Simgeler ne demek?',
+    title: 'Karttaki simgeler ne anlama geliyor',
+    close: 'Açıklamayı kapat',
+    stageDays: 'Kaydın şu anki aşamada geçirdiği gün sayısı. O aşama için belirlenen süre içindeyken gri.',
+    stageOverdue: 'Kırmızı ve ünlemli: kayıt bu aşamada kendisi için belirlenen süreden uzun kaldı (her aşamanın süresini yönetici belirler). Son tarihi görmek için simgenin üzerine gel.',
+    followUpSample: 'Takip 28.11.',
+    followUp: 'Takip: bir sonraki adımı (arama, e-posta, toplantı) yapmayı planladığın gün. O gün yanında "Bugün", geçince "Gecikti" yazar.',
+    trialEnd: 'Deneme bitişi: müşterinin deneme süresinin bitmesine kalan gün; o gün "Bugün bitiyor", sonra "Bitti" yazar.',
   },
   stageClock: {
     chip: '{n} gün',
@@ -18451,6 +18519,7 @@ const tr: Dict = {
       // söylenir — ve hiçbirine gerekçe söylenmez.
       'mentorship.mentorChanged': 'Mentörün değişti — artık mentörün {mentorName}.',
       'lead.handedOff': '{from} sana {menteeName} kaydını devretti — sıradaki adım: {action}',
+      'lead.noteAdded': '{from}, {menteeName} kaydına bir not ekledi',
       'mentorship.reassignedAway': '{menteeName} ile mentorluğun sona erdi — başka bir mentörle devam ediyor.',
       'relation.lifecycle_paused': '{name} ile eşleşmen şimdilik duraklatıldı.',
       'relation.lifecycle_resumed': '{name} ile eşleşmen yeniden başladı.',
@@ -18612,6 +18681,13 @@ const tr: Dict = {
       greeting: 'Merhaba {name},',
       body: 'Sana tek seferde {count} mentee atandı. Kim olduklarını görmek ve iletişime geçmek için panonu aç.',
       cta: 'Panonu aç',
+    },
+    leadNoteEmail: {
+      subject: '{from}, {lead} kaydına not ekledi',
+      heading: 'Lead\'ine bir not eklendi',
+      greeting: 'Merhaba {name},',
+      body: '{from}, {lead} kaydına şu notu ekledi:',
+      cta: 'Lead\'i aç',
     },
     leadHandedOffEmail: {
       subject: '{from} sana bir lead devretti: {lead}',
@@ -28141,7 +28217,7 @@ const de: Dict = {
     },
   },
   sales: {
-    view: { label: 'Anzeigen', mine: 'Meine', team: 'Team' },
+    view: { label: 'Anzeigen', mine: 'Meine', team: 'Team', handedOff: 'Von mir übergeben', handedOffHint: 'Leads, die du übergeben hast und die noch bei der anderen Person liegen' },
     pool: {
       title: 'Nicht zugewiesene Leads',
       hint: '{count} Leads, die noch niemand übernommen hat. Übernimm einen, und er landet in der ersten Stufe auf deinem Board.',
@@ -28248,8 +28324,22 @@ const de: Dict = {
       takenOverFrom: 'Am {date} von {owner} übernommen',
       handedOnBanner: 'Dieser Lead wurde am {date} übergeben, zuständig ist jetzt {owner}. Diese Seite ist der frühere Datensatz.',
       handedOnOpen: 'Aktuellen Datensatz öffnen',
+      note: {
+        add: 'Notiz hinzufügen',
+        label: 'Notiz',
+        placeholder: 'Was sollte der Lead-Inhaber wissen? Zum Beispiel: hat zurückgerufen, möchte das Angebot nächste Woche.',
+        hint: 'Wird mit Ihrem Namen im Verlauf gespeichert; zählt nicht als Kontakt.',
+        save: 'Notiz speichern',
+        cancel: 'Abbrechen',
+        saved: 'Notiz gespeichert.',
+        savedNotified: 'Notiz gespeichert — der Lead-Inhaber wurde benachrichtigt.',
+        empty: 'Bitte zuerst die Notiz schreiben.',
+        tooLong: 'Eine Notiz darf höchstens 280 Zeichen lang sein.',
+        failed: 'Die Notiz konnte nicht gespeichert werden. Bitte erneut versuchen.',
+      },
       followUpEvent: {
         badge: 'System',
+        note: 'Notiz',
         assigned: 'Wiedervorlage gesetzt: {to}',
         changed: 'Wiedervorlage geändert: {from} → {to}',
         cleared: 'Wiedervorlage entfernt',
@@ -30326,6 +30416,11 @@ const de: Dict = {
     salesDispatcherBadge: 'Lead-Verteiler',
     salesDispatcherGrantConfirm: '{name} zum Lead-Verteiler machen?\n\n{name} sieht alle Vertriebsdatensätze dieser Organisation, kann jeden Lead an jeden Vertriebler übergeben und die Datensätze der Kolleginnen und Kollegen wie deren Inhaber bearbeiten. Die Änderung wird im Aktivitätsprotokoll festgehalten.',
     salesDispatcherRevokeConfirm: '{name} nicht mehr Lead-Verteiler? {name} sieht und bearbeitet dann wieder nur die eigenen Datensätze.',
+    leadHandoffsClose: 'Lead-Übergaben schließen',
+    leadHandoffsOpen: 'Lead-Übergaben öffnen',
+    leadHandoffsClosedBadge: 'Keine Lead-Übergaben',
+    leadHandoffsCloseConfirm: 'Sollen Kolleg:innen {name} keine Leads mehr übergeben können?\n\n{name} verschwindet aus der Übergabeleiste und der Liste am Board. Die eigenen Leads bleiben bei {name}. Die Änderung wird im Aktivitätsprotokoll festgehalten.',
+    leadHandoffsOpenConfirm: 'Sollen Kolleg:innen {name} wieder Leads übergeben können?',
     ssoExemptGrant: 'SSO-Ausnahme gewähren',
     ssoExemptRevoke: 'SSO-Ausnahme entziehen',
     ssoExemptGrantConfirm: 'Soll {name} sich weiterhin per Passwort anmelden können, auch wenn diese Organisation Single Sign-on verlangt?\n\nDas ist das Notfallkonto für einen Ausfall des Identitätsanbieters. Jede Gewährung wird im Aktivitätsprotokoll festgehalten und {name} wird benachrichtigt.',
@@ -30392,6 +30487,7 @@ const de: Dict = {
       already_mentored: 'Dieser Lead hat bereits einen anderen aktiven Owner.',
       inactive_relation: 'Dieser Datensatz ist geschlossen.',
       no_follow_up: 'Dieser Lead hat keine Wiedervorlage zum Behalten.',
+      recipient_not_accepting: 'Dieser Person können gerade keine Leads übergeben werden.',
     },
     currentLine: 'Aktuell bei {name} · Wiedervorlage: {followUp}',
     currentNoFollowUp: 'Aktuell bei {name} · keine Wiedervorlage',
@@ -30421,6 +30517,16 @@ const de: Dict = {
     wipSaturated: 'Jede Spalte dieses Boards liegt über ihrem Arbeitslimit, damit zeigt die bernsteinfarbene Warnung nirgendwo mehr hin und wird ausgeblendet. Lege ein Limit fest, das zu diesem Programm passt — eine Zahl für das ganze Board oder eine je Phase.',
     wipSaturatedAction: 'Limits anpassen',
     groups: { pre: 'Vor dem Praktikum', internship: 'Praktikum', result: 'Ergebnis', custom: 'Eigene Phasen' },
+  },
+  boardLegend: {
+    toggle: 'Was bedeuten die Symbole?',
+    title: 'Was die Symbole auf einer Karte bedeuten',
+    close: 'Erklärung schließen',
+    stageDays: 'Tage, die der Datensatz schon in seiner aktuellen Phase ist. Grau, solange die für diese Phase vorgesehene Zeit nicht überschritten ist.',
+    stageOverdue: 'Rot mit Ausrufezeichen: länger in dieser Phase als vorgesehen (die Zeit je Phase legt ein Admin fest). Fahren Sie über das Symbol für die Frist.',
+    followUpSample: 'Wiedervorlage 28.11.',
+    followUp: 'Wiedervorlage: der Tag, an dem Sie den nächsten Schritt (Anruf, E-Mail, Termin) planen. Am Tag selbst steht „Heute fällig“ daneben, danach „Überfällig“.',
+    trialEnd: 'Testende: verbleibende Tage bis zum Ende des Tests beim Kunden; am Tag selbst „Endet heute“, danach „Beendet“.',
   },
   stageClock: {
     chip: '{n} T.',
@@ -31253,6 +31359,7 @@ const de: Dict = {
       // keinem davon der Grund.
       'mentorship.mentorChanged': 'Dein Mentor hat sich geändert — {mentorName} ist jetzt dein Mentor.',
       'lead.handedOff': '{from} hat dir {menteeName} übergeben — nächster Schritt: {action}',
+      'lead.noteAdded': '{from} hat eine Notiz zu {menteeName} hinzugefügt',
       'mentorship.reassignedAway': 'Dein Mentoring mit {menteeName} ist beendet — die Person setzt es mit einem anderen Mentor fort.',
       'relation.lifecycle_paused': 'Deine Zusammenarbeit mit {name} ist vorerst pausiert.',
       'relation.lifecycle_resumed': 'Deine Zusammenarbeit mit {name} geht weiter.',
@@ -31414,6 +31521,13 @@ const de: Dict = {
       greeting: 'Hallo {name},',
       body: 'Dir wurden auf einmal {count} Mentees zugewiesen. Öffne dein Dashboard, um zu sehen, wer sie sind, und melde dich bei ihnen.',
       cta: 'Dashboard öffnen',
+    },
+    leadNoteEmail: {
+      subject: '{from} hat eine Notiz zu {lead} hinzugefügt',
+      heading: 'Eine Notiz zu Ihrem Lead',
+      greeting: 'Hallo {name},',
+      body: '{from} hat {lead} diese Notiz hinzugefügt:',
+      cta: 'Lead öffnen',
     },
     leadHandedOffEmail: {
       subject: '{from} hat dir einen Lead übergeben: {lead}',

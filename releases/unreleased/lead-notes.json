@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "- A free note on a sales record (#3978): \"Add a note\" on the lead page (`POST /api/sales/leads/[id]/notes`, rule `src/lib/leadNoteRule.ts`, writer `src/lib/leadNotes.ts`) saves one `FollowUpEvent` `NOTE` line (≤ 280 characters) with its author in the record's history — never an `InteractionLog` row, so never a contact. The record's writer and anyone who owned it before and handed it on may add one (others get the 404 of a missing id); a colleague's note rings the owner in-app (`lead.noteAdded`) and by mail (category `lead-note`). A double click is one note.",
+  "notes": {
+    "en": ["Add a note to a lead — even one you have handed over: the person who has it now is notified."],
+    "tr": ["Lead'e not ekleyebilirsin — devrettiğin bir lead'e de: lead'in şimdiki sahibine haber gider."],
+    "de": ["Fügen Sie einem Lead eine Notiz hinzu – auch einem, den Sie übergeben haben: Der aktuelle Inhaber wird benachrichtigt."]
+  }
+}

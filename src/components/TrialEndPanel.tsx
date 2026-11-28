@@ -72,7 +72,7 @@ export function TrialEndChip({
   if (!isTrialEndEditableStage(pipelineStatus)) return null;
   if (!trialEndsAt) return <TrialEndStatus pipelineStatus={pipelineStatus} trialEndsAt={trialEndsAt} className="text-[10px]" />;
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400" data-testid="trial-end-chip">
+    <span className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400" title={t.boardLegend.trialEnd} data-testid="trial-end-chip">
       <Hourglass className="h-3 w-3" />
       {t.trialEnd.chip.replace('{date}', formatDate(trialEndsAt, locale, { timeZone: 'UTC' }))}
       <TrialEndStatus pipelineStatus={pipelineStatus} trialEndsAt={trialEndsAt} className="text-[10px]" />

@@ -118,6 +118,8 @@ export const EMAIL_GROUPS: readonly EmailGroupDef[] = [
       'mentee-assigned', 'mentor-application', 'goals-evaluation', 'mentor-offer',
       // The one ending-soon nudge per agreed end date (#1786).
       'relation-ending',
+      // A colleague's note on a lead this rep owns (#3978).
+      'lead-note',
     ],
     legacy: ['mentorship', 'goalsEvaluations'],
   },

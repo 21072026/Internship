@@ -1,0 +1,9 @@
+{
+  "bump": "minor",
+  "changelog": "Sales board: \"Handed on by me\" on the Team view (`?handedOff=1`, also on `GET /api/sales/team-book`) shows the leads whose last hand-off was from or by the viewer and that are not back with them (`handedOnBy`); `FollowUpEvent.fromUserId` is indexed for it (#3980).",
+  "notes": {
+    "en": ["On the board's Team view, \"Handed on by me\" shows the leads you passed to a colleague that are still with them."],
+    "tr": ["Panonun Ekip görünümünde \"Devrettiklerim\", bir ekip arkadaşına devrettiğin ve hâlâ onda olan lead'leri gösteriyor."],
+    "de": ["In der Team-Ansicht des Boards zeigt „Von mir übergeben“ die Leads, die du übergeben hast und die noch bei der anderen Person liegen."]
+  }
+}

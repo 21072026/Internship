@@ -3157,6 +3157,64 @@ export async function sendMenteesBulkAssignedEmail({
   });
 }
 
+// A colleague's note on a lead this rep owns (#3978, src/lib/leadNotes.ts):
+// usually the previous owner passing on news about a lead they handed over.
+// Through the router, e-mail channel only — the bell is the note's own
+// notify() with its exact link. The recipient is the record's owner, staff, so
+// outbound approval never holds it. The note is the owner's working prose and
+// they read it on the record anyway; it is escaped like every typed text.
+export async function sendLeadNoteEmail({
+  relationId,
+  leadName,
+  fromName,
+  note,
+  recipientName,
+  orgId,
+  userId,
+  locale,
+  dedupeKey,
+}: {
+  relationId: string;
+  leadName: string;
+  fromName: string;
+  note: string;
+  recipientName: string;
+  orgId: string;
+  userId: string;
+  locale?: string | null;
+  dedupeKey: string;
+}) {
+  const brand = await emailBrand(orgId);
+  const base = await appUrlForRecipient(orgId, userId);
+  const lang = await assignedEmailLocale(locale, userId);
+  const M = (await emailDictionary(lang, orgId)).notifications.leadNoteEmail;
+  const fill = (t: string) =>
+    t
+      .replace('{from}', () => fromName)
+      .replace('{lead}', () => leadName)
+      .replace('{name}', () => recipientName);
+  await notifyEvent(userId, 'lead.noteAdded', { menteeName: leadName, from: fromName, relationId }, {
+    channels: ['email'],
+    orgId,
+    dedupeKey,
+    email: {
+      category: 'lead-note',
+      locale: lang,
+      fromName: brand.name,
+      subject: fill(M.subject),
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          ${brandHeader(brand, esc(M.heading))}
+          <p>${esc(fill(M.greeting))}</p>
+          <p>${esc(fill(M.body))}</p>
+          <blockquote style="margin: 12px 0; padding: 8px 12px; border-left: 3px solid #d1d5db; white-space: pre-wrap;">${esc(note)}</blockquote>
+          ${ctaBlock(brand, `${base}/sales/leads/${encodeURIComponent(relationId)}`, esc(M.cta))}
+        </div>
+      `,
+    },
+  });
+}
+
 // A lead handed to this rep by a colleague or an admin (#3871,
 // src/lib/leadHandoff.ts). The admin's direct assignment already mails the new
 // owner (sendMenteeAssignedEmail); the board's hand-off told them only in-app,

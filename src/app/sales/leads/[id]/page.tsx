@@ -34,6 +34,7 @@ import { shownEmail } from '@/lib/leadEmail';
 import { LeadPageHandoff } from '@/components/sales/LeadPageHandoff';
 import { earlierPeriods, currentSuccessor } from '@/lib/leadJourney';
 import { followUpEventsFor, type FollowUpEventView } from '@/lib/followUpEvents';
+import { mayNoteLead } from '@/lib/leadNotes';
 import { imagesByEvent } from '@/lib/followUpImageRule';
 import { markAssignmentSeen } from '@/lib/assignedToYou';
 import { RefreshRouterCache } from '@/components/RefreshRouterCache';
@@ -123,6 +124,9 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
   // contact log (#3748), the trial end: the rule the write routes apply.
   const writable = await canWriteSalesRecord(session, relation);
   const ownersView = writable || canSeeNextAction({ id: session.user.id, role: session.user.role }, relation);
+  // A free note (#3978): who may work the record, or who owned it before and
+  // handed it on — they also read the notes, even where the follow-up is not theirs.
+  const noting = await mayNoteLead(session, relation);
 
   const [company, lastContact, interactions, earlier, successor, followUpEvents, stageMoves, meetings, viewer, attemptCount] = await Promise.all([
     relation.companyId
@@ -144,7 +148,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
     relation.status === 'ACTIVE' ? null : currentSuccessor(relation),
     // The follow-up's history (#3819) carries the owner's notes: only for the
     // viewers who may read the follow-up itself.
-    ownersView ? followUpEventsFor(relation.id) : [],
+    ownersView ? followUpEventsFor(relation.id) : noting.allowed ? followUpEventsFor(relation.id, { notesOnly: true }) : [],
     // The stage history (#3820), read from the audit rows every stage move
     // already writes — no second record. Stages are on the page for every
     // reader; the reason note is not shown here.
@@ -214,9 +218,13 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
             ? s.followUpEvent.completed
             : e.kind === 'CLEARED'
               ? s.followUpEvent.cleared
-              : fill(s.followUpEvent.handedOff, e.fromName ?? someone, e.toName ?? someone);
+              : e.kind === 'NOTE'
+                ? s.followUpEvent.note
+                : fill(s.followUpEvent.handedOff, e.fromName ?? someone, e.toName ?? someone);
     const detail =
-      e.kind === 'HANDED_OFF'
+      e.kind === 'NOTE'
+        ? e.toNote
+        : e.kind === 'HANDED_OFF'
         ? e.fromAt || e.fromNote
           ? fill(s.followUpEvent.handedOffFollowUpFrom, followUpText(e.fromAt, e.fromNote), followUpText(e.toAt, e.toNote))
           : fill(s.followUpEvent.handedOffFollowUp, '', followUpText(e.toAt, e.toNote))
@@ -225,7 +233,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
             ? followUpText(e.fromAt, e.fromNote)
             : null
           : null;
-    return { id: e.id, source: 'followUp', at: e.createdAt.toISOString(), headline, detail, by: e.actorName ?? someone, imageIds: images?.get(e.id) };
+    return { id: e.id, source: e.kind === 'NOTE' ? 'note' : 'followUp', at: e.createdAt.toISOString(), headline, detail, by: e.actorName ?? someone, imageIds: images?.get(e.id) };
   };
   const systemEvents: LeadSystemEvent[] = followUpEvents.map((e) => followUpLine(e, currentImageMap));
   for (const m of stageMoves) {
@@ -400,6 +408,7 @@ export default async function SalesLeadPage({ params }: { params: Promise<{ id: 
           <SalesInteractionsCard
             relationId={relation.id}
             canLog={canLog}
+            canNote={noting.allowed}
             interactions={interactions.map((i) => ({ id: i.id, date: i.date.toISOString(), type: i.type, subject: i.subject, notes: i.notes, outcome: i.outcome }))}
             systemEvents={systemEvents}
             attemptCount={attemptCount}

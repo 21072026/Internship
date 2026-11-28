@@ -37,6 +37,8 @@ const SELECTS = {
     ssoExempt: true,
     // The sales dispatcher (#3656): the directory badges it and offers the toggle.
     salesDispatcher: true,
+    // Closed to lead hand-offs (#3979): the directory badges it and offers the toggle.
+    acceptsLeadHandoffs: true,
     // Whether the account has a second factor at all (#1543). A boolean, not a
     // secret: the admin directory offers "reset two-factor" only to the rows
     // where there is something to reset, so support does not press it blind.

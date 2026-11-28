@@ -216,7 +216,7 @@ test('the team is the active ADMINs and MENTORs of the caller’s org, the calle
   expect(byId.get(ids.rep1)?.self).toBe(true);
   expect(byId.get(ids.rep2)?.self).toBe(false);
   // Names, avatars and the load counts (#3875, #3905), nothing else.
-  expect(Object.keys(members[0]).sort()).toEqual(['avatarUrl', 'followUps', 'fullName', 'id', 'open', 'overdue', 'self']);
+  expect(Object.keys(members[0]).sort()).toEqual(['acceptsHandoffs', 'avatarUrl', 'followUps', 'fullName', 'id', 'open', 'overdue', 'self']);
   await rep1.dispose();
 });
 
@@ -528,21 +528,34 @@ test('the strip shows each person\'s load: open records for everyone, overdue an
   expect(channels.email).toBeGreaterThanOrEqual(1);
   await admin.dispose();
 
-  // On the board: the line under the name.
+  // On the board (#3988): a badge with the open count; the rest opens on hover.
   await page.context().setExtraHTTPHeaders(asHost(MARKETING_HOST));
   await signInAndSettle(page, mail.rep1, PW, '/sales');
   await gotoSettled(page, '/sales/board');
-  const line = page.getByTestId(`handoff-target-load-${ids.rep2}`);
-  await expect(line).toHaveText(`${await openOf(ids.rep2)} open`);
-  await expect(page.getByTestId(`handoff-target-channels-${ids.rep2}`)).toHaveCount(0);
+  const openCount = await openOf(ids.rep2);
+  await expect(page.getByTestId(`handoff-target-open-${ids.rep2}`)).toHaveText(String(openCount));
+  // A rep sees no overdue dot, and the popover says the open count only.
+  await expect(page.getByTestId(`handoff-target-overdue-${ids.rep2}`)).toHaveCount(0);
+  await expect(page.getByTestId(`handoff-target-load-detail-${ids.rep2}`)).toHaveCount(0);
+  await page.getByTestId(`handoff-target-load-${ids.rep2}`).hover();
+  await expect(page.getByTestId(`handoff-target-load-detail-${ids.rep2}`)).toHaveText(`${openCount} open`);
 
-  // The admin's board says the split under the same name.
+  // The admin's board: the red dot with the overdue count, and the split in the popover.
   await page.context().clearCookies();
   await signInAndSettle(page, mail.admin, PW, '/admin');
   await gotoSettled(page, '/admin/board');
-  await expect(page.getByTestId(`handoff-target-channels-${ids.rep2}`)).toHaveText(
-    ` · follow-ups: ${channels.call} call · ${channels.email} e-mail · ${channels.other} other`,
-  );
+  await expect(page.getByTestId(`handoff-target-overdue-${ids.rep2}`)).toHaveText(String(asAdmin.overdue));
+  await page.getByTestId(`handoff-target-load-${ids.rep2}`).hover();
+  const detail = page.getByTestId(`handoff-target-load-detail-${ids.rep2}`);
+  await expect(detail).toContainText(`${asAdmin.overdue} overdue follow-ups`);
+  await expect(detail).toContainText(`follow-ups: ${channels.call} call · ${channels.email} e-mail · ${channels.other} other`);
+  // Escape folds it; keyboard focus opens it again.
+  await page.mouse.move(0, 0);
+  await expect(detail).toHaveCount(0);
+  await page.getByTestId(`handoff-target-load-${ids.rep2}`).focus();
+  await expect(detail).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(detail).toHaveCount(0);
 
   // The admin board's names filter it too (#3906): the owner filter follows the click.
   await page.getByTestId(`handoff-target-filter-${ids.rep2}`).click();

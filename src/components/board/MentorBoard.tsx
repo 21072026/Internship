@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/Toast';
 import { stageGateFrom, useStageGateDialog } from '@/components/StageGateDialog';
 import { useIsNarrow } from '@/hooks/useIsNarrow';
 import { BoardStageFilter } from '@/components/board/BoardStageFilter';
+import { BoardLegend, BoardLegendButton, useBoardLegend } from '@/components/board/BoardLegend';
 import { BoardPhaseGroups } from '@/components/board/BoardPhaseGroups';
 import { BoardColumnHeader } from '@/components/board/BoardColumnHeader';
 import { boardColumnPaint } from '@/lib/boardColumnTone';
@@ -140,6 +141,8 @@ export function MentorBoard({
   const router = useRouter();
   const toast = useToast();
   const narrow = useIsNarrow();
+  // "What do the badges mean?" (#3977) — a hook, so above every early return.
+  const legend = useBoardLegend();
   const [relations, setRelations] = useState<Relation[]>([]);
   // moveTo is also called much later from a toast's "Undo", where the closed-over
   // `relations` would be stale — read the live list through a ref instead.
@@ -175,14 +178,17 @@ export function MentorBoard({
   const [urlRead, setUrlRead] = useState(false);
   const [view, setViewState] = useState<SalesBoardView>('mine');
   const [owners, setOwnersState] = useState<string[]>([]);
+  // "Handed on by me" (#3980, `?handedOff=1`): the team view narrowed to the leads the viewer passed on.
+  const [handedOff, setHandedOffState] = useState(false);
   const [ownerOptions, setOwnerOptions] = useState<OwnerOption[]>([]);
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     setViewState(teamAllowed ? salesBoardView(params.get('view')) : 'mine');
     setOwnersState((params.get('owners') ?? '').split(',').filter(Boolean));
+    setHandedOffState(params.get('handedOff') === '1');
     setUrlRead(true);
   }, [teamAllowed]);
-  const writeUrl = (next: { view?: SalesBoardView; owners?: string[] }) => {
+  const writeUrl = (next: { view?: SalesBoardView; owners?: string[]; handedOff?: boolean }) => {
     const url = new URL(window.location.href);
     if (next.view !== undefined) {
       if (next.view === 'team') url.searchParams.set('view', 'team');
@@ -191,6 +197,10 @@ export function MentorBoard({
     if (next.owners !== undefined) {
       if (next.owners.length) url.searchParams.set('owners', next.owners.join(','));
       else url.searchParams.delete('owners');
+    }
+    if (next.handedOff !== undefined) {
+      if (next.handedOff) url.searchParams.set('handedOff', '1');
+      else url.searchParams.delete('handedOff');
     }
     window.history.replaceState(null, '', url.toString());
   };
@@ -203,6 +213,10 @@ export function MentorBoard({
     setOwnersState(ids);
     writeUrl({ owners: ids });
   };
+  const setHandedOff = (next: boolean) => {
+    setHandedOffState(next);
+    writeUrl({ handedOff: next });
+  };
   const teamView = teamAllowed && view === 'team';
 
   // A failed load is its own state, not an empty board (#1374).
@@ -214,6 +228,7 @@ export function MentorBoard({
       if (surface === 'sales' && teamAllowed && view === 'team') {
         const params = new URLSearchParams({ status: 'active' });
         if (owners.length) params.set('owners', owners.join(','));
+        if (handedOff) params.set('handedOff', '1');
         const res = await fetch(`/api/sales/team-book?${params}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const book = (await res.json()) as SalesTeamBook;
@@ -230,7 +245,7 @@ export function MentorBoard({
     } finally {
       setLoading(false);
     }
-  }, [surface, urlRead, teamAllowed, view, owners]);
+  }, [surface, urlRead, teamAllowed, view, owners, handedOff]);
 
   // Only the viewer's own card moves on the team view, or any for whom may write
   // them all; outside the sales surface (no viewer) the board is the owner's own.
@@ -478,7 +493,8 @@ export function MentorBoard({
     <div>
       {gateDialog}
       {handoff && leadHandoff.dialog}
-      <div className="mb-6">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-2">
+        <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
           {t.nav.board}
           {relations.length > 0 && (
@@ -490,7 +506,11 @@ export function MentorBoard({
         <p className="text-gray-500 mt-1">
           {t.mentor.boardSubtitle}
         </p>
+        </div>
+        {/* What the card badges mean (#3977). */}
+        {relations.length > 0 && <BoardLegendButton open={legend.open} onToggle={legend.toggle} />}
       </div>
+      <BoardLegend open={legend.open && relations.length > 0} onClose={legend.toggle} trial={surface === 'sales'} />
 
       {/* One toolbar row (#3838): Mine/Team and the owner filter on the left,
           "show empty stages" and then the search at the far right; it wraps on
@@ -499,6 +519,22 @@ export function MentorBoard({
         <div className="mb-4 flex flex-wrap items-center gap-3" data-testid="board-toolbar">
           {teamAllowed && <SalesViewToggle view={view} onChange={setView} />}
           {teamAllowed && teamView && <BoardOwnerFilter options={ownerOptions} selected={owners} onChange={setOwners} />}
+          {teamAllowed && teamView && (
+            <button
+              type="button"
+              aria-pressed={handedOff}
+              title={t.sales.view.handedOffHint}
+              onClick={() => setHandedOff(!handedOff)}
+              data-testid="board-handed-off-filter"
+              className={`rounded-lg border px-3 py-1.5 text-sm ${
+                handedOff
+                  ? 'border-blue-500 bg-blue-600 text-white dark:!border-blue-400 dark:!bg-blue-500'
+                  : 'border-gray-300 text-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800'
+              }`}
+            >
+              {t.sales.view.handedOff}
+            </button>
+          )}
           {relations.length > 0 && (
             <div className="flex w-full flex-wrap items-center gap-3 sm:ml-auto sm:w-auto">
               {q && matchCount === 0 && (
