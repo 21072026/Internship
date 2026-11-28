@@ -13,6 +13,7 @@ import {
   SALES_HANDOFF_REASON,
   composeHandoffNote,
   isHandoffAction,
+  mayReceiveHandoff,
   todayIso,
 } from '../../src/lib/leadHandoffRule.ts';
 
@@ -94,4 +95,10 @@ test('"other" needs words in both follow-up forms (#3903)', () => {
   assert.equal(followUpNoteMissing('other', 'x'), false);
   assert.equal(followUpNoteMissing('call', ''), false);
   assert.equal(followUpNoteMissing(null, ''), false);
+});
+
+test('a person closed to hand-offs takes none from a colleague, but may take one onto their own book (#3979)', () => {
+  assert.equal(mayReceiveHandoff({ recipientId: 'b', acceptsLeadHandoffs: true, actorId: 'a' }), true);
+  assert.equal(mayReceiveHandoff({ recipientId: 'b', acceptsLeadHandoffs: false, actorId: 'a' }), false);
+  assert.equal(mayReceiveHandoff({ recipientId: 'b', acceptsLeadHandoffs: false, actorId: 'b' }), true);
 });

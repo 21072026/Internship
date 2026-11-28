@@ -33,6 +33,8 @@ interface AdminUser {
   ssoExempt?: boolean;
   // The sales dispatcher (#3656): sees and works the whole sales book.
   salesDispatcher?: boolean;
+  // False when colleagues may not hand this person leads (#3979).
+  acceptsLeadHandoffs?: boolean;
   // Does this account have an authenticator enrolled (#1543)? The reset action
   // is only offered where there is a factor to clear.
   twoFactorEnabled?: boolean;
@@ -268,6 +270,30 @@ export default function AdminUsersPage() {
     setActionError(null);
     try {
       const res = await fetch(`/api/admin/users/${u.id}/sales-dispatcher`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: next }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? t.common.error);
+      await load();
+    } catch (e) {
+      setActionError({ userId: u.id, message: e instanceof Error ? e.message : String(e) });
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  // Lead hand-offs to this person on or off (#3979, POST /api/admin/users/[id]/lead-handoffs).
+  const toggleLeadHandoffs = async (u: AdminUser) => {
+    if (busyId) return;
+    const next = u.acceptsLeadHandoffs === false;
+    const question = (next ? t.usersAdmin.leadHandoffsOpenConfirm : t.usersAdmin.leadHandoffsCloseConfirm).replace(/\{name\}/g, u.fullName);
+    if (!window.confirm(question)) return;
+    setBusyId(u.id);
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/lead-handoffs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: next }),
@@ -530,6 +556,9 @@ export default function AdminUsersPage() {
                   {u.salesDispatcher && (
                     <Badge variant="info" data-testid={`sales-dispatcher-badge-${u.id}`}>{t.usersAdmin.salesDispatcherBadge}</Badge>
                   )}
+                  {salesBoard && u.acceptsLeadHandoffs === false && (
+                    <Badge variant="warning" data-testid={`lead-handoffs-closed-badge-${u.id}`}>{t.usersAdmin.leadHandoffsClosedBadge}</Badge>
+                  )}
                   {u.participantState === 'BENCHED' && (
                     <Badge variant="warning" data-testid={`benched-badge-${u.id}`}>{t.bench.badge}</Badge>
                   )}
@@ -600,6 +629,19 @@ export default function AdminUsersPage() {
                       onClick={() => toggleSalesDispatcher(u)}
                     >
                       {u.salesDispatcher ? t.usersAdmin.salesDispatcherRevoke : t.usersAdmin.salesDispatcherGrant}
+                    </Button>
+                  )}
+                  {/* Lead hand-offs (#3979): offered on every active lead owner; on any row still closed, to reopen. */}
+                  {salesBoard && (((u.role === 'MENTOR' || u.role === 'ADMIN') && u.isActive) || u.acceptsLeadHandoffs === false) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      loading={busyId === u.id}
+                      disabled={!!busyId}
+                      data-testid={`lead-handoffs-toggle-${u.id}`}
+                      onClick={() => toggleLeadHandoffs(u)}
+                    >
+                      {u.acceptsLeadHandoffs === false ? t.usersAdmin.leadHandoffsOpen : t.usersAdmin.leadHandoffsClose}
                     </Button>
                   )}
                   {/* Only an active admin may hold the exemption — the endpoint

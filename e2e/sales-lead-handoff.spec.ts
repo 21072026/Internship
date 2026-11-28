@@ -216,7 +216,7 @@ test('the team is the active ADMINs and MENTORs of the caller’s org, the calle
   expect(byId.get(ids.rep1)?.self).toBe(true);
   expect(byId.get(ids.rep2)?.self).toBe(false);
   // Names, avatars and the load counts (#3875, #3905), nothing else.
-  expect(Object.keys(members[0]).sort()).toEqual(['avatarUrl', 'followUps', 'fullName', 'id', 'open', 'overdue', 'self']);
+  expect(Object.keys(members[0]).sort()).toEqual(['acceptsHandoffs', 'avatarUrl', 'followUps', 'fullName', 'id', 'open', 'overdue', 'self']);
   await rep1.dispose();
 });
 
