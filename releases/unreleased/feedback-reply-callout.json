@@ -1,0 +1,9 @@
+{
+  "bump": "patch",
+  "changelog": "`/account/feedback`: the team's reply to a report reads as its own callout — tinted box, strong left edge, icon and bold label — instead of a grey quote under the report.",
+  "notes": {
+    "en": ["On \"My feedback\", the team's reply now stands out in its own highlighted box."],
+    "tr": ["\"Gönderdiğim geri bildirimler\" sayfasında ekibin yanıtı artık kendi vurgulu kutusunda, ilk bakışta görünüyor."],
+    "de": ["Unter „Mein Feedback“ steht die Antwort des Teams jetzt in einem eigenen hervorgehobenen Kasten."]
+  }
+}
