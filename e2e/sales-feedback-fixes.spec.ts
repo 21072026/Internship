@@ -81,7 +81,11 @@ test('the board offers "New lead" and a load badge with the split on hover', asy
   // One row (#3988): name and badge side by side, the chip no taller than the avatar line.
   const chip = await box(page, `handoff-target-${rep2Id}`);
   expect(chip.height).toBeLessThan(44);
-  // A tap opens the detail, a tap elsewhere closes it.
+  // A tap opens the detail, a tap elsewhere closes it. Bring the badge into view
+  // first and let that scroll land: the popover closes on scroll by design, and the
+  // scroll a click's own scrollIntoView causes is dispatched AFTER the click opened it.
+  await badge.scrollIntoViewIfNeeded();
+  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   await badge.click();
   await expect(page.getByTestId(`handoff-target-load-detail-${rep2Id}`)).toBeVisible();
   await page.mouse.move(0, 0);
