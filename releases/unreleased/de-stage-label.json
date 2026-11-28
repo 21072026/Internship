@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- German label of the MARKETING stage `LEAD_QUALIFIED` is now \"Bedarf geklärt\" (was \"Qualifiziert\", read as a person's qualification). The old default stays recognised as ours (`FORMER_STAGE_LABELS` / `isOurStageLabel()`, `src/lib/programTemplates.ts`), so orgs storing it read the new label in German and \"Qualified\" in English, while a label a tenant typed is kept verbatim — no data change (#3907).",
-  "notes": {
-    "en": ["German: the sales stage \"Qualifiziert\" is now called \"Bedarf geklärt\"."],
-    "tr": ["Almanca: \"Qualifiziert\" satış aşamasının adı artık \"Bedarf geklärt\"."],
-    "de": ["Die Vertriebsphase „Qualifiziert“ heißt jetzt „Bedarf geklärt“."]
-  }
-}

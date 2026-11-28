@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "Sales boards: a person an admin closed to lead hand-offs is no longer shown on the hand-off strip at all (it showed them dimmed where names double as the owner filter); their leads stay reachable through the owner filter (#3979)."
-}

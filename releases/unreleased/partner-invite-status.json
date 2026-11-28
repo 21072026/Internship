@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- The affiliate partner list (`/admin/affiliates/partners`) shows an open invitation as \"Invitation sent · <when>\" (or \"expired\") with a small \"Send again\" instead of the \"Send invitation\" button; a partner with an account shows neither. `listPartners()` carries the newest open invitation per partner (#3962).",
-  "notes": {
-    "en": ["The partner list now shows when an invitation was sent, with a small \"Send again\" — the invite button stays only for partners never invited."],
-    "tr": ["Partner listesi artık davetin ne zaman gönderildiğini ve küçük bir \"Tekrar gönder\" bağlantısını gösteriyor; davet butonu yalnızca hiç davet edilmemiş partnerlerde kalıyor."],
-    "de": ["Die Partnerliste zeigt jetzt, wann eine Einladung gesendet wurde, mit einem kleinen „Erneut senden“ – die Einladen-Schaltfläche bleibt nur bei noch nie eingeladenen Partnern."]
-  }
-}

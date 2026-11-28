@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "Follow-ups record what kind of step they are (`MentorshipRelation.nextActionType`: call, e-mail, meeting, demo, other) — written by the hand-off and by the follow-up edit (read from the note's label when no pick is sent), cleared with the step, and filled for older rows by the `0039-next-action-type` backfill (#3900)."
-}

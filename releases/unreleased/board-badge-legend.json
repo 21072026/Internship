@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- The board explains its card badges (#3977): \"What do the badges mean?\" in the board header opens a small panel (`BoardLegend`, open state remembered per browser) with a miniature of each badge — days in the stage (grey), past the stage's deadline (red, exclamation mark), the follow-up day and, on the sales board, the trial end. The follow-up and trial chips carry the same sentence as their hover text.",
-  "notes": {
-    "en": ["The board now explains its badges: open \"What do the badges mean?\" above the columns to see what the day counts, the red warning and the follow-up date stand for."],
-    "tr": ["Pano artık simgelerini açıklıyor: sütunların üstündeki \"Simgeler ne demek?\" ile gün sayılarının, kırmızı uyarının ve takip tarihinin ne anlama geldiğini görebilirsin."],
-    "de": ["Das Board erklärt jetzt seine Symbole: Über „Was bedeuten die Symbole?“ oberhalb der Spalten sehen Sie, wofür die Tageszahlen, die rote Warnung und das Wiedervorlagedatum stehen."]
-  }
-}

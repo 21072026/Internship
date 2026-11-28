@@ -1,4 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- `PATCH /api/v1/support/reports/{id}` with the new scope `support:triage` (#3937): the feedback review sets a report's status (NEW, TRIAGED, IN_PROGRESS, WONT_FIX — never RESOLVED) and the issue it opened in this repository (`SupportReport.reviewIssueUrl`, shown on the admin's report page). Nothing else is accepted, the reporter is not notified, every change is audited."
-}

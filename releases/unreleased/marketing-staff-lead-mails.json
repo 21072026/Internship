@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- MARKETING staff get their mail again (#3968): a lead somebody else puts on a rep's book (admin create with `ownerId`, web-inquiry conversion) sends the owner the bell and the `mentee-assigned` mail (`announceLeadAssigned`, never for a self-assignment, never per imported row); a bulk `assignOwner` sends the incoming owner ONE mail with the count (`sendMenteesBulkAssignedEmail`); and the daily digest gives a rep of an org without mentorship their /sales attention queue (`SALES_ATTENTION_REASONS`) plus overdue to-dos in one mail (`sendSalesDailyMail`). The customer-mail lock is unchanged: leads get nothing.",
-  "notes": {
-    "en": ["Sales reps get an e-mail when a lead is assigned to them, and a daily e-mail listing the leads that need a step from them."],
-    "tr": ["Satış temsilcileri kendilerine bir lead atandığında e-posta, ayrıca ilgilenmeleri gereken lead'leri listeleyen günlük bir e-posta alıyor."],
-    "de": ["Vertriebsmitarbeitende erhalten eine E-Mail, wenn ihnen ein Lead zugewiesen wird, und täglich eine E-Mail mit den Leads, die einen Schritt von ihnen brauchen."]
-  }
-}

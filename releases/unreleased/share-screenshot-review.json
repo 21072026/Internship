@@ -1,4 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- Per-report screenshot sharing for the feedback review (#3936): an admin ticks \"Share the screenshot with the feedback review\" on the report page (`PUT /api/admin/support/reports/[id]/screenshot-share`, audited), and a key holding the new scope `support:read_shared_screenshots` (with `support:read`) may read that screenshot — and no other (404). The v1 report carries `screenshotShared`. `support:read_screenshots` is unchanged."
-}

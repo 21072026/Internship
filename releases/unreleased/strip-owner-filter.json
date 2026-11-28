@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- A name on the board's colleague strip filters the board to that person's leads (`aria-pressed` button; clicking again removes them). On the sales board it is offered only to who may open the team view (`teamRead`) and switches \"Mine\" to the team view filtered to that person; on the admin board it sets the owner filter (`?owners=`). Dropping a card on a person still opens the hand-off (#3906).",
-  "notes": {
-    "en": ["Click a colleague's name on the board to see only their leads; click again to see everyone."],
-    "tr": ["Panoda bir ekip arkadaşının adına tıklayınca yalnızca onun lead'lerini görürsün; tekrar tıklayınca herkes geri gelir."],
-    "de": ["Klicke auf dem Board auf den Namen eines Kollegen, um nur dessen Leads zu sehen; ein weiterer Klick zeigt wieder alle."]
-  }
-}

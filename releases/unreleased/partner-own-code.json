@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- An invited affiliate partner can choose its own referral code on the registration form: the current code is pre-filled, \"Suggest another\" draws a random unambiguous 8-character code, and availability is checked while typing through `POST /api/invite/partner-code` (token holder only, rate-limited, never names the holder). `/api/register` writes `partnerCode` with the account link (`linkPartnerAccount`, 409 `code_taken` / 400 `code_invalid` / 409 `code_locked`), audited as `affiliate.partner.code_chosen`. The code is fixed once the account exists or the code is in use (`partnerCodeLock()`) (#3961).",
-  "notes": {
-    "en": ["Invited partners can now choose their own referral code when they sign up — with a warning if it is already taken."],
-    "tr": ["Davet edilen partnerler artık kayıt olurken kendi referans kodlarını seçebiliyor; kod alınmışsa uyarı görüyorlar."],
-    "de": ["Eingeladene Partner können ihren Empfehlungscode jetzt bei der Registrierung selbst wählen – mit Hinweis, wenn er schon vergeben ist."]
-  }
-}
