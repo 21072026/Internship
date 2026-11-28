@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- The rep strip's load line also counts open follow-ups by channel — call / e-mail / other, from `nextActionType` (`followUpChannel()`, `src/lib/salesTeamRule.ts`). `GET /api/sales/team` returns them as `followUps`, under the same rule as `overdue` (`canSeeRepOverdue`: admins and the dispatcher; `null` for everyone else) (#3905).",
-  "notes": {
-    "en": ["On the board, admins now see how many call and e-mail follow-ups each rep has waiting."],
-    "tr": ["Panoda yöneticiler artık her temsilcinin bekleyen telefon ve e-posta takip sayısını görüyor."],
-    "de": ["Auf dem Board sehen Admins jetzt, wie viele Anruf- und E-Mail-Wiedervorlagen bei jedem Vertriebler anstehen."]
-  }
-}

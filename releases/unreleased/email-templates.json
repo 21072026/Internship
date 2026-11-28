@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- E-mail templates on a lead (#3908): `MessageTemplate` gains `channel` (`message` | `email`, default `message`) and per-locale `subjects`. `/admin/message-templates` manages each channel on its own tab; `GET /api/message-templates?channel=email` is the lead picker's pool (default stays the composer's). Picking a template under a lead's address turns the link into a `mailto:` with subject and body in the rep's language, `{name}` / `{company}` / `{sender}` filled (`emailTemplateMailto()`); the rep's own mail program sends it. Opening it logs the e-mail and counts the template's use.",
-  "notes": {
-    "en": ["Ready-made e-mails for leads: admins write them once (with subject), reps pick one next to the lead's address and their mail program opens with everything filled in."],
-    "tr": ["Lead'ler için hazır e-postalar: yönetici bir kez (konusuyla) yazar, temsilci lead'in adresinin yanında seçer ve posta programı her şey dolu açılır."],
-    "de": ["Fertige E-Mails für Leads: Admins schreiben sie einmal (mit Betreff), Vertriebler wählen eine neben der Adresse des Leads und ihr Mailprogramm öffnet sich vollständig ausgefüllt."]
-  }
-}

@@ -65,6 +65,454 @@ export function getAllReleaseNotes(): ReleaseNote[] {
 
 export const RELEASE_NOTES: ReleaseNote[] = [
   {
+    version: '0.722.1-beta',
+    date: '2026-11-28',
+    time: '04:54',
+    commit: 'b57d38d',
+    highlights: {
+      en: [
+        "On \"My feedback\", the team's reply now stands out in its own highlighted box.",
+      ],
+      tr: [
+        "\"Gönderdiğim geri bildirimler\" sayfasında ekibin yanıtı artık kendi vurgulu kutusunda, ilk bakışta görünüyor.",
+      ],
+      de: [
+        "Unter „Mein Feedback“ steht die Antwort des Teams jetzt in einem eigenen hervorgehobenen Kasten.",
+      ],
+    },
+  },
+  {
+    version: '0.722.0-beta',
+    date: '2026-11-28',
+    time: '04:36',
+    commit: 'e33bf1f',
+    highlights: {
+      en: [
+        "On the board's Team view, \"Handed on by me\" shows the leads you passed to a colleague that are still with them.",
+      ],
+      tr: [
+        "Panonun Ekip görünümünde \"Devrettiklerim\", bir ekip arkadaşına devrettiğin ve hâlâ onda olan lead'leri gösteriyor.",
+      ],
+      de: [
+        "In der Team-Ansicht des Boards zeigt „Von mir übergeben“ die Leads, die du übergeben hast und die noch bei der anderen Person liegen.",
+      ],
+    },
+  },
+  {
+    version: '0.721.0-beta',
+    date: '2026-11-28',
+    time: '04:05',
+    commit: '874c6e9',
+    highlights: {
+      en: [
+        "Admins can now close lead hand-offs to a person on the users page — for someone who only manages or is away. Colleagues can no longer hand them leads; their own leads stay with them.",
+      ],
+      tr: [
+        "Yöneticiler artık kullanıcılar sayfasından bir kişiye lead devrini kapatabiliyor — yalnızca yöneten ya da bir süre müsait olmayan biri için. Ekip arkadaşları o kişiye lead devredemez; kişinin kendi lead'leri kendisinde kalır.",
+      ],
+      de: [
+        "Admins können auf der Benutzerseite Lead-Übergaben an eine Person schließen — etwa für jemanden, der nur leitet oder abwesend ist. Kolleg:innen können dieser Person dann keine Leads mehr übergeben; die eigenen Leads bleiben bei ihr.",
+      ],
+    },
+  },
+  {
+    version: '0.720.1-beta',
+    date: '2026-11-27',
+    time: '18:23',
+    commit: '81063d1',
+    highlights: {
+      en: [
+        "The rep strip above the board is tidier: next to each name a small badge shows the open leads, with a red dot and number for overdue follow-ups. Hover or tap it for the details.",
+      ],
+      tr: [
+        "Panonun üstündeki temsilci şeridi sadeleşti: her ismin yanında açık lead sayısını gösteren küçük bir rozet, gecikmiş takip varsa kırmızı nokta ve sayısı var. Ayrıntı için üzerine gelin veya dokunun.",
+      ],
+      de: [
+        "Die Teamleiste über dem Board ist aufgeräumter: Neben jedem Namen zeigt ein kleines Abzeichen die offenen Leads, bei überfälligen Wiedervorlagen mit rotem Punkt und Anzahl. Details per Mauszeiger oder Antippen.",
+      ],
+    },
+  },
+  {
+    version: '0.720.0-beta',
+    date: '2026-11-27',
+    time: '13:18',
+    commit: '8ddb6f6',
+    highlights: {
+      en: [
+        "Add a note to a lead — even one you have handed over: the person who has it now is notified.",
+      ],
+      tr: [
+        "Lead'e not ekleyebilirsin — devrettiğin bir lead'e de: lead'in şimdiki sahibine haber gider.",
+      ],
+      de: [
+        "Fügen Sie einem Lead eine Notiz hinzu – auch einem, den Sie übergeben haben: Der aktuelle Inhaber wird benachrichtigt.",
+      ],
+    },
+  },
+  {
+    version: '0.719.0-beta',
+    date: '2026-11-27',
+    time: '10:01',
+    commit: '38672ec',
+    highlights: {
+      en: [
+        "The board now explains its badges: open \"What do the badges mean?\" above the columns to see what the day counts, the red warning and the follow-up date stand for.",
+      ],
+      tr: [
+        "Pano artık simgelerini açıklıyor: sütunların üstündeki \"Simgeler ne demek?\" ile gün sayılarının, kırmızı uyarının ve takip tarihinin ne anlama geldiğini görebilirsin.",
+      ],
+      de: [
+        "Das Board erklärt jetzt seine Symbole: Über „Was bedeuten die Symbole?“ oberhalb der Spalten sehen Sie, wofür die Tageszahlen, die rote Warnung und das Wiedervorlagedatum stehen.",
+      ],
+    },
+  },
+  {
+    version: '0.718.2-beta',
+    date: '2026-11-27',
+    time: '09:32',
+    commit: '8bb0530',
+    highlights: {
+      en: [
+        "Handing a lead over now keeps the current follow-up by default.",
+        "\"New lead\" is now on the board too, and the lead page shows the stage in the same color as the board.",
+      ],
+      tr: [
+        "Lead devrederken mevcut takip artık varsayılan olarak korunuyor.",
+        "\"Yeni lead\" artık panoda da var; lead sayfası aşamayı panodaki renkle gösteriyor.",
+      ],
+      de: [
+        "Beim Übergeben eines Leads bleibt die aktuelle Wiedervorlage jetzt standardmäßig erhalten.",
+        "„Neuer Lead“ gibt es jetzt auch auf dem Board, und die Lead-Seite zeigt die Phase in derselben Farbe wie das Board.",
+      ],
+    },
+  },
+  {
+    version: '0.718.0-beta',
+    date: '2026-11-26',
+    time: '14:29',
+    commit: 'cc60ee8',
+    highlights: {
+      en: [
+        "Invite a partner with just an e-mail address — the partner chooses its name and referral code when signing up. Creating a partner with a fixed code is now under \"Advanced\".",
+      ],
+      tr: [
+        "Bir partneri yalnızca e-posta adresiyle davet edebilirsin; partner adını ve referans kodunu kayıt olurken kendisi seçer. Sabit kodla partner oluşturma artık \"Gelişmiş\" altında.",
+      ],
+      de: [
+        "Partner lassen sich jetzt allein mit ihrer E-Mail-Adresse einladen – Name und Empfehlungscode wählt der Partner bei der Registrierung. Das Anlegen mit festem Code steht jetzt unter „Erweitert“.",
+      ],
+    },
+  },
+  {
+    version: '0.717.0-beta',
+    date: '2026-11-26',
+    time: '14:24',
+    commit: '96a0be6',
+    highlights: {
+      en: [
+        "Sales reps get an e-mail when a lead is assigned to them, and a daily e-mail listing the leads that need a step from them.",
+      ],
+      tr: [
+        "Satış temsilcileri kendilerine bir lead atandığında e-posta, ayrıca ilgilenmeleri gereken lead'leri listeleyen günlük bir e-posta alıyor.",
+      ],
+      de: [
+        "Vertriebsmitarbeitende erhalten eine E-Mail, wenn ihnen ein Lead zugewiesen wird, und täglich eine E-Mail mit den Leads, die einen Schritt von ihnen brauchen.",
+      ],
+    },
+  },
+  {
+    version: '0.716.1-beta',
+    date: '2026-11-26',
+    time: '14:06',
+    commit: 'b182b41',
+    highlights: {
+      en: [
+        "Inviting a colleague to a sales workspace sends the invitation e-mail again.",
+      ],
+      tr: [
+        "Satış çalışma alanına bir iş arkadaşını davet etmek yeniden davet e-postası gönderiyor.",
+      ],
+      de: [
+        "Wer Kolleginnen und Kollegen in einen Vertriebsbereich einlädt, verschickt wieder die Einladungs-E-Mail.",
+      ],
+    },
+  },
+  {
+    version: '0.716.0-beta',
+    date: '2026-11-26',
+    time: '14:05',
+    commit: '84b12d8',
+    highlights: {
+      en: [
+        "Invited partners can now choose their own referral code when they sign up — with a warning if it is already taken.",
+      ],
+      tr: [
+        "Davet edilen partnerler artık kayıt olurken kendi referans kodlarını seçebiliyor; kod alınmışsa uyarı görüyorlar.",
+      ],
+      de: [
+        "Eingeladene Partner können ihren Empfehlungscode jetzt bei der Registrierung selbst wählen – mit Hinweis, wenn er schon vergeben ist.",
+      ],
+    },
+  },
+  {
+    version: '0.715.1-beta',
+    date: '2026-11-26',
+    time: '13:27',
+    commit: 'e42d16d',
+    highlights: {
+      en: [
+        "The partner list now shows when an invitation was sent, with a small \"Send again\" — the invite button stays only for partners never invited.",
+      ],
+      tr: [
+        "Partner listesi artık davetin ne zaman gönderildiğini ve küçük bir \"Tekrar gönder\" bağlantısını gösteriyor; davet butonu yalnızca hiç davet edilmemiş partnerlerde kalıyor.",
+      ],
+      de: [
+        "Die Partnerliste zeigt jetzt, wann eine Einladung gesendet wurde, mit einem kleinen „Erneut senden“ – die Einladen-Schaltfläche bleibt nur bei noch nie eingeladenen Partnern.",
+      ],
+    },
+  },
+  {
+    version: '0.715.0-beta',
+    date: '2026-11-26',
+    time: '12:15',
+    commit: '2a1923e',
+    highlights: {
+      en: [
+        "Admins can now see whether an e-mail to someone in their organization went out — and if not, why — under \"Mail log\".",
+      ],
+      tr: [
+        "Yöneticiler artık org'larındaki birine giden bir e-postanın gidip gitmediğini — gitmediyse nedenini — \"E-posta kaydı\" altında görebiliyor.",
+      ],
+      de: [
+        "Admins sehen jetzt unter „E-Mail-Protokoll“, ob eine E-Mail an jemanden aus ihrer Organisation versendet wurde – und wenn nicht, warum.",
+      ],
+    },
+  },
+  {
+    version: '0.714.2-beta',
+    date: '2026-11-26',
+    time: '12:04',
+    commit: 'e3d0f93',
+    highlights: {
+      en: [
+        "Fixed: e-mail notifications such as \"a lead was handed to you\" are delivered again.",
+      ],
+      tr: [
+        "Düzeltildi: \"Sana bir lead devredildi\" gibi e-posta bildirimleri yeniden gönderiliyor.",
+      ],
+      de: [
+        "Behoben: E-Mail-Benachrichtigungen wie „Dir wurde ein Lead übergeben“ werden wieder zugestellt.",
+      ],
+    },
+  },
+  {
+    version: '0.712.0-beta',
+    date: '2026-11-26',
+    time: '08:51',
+    commit: '950d261',
+    highlights: {
+      en: [
+        "Add images to a follow-up or a hand-off: pick a file or paste a screenshot into the note. The new owner sees them on the lead.",
+      ],
+      tr: [
+        "Takibe ve devre resim ekle: dosya seç ya da ekran görüntüsünü nota yapıştır. Yeni sahip resimleri lead'de görür.",
+      ],
+      de: [
+        "Bilder zur Wiedervorlage oder Übergabe hinzufügen: Datei wählen oder Screenshot in die Notiz einfügen. Die neue Person sieht sie am Lead.",
+      ],
+    },
+  },
+  {
+    version: '0.709.0-beta',
+    date: '2026-11-25',
+    time: '14:55',
+    commit: '2311f7e',
+    highlights: {
+      en: [
+        "\"My feedback\" now shows how many of your reports are completed and how many are waiting, and you can filter by status.",
+      ],
+      tr: [
+        "\"Gönderdiğim geri bildirimler\" artık kaç bildiriminin tamamlandığını ve kaçının beklediğini gösteriyor; duruma göre süzebilirsin.",
+      ],
+      de: [
+        "„Meine Rückmeldungen“ zeigt jetzt, wie viele deiner Meldungen erledigt und wie viele offen sind, und lässt sich nach Status filtern.",
+      ],
+    },
+  },
+  {
+    version: '0.708.1-beta',
+    date: '2026-11-25',
+    time: '11:57',
+    commit: '7aa78f7',
+    highlights: {
+      en: [
+        "\"My feedback\" is now in the account menu, so the reports you sent are one click away.",
+      ],
+      tr: [
+        "\"Gönderdiğim geri bildirimler\" artık hesap menüsünde; gönderdiğin bildirimler bir tık uzakta.",
+      ],
+      de: [
+        "„Meine Rückmeldungen“ stehen jetzt im Kontomenü – deine Meldungen sind nur einen Klick entfernt.",
+      ],
+    },
+  },
+  {
+    version: '0.708.0-beta',
+    date: '2026-11-25',
+    time: '11:23',
+    commit: '36b7f2f',
+    highlights: {
+      en: [
+        "Ready-made e-mails for leads: admins write them once (with subject), reps pick one next to the lead's address and their mail program opens with everything filled in.",
+      ],
+      tr: [
+        "Lead'ler için hazır e-postalar: yönetici bir kez (konusuyla) yazar, temsilci lead'in adresinin yanında seçer ve posta programı her şey dolu açılır.",
+      ],
+      de: [
+        "Fertige E-Mails für Leads: Admins schreiben sie einmal (mit Betreff), Vertriebler wählen eine neben der Adresse des Leads und ihr Mailprogramm öffnet sich vollständig ausgefüllt.",
+      ],
+    },
+  },
+  {
+    version: '0.707.1-beta',
+    date: '2026-11-25',
+    time: '11:00',
+    commit: '86efa9a',
+    highlights: {
+      en: [
+        "German: the sales stage \"Qualifiziert\" is now called \"Bedarf geklärt\".",
+      ],
+      tr: [
+        "Almanca: \"Qualifiziert\" satış aşamasının adı artık \"Bedarf geklärt\".",
+      ],
+      de: [
+        "Die Vertriebsphase „Qualifiziert“ heißt jetzt „Bedarf geklärt“.",
+      ],
+    },
+  },
+  {
+    version: '0.707.0-beta',
+    date: '2026-11-25',
+    time: '10:33',
+    commit: 'da4eb5c',
+    highlights: {
+      en: [
+        "Click a colleague's name on the board to see only their leads; click again to see everyone.",
+      ],
+      tr: [
+        "Panoda bir ekip arkadaşının adına tıklayınca yalnızca onun lead'lerini görürsün; tekrar tıklayınca herkes geri gelir.",
+      ],
+      de: [
+        "Klicke auf dem Board auf den Namen eines Kollegen, um nur dessen Leads zu sehen; ein weiterer Klick zeigt wieder alle.",
+      ],
+    },
+  },
+  {
+    version: '0.706.0-beta',
+    date: '2026-11-25',
+    time: '10:10',
+    commit: '3ffff7a',
+    highlights: {
+      en: [
+        "On the board, admins now see how many call and e-mail follow-ups each rep has waiting.",
+      ],
+      tr: [
+        "Panoda yöneticiler artık her temsilcinin bekleyen telefon ve e-posta takip sayısını görüyor.",
+      ],
+      de: [
+        "Auf dem Board sehen Admins jetzt, wie viele Anruf- und E-Mail-Wiedervorlagen bei jedem Vertriebler anstehen.",
+      ],
+    },
+  },
+  {
+    version: '0.705.0-beta',
+    date: '2026-11-25',
+    time: '09:24',
+    commit: 'a0d117c',
+    highlights: {
+      en: [
+        "After a call: Reached, Not reached or Didn't call. Reached saves one entry with your note and can complete the follow-up; Not reached records the attempt and lets you move the follow-up.",
+      ],
+      tr: [
+        "Aramadan sonra: Görüştüm, Ulaşamadım ya da Aranmadı. Görüştüm notunla tek bir kayıt yazar ve takibi tamamlayabilir; Ulaşamadım denemeyi kaydeder ve takibi ertelemeni sağlar.",
+      ],
+      de: [
+        "Nach einem Anruf: Erreicht, Nicht erreicht oder Nicht angerufen. Erreicht speichert einen Eintrag mit deiner Notiz und kann die Wiedervorlage erledigen; Nicht erreicht protokolliert den Versuch und lässt dich die Wiedervorlage verschieben.",
+      ],
+    },
+  },
+  {
+    version: '0.704.0-beta',
+    date: '2026-11-25',
+    time: '08:33',
+    commit: 'cd4c0f9',
+    highlights: {
+      en: [
+        "The follow-up on a lead and the hand-off dialog now use the same form: what is next, when (with quick days) and a note.",
+      ],
+      tr: [
+        "Lead'deki takip ve devir penceresi artık aynı formu kullanıyor: ne yapılacak, ne zaman (hızlı gün seçimiyle) ve not.",
+      ],
+      de: [
+        "Wiedervorlage am Lead und Übergabedialog nutzen jetzt dasselbe Formular: was als Nächstes, wann (mit Schnellauswahl) und eine Notiz.",
+      ],
+    },
+  },
+  {
+    version: '0.703.0-beta',
+    date: '2026-11-25',
+    time: '08:12',
+    commit: '750567e',
+    highlights: {
+      en: [
+        "Log a call nobody answered as \"Not reached\": the lead shows how often it was tried, without counting it as contact.",
+      ],
+      tr: [
+        "Açılmayan bir aramayı \"Ulaşılamadı\" olarak kaydet: lead'e kaç kez ulaşılmaya çalışıldığı görünür, temas sayılmaz.",
+      ],
+      de: [
+        "Einen unbeantworteten Anruf als „Nicht erreicht“ erfassen: Der Lead zeigt, wie oft er versucht wurde, ohne dass es als Kontakt zählt.",
+      ],
+    },
+  },
+  {
+    version: '0.702.0-beta',
+    date: '2026-11-25',
+    time: '03:08',
+    commit: 'cc46fff',
+    highlights: {
+      en: [
+        "Log interactions with date and time — entries of the same day now appear in the order they happened.",
+        "Follow-ups can have an optional time of day.",
+      ],
+      tr: [
+        "Etkileşimler tarih ve saatle kaydediliyor — aynı günün kayıtları artık gerçek sırasıyla listeleniyor.",
+        "Takiplere isteğe bağlı saat eklenebiliyor.",
+      ],
+      de: [
+        "Interaktionen werden mit Datum und Uhrzeit erfasst — Einträge desselben Tages erscheinen jetzt in ihrer tatsächlichen Reihenfolge.",
+        "Wiedervorlagen können eine optionale Uhrzeit haben.",
+      ],
+    },
+  },
+  {
+    version: '0.700.0-beta',
+    date: '2026-11-24',
+    time: '15:41',
+    commit: '8c50513',
+    highlights: {
+      en: [
+        "Not ready to register? Request occasional product updates below the main landing call to action. Confirm your email first and unsubscribe in one click.",
+      ],
+      tr: [
+        "Kayıt olmaya hazır değil misin? Ana sayfanın altından ürün haberlerini iste. Önce e-postanı onayla, istediğinde tek tıkla abonelikten çık.",
+      ],
+      de: [
+        "Noch nicht bereit zur Registrierung? Unter dem Hauptaufruf Produktneuigkeiten anfordern, die E-Mail bestätigen und jederzeit mit einem Klick abmelden.",
+      ],
+    },
+  },
+  {
     version: '0.699.1-beta',
     date: '2026-11-23',
     time: '10:57',

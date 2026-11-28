@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- Add a tenant-scoped product-interest signup with double opt-in, one-click unsubscribe, send/drain consent enforcement, admin CSV visibility and bounded retention (#1406).",
-  "notes": {
-    "en": ["Not ready to register? Request occasional product updates below the main landing call to action. Confirm your email first and unsubscribe in one click."],
-    "tr": ["Kayıt olmaya hazır değil misin? Ana sayfanın altından ürün haberlerini iste. Önce e-postanı onayla, istediğinde tek tıkla abonelikten çık."],
-    "de": ["Noch nicht bereit zur Registrierung? Unter dem Hauptaufruf Produktneuigkeiten anfordern, die E-Mail bestätigen und jederzeit mit einem Klick abmelden."]
-  }
-}

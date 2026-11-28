@@ -1,4 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "- Admins link the pull requests a feedback report was worked in, by hand, on the report page (`SupportReport.prLinks`; `POST`/`DELETE /api/admin/support/reports/[id]/pr-links`, only PRs of this repository, at most 10, audited). The inbox shows them per row and filters `?pr=with|without`. The links are admin only: the reporter's list, mail, bell and the v1 API never carry them (#3928)."
-}

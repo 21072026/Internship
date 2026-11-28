@@ -24,6 +24,222 @@ each fragment — so only the *recording* was late, not the numbering. The app
 had been serving these versions correctly all along, deriving them from
 base+fragments at build time.
 
+## [0.722.1-beta] - 2026-11-28
+
+_Shipped 2026-11-28 04:54 UTC · commit [b57d38d](https://github.com/21072026/Internship/commit/b57d38d6bdd460eb867fc629a6830036c77317ed)_
+
+`/account/feedback`: the team's reply to a report reads as its own callout — tinted box, strong left edge, icon and bold label — instead of a grey quote under the report.
+
+## [0.722.0-beta] - 2026-11-28
+
+_Shipped 2026-11-28 04:36 UTC · commit [e33bf1f](https://github.com/21072026/Internship/commit/e33bf1f039f7a41ed6e1afa2591d0ee3f1746414)_
+
+Sales board: "Handed on by me" on the Team view (`?handedOff=1`, also on `GET /api/sales/team-book`) shows the leads whose last hand-off was from or by the viewer and that are not back with them (`handedOnBy`); `FollowUpEvent.fromUserId` is indexed for it (#3980).
+
+## [0.721.1-beta] - 2026-11-28
+
+_Shipped 2026-11-28 04:16 UTC · commit [d32f31b](https://github.com/21072026/Internship/commit/d32f31be0b552e2a25ce8ee77395c7b039321685)_
+
+Sales boards: a person an admin closed to lead hand-offs is no longer shown on the hand-off strip at all (it showed them dimmed where names double as the owner filter); their leads stay reachable through the owner filter (#3979).
+
+## [0.721.0-beta] - 2026-11-28
+
+_Shipped 2026-11-28 04:05 UTC · commit [874c6e9](https://github.com/21072026/Internship/commit/874c6e9467be7e18c1c8827f82193c7c9bfeecdf)_
+
+Sales: an org admin can close lead hand-offs to a person on `/admin/users` (`POST /api/admin/users/[id]/lead-handoffs`, `User.acceptsLeadHandoffs`, audited). A closed person leaves the hand-off dialog, is no drop target on the strip, and the hand-off write refuses them with `409 recipient_not_accepting`; their own leads are untouched (#3979).
+
+## [0.720.1-beta] - 2026-11-27
+
+_Shipped 2026-11-27 18:23 UTC · commit [81063d1](https://github.com/21072026/Internship/commit/81063d1d7eada4ebd888d4e8520f7b79dff5a00e)_
+
+Sales boards: the rep strip shows each colleague's load as a small badge (open count, and a red dot with the overdue count when there is one); the full load opens in a popover on hover, keyboard focus or tap (#3988).
+
+## [0.720.0-beta] - 2026-11-27
+
+_Shipped 2026-11-27 13:18 UTC · commit [8ddb6f6](https://github.com/21072026/Internship/commit/8ddb6f6c22811a38b128eb2e0afa6da45012f67a)_
+
+- A free note on a sales record (#3978): "Add a note" on the lead page (`POST /api/sales/leads/[id]/notes`, rule `src/lib/leadNoteRule.ts`, writer `src/lib/leadNotes.ts`) saves one `FollowUpEvent` `NOTE` line (≤ 280 characters) with its author in the record's history — never an `InteractionLog` row, so never a contact. The record's writer and anyone who owned it before and handed it on may add one (others get the 404 of a missing id); a colleague's note rings the owner in-app (`lead.noteAdded`) and by mail (category `lead-note`). A double click is one note.
+
+## [0.719.0-beta] - 2026-11-27
+
+_Shipped 2026-11-27 10:01 UTC · commit [38672ec](https://github.com/21072026/Internship/commit/38672eceaefe59a1211bd7e492bae0999f0e38f3)_
+
+- The board explains its card badges (#3977): "What do the badges mean?" in the board header opens a small panel (`BoardLegend`, open state remembered per browser) with a miniature of each badge — days in the stage (grey), past the stage's deadline (red, exclamation mark), the follow-up day and, on the sales board, the trial end. The follow-up and trial chips carry the same sentence as their hover text.
+
+## [0.718.2-beta] - 2026-11-27
+
+_Shipped 2026-11-27 09:32 UTC · commit [8bb0530](https://github.com/21072026/Internship/commit/8bb0530e650588fab8c3f4b1e25caf3b5200e4da)_
+
+- Sales fixes from in-app feedback (#3976): the hand-off dialog keeps the current follow-up by default and offers it first; the lead page's stage badge wears the board column's stage color (`boardColumnPaint()`); the follow-up's date and time boxes share one baseline (`items-end`, wider time column); "Try again?" puts its two fields on one line and its actions below, so it fits a narrow card; the hand-off strip shows only the open count (and overdue when there is any) with the whole split as hover text; "New lead" is on `/sales/board` too.
+
+## [0.718.1-beta] - 2026-11-26
+
+_Shipped 2026-11-26 15:15 UTC · commit [1d41ee8](https://github.com/21072026/Internship/commit/1d41ee85b83d907adc2ace5f6e3176dfb912512b)_
+
+- `PATCH /api/v1/support/reports/{id}` (`support:triage`) also takes `prUrl` (a pull request of this repository, added to `prLinks` under the #3928 rule) and `reporterNote` (the answer in the reporter's own list, null clears it), and may set `RESOLVED` — only when the report then has at least one PR link and a note (422 `resolve_needs_pr_and_note`); RESOLVED rings the reporter's in-app bell, nothing is mailed. The write is guarded on the version read (409 `conflict`) and audited without the note's text. The report object carries `prLinks`, `reporterNote` and `reporterNoteAt`. `scripts/feedback-review.mjs triage` gained `--pr`, `--note` and `--no-note`; the feedback-review skill writes them when a PR is opened and marks RESOLVED after the deploy (#3972).
+
+## [0.718.0-beta] - 2026-11-26
+
+_Shipped 2026-11-26 14:29 UTC · commit [cc60ee8](https://github.com/21072026/Internship/commit/cc60ee8cee0cef406f64c6feb6c073762d2c3fd0)_
+
+- Affiliate partners can be invited by e-mail alone: `POST /api/admin/affiliate/partners/invite` (`src/lib/affiliateEmailInvite.ts`) creates the partner with a placeholder random code and the address's local part as its name, under the organisation lock, and sends the invitation (409 `email_is_partner` / `email_taken`). The registration form lets the partner set its name (`partnerName`, 400 `name_invalid`) next to its code. Creating a partner with a fixed code moved under "Advanced" on the partners page (#3963).
+
+## [0.717.0-beta] - 2026-11-26
+
+_Shipped 2026-11-26 14:24 UTC · commit [96a0be6](https://github.com/21072026/Internship/commit/96a0be61e0fc254c3278287086dabfc9c3a79920)_
+
+- MARKETING staff get their mail again (#3968): a lead somebody else puts on a rep's book (admin create with `ownerId`, web-inquiry conversion) sends the owner the bell and the `mentee-assigned` mail (`announceLeadAssigned`, never for a self-assignment, never per imported row); a bulk `assignOwner` sends the incoming owner ONE mail with the count (`sendMenteesBulkAssignedEmail`); and the daily digest gives a rep of an org without mentorship their /sales attention queue (`SALES_ATTENTION_REASONS`) plus overdue to-dos in one mail (`sendSalesDailyMail`). The customer-mail lock is unchanged: leads get nothing.
+
+## [0.716.1-beta] - 2026-11-26
+
+_Shipped 2026-11-26 14:06 UTC · commit [b182b41](https://github.com/21072026/Internship/commit/b182b41ed3bc843b6744c509f7792fdae5cb3c64)_
+
+- The marketing customer-mail lock no longer swallows a colleague's invitation: an address with no account yet is placed by the org's open invitations, and only ADMIN/MENTOR ones make it staff (`kindForUnregisteredAddress`); a lead's or customer's invitation stays locked.
+
+## [0.716.0-beta] - 2026-11-26
+
+_Shipped 2026-11-26 14:05 UTC · commit [84b12d8](https://github.com/21072026/Internship/commit/84b12d8435216efc9fec48da8904d69cb928985b)_
+
+- An invited affiliate partner can choose its own referral code on the registration form: the current code is pre-filled, "Suggest another" draws a random unambiguous 8-character code, and availability is checked while typing through `POST /api/invite/partner-code` (token holder only, rate-limited, never names the holder). `/api/register` writes `partnerCode` with the account link (`linkPartnerAccount`, 409 `code_taken` / 400 `code_invalid` / 409 `code_locked`), audited as `affiliate.partner.code_chosen`. The code is fixed once the account exists or the code is in use (`partnerCodeLock()`) (#3961).
+
+## [0.715.1-beta] - 2026-11-26
+
+_Shipped 2026-11-26 13:27 UTC · commit [e42d16d](https://github.com/21072026/Internship/commit/e42d16dfcf08021d4b7727e6f41b8e47891c12f5)_
+
+- The affiliate partner list (`/admin/affiliates/partners`) shows an open invitation as "Invitation sent · <when>" (or "expired") with a small "Send again" instead of the "Send invitation" button; a partner with an account shows neither. `listPartners()` carries the newest open invitation per partner (#3962).
+
+## [0.715.0-beta] - 2026-11-26
+
+_Shipped 2026-11-26 12:15 UTC · commit [2a1923e](https://github.com/21072026/Internship/commit/2a1923e9fd4bbe771f1ce5ae651e6728b9830785)_
+
+- Org admins get their own mail log (#3955): `/admin/mail-log` (`GET /api/admin/mail-log`, `mail.read`) lists the e-mails to the organization's own people — sent, failed, skipped and why, retrying, held for approval — filterable by status, type, recipient and 7/30 days. Only rows stamped with the admin's organization; rows without one and deployment-wide figures stay the super admin's. In every vertical, MARKETING included.
+
+## [0.714.2-beta] - 2026-11-26
+
+_Shipped 2026-11-26 12:04 UTC · commit [e3d0f93](https://github.com/21072026/Internship/commit/e3d0f9386bb1ecb3eb3e7758f8de733093c59d4c)_
+
+- Fix: notification e-mails sent through the router (e.g. the hand-off mail to the new rep) never left on deployments with SMTP (#3950). The mail's queue key (`notify:<ledger>`) was the `notification.email` job's own key, so `enqueue()` answered it with that job and no `email.send` row existed — the ledger said SENT, nothing was logged. The mail now has its own key (`notify-mail:<ledger>`, `src/lib/notifications/keys.ts`), and `enqueue()` refuses a key held by a job of another kind instead of returning it.
+
+## [0.714.1-beta] - 2026-11-26
+
+_Shipped 2026-11-26 10:02 UTC · commit [e52edad](https://github.com/21072026/Internship/commit/e52edad788410332cfff31a6e47d85e11db1794a)_
+
+- Feedback screenshots carry less personal data (#3938): e-mail / phone inputs and the contact values on the lead page, the account menu, the admin candidate page and the mentor's mentee page are painted over (`data-private`), and any other page text in the copy goes through the new `maskScreenText()` (`src/lib/feedbackContext.ts`: e-mail addresses, credentials, international phone numbers). The page itself does not change.
+
+## [0.714.0-beta] - 2026-11-26
+
+_Shipped 2026-11-26 09:47 UTC · commit [c156b2b](https://github.com/21072026/Internship/commit/c156b2bbbae359cb11a472a5e05ea328acecf881)_
+
+- `PATCH /api/v1/support/reports/{id}` with the new scope `support:triage` (#3937): the feedback review sets a report's status (NEW, TRIAGED, IN_PROGRESS, WONT_FIX — never RESOLVED) and the issue it opened in this repository (`SupportReport.reviewIssueUrl`, shown on the admin's report page). Nothing else is accepted, the reporter is not notified, every change is audited.
+
+## [0.713.0-beta] - 2026-11-26
+
+_Shipped 2026-11-26 09:29 UTC · commit [50330d1](https://github.com/21072026/Internship/commit/50330d180408f9928835f3565045dbef2f12345b)_
+
+- Per-report screenshot sharing for the feedback review (#3936): an admin ticks "Share the screenshot with the feedback review" on the report page (`PUT /api/admin/support/reports/[id]/screenshot-share`, audited), and a key holding the new scope `support:read_shared_screenshots` (with `support:read`) may read that screenshot — and no other (404). The v1 report carries `screenshotShared`. `support:read_screenshots` is unchanged.
+
+## [0.712.0-beta] - 2026-11-26
+
+_Shipped 2026-11-26 08:51 UTC · commit [950d261](https://github.com/21072026/Internship/commit/950d26166ccf6c51af46a854f9e2317451e08ab6)_
+
+- Follow-up images in the UI (#3932): the shared follow-up form takes images — "Add image" or a screenshot pasted into the note (Ctrl+V) — in the sales follow-up panel and the hand-off dialog; the panel shows them as thumbnails and each history line shows the images it set (`imagesByEvent()`), all opening in the in-app lightbox. The hand-off dialog now scrolls when it is taller than the screen.
+
+## [0.711.0-beta] - 2026-11-26
+
+_Shipped 2026-11-26 08:11 UTC · commit [40c0626](https://github.com/21072026/Internship/commit/40c06269c5c90e71237a156357a3c0c6685b4ea3)_
+
+- Follow-up images, the API half (#3931): `FollowUpImage` (draft → attached → cleared), `POST`/`GET /api/mentorship/[id]/follow-up-images`, `GET /api/follow-up-images/[id]`; `PUT /api/mentorship/[id]` takes `nextActionImageIds` and the hand-off takes `imageIds` (a kept hand-off moves the images). Images only (type read from the bytes), at most 3 × 5 MB per follow-up; read by whoever reads the follow-up note; the lead's erasure deletes them. The UI follows in #3932.
+
+## [0.710.0-beta] - 2026-11-26
+
+_Shipped 2026-11-26 07:34 UTC · commit [be380bd](https://github.com/21072026/Internship/commit/be380bdeb15854a26b08e30602ffc2ff58ccdc36)_
+
+- Admins link the pull requests a feedback report was worked in, by hand, on the report page (`SupportReport.prLinks`; `POST`/`DELETE /api/admin/support/reports/[id]/pr-links`, only PRs of this repository, at most 10, audited). The inbox shows them per row and filters `?pr=with|without`. The links are admin only: the reporter's list, mail, bell and the v1 API never carry them (#3928).
+
+## [0.709.0-beta] - 2026-11-25
+
+_Shipped 2026-11-25 14:55 UTC · commit [2311f7e](https://github.com/21072026/Internship/commit/2311f7ef94ef010be4eb8da80b7e167334ba38fe)_
+
+- "My feedback" (`/account/feedback`) says how far along a person's reports are — "X of N completed, Y waiting", with "will not be changed" counted on its own — and filters the list by that outcome (All / Waiting / Completed / Will not be changed, kept in `?status=`). The rule is `src/lib/myFeedbackFilter.ts`; the list stays the caller's own reports only (#3929).
+
+## [0.708.1-beta] - 2026-11-25
+
+_Shipped 2026-11-25 11:57 UTC · commit [7aa78f7](https://github.com/21072026/Internship/commit/7aa78f737c944fdadfb1420b5378eab018c9dd8b)_
+
+- "My feedback" (`/account/feedback`, #3877) is now an item of the account menu in every role shell (`AccountMenu`), not only a link on the account page and in the feedback panel (#3910).
+
+## [0.708.0-beta] - 2026-11-25
+
+_Shipped 2026-11-25 11:23 UTC · commit [36b7f2f](https://github.com/21072026/Internship/commit/36b7f2ff03b6ef041180091b433deb27deea523e)_
+
+- E-mail templates on a lead (#3908): `MessageTemplate` gains `channel` (`message` | `email`, default `message`) and per-locale `subjects`. `/admin/message-templates` manages each channel on its own tab; `GET /api/message-templates?channel=email` is the lead picker's pool (default stays the composer's). Picking a template under a lead's address turns the link into a `mailto:` with subject and body in the rep's language, `{name}` / `{company}` / `{sender}` filled (`emailTemplateMailto()`); the rep's own mail program sends it. Opening it logs the e-mail and counts the template's use.
+
+## [0.707.1-beta] - 2026-11-25
+
+_Shipped 2026-11-25 11:00 UTC · commit [86efa9a](https://github.com/21072026/Internship/commit/86efa9a9095d3e6a69de4b7694902ca871213865)_
+
+- German label of the MARKETING stage `LEAD_QUALIFIED` is now "Bedarf geklärt" (was "Qualifiziert", read as a person's qualification). The old default stays recognised as ours (`FORMER_STAGE_LABELS` / `isOurStageLabel()`, `src/lib/programTemplates.ts`), so orgs storing it read the new label in German and "Qualified" in English, while a label a tenant typed is kept verbatim — no data change (#3907).
+
+## [0.707.0-beta] - 2026-11-25
+
+_Shipped 2026-11-25 10:33 UTC · commit [da4eb5c](https://github.com/21072026/Internship/commit/da4eb5cd687a99bfee43fd63fdeb39abd48e9131)_
+
+- A name on the board's colleague strip filters the board to that person's leads (`aria-pressed` button; clicking again removes them). On the sales board it is offered only to who may open the team view (`teamRead`) and switches "Mine" to the team view filtered to that person; on the admin board it sets the owner filter (`?owners=`). Dropping a card on a person still opens the hand-off (#3906).
+
+## [0.706.0-beta] - 2026-11-25
+
+_Shipped 2026-11-25 10:10 UTC · commit [3ffff7a](https://github.com/21072026/Internship/commit/3ffff7aa49486081fa25334ef1b3a374ac781046)_
+
+- The rep strip's load line also counts open follow-ups by channel — call / e-mail / other, from `nextActionType` (`followUpChannel()`, `src/lib/salesTeamRule.ts`). `GET /api/sales/team` returns them as `followUps`, under the same rule as `overdue` (`canSeeRepOverdue`: admins and the dispatcher; `null` for everyone else) (#3905).
+
+## [0.705.0-beta] - 2026-11-25
+
+_Shipped 2026-11-25 09:24 UTC · commit [a0d117c](https://github.com/21072026/Internship/commit/a0d117cb417a94b2345dc76170960789a90d0018)_
+
+- After a call or WhatsApp, the question takes three answers (#3904): **Reached** opens a small form (note, "Complete the follow-up" — ticked when the open step is a call — and an optional next follow-up via the shared editor) and writes one interaction, then completes/replaces the follow-up (`nextActionCompleted`); **Not reached** logs an attempt (`NOT_REACHED`, #3902) and offers to move the follow-up (tomorrow, in 2 days, a date and time); **Didn't call** writes nothing. The separate "Add a note" choice is removed, so completing a follow-up after a call no longer creates a second interaction.
+
+## [0.704.0-beta] - 2026-11-25
+
+_Shipped 2026-11-25 08:33 UTC · commit [cd4c0f9](https://github.com/21072026/Internship/commit/cd4c0f9525444a71b801a5f54858ab0d97c52d1b)_
+
+- One follow-up editor (`FollowUpFields`) for the hand-off dialog and the sales lead page's follow-up panel: what is next (call / e-mail / meeting / demo / other), when (Today, Tomorrow, 3 days, 1 week, 2 weeks or a date, plus the optional time) and the note. The panel now writes `nextActionType` and shows the pick in the reader's language, with the note shown without a composed label (`handoffNoteText`). `other` needs a note in both forms and in `PUT /api/mentorship/[id]` (`400 note_required`) (#3903).
+
+## [0.703.0-beta] - 2026-11-25
+
+_Shipped 2026-11-25 08:12 UTC · commit [750567e](https://github.com/21072026/Internship/commit/750567e97002e3ce45d2ea9ca03e79003a2ea8bc)_
+
+- Log an unanswered call or WhatsApp as a contact attempt (`InteractionLog.outcome = NOT_REACHED`, default `REACHED`, so no backfill). An attempt is not contact: last contact, the first-contact stage advance, journey steps, nudges, go-live metrics and the interaction counts read `REACHED` rows only (`CONTACT_INTERACTION_WHERE`, `src/lib/interactionOutcome.ts`); it still counts as outreach for dormancy and as activity for metering. The lead page shows an attempt badge, an attempt count and an "Attempts" filter; the relation timeline has an `attempt` kind (not shown to mentees). `NOT_REACHED` on any other type is refused (400 `outcome_not_allowed`). The `interaction.logged@1` webhook payload is unchanged (#3902).
+
+## [0.702.0-beta] - 2026-11-25
+
+_Shipped 2026-11-25 03:08 UTC · commit [cc46fff](https://github.com/21072026/Internship/commit/cc46fff17d2fc5a3e4776db1c243110a19d7c403)_
+
+Interactions are logged with date and time (`datetime-local`), so a day's entries list in the order they happened; day-only rows keep reading as their day instead of a made-up "01:00". Follow-ups take an optional time of day (`nextActionTime`, `HH:MM` wall time) in the follow-up panel and the hand-off dialog, shown beside the day and ordering the sales calendar; due/overdue stay per calendar day (#3901).
+
+## [0.701.1-beta] - 2026-11-24
+
+_Shipped 2026-11-24 17:48 UTC · commit [bc32bb7](https://github.com/21072026/Internship/commit/bc32bb7f52a7736174335206fc9039b96c4198ec)_
+
+Follow-ups record what kind of step they are (`MentorshipRelation.nextActionType`: call, e-mail, meeting, demo, other) — written by the hand-off and by the follow-up edit (read from the note's label when no pick is sent), cleared with the step, and filled for older rows by the `0039-next-action-type` backfill (#3900).
+
+## [0.701.0-beta] - 2026-11-24
+
+_Shipped 2026-11-24 15:42 UTC · commit [76ee71a](https://github.com/21072026/Internship/commit/76ee71a5237efb450faa8b0a479cd3daff8a53da)_
+
+- Add consent-aware public conversion events for signup, verification, mentor applications, company inquiries, demo and role links, features and pricing; restrict properties to finite non-identifying UI categories (#1388).
+
+## [0.700.0-beta] - 2026-11-24
+
+_Shipped 2026-11-24 15:41 UTC · commit [8c50513](https://github.com/21072026/Internship/commit/8c50513603e3785f9b3d8998a556d7eb85b3899e)_
+
+- Add a tenant-scoped product-interest signup with double opt-in, one-click unsubscribe, send/drain consent enforcement, admin CSV visibility and bounded retention (#1406).
+
+## [0.699.2-beta] - 2026-11-24
+
+_Shipped 2026-11-24 15:41 UTC · commit [1349d05](https://github.com/21072026/Internship/commit/1349d05491d91b93a4001e591d1b530f08d2e0ca)_
+
+- Add reusable synthetic product PNGs, LinkedIn exports and a reproducible German one-pager source for marketing channels (#2225); reuse the existing landing capture producer and OG renderer.
+
 ## [0.699.1-beta] - 2026-11-23
 
 _Shipped 2026-11-23 10:57 UTC · commit [426aff4](https://github.com/21072026/Internship/commit/426aff4d11825a2413024c5ea24005c7d0ce8192)_

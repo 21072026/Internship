@@ -1,9 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- Sales fixes from in-app feedback (#3976): the hand-off dialog keeps the current follow-up by default and offers it first; the lead page's stage badge wears the board column's stage color (`boardColumnPaint()`); the follow-up's date and time boxes share one baseline (`items-end`, wider time column); \"Try again?\" puts its two fields on one line and its actions below, so it fits a narrow card; the hand-off strip shows only the open count (and overdue when there is any) with the whole split as hover text; \"New lead\" is on `/sales/board` too.",
-  "notes": {
-    "en": ["Handing a lead over now keeps the current follow-up by default.", "\"New lead\" is now on the board too, and the lead page shows the stage in the same color as the board."],
-    "tr": ["Lead devrederken mevcut takip artık varsayılan olarak korunuyor.", "\"Yeni lead\" artık panoda da var; lead sayfası aşamayı panodaki renkle gösteriyor."],
-    "de": ["Beim Übergeben eines Leads bleibt die aktuelle Wiedervorlage jetzt standardmäßig erhalten.", "„Neuer Lead“ gibt es jetzt auch auf dem Board, und die Lead-Seite zeigt die Phase in derselben Farbe wie das Board."]
-  }
-}

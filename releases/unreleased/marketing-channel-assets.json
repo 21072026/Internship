@@ -1,4 +1,0 @@
-{
-  "bump": "patch",
-  "changelog": "- Add reusable synthetic product PNGs, LinkedIn exports and a reproducible German one-pager source for marketing channels (#2225); reuse the existing landing capture producer and OG renderer."
-}

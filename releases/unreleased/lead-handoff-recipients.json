@@ -1,9 +1,0 @@
-{
-  "bump": "minor",
-  "changelog": "Sales: an org admin can close lead hand-offs to a person on `/admin/users` (`POST /api/admin/users/[id]/lead-handoffs`, `User.acceptsLeadHandoffs`, audited). A closed person leaves the hand-off dialog, is no drop target on the strip, and the hand-off write refuses them with `409 recipient_not_accepting`; their own leads are untouched (#3979).",
-  "notes": {
-    "en": ["Admins can now close lead hand-offs to a person on the users page — for someone who only manages or is away. Colleagues can no longer hand them leads; their own leads stay with them."],
-    "tr": ["Yöneticiler artık kullanıcılar sayfasından bir kişiye lead devrini kapatabiliyor — yalnızca yöneten ya da bir süre müsait olmayan biri için. Ekip arkadaşları o kişiye lead devredemez; kişinin kendi lead'leri kendisinde kalır."],
-    "de": ["Admins können auf der Benutzerseite Lead-Übergaben an eine Person schließen — etwa für jemanden, der nur leitet oder abwesend ist. Kolleg:innen können dieser Person dann keine Leads mehr übergeben; die eigenen Leads bleiben bei ihr."]
-  }
-}
